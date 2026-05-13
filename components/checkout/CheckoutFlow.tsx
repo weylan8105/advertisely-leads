@@ -224,24 +224,11 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label>Occupation niche</Label>
-                  <Select defaultValue="any">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Any</SelectItem>
-                      <SelectItem value="trades">Trades & union</SelectItem>
-                      <SelectItem value="medical">Medical professionals</SelectItem>
-                      <SelectItem value="biz">Business owners</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Filters apply to delivered leads. Availability depends on live campaign volume.
+                Occupation niche is set by the lead package itself. Filters above apply to
+                delivered leads — availability depends on live campaign volume.
               </p>
             </div>
           )}

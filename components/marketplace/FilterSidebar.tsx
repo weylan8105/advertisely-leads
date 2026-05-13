@@ -1,27 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Filter, X, Info, Lock } from "lucide-react";
+import { Filter, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { US_STATES, AVAILABLE_STATES } from "@/data/states";
 import { cn } from "@/lib/utils";
-
-const occupations = [
-  "Lineman",
-  "Electrician",
-  "Plumber",
-  "Pipefitter",
-  "Nurse",
-  "Teacher",
-  "Business Owner",
-  "Homeowner",
-  "Software Engineer",
-  "Contractor",
-];
 
 interface FilterSidebarProps {
   className?: string;
@@ -31,7 +17,6 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
   const [states, setStates] = useState<string[]>(["TX", "FL"]);
   const [minInc, setMinInc] = useState(50000);
   const [maxInc, setMaxInc] = useState(200000);
-  const [occs, setOccs] = useState<string[]>([]);
 
   const toggle = (arr: string[], setArr: (v: string[]) => void, v: string) => {
     setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -121,27 +106,13 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
         </p>
       </div>
 
-      <div>
-        <Label className="mb-2 block">Occupation / niche</Label>
-        <div className="space-y-2 max-h-[180px] overflow-y-auto scrollbar-thin pr-2">
-          {occupations.map((o) => (
-            <label key={o} className="flex items-center gap-2 text-xs cursor-pointer">
-              <Checkbox
-                checked={occs.includes(o)}
-                onCheckedChange={() => toggle(occs, setOccs, o)}
-              />
-              <span>{o}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
       <Button className="w-full" size="sm">
         Apply filters
       </Button>
 
       <p className="text-[10px] text-muted-foreground">
-        Lead availability varies by state and campaign volume.
+        Occupation niche is set by the lead package you choose. Lead availability varies by
+        state and campaign volume.
       </p>
     </Card>
   );
