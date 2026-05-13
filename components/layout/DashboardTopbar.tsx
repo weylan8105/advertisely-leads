@@ -1,6 +1,8 @@
 "use client";
+import Link from "next/link";
 import { Search, Bell, ChevronDown } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { signOut, useSession } from "next-auth/react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -12,9 +14,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { currentUser } from "@/data/user";
 import { initials } from "@/lib/utils";
-import Link from "next/link";
 
 export function DashboardTopbar() {
+  const { data: session } = useSession();
+  const displayName = session?.user?.name ?? currentUser.name;
+  const displayEmail = session?.user?.email ?? currentUser.email;
+  const avatarUrl = session?.user?.image;
+
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-white/[0.06] bg-brand-deepnavy/70 backdrop-blur-md">
       <div className="h-full px-6 flex items-center justify-between gap-6">
@@ -33,11 +39,14 @@ export function DashboardTopbar() {
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 rounded-md border border-white/10 pl-1 pr-2.5 py-1 hover:bg-white/5">
                 <Avatar className="h-7 w-7">
-                  <AvatarFallback className="text-[10px]">{initials(currentUser.name)}</AvatarFallback>
+                  {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
+                  <AvatarFallback className="text-[10px]">
+                    {initials(displayName)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="hidden sm:block leading-tight text-left">
-                  <div className="text-xs font-medium">{currentUser.name}</div>
-                  <div className="text-[10px] text-muted-foreground">{currentUser.agency}</div>
+                  <div className="text-xs font-medium">{displayName}</div>
+                  <div className="text-[10px] text-muted-foreground">{displayEmail}</div>
                 </div>
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </button>
@@ -54,8 +63,11 @@ export function DashboardTopbar() {
                 <Link href="/orders">Billing & orders</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/login">Sign out</Link>
+              <DropdownMenuItem
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="cursor-pointer"
+              >
+                Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
