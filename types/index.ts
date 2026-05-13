@@ -27,6 +27,8 @@ export interface LeadPackage {
   features: string[];
   ideal: string[];
   niches: string[];
+  available: boolean;
+  comingSoonNote?: string;
 }
 
 export interface LeadFilters {
@@ -35,6 +37,17 @@ export interface LeadFilters {
   incomeRange?: [number, number];
   occupations?: string[];
 }
+
+export type LeadDisposition =
+  | "interested"
+  | "callback"
+  | "not_interested"
+  | "voicemail"
+  | "wrong_number"
+  | "do_not_call"
+  | "left_message"
+  | "qualified"
+  | "sold";
 
 export interface Lead {
   id: string;
@@ -48,7 +61,9 @@ export interface Lead {
   leadType: LeadPackageId;
   leadTypeLabel: string;
   status: LeadStatus;
+  disposition?: LeadDisposition;
   source: string;
+  tags: string[];
   consent: {
     captured: boolean;
     method: "TCPA Web Form" | "TrustedForm" | "Jornaya";
@@ -56,14 +71,56 @@ export interface Lead {
     ip?: string;
   };
   receivedAt: string;
+  lastContactedAt?: string;
   assignedAgent?: string;
   intentReason: string;
   notes: LeadNote[];
+  tasks: LeadTask[];
+  activity: LeadActivity[];
+  callAttempts: number;
 }
 
 export interface LeadNote {
   id: string;
   author: string;
+  body: string;
+  at: string;
+}
+
+export type LeadTaskType =
+  | "call"
+  | "email"
+  | "sms"
+  | "appointment"
+  | "follow_up";
+
+export interface LeadTask {
+  id: string;
+  leadId: string;
+  leadName: string;
+  type: LeadTaskType;
+  title: string;
+  dueAt: string;
+  done: boolean;
+  assignedTo: string;
+}
+
+export type LeadActivityType =
+  | "lead_received"
+  | "call_made"
+  | "email_sent"
+  | "sms_sent"
+  | "note_added"
+  | "status_changed"
+  | "appointment_set"
+  | "exported_crm"
+  | "tag_added"
+  | "replacement_requested";
+
+export interface LeadActivity {
+  id: string;
+  type: LeadActivityType;
+  author?: string;
   body: string;
   at: string;
 }
@@ -110,7 +167,10 @@ export type IntegrationType =
   | "hubspot"
   | "zapier"
   | "sheets"
-  | "webhook";
+  | "webhook"
+  | "dialer"
+  | "twilio"
+  | "calendar";
 
 export interface Integration {
   id: string;

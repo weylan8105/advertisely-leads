@@ -2,39 +2,16 @@ import type { LeadPackage } from "@/types";
 
 export const leadPackages: LeadPackage[] = [
   {
-    id: "fresh-iul",
-    name: "Fresh IUL Leads",
-    tagline: "Real-time. High intent. Closer-ready.",
-    description:
-      "Brand new IUL prospects sourced from Meta campaigns. Delivered within minutes of opt-in with full TCPA consent capture.",
-    pricePerLead: 32,
-    minimumOrder: 15,
-    estimatedDelivery: "Real-time (under 5 min)",
-    freshnessHours: 1,
-    badge: "Most Popular",
-    features: [
-      "Real-time delivery",
-      "TCPA consent captured",
-      "Source + campaign tracking",
-      "TrustedForm / Jornaya certificate",
-    ],
-    ideal: [
-      "Agents with active dialer setup",
-      "GFI builders running call nights",
-      "Tax-free retirement scripts",
-    ],
-    niches: ["Tax-free retirement", "401k rollover", "College savings"],
-  },
-  {
     id: "blue-collar-iul",
     name: "Blue-Collar IUL Leads",
     tagline: "Working professionals who actually pick up.",
     description:
-      "Union members, tradesmen, and W-2 earners actively asking about cash-value life insurance and tax-free income strategies.",
+      "Union members, tradesmen, and W-2 earners actively asking about cash-value life insurance and tax-free income strategies. Currently the only package we deliver live.",
     pricePerLead: 30,
     minimumOrder: 20,
     estimatedDelivery: "Within 24 hours",
-    badge: "High Pickup Rate",
+    badge: "Available now",
+    available: true,
     features: [
       "Income-qualified ($55k+ W-2)",
       "Trade & union niches",
@@ -49,6 +26,32 @@ export const leadPackages: LeadPackage[] = [
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter", "Nurse"],
   },
   {
+    id: "fresh-iul",
+    name: "Fresh IUL Leads",
+    tagline: "Real-time. High intent. Closer-ready.",
+    description:
+      "Brand new IUL prospects sourced from Meta campaigns. Delivered within minutes of opt-in with full TCPA consent capture.",
+    pricePerLead: 32,
+    minimumOrder: 15,
+    estimatedDelivery: "Real-time (under 5 min)",
+    freshnessHours: 1,
+    badge: "Coming soon",
+    available: false,
+    comingSoonNote: "Real-time delivery pipeline launching next.",
+    features: [
+      "Real-time delivery",
+      "TCPA consent captured",
+      "Source + campaign tracking",
+      "TrustedForm / Jornaya certificate",
+    ],
+    ideal: [
+      "Agents with active dialer setup",
+      "Agency builders running call nights",
+      "Tax-free retirement scripts",
+    ],
+    niches: ["Tax-free retirement", "401k rollover", "College savings"],
+  },
+  {
     id: "retirement-iul",
     name: "Retirement-Focused IUL Leads",
     tagline: "Pre-retirees asking the right questions.",
@@ -57,6 +60,9 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 38,
     minimumOrder: 10,
     estimatedDelivery: "Real-time",
+    badge: "Coming soon",
+    available: false,
+    comingSoonNote: "Campaign creative in pre-launch QA.",
     features: [
       "Age-qualified 45-65",
       "Household income $90k+",
@@ -79,6 +85,9 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 26,
     minimumOrder: 20,
     estimatedDelivery: "Within 24 hours",
+    badge: "Coming soon",
+    available: false,
+    comingSoonNote: "Adding MP qualification step to capture flow.",
     features: [
       "Homeowner verified",
       "Soft mortgage data",
@@ -101,7 +110,9 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 6,
     minimumOrder: 100,
     estimatedDelivery: "Instant download",
-    badge: "Best Value",
+    badge: "Coming soon",
+    available: false,
+    comingSoonNote: "Inventory building — available once Fresh pipeline ages.",
     features: [
       "30-90 day aged",
       "Bulk CSV delivery",

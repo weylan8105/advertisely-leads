@@ -11,6 +11,9 @@ const colorMap: Record<string, string> = {
   zapier: "bg-orange-500/10 text-orange-300",
   sheets: "bg-emerald-500/10 text-emerald-300",
   webhook: "bg-violet-500/10 text-violet-300",
+  dialer: "bg-rose-500/10 text-rose-300",
+  twilio: "bg-rose-500/10 text-rose-300",
+  calendar: "bg-sky-500/10 text-sky-300",
 };
 
 export function CRMIntegrationCard({ integration }: { integration: Integration }) {

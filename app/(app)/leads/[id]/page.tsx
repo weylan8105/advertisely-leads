@@ -12,13 +12,21 @@ import {
   Send,
   ExternalLink,
   Plus,
+  MessageSquare,
+  Tag,
+  Clock,
+  Pencil,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/leads/StatusBadge";
+import { ActivityTimeline } from "@/components/leads/ActivityTimeline";
+import { TaskList } from "@/components/leads/TaskList";
 import {
   Select,
   SelectContent,
@@ -26,13 +34,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { mockLeads, leadStatuses } from "@/data/leads";
+import { mockLeads, leadStatuses, dispositionLabels } from "@/data/leads";
 import { formatCurrency, formatDateTime, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export default function LeadDetailPage({ params }: { params: { id: string } }) {
   const lead = mockLeads.find((l) => l.id === params.id);
   if (!lead) return notFound();
+
+  const telHref = `tel:${lead.phone.replace(/\D/g, "")}`;
+  const smsHref = `sms:${lead.phone.replace(/\D/g, "")}`;
+  const mailHref = `mailto:${lead.email}`;
 
   return (
     <div>
@@ -44,14 +56,26 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
       </Link>
 
       <PageHeader
-        eyebrow={`Lead ${lead.id}`}
+        eyebrow={`Lead ${lead.id} · ${lead.callAttempts} call attempt${lead.callAttempts === 1 ? "" : "s"}`}
         title={lead.name}
         description={lead.intentReason}
         actions={
           <>
-            <Button size="sm" variant="outline">
-              <RefreshCw className="h-4 w-4" /> Request replacement
-            </Button>
+            <a href={telHref}>
+              <Button size="sm" variant="outline">
+                <Phone className="h-4 w-4" /> Call
+              </Button>
+            </a>
+            <a href={smsHref}>
+              <Button size="sm" variant="outline">
+                <MessageSquare className="h-4 w-4" /> Text
+              </Button>
+            </a>
+            <a href={mailHref}>
+              <Button size="sm" variant="outline">
+                <Mail className="h-4 w-4" /> Email
+              </Button>
+            </a>
             <Button size="sm">
               <Send className="h-4 w-4" /> Push to CRM
             </Button>
@@ -67,87 +91,204 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
               <CardDescription>Outreach details captured at form submission</CardDescription>
             </CardHeader>
             <CardContent className="grid sm:grid-cols-2 gap-4 text-sm">
-              <Field icon={Phone} label="Phone" value={lead.phone} />
-              <Field icon={Mail} label="Email" value={lead.email} />
-              <Field icon={MapPin} label="State" value={lead.state} />
-              <Field icon={Briefcase} label="Occupation" value={lead.occupation} />
-              <Field icon={Calendar} label="Age" value={`${lead.age}`} />
-              <Field icon={Calendar} label="Self-reported income" value={formatCurrency(lead.income)} />
+              <ContactField
+                icon={Phone}
+                label="Phone"
+                value={lead.phone}
+                href={telHref}
+              />
+              <ContactField icon={Mail} label="Email" value={lead.email} href={mailHref} />
+              <ContactField icon={MapPin} label="State" value={lead.state} />
+              <ContactField icon={Briefcase} label="Occupation" value={lead.occupation} />
+              <ContactField icon={Calendar} label="Age" value={`${lead.age}`} />
+              <ContactField
+                icon={Calendar}
+                label="Self-reported income"
+                value={formatCurrency(lead.income)}
+              />
+              {lead.lastContactedAt && (
+                <ContactField
+                  icon={Clock}
+                  label="Last contacted"
+                  value={formatDateTime(lead.lastContactedAt)}
+                />
+              )}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Intent & qualification</CardTitle>
-              <CardDescription>What the prospect actually asked about</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
-                <div className="text-xs text-muted-foreground mb-1">IUL interest reason</div>
-                <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3 text-sm">
-                  {lead.intentReason}
-                </div>
+                <CardTitle>Tags</CardTitle>
+                <CardDescription>Quick categorization across your pipeline</CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="default">{lead.leadTypeLabel}</Badge>
-                <Badge variant="muted">{lead.source}</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes & activity</CardTitle>
-              <CardDescription>Internal CRM timeline. Visible to your agency seats only.</CardDescription>
+              <Button size="sm" variant="outline">
+                <Tag className="h-3.5 w-3.5" />
+                Add tag
+              </Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 mb-4">
-                <Textarea placeholder="Add a note about this lead…" />
-                <div className="flex justify-end">
-                  <Button size="sm">
-                    <Plus className="h-3.5 w-3.5" /> Add note
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {lead.notes.length === 0 && (
-                  <div className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-4 text-xs text-muted-foreground text-center">
-                    No notes yet. Add the first one above.
-                  </div>
+              <div className="flex flex-wrap gap-2">
+                {lead.tags.length === 0 && (
+                  <span className="text-xs text-muted-foreground">No tags yet.</span>
                 )}
-                {lead.notes.map((n) => (
-                  <div key={n.id} className="flex items-start gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-[10px]">{initials(n.author)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-medium">{n.author}</div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {formatDateTime(n.at)}
-                        </div>
-                      </div>
-                      <p className="mt-1 text-sm">{n.body}</p>
-                    </div>
-                  </div>
+                {lead.tags.map((t) => (
+                  <Badge key={t} variant="default" className="cursor-pointer">
+                    {t}
+                  </Badge>
                 ))}
               </div>
             </CardContent>
           </Card>
+
+          <Tabs defaultValue="activity">
+            <TabsList>
+              <TabsTrigger value="activity">Activity ({lead.activity.length + lead.notes.length})</TabsTrigger>
+              <TabsTrigger value="tasks">Tasks ({lead.tasks.filter((t) => !t.done).length})</TabsTrigger>
+              <TabsTrigger value="notes">Notes ({lead.notes.length})</TabsTrigger>
+              <TabsTrigger value="intent">Intent</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="activity">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity timeline</CardTitle>
+                  <CardDescription>
+                    Combined feed of calls, texts, emails, notes, exports, and status changes.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="mb-5 grid grid-cols-3 gap-2">
+                    <a
+                      href={telHref}
+                      className="flex flex-col items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-emerald-500/[0.05] hover:border-emerald-500/30 py-3 transition-colors"
+                    >
+                      <Phone className="h-4 w-4 text-emerald-300" />
+                      <span className="text-[11px]">Log call</span>
+                    </a>
+                    <a
+                      href={smsHref}
+                      className="flex flex-col items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-sky-500/[0.05] hover:border-sky-500/30 py-3 transition-colors"
+                    >
+                      <MessageSquare className="h-4 w-4 text-sky-300" />
+                      <span className="text-[11px]">Send SMS</span>
+                    </a>
+                    <a
+                      href={mailHref}
+                      className="flex flex-col items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-violet-500/[0.05] hover:border-violet-500/30 py-3 transition-colors"
+                    >
+                      <Mail className="h-4 w-4 text-violet-300" />
+                      <span className="text-[11px]">Send email</span>
+                    </a>
+                  </div>
+                  <ActivityTimeline activity={lead.activity} notes={lead.notes} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="tasks">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle>Tasks & follow-ups</CardTitle>
+                    <CardDescription>
+                      Schedule callbacks, send templates, and never let a lead go cold.
+                    </CardDescription>
+                  </div>
+                  <Button size="sm">
+                    <Plus className="h-3.5 w-3.5" />
+                    Add task
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <TaskList tasks={lead.tasks} showLead={false} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="notes">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notes</CardTitle>
+                  <CardDescription>
+                    Internal CRM notes. Visible to your agency seats only.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 mb-4">
+                    <Textarea placeholder="Add a note about this lead…" />
+                    <div className="flex justify-end">
+                      <Button size="sm">
+                        <Plus className="h-3.5 w-3.5" /> Add note
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {lead.notes.length === 0 && (
+                      <div className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-4 text-xs text-muted-foreground text-center">
+                        No notes yet. Add the first one above.
+                      </div>
+                    )}
+                    {lead.notes.map((n) => (
+                      <div key={n.id} className="flex items-start gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-[10px]">
+                            {initials(n.author)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs font-medium">{n.author}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {formatDateTime(n.at)}
+                            </div>
+                          </div>
+                          <p className="mt-1 text-sm">{n.body}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="intent">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Intent & qualification</CardTitle>
+                  <CardDescription>What the prospect actually asked about</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">IUL interest reason</div>
+                    <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3 text-sm">
+                      {lead.intentReason}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="default">{lead.leadTypeLabel}</Badge>
+                    <Badge variant="muted">{lead.source}</Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
 
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>Status</CardTitle>
-              <CardDescription>Update where this lead sits in your pipeline.</CardDescription>
+              <CardTitle>Status & disposition</CardTitle>
+              <CardDescription>
+                Where this lead sits in your pipeline + last call outcome.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={lead.status} />
-                <span className="text-xs text-muted-foreground">
-                  Last updated {formatDateTime(lead.receivedAt)}
-                </span>
+                {lead.disposition && (
+                  <Badge variant="info">{dispositionLabels[lead.disposition]}</Badge>
+                )}
               </div>
               <Select defaultValue={lead.status}>
                 <SelectTrigger>
@@ -161,9 +302,40 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                   ))}
                 </SelectContent>
               </Select>
+              <Select defaultValue={lead.disposition ?? "none"}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Log call disposition" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— No disposition —</SelectItem>
+                  {Object.entries(dispositionLabels).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button className="w-full" size="sm">
-                Save status
+                Save
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Quick send</CardTitle>
+                <CardDescription>Pre-built templates</CardDescription>
+              </div>
+              <Button size="sm" variant="ghost">
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <TemplateRow label="Intro text" channel="SMS" />
+              <TemplateRow label="Callback link" channel="SMS" />
+              <TemplateRow label="IUL prep doc" channel="Email" />
+              <TemplateRow label="Illustration walkthrough" channel="Email" />
             </CardContent>
           </Card>
 
@@ -243,6 +415,10 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
               <Button variant="outline" size="sm" className="w-full">
                 Reassign agent
               </Button>
+              <Button variant="outline" size="sm" className="w-full">
+                <RefreshCw className="h-3.5 w-3.5" />
+                Request replacement
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -251,22 +427,49 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
   );
 }
 
-function Field({
+function ContactField({
   icon: Icon,
   label,
   value,
+  href,
 }: {
   icon: any;
   label: string;
   value: string;
+  href?: string;
 }) {
-  return (
-    <div>
+  const content = (
+    <>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
         <Icon className="h-3 w-3" />
         {label}
       </div>
       <div className="font-medium">{value}</div>
-    </div>
+    </>
+  );
+  return href ? (
+    <a href={href} className="block hover:text-brand-teal transition-colors">
+      {content}
+    </a>
+  ) : (
+    <div>{content}</div>
+  );
+}
+
+function TemplateRow({ label, channel }: { label: string; channel: string }) {
+  return (
+    <button className="w-full flex items-center justify-between gap-3 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] px-3 py-2 transition-colors text-sm text-left">
+      <div className="flex items-center gap-2">
+        {channel === "SMS" ? (
+          <MessageSquare className="h-3.5 w-3.5 text-sky-300" />
+        ) : (
+          <Mail className="h-3.5 w-3.5 text-violet-300" />
+        )}
+        <span>{label}</span>
+      </div>
+      <Badge variant="muted" className="text-[10px]">
+        {channel}
+      </Badge>
+    </button>
   );
 }

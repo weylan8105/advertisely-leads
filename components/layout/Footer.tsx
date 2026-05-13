@@ -49,7 +49,7 @@ export function Footer() {
             <Logo />
             <p className="mt-4 text-sm text-muted-foreground">
               High-intent IUL leads built for agents who actually close. Premium lead
-              marketplace for GFI agents, agency builders, and life insurance professionals.
+              marketplace for life insurance agents, agency builders, and IUL producers.
             </p>
           </div>
           {cols.map((col) => (

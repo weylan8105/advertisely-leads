@@ -2,7 +2,7 @@ import { Database, Building2, FileDown, Plug } from "lucide-react";
 
 const stats = [
   { icon: Database, label: "High-intent IUL leads", value: "Built for one product, done right" },
-  { icon: Building2, label: "Built for GFI scale", value: "Agency-friendly seat & distribution model" },
+  { icon: Building2, label: "Built for agency scale", value: "Multi-seat workspaces & lead distribution" },
   { icon: FileDown, label: "Export-ready", value: "CSV + Google Sheets in one click" },
   { icon: Plug, label: "CRM-ready", value: "Webhooks, GHL, Salesforce, HubSpot" },
 ];

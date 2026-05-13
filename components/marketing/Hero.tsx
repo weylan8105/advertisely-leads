@@ -24,16 +24,16 @@ export function Hero() {
         >
           <Badge variant="default" className="mb-5 backdrop-blur">
             <Zap className="h-3 w-3 mr-1" />
-            Built for GFI agents · IUL focused
+            Built for life insurance agents · IUL focused
           </Badge>
           <h1 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]">
             High-intent IUL leads built for{" "}
             <span className="text-gradient">agents who actually close.</span>
           </h1>
           <p className="mt-6 text-base md:text-lg text-muted-foreground max-w-2xl">
-            Advertisely Leads is the premium IUL lead marketplace for GFI agents and life
-            insurance professionals. Real-time delivery, documented TCPA consent, and a
-            built-in CRM that ships your leads anywhere you need them.
+            Advertisely Leads is the premium IUL lead marketplace for life insurance agents,
+            agency builders, and IUL producers. Real-time delivery, documented TCPA consent,
+            and a built-in CRM that ships your leads anywhere you need them.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/marketplace">

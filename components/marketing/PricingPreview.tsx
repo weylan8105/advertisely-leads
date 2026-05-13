@@ -29,7 +29,7 @@ export function PricingPreview() {
 
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {leadPackages.slice(0, 3).map((p) => (
-          <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "fresh-iul"} />
+          <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "blue-collar-iul"} />
         ))}
       </div>
     </section>

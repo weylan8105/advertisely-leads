@@ -34,7 +34,7 @@ const faqs = [
   },
   {
     q: "How is this different from Goat Leads or other lead vendors?",
-    a: "We do one product (IUL) with one media channel (Meta), tuned to one audience (GFI agents and IUL-focused producers). No grab-bag of Medicare, ACA, or final expense. No recycled leads dressed up. No surprises.",
+    a: "We do one product (IUL) with one media channel (Meta), tuned to one audience (IUL-focused producers). No grab-bag of Medicare, ACA, or final expense. No recycled leads dressed up. No surprises.",
   },
 ];
 

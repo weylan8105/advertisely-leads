@@ -84,7 +84,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>IMO / Carrier alignment</Label>
-                <Input placeholder="Global Financial Impact (GFI)" defaultValue="GFI" />
+                <Input placeholder="Your IMO or carrier" defaultValue="" />
               </div>
               <div className="space-y-1.5">
                 <Label>Number of producers</Label>

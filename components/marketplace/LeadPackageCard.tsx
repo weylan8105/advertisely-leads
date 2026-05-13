@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, Clock, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Clock, Sparkles, Lock, Bell } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,17 +13,25 @@ interface LeadPackageCardProps {
 }
 
 export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
+  const isAvailable = pkg.available;
   return (
     <Card
       className={cn(
         "relative flex flex-col overflow-hidden transition-all",
-        highlight ? "ring-1 ring-brand-teal/40 shadow-[0_24px_80px_-12px_rgba(34,211,238,0.25)]" : "hover:border-white/15",
+        highlight && isAvailable
+          ? "ring-1 ring-brand-teal/40 shadow-[0_24px_80px_-12px_rgba(34,211,238,0.25)]"
+          : "hover:border-white/15",
+        !isAvailable && "opacity-90",
       )}
     >
       {pkg.badge && (
-        <div className="absolute top-4 right-4">
-          <Badge variant={pkg.badge === "Most Popular" ? "default" : "purple"}>
-            <Sparkles className="h-3 w-3 mr-1" />
+        <div className="absolute top-4 right-4 z-10">
+          <Badge variant={isAvailable ? "success" : "muted"}>
+            {isAvailable ? (
+              <Sparkles className="h-3 w-3 mr-1" />
+            ) : (
+              <Lock className="h-3 w-3 mr-1" />
+            )}
             {pkg.badge}
           </Badge>
         </div>
@@ -36,7 +44,12 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
         <p className="mt-3 text-sm text-muted-foreground flex-1">{pkg.description}</p>
 
         <div className="mt-5 flex items-baseline gap-2">
-          <span className="text-3xl font-semibold tracking-tight">
+          <span
+            className={cn(
+              "text-3xl font-semibold tracking-tight",
+              !isAvailable && "text-muted-foreground",
+            )}
+          >
             {formatCurrency(pkg.pricePerLead)}
           </span>
           <span className="text-xs text-muted-foreground">/ lead</span>
@@ -66,15 +79,37 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
           ))}
         </div>
 
+        {!isAvailable && pkg.comingSoonNote && (
+          <div className="mt-5 rounded-md border border-amber-500/20 bg-amber-500/[0.04] p-3 text-[11px] text-amber-200">
+            <span className="font-medium">Coming soon — </span>
+            {pkg.comingSoonNote}
+          </div>
+        )}
+
         <div className="mt-6 flex gap-2">
-          <Link href={`/checkout?pkg=${pkg.id}`} className="flex-1">
-            <Button className="w-full" size="sm">
-              Order leads <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
-          <Button variant="outline" size="sm">
-            Add to cart
-          </Button>
+          {isAvailable ? (
+            <>
+              <Link href={`/checkout?pkg=${pkg.id}`} className="flex-1">
+                <Button className="w-full" size="sm">
+                  Order leads <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+              <Button variant="outline" size="sm">
+                Add to cart
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button className="flex-1" size="sm" variant="subtle" disabled>
+                <Lock className="h-3.5 w-3.5" />
+                Coming soon
+              </Button>
+              <Button variant="outline" size="sm">
+                <Bell className="h-3.5 w-3.5" />
+                Notify me
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Card>

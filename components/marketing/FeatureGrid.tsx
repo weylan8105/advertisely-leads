@@ -1,8 +1,8 @@
 import {
   ShoppingBag,
-  LayoutDashboard,
-  Users,
-  FileDown,
+  KanbanSquare,
+  Phone,
+  CheckSquare,
   Sheet,
   Webhook,
   Sparkles,
@@ -13,22 +13,22 @@ const features = [
   {
     icon: ShoppingBag,
     title: "Lead marketplace",
-    body: "Five purpose-built IUL packages. Order what you actually want to dial.",
+    body: "Purpose-built IUL lead packages. Order what you actually want to dial.",
   },
   {
-    icon: LayoutDashboard,
-    title: "Agent dashboard",
-    body: "Performance, pipeline, and AP-at-a-glance for every agent on your roster.",
+    icon: KanbanSquare,
+    title: "Pipeline CRM",
+    body: "Drag-and-drop pipeline, dispositions, tags, and notes — no separate CRM required.",
   },
   {
-    icon: Users,
-    title: "Built-in CRM",
-    body: "Statuses, notes, agent assignment, and replacement requests in one place.",
+    icon: Phone,
+    title: "Click-to-call, SMS, email",
+    body: "Native tel/SMS/mailto links plus Twilio and dialer integrations.",
   },
   {
-    icon: FileDown,
-    title: "CSV export",
-    body: "Download any filtered view with full consent metadata attached.",
+    icon: CheckSquare,
+    title: "Tasks & follow-ups",
+    body: "Schedule callbacks, send templates, and never let a lead go cold.",
   },
   {
     icon: Sheet,
@@ -65,7 +65,7 @@ export function FeatureGrid() {
         </h2>
         <p className="mt-3 text-muted-foreground">
           Marketplace, CRM, and export pipes — under one roof. Designed to feel native to the
-          way GFI agencies actually run a call night.
+          way producing agencies actually run a call night.
         </p>
       </div>
 

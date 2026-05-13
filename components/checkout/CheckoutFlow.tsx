@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,8 +41,12 @@ interface CheckoutFlowProps {
 }
 
 export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
+  const defaultPkg: LeadPackageId =
+    initialPackageId && leadPackages.find((p) => p.id === initialPackageId)?.available
+      ? initialPackageId
+      : (leadPackages.find((p) => p.available)?.id ?? "blue-collar-iul");
   const [step, setStep] = useState(initialPackageId ? 2 : 1);
-  const [pkgId, setPkgId] = useState<LeadPackageId>(initialPackageId ?? "fresh-iul");
+  const [pkgId, setPkgId] = useState<LeadPackageId>(defaultPkg);
   const pkg = useMemo(() => leadPackages.find((p) => p.id === pkgId)!, [pkgId]);
   const [qty, setQty] = useState<number>(pkg.minimumOrder);
 
@@ -100,20 +105,33 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 {leadPackages.map((p) => (
                   <button
                     key={p.id}
+                    disabled={!p.available}
                     onClick={() => {
+                      if (!p.available) return;
                       setPkgId(p.id);
                       setQty(p.minimumOrder);
                     }}
                     className={cn(
-                      "text-left rounded-lg border p-4 transition-colors",
-                      pkgId === p.id
+                      "text-left rounded-lg border p-4 transition-colors relative",
+                      pkgId === p.id && p.available
                         ? "border-brand-teal/50 bg-brand-teal/[0.04]"
-                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]",
+                        : "border-white/[0.06] bg-white/[0.02]",
+                      p.available
+                        ? "hover:bg-white/[0.04] cursor-pointer"
+                        : "opacity-60 cursor-not-allowed",
                     )}
                   >
                     <div className="flex items-center justify-between">
                       <div className="font-medium">{p.name}</div>
-                      {pkgId === p.id && <Check className="h-4 w-4 text-brand-teal" />}
+                      {pkgId === p.id && p.available && (
+                        <Check className="h-4 w-4 text-brand-teal" />
+                      )}
+                      {!p.available && (
+                        <Badge variant="muted" className="text-[10px]">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Soon
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">{p.tagline}</div>
                     <div className="mt-3 flex items-end gap-1">

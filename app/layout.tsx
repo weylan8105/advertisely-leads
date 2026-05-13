@@ -5,11 +5,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://advertisely.io"),
   title: "Advertisely Leads — High-Intent IUL Leads for Agents Who Close",
   description:
-    "Premium IUL lead marketplace for GFI agents and life insurance professionals. Real-time delivery, TCPA compliant, CRM-ready.",
+    "Premium IUL lead marketplace for life insurance agents and IUL producers. Real-time delivery, TCPA compliant, CRM-ready.",
   openGraph: {
     title: "Advertisely Leads — High-Intent IUL Leads for Agents Who Close",
     description:
-      "Premium IUL lead marketplace for GFI agents and life insurance professionals.",
+      "Premium IUL lead marketplace for life insurance agents and IUL producers.",
     url: "https://advertisely.io",
     siteName: "Advertisely Leads",
     type: "website",

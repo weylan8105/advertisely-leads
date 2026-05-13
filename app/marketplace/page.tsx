@@ -40,9 +40,15 @@ export default function MarketplacePage() {
                   Sorted by: <span className="text-foreground">Recommended</span>
                 </div>
               </div>
+              <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-200">
+                <span className="font-medium">Heads up: </span>
+                Only <strong>Blue-Collar IUL Leads</strong> are available for purchase right now.
+                Other packages are in pre-launch — click <em>Notify me</em> on any "Coming soon"
+                card and we'll email you when inventory opens.
+              </div>
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {leadPackages.map((p) => (
-                  <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "fresh-iul"} />
+                  <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "blue-collar-iul"} />
                 ))}
               </div>
 

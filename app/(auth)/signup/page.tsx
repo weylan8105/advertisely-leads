@@ -61,7 +61,7 @@ export default function SignupPage() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="agency">Agency / IMO</Label>
-            <Input id="agency" placeholder="Pace Financial Group (GFI)" />
+            <Input id="agency" placeholder="Your agency or independent" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
