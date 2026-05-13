@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle2 } from "lucide-react";
@@ -95,7 +96,7 @@ export default function SignupPage() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" placeholder="••••••••" />
+            <PasswordInput id="password" placeholder="••••••••" />
           </div>
           <label className="flex items-start gap-2 text-xs text-muted-foreground">
             <Checkbox defaultChecked className="mt-0.5" />

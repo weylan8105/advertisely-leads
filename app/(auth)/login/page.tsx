@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ShieldCheck, Zap, Database } from "lucide-react";
@@ -49,7 +50,7 @@ export default function LoginPage() {
                 Forgot?
               </Link>
             </div>
-            <Input id="password" type="password" placeholder="••••••••" />
+            <PasswordInput id="password" placeholder="••••••••" />
           </div>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <Checkbox defaultChecked /> Keep me signed in for 30 days
