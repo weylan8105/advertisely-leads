@@ -5,3 +5,9 @@ export const US_STATES = [
   "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
+
+export const AVAILABLE_STATES = ["TX", "FL", "CA", "IL"];
+
+export function isStateAvailable(state: string) {
+  return AVAILABLE_STATES.includes(state);
+}

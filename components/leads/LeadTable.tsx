@@ -40,6 +40,7 @@ import {
 import type { Lead } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { leadStatuses } from "@/data/leads";
+import { AVAILABLE_STATES, US_STATES } from "@/data/states";
 
 interface LeadTableProps {
   leads: Lead[];
@@ -115,11 +116,19 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="any-state">Any state</SelectItem>
-                <SelectItem value="tx">TX</SelectItem>
-                <SelectItem value="fl">FL</SelectItem>
-                <SelectItem value="ca">CA</SelectItem>
-                <SelectItem value="ny">NY</SelectItem>
-                <SelectItem value="ga">GA</SelectItem>
+                {US_STATES.map((s) => {
+                  const available = AVAILABLE_STATES.includes(s);
+                  return (
+                    <SelectItem
+                      key={s}
+                      value={s}
+                      disabled={!available}
+                      className={!available ? "opacity-40" : ""}
+                    >
+                      {s} {!available && "· soon"}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>

@@ -1,13 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Filter, X } from "lucide-react";
+import { Filter, X, Info, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { US_STATES } from "@/data/states";
+import { US_STATES, AVAILABLE_STATES } from "@/data/states";
 import { cn } from "@/lib/utils";
 
 const occupations = [
@@ -28,9 +28,7 @@ interface FilterSidebarProps {
 }
 
 export function FilterSidebar({ className }: FilterSidebarProps) {
-  const [states, setStates] = useState<string[]>(["TX", "FL", "OH"]);
-  const [minAge, setMinAge] = useState(35);
-  const [maxAge, setMaxAge] = useState(60);
+  const [states, setStates] = useState<string[]>(["TX", "FL"]);
   const [minInc, setMinInc] = useState(50000);
   const [maxInc, setMaxInc] = useState(200000);
   const [occs, setOccs] = useState<string[]>([]);
@@ -52,46 +50,71 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
       </div>
 
       <div>
-        <Label className="mb-2 block">States</Label>
+        <div className="flex items-center justify-between mb-2">
+          <Label>States</Label>
+          <Badge variant="muted" className="text-[10px]">
+            {AVAILABLE_STATES.length} live
+          </Badge>
+        </div>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {states.map((s) => (
-            <Badge key={s} variant="default" className="cursor-pointer" onClick={() => toggle(states, setStates, s)}>
+            <Badge
+              key={s}
+              variant="default"
+              className="cursor-pointer"
+              onClick={() => toggle(states, setStates, s)}
+            >
               {s}
               <X className="h-3 w-3 ml-1" />
             </Badge>
           ))}
         </div>
-        <div className="max-h-[160px] overflow-y-auto scrollbar-thin grid grid-cols-5 gap-1 rounded-md border border-white/10 p-2 bg-white/[0.02]">
-          {US_STATES.map((s) => (
-            <button
-              key={s}
-              onClick={() => toggle(states, setStates, s)}
-              className={cn(
-                "text-[11px] py-1 rounded transition-colors",
-                states.includes(s)
-                  ? "bg-brand-teal/20 text-brand-teal"
-                  : "hover:bg-white/5 text-muted-foreground",
-              )}
-            >
-              {s}
-            </button>
-          ))}
+        <div className="max-h-[180px] overflow-y-auto scrollbar-thin grid grid-cols-5 gap-1 rounded-md border border-white/10 p-2 bg-white/[0.02]">
+          {US_STATES.map((s) => {
+            const available = AVAILABLE_STATES.includes(s);
+            const selected = states.includes(s);
+            return (
+              <button
+                key={s}
+                disabled={!available}
+                onClick={() => available && toggle(states, setStates, s)}
+                title={available ? `Filter to ${s}` : `${s} not available yet`}
+                className={cn(
+                  "text-[11px] py-1 rounded transition-colors relative",
+                  !available && "opacity-40 text-muted-foreground cursor-not-allowed line-through",
+                  available && !selected && "hover:bg-white/5 text-muted-foreground",
+                  selected && "bg-brand-teal/20 text-brand-teal",
+                )}
+              >
+                {s}
+              </button>
+            );
+          })}
         </div>
-      </div>
-
-      <div>
-        <Label className="mb-2 block">Age range</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <Input type="number" value={minAge} onChange={(e) => setMinAge(+e.target.value)} placeholder="Min" />
-          <Input type="number" value={maxAge} onChange={(e) => setMaxAge(+e.target.value)} placeholder="Max" />
+        <div className="mt-2 flex items-start gap-1.5 text-[10px] text-muted-foreground">
+          <Info className="h-3 w-3 mt-0.5 shrink-0" />
+          <span>
+            Active states: <span className="text-foreground">TX, FL, CA, IL</span>. More
+            states unlock as inventory grows.
+          </span>
         </div>
       </div>
 
       <div>
         <Label className="mb-2 block">Income range (annual)</Label>
         <div className="grid grid-cols-2 gap-2">
-          <Input type="number" value={minInc} onChange={(e) => setMinInc(+e.target.value)} placeholder="Min" />
-          <Input type="number" value={maxInc} onChange={(e) => setMaxInc(+e.target.value)} placeholder="Max" />
+          <Input
+            type="number"
+            value={minInc}
+            onChange={(e) => setMinInc(+e.target.value)}
+            placeholder="Min"
+          />
+          <Input
+            type="number"
+            value={maxInc}
+            onChange={(e) => setMaxInc(+e.target.value)}
+            placeholder="Max"
+          />
         </div>
         <p className="text-[10px] text-muted-foreground mt-1.5">
           Income is self-reported by prospect on form.

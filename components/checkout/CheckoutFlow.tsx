@@ -199,23 +199,16 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="multi">TX, FL, OH, GA (+3 more)</SelectItem>
-                      <SelectItem value="all">All licensed states</SelectItem>
+                      <SelectItem value="multi">TX, FL, CA, IL (all active)</SelectItem>
+                      <SelectItem value="tx">TX only</SelectItem>
+                      <SelectItem value="fl">FL only</SelectItem>
+                      <SelectItem value="ca">CA only</SelectItem>
+                      <SelectItem value="il">IL only</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Age range</Label>
-                  <Select defaultValue="35-60">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="25-40">25–40</SelectItem>
-                      <SelectItem value="35-60">35–60</SelectItem>
-                      <SelectItem value="50-70">50–70</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Active states: TX, FL, CA, IL. More unlock as inventory grows.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Income minimum</Label>
@@ -231,7 +224,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 sm:col-span-2">
                   <Label>Occupation niche</Label>
                   <Select defaultValue="any">
                     <SelectTrigger>
@@ -266,7 +259,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <ReviewRow label="Quantity" value={`${qty} leads`} />
                 <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
                 <ReviewRow label="Estimated delivery" value={pkg.estimatedDelivery} />
-                <ReviewRow label="Filters" value="TX, FL, OH · 35–60 · $60k+" />
+                <ReviewRow label="Filters" value="TX, FL, CA, IL · Income $60k+" />
               </div>
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox defaultChecked className="mt-0.5" />
