@@ -1,0 +1,125 @@
+"use client";
+import { useState } from "react";
+import { Filter, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { US_STATES } from "@/data/states";
+import { cn } from "@/lib/utils";
+
+const occupations = [
+  "Lineman",
+  "Electrician",
+  "Plumber",
+  "Pipefitter",
+  "Nurse",
+  "Teacher",
+  "Business Owner",
+  "Homeowner",
+  "Software Engineer",
+  "Contractor",
+];
+
+interface FilterSidebarProps {
+  className?: string;
+}
+
+export function FilterSidebar({ className }: FilterSidebarProps) {
+  const [states, setStates] = useState<string[]>(["TX", "FL", "OH"]);
+  const [minAge, setMinAge] = useState(35);
+  const [maxAge, setMaxAge] = useState(60);
+  const [minInc, setMinInc] = useState(50000);
+  const [maxInc, setMaxInc] = useState(200000);
+  const [occs, setOccs] = useState<string[]>([]);
+
+  const toggle = (arr: string[], setArr: (v: string[]) => void, v: string) => {
+    setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  };
+
+  return (
+    <Card className={cn("p-5 space-y-6 h-fit sticky top-20", className)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 font-medium">
+          <Filter className="h-4 w-4 text-brand-teal" />
+          Filters
+        </div>
+        <button className="text-xs text-muted-foreground hover:text-foreground">
+          Reset
+        </button>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">States</Label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {states.map((s) => (
+            <Badge key={s} variant="default" className="cursor-pointer" onClick={() => toggle(states, setStates, s)}>
+              {s}
+              <X className="h-3 w-3 ml-1" />
+            </Badge>
+          ))}
+        </div>
+        <div className="max-h-[160px] overflow-y-auto scrollbar-thin grid grid-cols-5 gap-1 rounded-md border border-white/10 p-2 bg-white/[0.02]">
+          {US_STATES.map((s) => (
+            <button
+              key={s}
+              onClick={() => toggle(states, setStates, s)}
+              className={cn(
+                "text-[11px] py-1 rounded transition-colors",
+                states.includes(s)
+                  ? "bg-brand-teal/20 text-brand-teal"
+                  : "hover:bg-white/5 text-muted-foreground",
+              )}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">Age range</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="number" value={minAge} onChange={(e) => setMinAge(+e.target.value)} placeholder="Min" />
+          <Input type="number" value={maxAge} onChange={(e) => setMaxAge(+e.target.value)} placeholder="Max" />
+        </div>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">Income range (annual)</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="number" value={minInc} onChange={(e) => setMinInc(+e.target.value)} placeholder="Min" />
+          <Input type="number" value={maxInc} onChange={(e) => setMaxInc(+e.target.value)} placeholder="Max" />
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          Income is self-reported by prospect on form.
+        </p>
+      </div>
+
+      <div>
+        <Label className="mb-2 block">Occupation / niche</Label>
+        <div className="space-y-2 max-h-[180px] overflow-y-auto scrollbar-thin pr-2">
+          {occupations.map((o) => (
+            <label key={o} className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={occs.includes(o)}
+                onCheckedChange={() => toggle(occs, setOccs, o)}
+              />
+              <span>{o}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <Button className="w-full" size="sm">
+        Apply filters
+      </Button>
+
+      <p className="text-[10px] text-muted-foreground">
+        Lead availability varies by state and campaign volume.
+      </p>
+    </Card>
+  );
+}
