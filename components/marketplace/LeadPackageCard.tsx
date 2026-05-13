@@ -44,18 +44,24 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
         <p className="mt-3 text-sm text-muted-foreground flex-1">{pkg.description}</p>
 
         <div className="mt-5 flex items-baseline gap-2">
-          <span
-            className={cn(
-              "text-3xl font-semibold tracking-tight",
-              !isAvailable && "text-muted-foreground",
-            )}
-          >
-            {formatCurrency(pkg.pricePerLead)}
-          </span>
-          <span className="text-xs text-muted-foreground">/ lead</span>
+          {isAvailable ? (
+            <>
+              <span className="text-3xl font-semibold tracking-tight">
+                {formatCurrency(pkg.pricePerLead)}
+              </span>
+              <span className="text-xs text-muted-foreground">/ lead</span>
+            </>
+          ) : (
+            <>
+              <span className="text-3xl font-semibold tracking-tight text-muted-foreground">
+                Pending
+              </span>
+              <span className="text-xs text-muted-foreground">pricing</span>
+            </>
+          )}
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          Min order: {pkg.minimumOrder} leads
+          {isAvailable ? `Min order: ${pkg.minimumOrder} leads` : "Min order: TBD"}
         </div>
         <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Clock className="h-3 w-3" />

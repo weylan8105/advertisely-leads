@@ -7,7 +7,7 @@ export const leadPackages: LeadPackage[] = [
     tagline: "Working professionals who actually pick up.",
     description:
       "Union members, tradesmen, and W-2 earners actively asking about cash-value life insurance and tax-free income strategies. Currently the only package we deliver live.",
-    pricePerLead: 30,
+    pricePerLead: 45,
     minimumOrder: 20,
     estimatedDelivery: "Within 24 hours",
     badge: "Available now",

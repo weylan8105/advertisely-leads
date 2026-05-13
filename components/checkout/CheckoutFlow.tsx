@@ -135,8 +135,21 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">{p.tagline}</div>
                     <div className="mt-3 flex items-end gap-1">
-                      <span className="text-lg font-semibold">{formatCurrency(p.pricePerLead)}</span>
-                      <span className="text-[11px] text-muted-foreground">/ lead</span>
+                      {p.available ? (
+                        <>
+                          <span className="text-lg font-semibold">
+                            {formatCurrency(p.pricePerLead)}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">/ lead</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-lg font-semibold text-muted-foreground">
+                            Pending
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">pricing</span>
+                        </>
+                      )}
                     </div>
                   </button>
                 ))}
