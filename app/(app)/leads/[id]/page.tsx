@@ -255,8 +255,10 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
             <TabsContent value="intent">
               <Card>
                 <CardHeader>
-                  <CardTitle>Intent & qualification</CardTitle>
-                  <CardDescription>What the prospect actually asked about</CardDescription>
+                  <CardTitle>Intent & full form responses</CardTitle>
+                  <CardDescription>
+                    Every question the prospect answered on the Meta instant form
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">
                   <div>
@@ -268,6 +270,30 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="default">{lead.leadTypeLabel}</Badge>
                     <Badge variant="muted">{lead.source}</Badge>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/[0.06]">
+                    <div className="text-xs font-medium mb-2">Instant form responses</div>
+                    <div className="rounded-md border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+                      <FormResponseRow label="Full name" value={lead.name} />
+                      <FormResponseRow label="Phone number" value={lead.phone} />
+                      <FormResponseRow label="Email" value={lead.email} />
+                      <FormResponseRow label="State" value={lead.state} />
+                      <FormResponseRow label="Age" value={`${lead.age}`} />
+                      <FormResponseRow
+                        label="Self-reported income"
+                        value={formatCurrency(lead.income)}
+                      />
+                      <FormResponseRow label="Occupation" value={lead.occupation} />
+                      <FormResponseRow
+                        label="Why interested in IUL?"
+                        value={lead.intentReason}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Sourced directly from the Meta Lead Ad form submission. Original
+                      consent record preserved.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -453,6 +479,15 @@ function ContactField({
     </a>
   ) : (
     <div>{content}</div>
+  );
+}
+
+function FormResponseRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 px-3 py-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
   );
 }
 

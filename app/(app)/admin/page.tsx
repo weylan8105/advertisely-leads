@@ -24,6 +24,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
+import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
 import { mockLeads, leadSources } from "@/data/leads";
 import { formatCurrency } from "@/lib/utils";
 
@@ -85,6 +86,7 @@ export default function AdminPage() {
         <Tabs defaultValue="queue">
           <TabsList>
             <TabsTrigger value="queue">Manual assignment</TabsTrigger>
+            <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
             <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
             <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
             <TabsTrigger value="replacements">Replacement queue</TabsTrigger>
@@ -104,6 +106,10 @@ export default function AdminPage() {
                 <AdminLeadQueue />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="meta">
+            <MetaIntegrationManager />
           </TabsContent>
 
           <TabsContent value="auto">

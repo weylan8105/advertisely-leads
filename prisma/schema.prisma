@@ -1,0 +1,303 @@
+// Advertisely Leads — Prisma schema
+// Reference: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+// ─── NextAuth models ─────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  agency        String?
+  role          UserRole  @default(AGENT)
+  state         String?
+  createdAt     DateTime  @default(now())
+
+  accounts     Account[]
+  sessions     Session[]
+  orders       Order[]
+  assignedLeads Lead[]      @relation("AssignedAgent")
+  integrations Integration[]
+  exportLogs   ExportLog[]
+  tasks        Task[]
+}
+
+enum UserRole {
+  AGENT
+  AGENCY_OWNER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Meta integration (admin-owned) ──────────────────────────────────
+
+// One row per Meta Page that we ingest leads from.
+// Admin-only; customers never touch this.
+model MetaPageConnection {
+  id              String   @id @default(cuid())
+  pageId          String   @unique
+  pageName        String
+  pageAccessToken String   @db.Text
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  formMappings    MetaFormMapping[]
+}
+
+// Maps a specific Meta Lead Ad Form to an Advertisely package.
+// e.g. "Lineman Retirement Q2" form_id 12345 → "blue-collar-iul" package.
+model MetaFormMapping {
+  id                 String              @id @default(cuid())
+  formId             String              @unique
+  formName           String
+  packageId          String              // matches LeadPackageId in TypeScript
+  pageConnectionId   String
+  enabled            Boolean             @default(true)
+  // Mapping from Meta form question key → our standardized field name.
+  // E.g. {"what_state_do_you_live_in?": "state", "your_occupation?": "occupation"}
+  fieldMapping       Json                @default("{}")
+  createdAt          DateTime            @default(now())
+  pageConnection     MetaPageConnection  @relation(fields: [pageConnectionId], references: [id], onDelete: Cascade)
+}
+
+// ─── Lead pipeline ───────────────────────────────────────────────────
+
+model Lead {
+  id              String      @id @default(cuid())
+  externalId      String?     @unique // Meta leadgen_id
+  name            String
+  phone           String
+  email           String
+  state           String
+  age             Int?
+  income          Int?
+  occupation      String?
+  intentReason    String?     @db.Text
+  packageId       String      // which package this lead belongs to
+  status          LeadStatus  @default(NEW)
+  disposition     String?
+  source          String      // e.g. "Meta - Lineman Retirement Q2"
+  campaignName    String?
+  adsetId         String?
+  creativeId      String?
+  consentMethod   ConsentMethod @default(TCPA_WEB_FORM)
+  consentTime     DateTime
+  consentIp       String?
+  trustedFormUrl  String?
+  // Every question/answer from the Meta instant form, even ones we don't model
+  rawFormData     Json        @default("{}")
+  tags            String[]    @default([])
+  callAttempts    Int         @default(0)
+  lastContactedAt DateTime?
+  receivedAt      DateTime    @default(now())
+
+  // Assignment + order
+  assignedUserId  String?
+  assignedAt      DateTime?
+  orderId         String?
+  assignedUser    User?       @relation("AssignedAgent", fields: [assignedUserId], references: [id])
+  order           Order?      @relation(fields: [orderId], references: [id])
+
+  notes           LeadNote[]
+  tasks           Task[]
+  activity        LeadActivity[]
+  exportLogs      ExportLog[]
+
+  @@index([state, packageId, status, assignedUserId])
+  @@index([receivedAt])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  APPOINTMENT_SET
+  NO_ANSWER
+  BAD_NUMBER
+  CLOSED
+  REPLACED
+}
+
+enum ConsentMethod {
+  TCPA_WEB_FORM
+  TRUSTED_FORM
+  JORNAYA
+}
+
+model LeadNote {
+  id       String   @id @default(cuid())
+  leadId   String
+  author   String
+  body     String   @db.Text
+  createdAt DateTime @default(now())
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadActivity {
+  id       String       @id @default(cuid())
+  leadId   String
+  type     ActivityType
+  author   String?
+  body     String       @db.Text
+  metadata Json?
+  createdAt DateTime    @default(now())
+  lead     Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+enum ActivityType {
+  LEAD_RECEIVED
+  LEAD_ASSIGNED
+  CALL_MADE
+  EMAIL_SENT
+  SMS_SENT
+  NOTE_ADDED
+  STATUS_CHANGED
+  APPOINTMENT_SET
+  EXPORTED_CRM
+  TAG_ADDED
+  REPLACEMENT_REQUESTED
+}
+
+model Task {
+  id         String   @id @default(cuid())
+  leadId     String
+  assignedTo String
+  type       TaskType
+  title      String
+  dueAt      DateTime
+  done       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [assignedTo], references: [id], onDelete: Cascade)
+}
+
+enum TaskType {
+  CALL
+  EMAIL
+  SMS
+  APPOINTMENT
+  FOLLOW_UP
+}
+
+// ─── Orders + fulfillment ────────────────────────────────────────────
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  packageId       String
+  quantity        Int
+  pricePerLeadCents Int
+  totalCents      Int
+  // Filters that gate which leads can fulfill this order
+  filterStates    String[]    @default([])
+  filterIncomeMin Int?
+  status          OrderStatus @default(PENDING)
+  fulfilledCount  Int         @default(0)
+  stripePaymentIntentId String?
+  createdAt       DateTime    @default(now())
+  fulfilledAt     DateTime?
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads           Lead[]
+
+  @@index([status])
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  DELIVERING
+  DELIVERED
+  REFUNDED
+}
+
+// ─── Customer integrations (GHL, Sheets, Webhook) ────────────────────
+
+model Integration {
+  id        String          @id @default(cuid())
+  userId    String
+  type      IntegrationType
+  enabled   Boolean         @default(true)
+  // Encrypted credentials: { apiKey, locationId, sheetUrl, webhookUrl, etc. }
+  config    Json
+  lastUsedAt DateTime?
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+}
+
+enum IntegrationType {
+  GOHIGHLEVEL
+  GOOGLE_SHEETS
+  WEBHOOK
+  SALESFORCE
+  HUBSPOT
+  ZAPIER
+}
+
+// ─── Export audit log ────────────────────────────────────────────────
+
+model ExportLog {
+  id          String     @id @default(cuid())
+  userId      String
+  leadId      String?
+  destination String     // 'ghl', 'sheets', 'webhook', etc.
+  status      ExportStatus @default(SUCCESS)
+  responseCode Int?
+  errorMessage String?
+  createdAt   DateTime   @default(now())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead        Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+enum ExportStatus {
+  SUCCESS
+  FAILED
+  PENDING
+}

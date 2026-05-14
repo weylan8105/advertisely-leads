@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
+import { GHLConnectCard } from "@/components/settings/GHLConnectCard";
 import { integrations } from "@/data/integrations";
 import { currentUser } from "@/data/user";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -120,9 +121,12 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {integrations.map((i) => (
-                  <CRMIntegrationCard key={i.id} integration={i} />
-                ))}
+                <GHLConnectCard />
+                {integrations
+                  .filter((i) => i.type !== "gohighlevel")
+                  .map((i) => (
+                    <CRMIntegrationCard key={i.id} integration={i} />
+                  ))}
               </div>
             </div>
 
