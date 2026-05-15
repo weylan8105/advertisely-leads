@@ -4,13 +4,13 @@ import Link from "next/link";
 import {
   Check,
   ChevronRight,
-  CreditCard,
   Lock,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -263,38 +263,14 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
               <div>
                 <h2 className="text-xl font-semibold">Payment</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Securely process via Stripe. Card or ACH supported.
+                  Securely process via Stripe. Card, Apple Pay, Google Pay, and ACH supported.
                 </p>
               </div>
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3 text-xs text-amber-200">
-                Demo build — Stripe is not connected yet. This screen mocks the production checkout.
-              </div>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label>Cardholder name</Label>
-                  <Input placeholder="Jordan Pace" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Card number</Label>
-                  <div className="relative">
-                    <Input placeholder="4242 4242 4242 4242" className="pl-10" />
-                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Expiry</Label>
-                    <Input placeholder="MM / YY" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>CVC</Label>
-                    <Input placeholder="123" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Lock className="h-3 w-3" /> Payments processed securely via Stripe.
-                </div>
-              </div>
+              <StripePaymentForm
+                packageId={pkg.id}
+                quantity={qty}
+                onSuccess={() => setStep(5)}
+              />
             </div>
           )}
 
@@ -319,7 +295,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
             </div>
           )}
 
-          {step < 5 && (
+          {step < 4 && (
             <div className="flex justify-between mt-8 pt-6 border-t border-white/[0.06]">
               <Button
                 variant="outline"
@@ -329,7 +305,18 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <ArrowLeft className="h-4 w-4" /> Back
               </Button>
               <Button onClick={() => setStep(Math.min(5, step + 1))}>
-                {step === 4 ? "Place order" : "Continue"} <ArrowRight className="h-4 w-4" />
+                Continue <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {step === 4 && (
+            <div className="mt-6 pt-4 border-t border-white/[0.06]">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep(3)}
+              >
+                <ArrowLeft className="h-4 w-4" /> Back to review
               </Button>
             </div>
           )}
