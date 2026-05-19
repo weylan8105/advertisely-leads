@@ -15,16 +15,16 @@ import { formatDateTime, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const typeMap: Record<LeadActivity["type"], { icon: any; color: string }> = {
-  lead_received: { icon: Inbox, color: "text-brand-teal bg-brand-teal/10" },
-  call_made: { icon: PhoneCall, color: "text-emerald-300 bg-emerald-500/10" },
-  email_sent: { icon: Mail, color: "text-violet-300 bg-violet-500/10" },
-  sms_sent: { icon: MessageSquare, color: "text-sky-300 bg-sky-500/10" },
-  note_added: { icon: StickyNote, color: "text-amber-300 bg-amber-500/10" },
-  status_changed: { icon: ArrowRight, color: "text-muted-foreground bg-white/5" },
-  appointment_set: { icon: CalendarCheck, color: "text-violet-300 bg-violet-500/10" },
-  exported_crm: { icon: Send, color: "text-sky-300 bg-sky-500/10" },
-  tag_added: { icon: Tag, color: "text-muted-foreground bg-white/5" },
-  replacement_requested: { icon: RefreshCw, color: "text-rose-300 bg-rose-500/10" },
+  lead_received: { icon: Inbox, color: "text-brand-red bg-brand-red/10" },
+  call_made: { icon: PhoneCall, color: "text-emerald-600 bg-emerald-500/10" },
+  email_sent: { icon: Mail, color: "text-violet-600 bg-violet-500/10" },
+  sms_sent: { icon: MessageSquare, color: "text-sky-600 bg-sky-500/10" },
+  note_added: { icon: StickyNote, color: "text-amber-700 bg-amber-500/10" },
+  status_changed: { icon: ArrowRight, color: "text-muted-foreground bg-slate-100" },
+  appointment_set: { icon: CalendarCheck, color: "text-violet-600 bg-violet-500/10" },
+  exported_crm: { icon: Send, color: "text-sky-600 bg-sky-500/10" },
+  tag_added: { icon: Tag, color: "text-muted-foreground bg-slate-100" },
+  replacement_requested: { icon: RefreshCw, color: "text-rose-600 bg-rose-500/10" },
 };
 
 interface ActivityTimelineProps {
@@ -50,7 +50,7 @@ export function ActivityTimeline({ activity, notes }: ActivityTimelineProps) {
 
   if (merged.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-4 text-xs text-muted-foreground text-center">
+      <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-muted-foreground text-center">
         No activity yet. Notes, calls, and exports will appear here.
       </div>
     );
@@ -58,7 +58,7 @@ export function ActivityTimeline({ activity, notes }: ActivityTimelineProps) {
 
   return (
     <div className="relative">
-      <div className="absolute left-[15px] top-2 bottom-2 w-px bg-white/[0.06]" />
+      <div className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-100" />
       <div className="space-y-4">
         {merged.map((event) => {
           const cfg = typeMap[event.type];

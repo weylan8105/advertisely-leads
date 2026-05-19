@@ -161,23 +161,23 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                   <div className="mb-5 grid grid-cols-3 gap-2">
                     <a
                       href={telHref}
-                      className="flex flex-col items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-emerald-500/[0.05] hover:border-emerald-500/30 py-3 transition-colors"
+                      className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-emerald-500/[0.05] hover:border-emerald-500/30 py-3 transition-colors"
                     >
-                      <Phone className="h-4 w-4 text-emerald-300" />
+                      <Phone className="h-4 w-4 text-emerald-600" />
                       <span className="text-[11px]">Log call</span>
                     </a>
                     <a
                       href={smsHref}
-                      className="flex flex-col items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-sky-500/[0.05] hover:border-sky-500/30 py-3 transition-colors"
+                      className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-sky-500/[0.05] hover:border-sky-500/30 py-3 transition-colors"
                     >
-                      <MessageSquare className="h-4 w-4 text-sky-300" />
+                      <MessageSquare className="h-4 w-4 text-sky-600" />
                       <span className="text-[11px]">Send SMS</span>
                     </a>
                     <a
                       href={mailHref}
-                      className="flex flex-col items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-violet-500/[0.05] hover:border-violet-500/30 py-3 transition-colors"
+                      className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-violet-500/[0.05] hover:border-violet-500/30 py-3 transition-colors"
                     >
-                      <Mail className="h-4 w-4 text-violet-300" />
+                      <Mail className="h-4 w-4 text-violet-600" />
                       <span className="text-[11px]">Send email</span>
                     </a>
                   </div>
@@ -225,7 +225,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                   </div>
                   <div className="space-y-3">
                     {lead.notes.length === 0 && (
-                      <div className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-4 text-xs text-muted-foreground text-center">
+                      <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-muted-foreground text-center">
                         No notes yet. Add the first one above.
                       </div>
                     )}
@@ -236,7 +236,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                             {initials(n.author)}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
+                        <div className="flex-1 rounded-md border border-slate-200 bg-slate-50 p-3">
                           <div className="flex items-center justify-between">
                             <div className="text-xs font-medium">{n.author}</div>
                             <div className="text-[10px] text-muted-foreground">
@@ -263,7 +263,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                 <CardContent className="space-y-4 text-sm">
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">IUL interest reason</div>
-                    <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3 text-sm">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
                       {lead.intentReason}
                     </div>
                   </div>
@@ -272,9 +272,9 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                     <Badge variant="muted">{lead.source}</Badge>
                   </div>
 
-                  <div className="pt-3 border-t border-white/[0.06]">
+                  <div className="pt-3 border-t border-slate-200">
                     <div className="text-xs font-medium mb-2">Instant form responses</div>
-                    <div className="rounded-md border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+                    <div className="rounded-md border border-slate-200 bg-slate-50 divide-y divide-slate-200">
                       <FormResponseRow label="Full name" value={lead.name} />
                       <FormResponseRow label="Phone number" value={lead.phone} />
                       <FormResponseRow label="Email" value={lead.email} />
@@ -372,10 +372,10 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-brand-teal" />
+                <ShieldCheck className="h-4 w-4 text-brand-red" />
                 <Badge variant="success">{lead.consent.method}</Badge>
               </div>
-              <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3 text-xs space-y-1">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Captured</span>
                   <span>{lead.consent.captured ? "Yes" : "No"}</span>
@@ -474,7 +474,7 @@ function ContactField({
     </>
   );
   return href ? (
-    <a href={href} className="block hover:text-brand-teal transition-colors">
+    <a href={href} className="block hover:text-brand-red transition-colors">
       {content}
     </a>
   ) : (
@@ -493,12 +493,12 @@ function FormResponseRow({ label, value }: { label: string; value: string }) {
 
 function TemplateRow({ label, channel }: { label: string; channel: string }) {
   return (
-    <button className="w-full flex items-center justify-between gap-3 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] px-3 py-2 transition-colors text-sm text-left">
+    <button className="w-full flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2 transition-colors text-sm text-left">
       <div className="flex items-center gap-2">
         {channel === "SMS" ? (
-          <MessageSquare className="h-3.5 w-3.5 text-sky-300" />
+          <MessageSquare className="h-3.5 w-3.5 text-sky-600" />
         ) : (
-          <Mail className="h-3.5 w-3.5 text-violet-300" />
+          <Mail className="h-3.5 w-3.5 text-violet-600" />
         )}
         <span>{label}</span>
       </div>

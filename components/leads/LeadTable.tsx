@@ -144,7 +144,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
         </div>
       )}
 
-      <div className="rounded-xl border border-white/[0.06] bg-card/40 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -176,7 +176,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                 )}
                 <TableCell>
                   <Link href={`/leads/${lead.id}`} className="block group">
-                    <div className="font-medium leading-tight group-hover:text-brand-teal transition-colors">
+                    <div className="font-medium leading-tight group-hover:text-brand-red transition-colors">
                       {lead.name}
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -217,7 +217,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                       href={`tel:${lead.phone.replace(/\D/g, "")}`}
                       onClick={(e) => e.stopPropagation()}
                       title="Call"
-                      className="h-7 w-7 grid place-items-center rounded-md border border-white/10 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-300 transition-colors"
+                      className="h-7 w-7 grid place-items-center rounded-md border border-slate-300 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-600 transition-colors"
                     >
                       <Phone className="h-3.5 w-3.5" />
                     </a>
@@ -225,7 +225,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                       href={`sms:${lead.phone.replace(/\D/g, "")}`}
                       onClick={(e) => e.stopPropagation()}
                       title="Text"
-                      className="h-7 w-7 grid place-items-center rounded-md border border-white/10 hover:bg-sky-500/10 hover:border-sky-500/40 hover:text-sky-300 transition-colors"
+                      className="h-7 w-7 grid place-items-center rounded-md border border-slate-300 hover:bg-sky-500/10 hover:border-sky-500/40 hover:text-sky-600 transition-colors"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </a>
@@ -233,7 +233,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                       href={`mailto:${lead.email}`}
                       onClick={(e) => e.stopPropagation()}
                       title="Email"
-                      className="h-7 w-7 grid place-items-center rounded-md border border-white/10 hover:bg-violet-500/10 hover:border-violet-500/40 hover:text-violet-300 transition-colors"
+                      className="h-7 w-7 grid place-items-center rounded-md border border-slate-300 hover:bg-violet-500/10 hover:border-violet-500/40 hover:text-violet-600 transition-colors"
                     >
                       <Mail className="h-3.5 w-3.5" />
                     </a>

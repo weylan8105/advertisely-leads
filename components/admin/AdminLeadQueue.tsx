@@ -29,7 +29,7 @@ export function AdminLeadQueue() {
   const unassigned = mockLeads.slice(0, 8);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-card/40 overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>

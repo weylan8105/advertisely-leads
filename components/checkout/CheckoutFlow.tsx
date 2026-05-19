@@ -55,7 +55,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
   return (
     <div>
       {/* Stepper */}
-      <div className="rounded-xl border border-white/[0.06] bg-card/40 p-4 mb-8">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 mb-8">
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
           {steps.map((s, i) => {
             const done = step > s.id;
@@ -66,10 +66,10 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                   className={cn(
                     "h-7 w-7 grid place-items-center rounded-full text-xs font-medium",
                     done
-                      ? "bg-brand-teal text-slate-950"
+                      ? "bg-brand-red text-slate-950"
                       : active
-                      ? "bg-white/10 text-foreground ring-2 ring-brand-teal/40"
-                      : "bg-white/[0.04] text-muted-foreground",
+                      ? "bg-slate-200 text-foreground ring-2 ring-brand-red/40"
+                      : "bg-slate-100 text-muted-foreground",
                   )}
                 >
                   {done ? <Check className="h-3.5 w-3.5" /> : s.id}
@@ -114,17 +114,17 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                     className={cn(
                       "text-left rounded-lg border p-4 transition-colors relative",
                       pkgId === p.id && p.available
-                        ? "border-brand-teal/50 bg-brand-teal/[0.04]"
-                        : "border-white/[0.06] bg-white/[0.02]",
+                        ? "border-brand-red/50 bg-brand-red/[0.04]"
+                        : "border-slate-200 bg-slate-50",
                       p.available
-                        ? "hover:bg-white/[0.04] cursor-pointer"
+                        ? "hover:bg-slate-100 cursor-pointer"
                         : "opacity-60 cursor-not-allowed",
                     )}
                   >
                     <div className="flex items-center justify-between">
                       <div className="font-medium">{p.name}</div>
                       {pkgId === p.id && p.available && (
-                        <Check className="h-4 w-4 text-brand-teal" />
+                        <Check className="h-4 w-4 text-brand-red" />
                       )}
                       {!p.available && (
                         <Badge variant="muted" className="text-[10px]">
@@ -241,7 +241,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                   Double-check everything before payment.
                 </p>
               </div>
-              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200">
                 <ReviewRow label="Package" value={pkg.name} />
                 <ReviewRow label="Quantity" value={`${qty} leads`} />
                 <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
@@ -276,7 +276,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
 
           {step === 5 && (
             <div className="text-center py-10">
-              <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-emerald-500/15 text-emerald-300 mb-4">
+              <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-emerald-500/15 text-emerald-600 mb-4">
                 <CheckCircle2 className="h-7 w-7" />
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">Order placed</h2>
@@ -296,7 +296,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
           )}
 
           {step < 4 && (
-            <div className="flex justify-between mt-8 pt-6 border-t border-white/[0.06]">
+            <div className="flex justify-between mt-8 pt-6 border-t border-slate-200">
               <Button
                 variant="outline"
                 onClick={() => setStep(Math.max(1, step - 1))}
@@ -310,7 +310,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
             </div>
           )}
           {step === 4 && (
-            <div className="mt-6 pt-4 border-t border-white/[0.06]">
+            <div className="mt-6 pt-4 border-t border-slate-200">
               <Button
                 variant="ghost"
                 size="sm"
@@ -341,7 +341,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <span className="text-muted-foreground">Price per lead</span>
                 <span>{formatCurrency(pkg.pricePerLead)}</span>
               </div>
-              <div className="border-t border-white/[0.06] pt-3 flex justify-between text-base">
+              <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
                 <span className="font-medium">Total</span>
                 <span className="font-semibold text-gradient">{formatCurrency(total)}</span>
               </div>

@@ -43,7 +43,7 @@ export function FAQ() {
   return (
     <section id="faq" className="container py-20 lg:py-28">
       <div className="max-w-2xl mx-auto text-center">
-        <div className="text-xs uppercase tracking-[0.18em] text-brand-teal font-medium mb-3">
+        <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
           FAQ
         </div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
@@ -58,8 +58,8 @@ export function FAQ() {
             <div
               key={i}
               className={cn(
-                "rounded-xl border border-white/[0.06] bg-card/40 overflow-hidden transition-colors",
-                isOpen && "border-white/15",
+                "rounded-xl border border-slate-200 bg-white overflow-hidden transition-colors",
+                isOpen && "border-slate-300",
               )}
             >
               <button
@@ -68,7 +68,7 @@ export function FAQ() {
               >
                 <span className="font-medium text-sm">{f.q}</span>
                 {isOpen ? (
-                  <Minus className="h-4 w-4 text-brand-teal shrink-0" />
+                  <Minus className="h-4 w-4 text-brand-red shrink-0" />
                 ) : (
                   <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
                 )}

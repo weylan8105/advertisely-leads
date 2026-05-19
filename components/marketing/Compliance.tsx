@@ -2,11 +2,11 @@ import { ShieldCheck, FileCheck, Clock4, FlagTriangleRight, BadgeCheck } from "l
 
 export function Compliance() {
   return (
-    <section id="compliance" className="border-y border-white/[0.06] bg-brand-deepnavy">
+    <section id="compliance" className="border-y border-slate-200 bg-slate-50">
       <div className="container py-20 lg:py-24">
         <div className="grid lg:grid-cols-5 gap-10">
           <div className="lg:col-span-2">
-            <div className="text-xs uppercase tracking-[0.18em] text-brand-teal font-medium mb-3">
+            <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
               Compliance & trust
             </div>
             <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
@@ -17,8 +17,8 @@ export function Compliance() {
               timestamped opt-in, and traceable Meta campaign attribution. We don't ship leads
               without a paper trail — ever.
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs">
-              <BadgeCheck className="h-3.5 w-3.5 text-brand-teal" />
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs">
+              <BadgeCheck className="h-3.5 w-3.5 text-brand-red" />
               TrustedForm / Jornaya certificate per lead
             </div>
           </div>
@@ -48,8 +48,8 @@ export function Compliance() {
             ].map((c) => {
               const Icon = c.icon;
               return (
-                <div key={c.title} className="rounded-xl border border-white/[0.06] bg-card/40 p-5">
-                  <div className="h-9 w-9 grid place-items-center rounded-md bg-white/[0.04] border border-white/10 text-brand-teal">
+                <div key={c.title} className="rounded-xl border border-slate-200 bg-white p-5">
+                  <div className="h-9 w-9 grid place-items-center rounded-md bg-slate-100 border border-slate-300 text-brand-red">
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="mt-3 font-medium">{c.title}</div>
@@ -60,7 +60,7 @@ export function Compliance() {
           </div>
         </div>
 
-        <div className="mt-10 rounded-xl border border-white/[0.06] bg-card/40 p-5 text-xs text-muted-foreground">
+        <div className="mt-10 rounded-xl border border-slate-200 bg-white p-5 text-xs text-muted-foreground">
           <span className="text-foreground font-medium">Disclaimers: </span>
           Lead availability varies by state and campaign volume. All leads should include
           documented consent before agent outreach. Advertisely does not guarantee sales

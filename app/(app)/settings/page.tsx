@@ -133,7 +133,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Webhook className="h-4 w-4 text-brand-teal" />
+                  <Webhook className="h-4 w-4 text-brand-red" />
                   Custom webhook endpoint
                 </CardTitle>
                 <CardDescription>
@@ -173,7 +173,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4 text-emerald-300" />
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
                   Google Sheets connection
                 </CardTitle>
                 <CardDescription>
@@ -275,7 +275,7 @@ export default function SettingsPage() {
                 ["Weekly performance digest", true],
                 ["Marketplace inventory alerts", false],
               ].map(([label, on]) => (
-                <div key={label as string} className="flex items-center justify-between border-b border-white/[0.06] pb-3 last:border-0">
+                <div key={label as string} className="flex items-center justify-between border-b border-slate-200 pb-3 last:border-0">
                   <div className="text-sm">{label}</div>
                   <div className="flex gap-2">
                     <label className="flex items-center gap-1 text-xs"><Checkbox defaultChecked={!!on} /> Email</label>

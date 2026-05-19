@@ -13,7 +13,7 @@ export function Hero() {
         className="absolute inset-0 bg-grid-light pointer-events-none"
         style={{ backgroundSize: "32px 32px" }}
       />
-      <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[480px] w-[1100px] rounded-full bg-brand-teal/10 blur-3xl pointer-events-none" />
+      <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[480px] w-[1100px] rounded-full bg-brand-red/10 blur-3xl pointer-events-none" />
 
       <div className="container relative pt-20 pb-24 lg:pt-28 lg:pb-32">
         <motion.div
@@ -50,13 +50,13 @@ export function Hero() {
 
           <div className="mt-8 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-brand-teal" /> TCPA-compliant capture
+              <ShieldCheck className="h-3.5 w-3.5 text-brand-red" /> TCPA-compliant capture
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Database className="h-3.5 w-3.5 text-brand-teal" /> Source-tracked records
+              <Database className="h-3.5 w-3.5 text-brand-red" /> Source-tracked records
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-brand-teal" /> Real-time delivery
+              <Zap className="h-3.5 w-3.5 text-brand-red" /> Real-time delivery
             </span>
           </div>
         </motion.div>
@@ -77,9 +77,9 @@ export function Hero() {
 function HeroDashboardMock() {
   return (
     <div className="relative mx-auto max-w-5xl">
-      <div className="absolute -inset-x-12 -top-12 -bottom-12 bg-gradient-to-b from-brand-teal/10 via-transparent to-transparent blur-3xl pointer-events-none" />
-      <div className="relative rounded-2xl border border-white/10 bg-card/70 backdrop-blur-xl overflow-hidden shadow-[0_40px_120px_-30px_rgba(34,211,238,0.35)]">
-        <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3 text-xs text-muted-foreground">
+      <div className="absolute -inset-x-12 -top-12 -bottom-12 bg-gradient-to-b from-brand-red/10 via-transparent to-transparent blur-3xl pointer-events-none" />
+      <div className="relative rounded-2xl border border-slate-300 bg-white backdrop-blur-xl overflow-hidden shadow-[0_40px_120px_-30px_rgba(220,38,38,0.35)]">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 text-xs text-muted-foreground">
           <span className="h-2.5 w-2.5 rounded-full bg-rose-500/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
@@ -91,12 +91,12 @@ function HeroDashboardMock() {
           <MockStat label="Closed AP (30d)" value="$48,200" delta="+12%" tone="emerald" />
         </div>
         <div className="px-5 pb-5">
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-medium">Recent IUL leads</div>
-              <span className="text-[10px] text-brand-teal">Live · auto-refreshing</span>
+              <span className="text-[10px] text-brand-red">Live · auto-refreshing</span>
             </div>
-            <div className="divide-y divide-white/[0.05]">
+            <div className="divide-y divide-slate-200">
               {[
                 ["Marcus H.", "TX", "Lineman", "New"],
                 ["Tasha G.", "FL", "RN", "Contacted"],
@@ -110,10 +110,10 @@ function HeroDashboardMock() {
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         row[3] === "New"
-                          ? "bg-brand-teal/15 text-brand-teal"
+                          ? "bg-brand-red/15 text-brand-red"
                           : row[3] === "Contacted"
-                          ? "bg-sky-500/15 text-sky-300"
-                          : "bg-violet-500/15 text-violet-300"
+                          ? "bg-sky-500/15 text-sky-600"
+                          : "bg-violet-500/15 text-violet-600"
                       }`}
                     >
                       {row[3]}
@@ -141,12 +141,12 @@ function MockStat({
   tone: "teal" | "violet" | "emerald";
 }) {
   const colors = {
-    teal: "from-brand-teal/15 text-brand-teal",
-    violet: "from-violet-500/15 text-violet-300",
-    emerald: "from-emerald-500/15 text-emerald-300",
+    teal: "from-brand-red/15 text-brand-red",
+    violet: "from-violet-500/15 text-violet-600",
+    emerald: "from-emerald-500/15 text-emerald-600",
   };
   return (
-    <div className="relative rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden p-4">
+    <div className="relative rounded-xl border border-slate-200 bg-slate-50 overflow-hidden p-4">
       <div className={`absolute inset-0 bg-gradient-to-br ${colors[tone].split(" ")[0]} to-transparent`} />
       <div className="relative">
         <div className="text-[11px] text-muted-foreground">{label}</div>

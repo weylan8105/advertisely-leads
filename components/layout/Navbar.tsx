@@ -17,7 +17,7 @@ const navItems = [
 export function Navbar() {
   const [open, setOpen] = useState(false);
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.06] bg-brand-deepnavy/70 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-10">
           <Logo />
@@ -53,7 +53,7 @@ export function Navbar() {
       </div>
       <div
         className={cn(
-          "md:hidden overflow-hidden border-t border-white/[0.06] transition-all",
+          "md:hidden overflow-hidden border-t border-slate-200 transition-all",
           open ? "max-h-96" : "max-h-0",
         )}
       >

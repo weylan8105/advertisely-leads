@@ -45,8 +45,8 @@ export default async function CheckoutSuccessPage({
   }
 
   return (
-    <div className="min-h-screen bg-brand-deepnavy">
-      <header className="border-b border-white/[0.06]">
+    <div className="min-h-screen bg-white">
+      <header className="border-b border-slate-200">
         <div className="container h-16 flex items-center justify-between">
           <Logo />
           <Link
@@ -62,7 +62,7 @@ export default async function CheckoutSuccessPage({
           <Card className="p-10 text-center">
             {resolvedStatus === "success" && (
               <>
-                <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-emerald-500/15 text-emerald-300 mb-4">
+                <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-emerald-500/15 text-emerald-600 mb-4">
                   <CheckCircle2 className="h-7 w-7" />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight">
@@ -76,7 +76,7 @@ export default async function CheckoutSuccessPage({
             )}
             {resolvedStatus === "processing" && (
               <>
-                <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-amber-500/15 text-amber-300 mb-4">
+                <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-amber-500/15 text-amber-700 mb-4">
                   <Loader2 className="h-7 w-7 animate-spin" />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight">
@@ -90,7 +90,7 @@ export default async function CheckoutSuccessPage({
             )}
             {resolvedStatus === "failed" && (
               <>
-                <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-rose-500/15 text-rose-300 mb-4">
+                <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-rose-500/15 text-rose-600 mb-4">
                   <AlertCircle className="h-7 w-7" />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight">

@@ -49,8 +49,8 @@ const sections: { title: string; items: NavItem[] }[] = [
 export function SidebarNav() {
   const pathname = usePathname();
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-white/[0.06] bg-brand-deepnavy/80 backdrop-blur-md min-h-screen sticky top-0">
-      <div className="px-5 h-16 flex items-center border-b border-white/[0.06]">
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white min-h-screen sticky top-0">
+      <div className="px-5 h-16 flex items-center border-b border-slate-200">
         <Logo />
       </div>
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-6 scrollbar-thin">
@@ -70,12 +70,12 @@ export function SidebarNav() {
                     className={cn(
                       "group flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
                       active
-                        ? "bg-white/[0.06] text-foreground"
-                        : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+                        ? "bg-slate-100 text-foreground"
+                        : "text-muted-foreground hover:bg-slate-100 hover:text-foreground",
                     )}
                   >
                     <span className="flex items-center gap-3">
-                      <Icon className={cn("h-4 w-4", active && "text-brand-teal")} />
+                      <Icon className={cn("h-4 w-4", active && "text-brand-red")} />
                       {item.label}
                     </span>
                     {item.badge && <Badge variant="muted" className="text-[10px]">{item.badge}</Badge>}
@@ -86,10 +86,10 @@ export function SidebarNav() {
           </div>
         ))}
       </div>
-      <div className="p-4 border-t border-white/[0.06] space-y-3">
-        <div className="rounded-lg p-3 bg-gradient-to-br from-brand-teal/15 to-brand-electric/15 border border-white/10">
+      <div className="p-4 border-t border-slate-200 space-y-3">
+        <div className="rounded-lg p-3 bg-gradient-to-br from-brand-red/15 to-brand-redDark/15 border border-slate-300">
           <div className="flex items-center gap-2 text-xs font-medium">
-            <Sparkles className="h-3.5 w-3.5 text-brand-teal" />
+            <Sparkles className="h-3.5 w-3.5 text-brand-red" />
             Auto-distribution
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">

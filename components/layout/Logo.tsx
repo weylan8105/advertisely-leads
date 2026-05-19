@@ -15,7 +15,7 @@ export function Logo({ href = "/", className, size = "md", withWordmark = true }
     <Link href={href} className={cn("group inline-flex items-center gap-2.5", className)}>
       <div
         className={cn(
-          "relative grid place-items-center rounded-lg bg-white shrink-0 overflow-hidden ring-1 ring-white/10",
+          "relative grid place-items-center rounded-lg bg-white shrink-0 overflow-hidden ring-1 ring-slate-200",
           dims,
         )}
       >
@@ -32,7 +32,7 @@ export function Logo({ href = "/", className, size = "md", withWordmark = true }
       {withWordmark && (
         <div className="leading-tight">
           <div className="text-sm font-semibold tracking-tight">Advertisely</div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-brand-teal">Leads</div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-brand-red">Leads</div>
         </div>
       )}
     </Link>

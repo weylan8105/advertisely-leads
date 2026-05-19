@@ -31,9 +31,9 @@ export function ExportButton({ count, variant = "outline" }: ExportButtonProps) 
           Download CSV
         </DropdownMenuItem>
         <DropdownMenuItem>
-          <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-300" />
+          <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
           Send to Google Sheets
-          <Check className="h-3 w-3 ml-auto text-emerald-400" />
+          <Check className="h-3 w-3 ml-auto text-emerald-600" />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>CRM destinations</DropdownMenuLabel>

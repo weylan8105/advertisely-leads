@@ -26,7 +26,7 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
     <Card className={cn("p-5 space-y-6 h-fit sticky top-20", className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-medium">
-          <Filter className="h-4 w-4 text-brand-teal" />
+          <Filter className="h-4 w-4 text-brand-red" />
           Filters
         </div>
         <button className="text-xs text-muted-foreground hover:text-foreground">
@@ -54,7 +54,7 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
             </Badge>
           ))}
         </div>
-        <div className="max-h-[180px] overflow-y-auto scrollbar-thin grid grid-cols-5 gap-1 rounded-md border border-white/10 p-2 bg-white/[0.02]">
+        <div className="max-h-[180px] overflow-y-auto scrollbar-thin grid grid-cols-5 gap-1 rounded-md border border-slate-300 p-2 bg-slate-50">
           {US_STATES.map((s) => {
             const available = AVAILABLE_STATES.includes(s);
             const selected = states.includes(s);
@@ -67,8 +67,8 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
                 className={cn(
                   "text-[11px] py-1 rounded transition-colors relative",
                   !available && "opacity-40 text-muted-foreground cursor-not-allowed line-through",
-                  available && !selected && "hover:bg-white/5 text-muted-foreground",
-                  selected && "bg-brand-teal/20 text-brand-teal",
+                  available && !selected && "hover:bg-slate-100 text-muted-foreground",
+                  selected && "bg-brand-red/20 text-brand-red",
                 )}
               >
                 {s}

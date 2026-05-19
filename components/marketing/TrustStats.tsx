@@ -9,14 +9,14 @@ const stats = [
 
 export function TrustStats() {
   return (
-    <section className="border-y border-white/[0.06] bg-brand-deepnavy/60 backdrop-blur">
+    <section className="border-y border-slate-200 bg-white/60 backdrop-blur">
       <div className="container py-10">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((s) => {
             const Icon = s.icon;
             return (
               <div key={s.label} className="flex items-start gap-3">
-                <div className="h-9 w-9 grid place-items-center rounded-md bg-white/[0.04] border border-white/10 text-brand-teal">
+                <div className="h-9 w-9 grid place-items-center rounded-md bg-slate-100 border border-slate-300 text-brand-red">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">

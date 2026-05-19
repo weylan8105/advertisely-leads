@@ -9,7 +9,7 @@ export function PricingPreview() {
     <section id="pricing" className="container py-20 lg:py-28">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-12">
         <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-[0.18em] text-brand-teal font-medium mb-3">
+          <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
             Pricing
           </div>
           <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">

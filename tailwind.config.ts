@@ -51,12 +51,19 @@ const config: Config = {
           foreground: "hsl(var(--popover-foreground))",
         },
         brand: {
-          navy: "#0a0f1f",
-          deepnavy: "#060912",
-          ink: "#0f1730",
-          teal: "#22d3ee",
-          electric: "#3b82f6",
-          glow: "#67e8f9",
+          // Logo-inspired palette
+          red: "#dc2626",
+          redDark: "#991b1b",
+          redLight: "#fee2e2",
+          ink: "#0f172a",
+          bg: "#ffffff",
+          subtle: "#f8fafc",
+          // Legacy aliases — preserved so existing class names continue to work
+          navy: "#ffffff",
+          deepnavy: "#ffffff",
+          teal: "#dc2626",
+          electric: "#991b1b",
+          glow: "#fca5a5",
         },
       },
       borderRadius: {
@@ -66,9 +73,9 @@ const config: Config = {
       },
       backgroundImage: {
         "grid-light":
-          "linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)",
+          "linear-gradient(to right, rgba(15,23,42,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(15,23,42,0.05) 1px, transparent 1px)",
         "radial-glow":
-          "radial-gradient(circle at 20% 0%, rgba(34,211,238,0.18), transparent 60%), radial-gradient(circle at 80% 100%, rgba(59,130,246,0.18), transparent 60%)",
+          "radial-gradient(circle at 20% 0%, rgba(220,38,38,0.08), transparent 60%), radial-gradient(circle at 80% 100%, rgba(220,38,38,0.05), transparent 60%)",
       },
       keyframes: {
         "fade-up": {

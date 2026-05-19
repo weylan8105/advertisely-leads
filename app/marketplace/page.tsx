@@ -11,7 +11,7 @@ export default function MarketplacePage() {
     <>
       <Navbar />
       <main className="pb-24">
-        <section className="relative border-b border-white/[0.06] overflow-hidden">
+        <section className="relative border-b border-slate-200 overflow-hidden">
           <div className="absolute inset-0 bg-radial-glow opacity-60 pointer-events-none" />
           <div className="container relative py-14">
             <PageHeader
@@ -40,7 +40,7 @@ export default function MarketplacePage() {
                   Sorted by: <span className="text-foreground">Recommended</span>
                 </div>
               </div>
-              <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-200">
+              <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-800">
                 <span className="font-medium">Heads up: </span>
                 Only <strong>Blue-Collar IUL Leads</strong> are available for purchase right now.
                 Other packages are in pre-launch — click <em>Notify me</em> on any "Coming soon"
@@ -52,7 +52,7 @@ export default function MarketplacePage() {
                 ))}
               </div>
 
-              <div className="mt-10 rounded-xl border border-white/[0.06] bg-card/40 p-5 text-xs text-muted-foreground">
+              <div className="mt-10 rounded-xl border border-slate-200 bg-white p-5 text-xs text-muted-foreground">
                 <span className="text-foreground font-medium">Disclaimers: </span>
                 Lead availability varies by state and campaign volume. All leads include
                 documented consent. Replacement eligibility subject to quality review.

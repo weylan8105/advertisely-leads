@@ -57,7 +57,7 @@ export function FeatureGrid() {
   return (
     <section className="container py-20 lg:py-28">
       <div className="max-w-2xl">
-        <div className="text-xs uppercase tracking-[0.18em] text-brand-teal font-medium mb-3">
+        <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
           Platform
         </div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
@@ -75,14 +75,14 @@ export function FeatureGrid() {
           return (
             <div
               key={f.title}
-              className="group relative rounded-xl border border-white/[0.06] bg-card/40 p-5 hover:border-white/15 hover:bg-card/60 transition-colors"
+              className="group relative rounded-xl border border-slate-200 bg-white p-5 hover:border-slate-300 hover:bg-white transition-colors"
             >
               {f.soon && (
-                <span className="absolute top-3 right-3 text-[10px] uppercase tracking-wider text-brand-teal/80">
+                <span className="absolute top-3 right-3 text-[10px] uppercase tracking-wider text-brand-red/80">
                   Roadmap
                 </span>
               )}
-              <div className="h-10 w-10 grid place-items-center rounded-lg bg-white/[0.04] border border-white/10 text-brand-teal group-hover:scale-105 transition-transform">
+              <div className="h-10 w-10 grid place-items-center rounded-lg bg-slate-100 border border-slate-300 text-brand-red group-hover:scale-105 transition-transform">
                 <Icon className="h-5 w-5" />
               </div>
               <div className="mt-4 font-medium tracking-tight">{f.title}</div>

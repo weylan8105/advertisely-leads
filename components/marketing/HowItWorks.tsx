@@ -31,7 +31,7 @@ export function HowItWorks() {
   return (
     <section id="how-it-works" className="container py-20 lg:py-28">
       <div className="max-w-2xl">
-        <div className="text-xs uppercase tracking-[0.18em] text-brand-teal font-medium mb-3">
+        <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
           How it works
         </div>
         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
@@ -49,13 +49,13 @@ export function HowItWorks() {
           return (
             <div
               key={s.title}
-              className="relative rounded-xl border border-white/[0.06] bg-card/40 p-5 hover:border-white/15 transition-colors"
+              className="relative rounded-xl border border-slate-200 bg-white p-5 hover:border-slate-300 transition-colors"
             >
               <div className="absolute -top-3 right-4 text-[10px] font-mono text-muted-foreground/60">
                 {String(i + 1).padStart(2, "0")}
               </div>
-              <div className="h-10 w-10 grid place-items-center rounded-lg bg-gradient-to-br from-brand-teal/20 to-brand-electric/20 border border-white/10">
-                <Icon className="h-5 w-5 text-brand-teal" />
+              <div className="h-10 w-10 grid place-items-center rounded-lg bg-gradient-to-br from-brand-red/20 to-brand-redDark/20 border border-slate-300">
+                <Icon className="h-5 w-5 text-brand-red" />
               </div>
               <div className="mt-4 font-medium tracking-tight">{s.title}</div>
               <p className="mt-1 text-sm text-muted-foreground">{s.body}</p>

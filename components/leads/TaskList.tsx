@@ -17,11 +17,11 @@ import { formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 const typeMap: Record<LeadTask["type"], { icon: any; color: string; label: string }> = {
-  call: { icon: Phone, color: "text-emerald-300 bg-emerald-500/10", label: "Call" },
-  email: { icon: Mail, color: "text-violet-300 bg-violet-500/10", label: "Email" },
-  sms: { icon: MessageSquare, color: "text-sky-300 bg-sky-500/10", label: "SMS" },
-  appointment: { icon: Calendar, color: "text-amber-300 bg-amber-500/10", label: "Appointment" },
-  follow_up: { icon: Clock, color: "text-brand-teal bg-brand-teal/10", label: "Follow-up" },
+  call: { icon: Phone, color: "text-emerald-600 bg-emerald-500/10", label: "Call" },
+  email: { icon: Mail, color: "text-violet-600 bg-violet-500/10", label: "Email" },
+  sms: { icon: MessageSquare, color: "text-sky-600 bg-sky-500/10", label: "SMS" },
+  appointment: { icon: Calendar, color: "text-amber-700 bg-amber-500/10", label: "Appointment" },
+  follow_up: { icon: Clock, color: "text-brand-red bg-brand-red/10", label: "Follow-up" },
 };
 
 interface TaskListProps {
@@ -42,8 +42,8 @@ export function TaskList({ tasks, showLead = true, emptyHint }: TaskListProps) {
 
   if (ordered.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-6 text-xs text-muted-foreground text-center">
-        <CheckCircle2 className="h-5 w-5 mx-auto mb-2 text-brand-teal" />
+      <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-6 text-xs text-muted-foreground text-center">
+        <CheckCircle2 className="h-5 w-5 mx-auto mb-2 text-brand-red" />
         {emptyHint ?? "No upcoming tasks. You're clear."}
       </div>
     );
@@ -60,12 +60,12 @@ export function TaskList({ tasks, showLead = true, emptyHint }: TaskListProps) {
           <div
             key={task.id}
             className={cn(
-              "rounded-lg border bg-white/[0.02] p-3 flex items-start gap-3 transition-all",
+              "rounded-lg border bg-slate-50 p-3 flex items-start gap-3 transition-all",
               done
-                ? "border-white/[0.04] opacity-50"
+                ? "border-slate-200 opacity-50"
                 : overdue
                 ? "border-rose-500/30 bg-rose-500/[0.04]"
-                : "border-white/[0.08]",
+                : "border-slate-200",
             )}
           >
             <Checkbox
@@ -100,7 +100,7 @@ export function TaskList({ tasks, showLead = true, emptyHint }: TaskListProps) {
               {showLead && (
                 <Link
                   href={`/leads/${task.leadId}`}
-                  className="text-[11px] text-muted-foreground hover:text-brand-teal inline-flex items-center gap-0.5 mt-1"
+                  className="text-[11px] text-muted-foreground hover:text-brand-red inline-flex items-center gap-0.5 mt-1"
                 >
                   {task.leadName} <ChevronRight className="h-3 w-3" />
                 </Link>

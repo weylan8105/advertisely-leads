@@ -26,12 +26,12 @@ export function LeadPerformanceChart() {
         <AreaChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 0 }}>
           <defs>
             <linearGradient id="recv" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.5} />
-              <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+              <stop offset="5%" stopColor="#dc2626" stopOpacity={0.5} />
+              <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="cont" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.45} />
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              <stop offset="5%" stopColor="#991b1b" stopOpacity={0.45} />
+              <stop offset="95%" stopColor="#991b1b" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="set" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.4} />
@@ -49,8 +49,8 @@ export function LeadPerformanceChart() {
               fontSize: 12,
             }}
           />
-          <Area type="monotone" dataKey="received" stroke="#22d3ee" fill="url(#recv)" strokeWidth={2} />
-          <Area type="monotone" dataKey="contacted" stroke="#3b82f6" fill="url(#cont)" strokeWidth={2} />
+          <Area type="monotone" dataKey="received" stroke="#dc2626" fill="url(#recv)" strokeWidth={2} />
+          <Area type="monotone" dataKey="contacted" stroke="#991b1b" fill="url(#cont)" strokeWidth={2} />
           <Area type="monotone" dataKey="set" stroke="#a78bfa" fill="url(#set)" strokeWidth={2} />
         </AreaChart>
       </ResponsiveContainer>

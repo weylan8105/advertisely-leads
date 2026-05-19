@@ -22,7 +22,7 @@ export function DashboardTopbar() {
   const avatarUrl = session?.user?.image;
 
   return (
-    <header className="sticky top-0 z-30 h-16 border-b border-white/[0.06] bg-brand-deepnavy/70 backdrop-blur-md">
+    <header className="sticky top-0 z-30 h-16 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="h-full px-6 flex items-center justify-between gap-6">
         <div className="hidden md:flex items-center gap-2 max-w-md w-full">
           <div className="relative flex-1">
@@ -31,13 +31,13 @@ export function DashboardTopbar() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button className="relative h-9 w-9 grid place-items-center rounded-md border border-white/10 hover:bg-white/5">
+          <button className="relative h-9 w-9 grid place-items-center rounded-md border border-slate-300 hover:bg-slate-100">
             <Bell className="h-4 w-4 text-muted-foreground" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-brand-teal" />
+            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-brand-red" />
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 rounded-md border border-white/10 pl-1 pr-2.5 py-1 hover:bg-white/5">
+              <button className="flex items-center gap-2 rounded-md border border-slate-300 pl-1 pr-2.5 py-1 hover:bg-slate-100">
                 <Avatar className="h-7 w-7">
                   {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
                   <AvatarFallback className="text-[10px]">

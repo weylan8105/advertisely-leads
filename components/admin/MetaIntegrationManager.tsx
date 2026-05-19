@@ -62,7 +62,7 @@ export function MetaIntegrationManager() {
             href="https://developers.facebook.com/docs/marketing-api/guides/lead-ads/setup/"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-brand-teal hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-brand-red hover:underline"
           >
             Meta Lead Ads webhook docs <ExternalLink className="h-3 w-3" />
           </a>
@@ -84,7 +84,7 @@ export function MetaIntegrationManager() {
         </CardHeader>
         <CardContent>
           {showAddPage && (
-            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 mb-4 space-y-3">
+            <div className="rounded-lg border border-slate-300 bg-slate-50 p-4 mb-4 space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Page ID</Label>
@@ -150,8 +150,8 @@ export function MetaIntegrationManager() {
           )}
 
           {pages.length === 0 ? (
-            <div className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-8 text-center">
-              <Plug className="h-6 w-6 mx-auto text-brand-teal mb-2" />
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <Plug className="h-6 w-6 mx-auto text-brand-red mb-2" />
               <div className="text-sm font-medium">No pages connected yet.</div>
               <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
                 Connect your first Meta page above. Leads from any form on that page will start
@@ -163,7 +163,7 @@ export function MetaIntegrationManager() {
               {pages.map((p) => (
                 <div
                   key={p.id}
-                  className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -201,7 +201,7 @@ function FormMappingList({
   const [packageId, setPackageId] = useState<string>(leadPackages[0].id);
 
   return (
-    <div className="mt-3 pt-3 border-t border-white/[0.06]">
+    <div className="mt-3 pt-3 border-t border-slate-200">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-medium text-muted-foreground">
           Form → Package mappings ({mappings.length})
@@ -212,7 +212,7 @@ function FormMappingList({
       </div>
 
       {show && (
-        <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3 mb-2 space-y-2">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 mb-2 space-y-2">
           <div className="grid sm:grid-cols-3 gap-2">
             <Input
               value={formId}
@@ -279,7 +279,7 @@ function FormMappingList({
             return (
               <div
                 key={m.id}
-                className="flex items-center justify-between text-xs rounded-md bg-white/[0.02] px-3 py-2"
+                className="flex items-center justify-between text-xs rounded-md bg-slate-50 px-3 py-2"
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{m.formName}</span>

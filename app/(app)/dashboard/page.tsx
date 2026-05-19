@@ -160,7 +160,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              ["New", newCount, "bg-brand-teal/20"],
+              ["New", newCount, "bg-brand-red/20"],
               ["Contacted", contactedCount, "bg-sky-500/20"],
               ["Appointment Set", apptCount, "bg-violet-500/20"],
               ["Closed", closedCount, "bg-emerald-500/20"],
@@ -174,7 +174,7 @@ export default function DashboardPage() {
                     <span>{label}</span>
                     <span className="text-muted-foreground">{count} · {pct}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-white/[0.04] overflow-hidden">
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
                       className={`h-full ${color as string}`}
                       style={{ width: `${pct}%` }}
@@ -236,17 +236,17 @@ function QuickAction({
   tone?: "emerald" | "sky" | "violet";
 }) {
   const colors: Record<string, string> = {
-    emerald: "text-emerald-300",
-    sky: "text-sky-300",
-    violet: "text-violet-300",
+    emerald: "text-emerald-600",
+    sky: "text-sky-600",
+    violet: "text-violet-600",
   };
   return (
-    <button className="w-full flex items-center justify-between gap-3 rounded-md border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] px-3 py-2.5 transition-colors text-left">
+    <button className="w-full flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2.5 transition-colors text-left">
       <span className="flex items-center gap-2.5 text-sm">
-        <Icon className={`h-4 w-4 ${tone ? colors[tone] : "text-brand-teal"}`} />
+        <Icon className={`h-4 w-4 ${tone ? colors[tone] : "text-brand-red"}`} />
         {label}
       </span>
-      {hint && <span className="text-[10px] text-emerald-300">{hint}</span>}
+      {hint && <span className="text-[10px] text-emerald-600">{hint}</span>}
     </button>
   );
 }

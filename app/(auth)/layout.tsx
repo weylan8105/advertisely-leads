@@ -3,7 +3,7 @@ import { Logo } from "@/components/layout/Logo";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand-deepnavy">
+    <div className="min-h-screen relative overflow-hidden bg-white">
       <div className="absolute inset-0 bg-radial-glow pointer-events-none" />
       <div className="absolute inset-0 bg-grid-light [background-size:32px_32px] opacity-30 pointer-events-none" />
       <div className="relative">

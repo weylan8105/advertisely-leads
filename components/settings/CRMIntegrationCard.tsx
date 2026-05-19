@@ -5,23 +5,23 @@ import { Badge } from "@/components/ui/badge";
 import type { Integration } from "@/types";
 
 const colorMap: Record<string, string> = {
-  gohighlevel: "bg-amber-500/10 text-amber-300",
-  salesforce: "bg-sky-500/10 text-sky-300",
-  hubspot: "bg-orange-500/10 text-orange-300",
-  zapier: "bg-orange-500/10 text-orange-300",
-  sheets: "bg-emerald-500/10 text-emerald-300",
-  webhook: "bg-violet-500/10 text-violet-300",
-  dialer: "bg-rose-500/10 text-rose-300",
-  twilio: "bg-rose-500/10 text-rose-300",
-  calendar: "bg-sky-500/10 text-sky-300",
+  gohighlevel: "bg-amber-500/10 text-amber-700",
+  salesforce: "bg-sky-500/10 text-sky-600",
+  hubspot: "bg-orange-500/10 text-orange-600",
+  zapier: "bg-orange-500/10 text-orange-600",
+  sheets: "bg-emerald-500/10 text-emerald-600",
+  webhook: "bg-violet-500/10 text-violet-600",
+  dialer: "bg-rose-500/10 text-rose-600",
+  twilio: "bg-rose-500/10 text-rose-600",
+  calendar: "bg-sky-500/10 text-sky-600",
 };
 
 export function CRMIntegrationCard({ integration }: { integration: Integration }) {
   const isConnected = integration.status === "connected";
   return (
-    <Card className="p-5 flex flex-col gap-4 hover:border-white/15 transition-colors">
+    <Card className="p-5 flex flex-col gap-4 hover:border-slate-300 transition-colors">
       <div className="flex items-start justify-between gap-3">
-        <div className={`h-10 w-10 grid place-items-center rounded-lg ${colorMap[integration.type] ?? "bg-white/5 text-white"}`}>
+        <div className={`h-10 w-10 grid place-items-center rounded-lg ${colorMap[integration.type] ?? "bg-slate-100 text-white"}`}>
           <Plug className="h-5 w-5" />
         </div>
         {isConnected ? (

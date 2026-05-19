@@ -50,9 +50,9 @@ export function GHLConnectCard() {
   }
 
   return (
-    <Card className="p-5 flex flex-col gap-4 hover:border-white/15 transition-colors">
+    <Card className="p-5 flex flex-col gap-4 hover:border-slate-300 transition-colors">
       <div className="flex items-start justify-between gap-3">
-        <div className="h-10 w-10 grid place-items-center rounded-lg bg-amber-500/10 text-amber-300">
+        <div className="h-10 w-10 grid place-items-center rounded-lg bg-amber-500/10 text-amber-700">
           <Plug className="h-5 w-5" />
         </div>
         {connected === null ? (
@@ -98,7 +98,7 @@ export function GHLConnectCard() {
       )}
 
       {editing && (
-        <div className="space-y-3 border-t border-white/[0.06] pt-4">
+        <div className="space-y-3 border-t border-slate-200 pt-4">
           <div className="space-y-1.5">
             <Label>Location ID</Label>
             <Input
@@ -121,7 +121,7 @@ export function GHLConnectCard() {
               <Lock className="h-3 w-3" /> Stored encrypted at rest. Never displayed back.
             </p>
           </div>
-          {error && <p className="text-[11px] text-rose-300">{error}</p>}
+          {error && <p className="text-[11px] text-rose-600">{error}</p>}
           <div className="flex gap-2 justify-end">
             <Button
               size="sm"

@@ -30,14 +30,14 @@ export default function LeadsPage() {
         description="Manage every IUL lead you've purchased — statuses, tasks, notes, dispositions, and consent records all in one place."
         actions={
           <>
-            <div className="inline-flex rounded-md border border-white/10 overflow-hidden">
+            <div className="inline-flex rounded-md border border-slate-300 overflow-hidden">
               <button
                 onClick={() => setView("list")}
                 className={cn(
                   "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
                   view === "list"
-                    ? "bg-white/10 text-foreground"
-                    : "text-muted-foreground hover:bg-white/5",
+                    ? "bg-slate-200 text-foreground"
+                    : "text-muted-foreground hover:bg-slate-100",
                 )}
               >
                 <Rows3 className="h-3.5 w-3.5" /> List
@@ -45,10 +45,10 @@ export default function LeadsPage() {
               <button
                 onClick={() => setView("kanban")}
                 className={cn(
-                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-white/10",
+                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-slate-300",
                   view === "kanban"
-                    ? "bg-white/10 text-foreground"
-                    : "text-muted-foreground hover:bg-white/5",
+                    ? "bg-slate-200 text-foreground"
+                    : "text-muted-foreground hover:bg-slate-100",
                 )}
               >
                 <KanbanSquare className="h-3.5 w-3.5" /> Pipeline

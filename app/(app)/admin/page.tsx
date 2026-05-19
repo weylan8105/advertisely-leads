@@ -122,8 +122,8 @@ export default function AdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center">
-                  <Sparkles className="h-7 w-7 mx-auto text-brand-teal" />
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                  <Sparkles className="h-7 w-7 mx-auto text-brand-red" />
                   <h3 className="mt-3 font-medium">Auto-distribution engine coming online</h3>
                   <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
                     When enabled, every new inbound IUL lead is routed to the right agent
@@ -149,7 +149,7 @@ export default function AdminPage() {
                       body: "Unrouted leads fall back to manual queue automatically.",
                     },
                   ].map((c) => (
-                    <div key={c.title} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div key={c.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                       <div className="text-sm font-medium">{c.title}</div>
                       <div className="text-xs text-muted-foreground mt-1">{c.body}</div>
                     </div>
@@ -168,7 +168,7 @@ export default function AdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-xl border border-white/[0.06] overflow-hidden">
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -221,7 +221,7 @@ export default function AdminPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 text-brand-teal" />
+                  <RefreshCw className="h-4 w-4 text-brand-red" />
                   Quality & replacement queue
                 </CardTitle>
                 <CardDescription>
@@ -306,7 +306,7 @@ export default function AdminPage() {
                     ].map((r, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium flex items-center gap-2">
-                          <Users className="h-4 w-4 text-brand-teal" /> {r[0]}
+                          <Users className="h-4 w-4 text-brand-red" /> {r[0]}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">{r[1]}</TableCell>
                         <TableCell className="hidden md:table-cell">

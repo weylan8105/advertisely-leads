@@ -14,8 +14,8 @@ export default function CheckoutPage({ searchParams }: CheckoutPageProps) {
   const initial = leadPackages.find((p) => p.id === requested)?.id as LeadPackageId | undefined;
 
   return (
-    <div className="min-h-screen bg-brand-deepnavy">
-      <header className="border-b border-white/[0.06]">
+    <div className="min-h-screen bg-white">
+      <header className="border-b border-slate-200">
         <div className="container h-16 flex items-center justify-between">
           <Logo />
           <div className="flex items-center gap-4">

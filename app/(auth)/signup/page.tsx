@@ -30,7 +30,7 @@ export default function SignupPage() {
         <ul className="mt-8 space-y-3 text-sm">
           {perks.map((p) => (
             <li key={p} className="flex items-start gap-2 text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 mt-0.5 text-brand-teal shrink-0" />
+              <CheckCircle2 className="h-4 w-4 mt-0.5 text-brand-red shrink-0" />
               <span>{p}</span>
             </li>
           ))}
@@ -38,7 +38,7 @@ export default function SignupPage() {
       </div>
 
       <Card className="p-8 max-w-md mx-auto w-full glass-strong">
-        <div className="text-xs uppercase tracking-[0.18em] text-brand-teal mb-2">
+        <div className="text-xs uppercase tracking-[0.18em] text-brand-red mb-2">
           Create account
         </div>
         <h2 className="text-2xl font-semibold tracking-tight">Spin up your workspace</h2>
@@ -51,7 +51,7 @@ export default function SignupPage() {
         </div>
         <div className="mt-4 relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-white/10" />
+            <span className="w-full border-t border-slate-300" />
           </div>
           <div className="relative flex justify-center text-[10px] uppercase">
             <span className="bg-card px-2 text-muted-foreground">or sign up with email</span>
@@ -85,11 +85,11 @@ export default function SignupPage() {
             <Checkbox defaultChecked className="mt-0.5" />
             <span>
               I agree to the{" "}
-              <Link href="#" className="text-brand-teal hover:underline">
+              <Link href="#" className="text-brand-red hover:underline">
                 Terms
               </Link>{" "}
               and{" "}
-              <Link href="#" className="text-brand-teal hover:underline">
+              <Link href="#" className="text-brand-red hover:underline">
                 TCPA outreach policy
               </Link>
               . I will only contact leads after verifying captured consent.
@@ -104,7 +104,7 @@ export default function SignupPage() {
 
         <p className="mt-6 text-xs text-center text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/login" className="text-brand-teal hover:underline">
+          <Link href="/login" className="text-brand-red hover:underline">
             Sign in
           </Link>
         </p>

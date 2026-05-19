@@ -42,7 +42,7 @@ const cols = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] bg-brand-deepnavy">
+    <footer className="border-t border-slate-200 bg-slate-50">
       <div className="container py-16">
         <div className="grid gap-10 lg:grid-cols-6">
           <div className="lg:col-span-2 max-w-sm">
@@ -67,7 +67,7 @@ export function Footer() {
             </div>
           ))}
         </div>
-        <div className="mt-12 pt-6 border-t border-white/[0.06] flex flex-col md:flex-row justify-between gap-4 text-xs text-muted-foreground">
+        <div className="mt-12 pt-6 border-t border-slate-200 flex flex-col md:flex-row justify-between gap-4 text-xs text-muted-foreground">
           <div>© {new Date().getFullYear()} Advertisely Leads. All rights reserved.</div>
           <div className="max-w-2xl">
             Advertisely Leads does not guarantee sales outcomes. Lead availability varies by

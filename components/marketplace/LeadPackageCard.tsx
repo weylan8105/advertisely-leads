@@ -19,8 +19,8 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
       className={cn(
         "relative flex flex-col overflow-hidden transition-all",
         highlight && isAvailable
-          ? "ring-1 ring-brand-teal/40 shadow-[0_24px_80px_-12px_rgba(34,211,238,0.25)]"
-          : "hover:border-white/15",
+          ? "ring-1 ring-brand-red/40 shadow-[0_24px_80px_-12px_rgba(220,38,38,0.25)]"
+          : "hover:border-slate-300",
         !isAvailable && "opacity-90",
       )}
     >
@@ -39,7 +39,7 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
       <div className="p-6 flex-1 flex flex-col">
         <div>
           <h3 className="text-lg font-semibold tracking-tight">{pkg.name}</h3>
-          <p className="text-xs text-brand-teal mt-1">{pkg.tagline}</p>
+          <p className="text-xs text-brand-red mt-1">{pkg.tagline}</p>
         </div>
         <p className="mt-3 text-sm text-muted-foreground flex-1">{pkg.description}</p>
 
@@ -71,7 +71,7 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
         <ul className="mt-5 space-y-2">
           {pkg.features.map((f) => (
             <li key={f} className="flex items-start gap-2 text-xs">
-              <Check className="h-3.5 w-3.5 text-brand-teal mt-0.5 shrink-0" />
+              <Check className="h-3.5 w-3.5 text-brand-red mt-0.5 shrink-0" />
               <span className="text-muted-foreground">{f}</span>
             </li>
           ))}
@@ -86,7 +86,7 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
         </div>
 
         {!isAvailable && pkg.comingSoonNote && (
-          <div className="mt-5 rounded-md border border-amber-500/20 bg-amber-500/[0.04] p-3 text-[11px] text-amber-200">
+          <div className="mt-5 rounded-md border border-amber-500/20 bg-amber-500/[0.04] p-3 text-[11px] text-amber-800">
             <span className="font-medium">Coming soon — </span>
             {pkg.comingSoonNote}
           </div>
