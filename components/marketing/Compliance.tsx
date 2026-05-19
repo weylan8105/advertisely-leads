@@ -2,22 +2,27 @@ import { ShieldCheck, FileCheck, Clock4, FlagTriangleRight, BadgeCheck } from "l
 
 export function Compliance() {
   return (
-    <section id="compliance" className="border-y border-slate-200 bg-slate-50">
-      <div className="container py-20 lg:py-24">
-        <div className="grid lg:grid-cols-5 gap-10">
+    <section id="compliance" className="relative bg-black text-white overflow-hidden">
+      <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-brand-red/10 blur-3xl pointer-events-none" />
+      <div className="relative container py-20 lg:py-28">
+        <div className="grid lg:grid-cols-5 gap-12">
           <div className="lg:col-span-2">
-            <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
-              Compliance & trust
+            <div className="inline-flex items-center gap-2 mb-5">
+              <span className="h-px w-8 bg-brand-red" />
+              <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
+                Compliance & trust
+              </span>
             </div>
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-              The boring stuff your compliance officer will love.
+            <h2 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.1] text-white">
+              The boring stuff your compliance officer will{" "}
+              <span className="text-brand-red">love.</span>
             </h2>
-            <p className="mt-4 text-muted-foreground">
+            <p className="mt-5 text-white/60 leading-relaxed">
               Every lead delivered through Advertisely arrives with documented consent, a
               timestamped opt-in, and traceable Meta campaign attribution. We don't ship leads
               without a paper trail — ever.
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs">
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs">
               <BadgeCheck className="h-3.5 w-3.5 text-brand-red" />
               TrustedForm / Jornaya certificate per lead
             </div>
@@ -48,20 +53,23 @@ export function Compliance() {
             ].map((c) => {
               const Icon = c.icon;
               return (
-                <div key={c.title} className="rounded-xl border border-slate-200 bg-white p-5">
-                  <div className="h-9 w-9 grid place-items-center rounded-md bg-slate-100 border border-slate-300 text-brand-red">
+                <div
+                  key={c.title}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-sm"
+                >
+                  <div className="h-9 w-9 grid place-items-center rounded-md bg-brand-red/15 border border-brand-red/30 text-brand-red">
                     <Icon className="h-4 w-4" />
                   </div>
-                  <div className="mt-3 font-medium">{c.title}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">{c.body}</p>
+                  <div className="mt-3 font-medium text-white">{c.title}</div>
+                  <p className="mt-1 text-xs text-white/60 leading-relaxed">{c.body}</p>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="mt-10 rounded-xl border border-slate-200 bg-white p-5 text-xs text-muted-foreground">
-          <span className="text-foreground font-medium">Disclaimers: </span>
+        <div className="mt-12 rounded-xl border border-white/10 bg-white/[0.02] p-5 text-xs text-white/55">
+          <span className="text-white font-medium">Disclaimers: </span>
           Lead availability varies by state and campaign volume. All leads should include
           documented consent before agent outreach. Advertisely does not guarantee sales
           outcomes. Replacement eligibility subject to quality review.

@@ -57,10 +57,11 @@ export function FeatureGrid() {
   return (
     <section className="container py-20 lg:py-28">
       <div className="max-w-2xl">
-        <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
-          Platform
+        <div className="inline-flex items-center gap-2 mb-5">
+          <span className="h-px w-8 bg-brand-red" />
+          <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">Platform</span>
         </div>
-        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+        <h2 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.1]">
           Everything you need to run leads like an operator.
         </h2>
         <p className="mt-3 text-muted-foreground">

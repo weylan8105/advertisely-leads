@@ -22,13 +22,15 @@ export function Hero() {
           transition={{ duration: 0.5 }}
           className="max-w-3xl"
         >
-          <Badge variant="default" className="mb-5 backdrop-blur">
-            <Zap className="h-3 w-3 mr-1" />
-            Built for life insurance agents · IUL focused
-          </Badge>
-          <h1 className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]">
+          <div className="inline-flex items-center gap-2 mb-6">
+            <span className="h-px w-8 bg-brand-red" />
+            <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
+              Built for life insurance agents
+            </span>
+          </div>
+          <h1 className="font-serif text-5xl md:text-7xl font-medium tracking-tight leading-[1.02]">
             High-intent IUL leads built for{" "}
-            <span className="text-gradient">agents who actually close.</span>
+            <span className="text-brand-red">agents who actually close.</span>
           </h1>
           <p className="mt-6 text-base md:text-lg text-muted-foreground max-w-2xl">
             Advertisely Leads is the premium IUL lead marketplace for life insurance agents,

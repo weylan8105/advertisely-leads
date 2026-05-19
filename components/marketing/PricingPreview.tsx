@@ -9,10 +9,11 @@ export function PricingPreview() {
     <section id="pricing" className="container py-20 lg:py-28">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-12">
         <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-[0.18em] text-brand-red font-medium mb-3">
-            Pricing
-          </div>
-          <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          <div className="inline-flex items-center gap-2 mb-5">
+          <span className="h-px w-8 bg-brand-red" />
+          <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">Pricing</span>
+        </div>
+          <h2 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.1]">
             Buy by the lead. Scale by the package.
           </h2>
           <p className="mt-3 text-muted-foreground">
