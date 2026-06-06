@@ -199,15 +199,20 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="multi">TX, FL, CA, IL (all active)</SelectItem>
+                      <SelectItem value="multi">All 9 active states</SelectItem>
                       <SelectItem value="tx">TX only</SelectItem>
                       <SelectItem value="fl">FL only</SelectItem>
                       <SelectItem value="ca">CA only</SelectItem>
                       <SelectItem value="il">IL only</SelectItem>
+                      <SelectItem value="pa">PA only</SelectItem>
+                      <SelectItem value="oh">OH only</SelectItem>
+                      <SelectItem value="co">CO only</SelectItem>
+                      <SelectItem value="mi">MI only</SelectItem>
+                      <SelectItem value="wa">WA only</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Active states: TX, FL, CA, IL. More unlock as inventory grows.
+                    Active states: TX, FL, CA, IL, PA, OH, CO, MI, WA. More unlock as inventory grows.
                   </p>
                 </div>
                 <div className="space-y-1.5">
@@ -246,7 +251,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <ReviewRow label="Quantity" value={`${qty} leads`} />
                 <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
                 <ReviewRow label="Estimated delivery" value={pkg.estimatedDelivery} />
-                <ReviewRow label="Filters" value="TX, FL, CA, IL · Income $60k+" />
+                <ReviewRow label="Filters" value="All 9 active states · Income $60k+" />
               </div>
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox defaultChecked className="mt-0.5" />

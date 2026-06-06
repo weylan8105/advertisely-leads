@@ -79,7 +79,7 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
         <div className="mt-2 flex items-start gap-1.5 text-[10px] text-muted-foreground">
           <Info className="h-3 w-3 mt-0.5 shrink-0" />
           <span>
-            Active states: <span className="text-foreground">TX, FL, CA, IL</span>. More
+            Active states: <span className="text-foreground">TX, FL, CA, IL, PA, OH, CO, MI, WA</span>. More
             states unlock as inventory grows.
           </span>
         </div>
