@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/marketplace", label: "Marketplace" },
   { href: "/#how-it-works", label: "How it works" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
   { href: "/#compliance", label: "Compliance" },
   { href: "/#faq", label: "FAQ" },
 ];
