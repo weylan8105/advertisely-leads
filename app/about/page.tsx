@@ -30,8 +30,8 @@ export default function AboutPage() {
                   </span>
                 </div>
                 <h1 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.05] text-white">
-                  Why we{" "}
-                  <span className="text-brand-red">only do leads</span> now.
+                  Built by people who got tired of{" "}
+                  <span className="text-brand-red">bad leads.</span>
                 </h1>
               </div>
 
@@ -121,25 +121,23 @@ export default function AboutPage() {
             </div>
             <div className="lg:col-span-3 space-y-5 text-base text-muted-foreground leading-relaxed">
               <p>
-                Advertisely was founded by agents and digital marketers who'd spent years on
-                both sides of the lead industry — buying leads that didn't convert, then later
-                running ad campaigns trying to generate better ones.
+                Advertisely was founded by agents and digital marketers who've spent years on
+                both sides of the lead industry — buying leads that didn't convert, then
+                running ad campaigns to generate better ones.
               </p>
               <p>
-                What we kept seeing was the same broken model: generic life-insurance leads
-                being sold as "IUL-interested," prospects who'd filled out a form for something
-                else entirely, batches recycled across multiple agencies, and zero source
+                The pattern was always the same: generic life-insurance leads being sold as
+                "IUL-interested," prospects who'd filled out a form for something else
+                entirely, batches recycled across multiple agencies, and zero source
                 attribution to figure out what was actually working.
               </p>
               <p>
-                We started building Advertisely as an internal tool — a Meta-fed lead pipeline
-                with strict IUL intent qualification, source tracking on every record, and a
-                lightweight CRM so we could see what was closing. After it outperformed every
-                vendor we'd ever bought from, we opened it up.
+                Advertisely was built to solve all of that. A Meta-fed lead pipeline with
+                strict IUL intent qualification, source tracking on every record, and a
+                lightweight CRM so you can see exactly what's closing — and what's not.
               </p>
               <p className="text-foreground font-medium">
-                Today, Advertisely Leads is the only IUL lead marketplace tuned to one
-                product, one channel, and one promise.
+                One product, one channel, one promise. That focus is the whole point.
               </p>
             </div>
           </div>
@@ -160,10 +158,9 @@ export default function AboutPage() {
                 <span className="text-brand-red">Done right.</span>
               </h2>
               <p className="mt-5 text-muted-foreground leading-relaxed">
-                We used to bundle software, coaching, and ad management. Not anymore. We
-                stripped the offer down to the thing agents actually need most — clean,
-                high-intent IUL leads with documented consent — and made it the only thing we
-                do.
+                Advertisely focuses on one job and one job only — delivering clean,
+                high-intent IUL leads with documented consent. Every system we've built and
+                every campaign we run exists to support that single mission.
               </p>
             </div>
 
