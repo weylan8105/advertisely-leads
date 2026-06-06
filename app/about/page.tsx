@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { VSLEmbed } from "@/components/marketing/VSLEmbed";
 
 export const metadata = {
-  title: "About Advertisely Leads — Built by agents, for agents",
+  title: "About Us — Advertisely Leads",
   description:
     "Why we built Advertisely Leads — the only IUL lead marketplace tuned to one product, one channel, one promise. Hear our story.",
 };
@@ -16,79 +16,91 @@ export default function AboutPage() {
     <>
       <Navbar />
       <main>
-        {/* ─── Hero ───────────────────────────────────────────────── */}
-        <section className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-radial-glow pointer-events-none" />
-          <div
-            className="absolute inset-0 bg-grid-light pointer-events-none"
-            style={{ backgroundSize: "32px 32px" }}
-          />
-          <div className="container relative pt-20 pb-20 lg:pt-28 lg:pb-24">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 mb-6">
-                <span className="h-px w-8 bg-brand-red" />
-                <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
-                  About Advertisely
-                </span>
-              </div>
-              <h1 className="font-serif text-5xl md:text-7xl font-medium tracking-tight leading-[1.02]">
-                Built by people who got tired of{" "}
-                <span className="text-brand-red">bad leads.</span>
-              </h1>
-              <p className="mt-7 text-base md:text-lg text-muted-foreground max-w-2xl leading-relaxed">
-                Advertisely Leads exists because every agent we know has the same story —
-                spending thousands on lead vendors, getting disconnected numbers, recycled
-                contacts, and people who never asked about IUL in the first place. We built
-                the platform we wished we had.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* ─── VSL Section (dark) ───────────────────────────────────── */}
+        {/* ─── 1. VSL (above fold) ─────────────────────────────── */}
         <section className="relative bg-black text-white overflow-hidden">
           <div className="absolute -top-32 right-1/4 h-[500px] w-[500px] rounded-full bg-brand-red/10 blur-3xl pointer-events-none" />
-          <div className="relative container py-20 lg:py-28">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
-              <div>
-                <div className="inline-flex items-center gap-2 mb-5">
+          <div className="absolute -bottom-32 left-1/4 h-[400px] w-[400px] rounded-full bg-brand-red/5 blur-3xl pointer-events-none" />
+          <div className="relative container py-8 md:py-12 lg:py-14">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center mb-5 md:mb-6">
+                <div className="inline-flex items-center gap-2 mb-3 md:mb-4">
                   <span className="h-px w-8 bg-brand-red" />
                   <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
                     Watch our story
                   </span>
                 </div>
-                <h2 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.1] text-white">
+                <h1 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.05] text-white">
                   Why we{" "}
                   <span className="text-brand-red">only do leads</span> now.
-                </h2>
-                <p className="mt-5 text-white/60 leading-relaxed">
-                  We've simplified the entire offer. No funnels, no coaching, no software
-                  bundles. One product, done right: high-intent IUL leads delivered straight to
-                  your dashboard. Watch the full breakdown of why we pivoted and what it means
-                  for the agents who work with us.
-                </p>
-                <div className="mt-7 flex flex-wrap items-center gap-4 text-xs text-white/55">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-red" />
-                    9 active states
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-red" />
-                    Meta-sourced, TCPA-compliant
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-red" />
-                    Real-time delivery
-                  </span>
-                </div>
+                </h1>
               </div>
 
-              <div>
-                {/* Drop your VSL embed URL into src when ready */}
-                <VSLEmbed
-                  title="The Advertisely Leads story — why we only do leads now."
-                />
+              <VSLEmbed
+                title="The Advertisely Leads story — why we only do leads now."
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ─── 2. CTA (above fold) ─────────────────────────────── */}
+        <section className="container py-10 md:py-14">
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 mb-4 md:mb-5 justify-center">
+              <span className="h-px w-8 bg-brand-red" />
+              <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
+                Ready to start?
+              </span>
+            </div>
+            <h2 className="font-serif text-3xl md:text-5xl font-medium tracking-tight leading-[1.05]">
+              See for yourself why agents{" "}
+              <span className="text-brand-red">switch and stay.</span>
+            </h2>
+            <p className="mt-4 text-sm md:text-base text-muted-foreground leading-relaxed max-w-xl mx-auto">
+              Browse the marketplace, place your first order, and watch real IUL leads land in
+              your dashboard tonight.
+            </p>
+            <div className="mt-6 md:mt-7 flex flex-wrap justify-center gap-3">
+              <Link href="/marketplace">
+                <Button size="xl">
+                  Browse leads <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button size="xl" variant="outline">
+                  Create free account
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── BELOW THE FOLD — supporting content ──────────────── */}
+
+        {/* ─── Intro hero ──────────────────────────────────────── */}
+        <section className="relative overflow-hidden border-t border-slate-200">
+          <div className="absolute inset-0 bg-radial-glow pointer-events-none" />
+          <div
+            className="absolute inset-0 bg-grid-light pointer-events-none"
+            style={{ backgroundSize: "32px 32px" }}
+          />
+          <div className="container relative py-20 lg:py-24">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 mb-6">
+                <span className="h-px w-8 bg-brand-red" />
+                <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
+                  About Us
+                </span>
               </div>
+              <h2 className="font-serif text-4xl md:text-6xl font-medium tracking-tight leading-[1.02]">
+                Built by people who got tired of{" "}
+                <span className="text-brand-red">bad leads.</span>
+              </h2>
+              <p className="mt-6 text-base md:text-lg text-muted-foreground max-w-2xl leading-relaxed">
+                Advertisely Leads exists because every agent we know has the same story —
+                spending thousands on lead vendors, getting disconnected numbers, recycled
+                contacts, and people who never asked about IUL in the first place. We built
+                the platform we wished we had.
+              </p>
             </div>
           </div>
         </section>
@@ -301,24 +313,14 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* ─── Final CTA ───────────────────────────────────────── */}
-        <section className="container py-20 lg:py-28">
+        {/* ─── Bottom-of-page CTA echo ─────────────────────────── */}
+        <section className="container py-20 lg:py-24">
           <div className="max-w-3xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 mb-6 justify-center">
-              <span className="h-px w-8 bg-brand-red" />
-              <span className="bg-brand-red text-white text-[10px] uppercase tracking-[0.22em] font-semibold px-2 py-0.5 rounded-sm">
-                Ready to start?
-              </span>
-            </div>
-            <h2 className="font-serif text-4xl md:text-5xl font-medium tracking-tight leading-[1.05]">
-              See for yourself why agents{" "}
-              <span className="text-brand-red">switch and stay.</span>
+            <h2 className="font-serif text-3xl md:text-4xl font-medium tracking-tight leading-[1.1]">
+              Still reading?{" "}
+              <span className="text-brand-red">Let's get you started.</span>
             </h2>
-            <p className="mt-5 text-muted-foreground leading-relaxed max-w-xl mx-auto">
-              Browse the marketplace, place your first order, and watch real IUL leads land in
-              your dashboard tonight. Or create a free account and explore the platform first.
-            </p>
-            <div className="mt-9 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link href="/marketplace">
                 <Button size="xl">
                   Browse leads <ArrowRight className="h-4 w-4" />
