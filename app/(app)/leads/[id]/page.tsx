@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -16,13 +19,16 @@ import {
   Tag,
   Clock,
   Pencil,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/leads/StatusBadge";
 import { ActivityTimeline } from "@/components/leads/ActivityTimeline";
@@ -38,16 +44,95 @@ import { mockLeads, leadStatuses, dispositionLabels } from "@/data/leads";
 import { formatCurrency, formatDateTime, initials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+interface Toast {
+  id: number;
+  type: "success" | "error";
+  message: string;
+}
+let toastCounter = 0;
+
 export default function LeadDetailPage({ params }: { params: { id: string } }) {
   const lead = mockLeads.find((l) => l.id === params.id);
   if (!lead) return notFound();
+
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [ghlLoading, setGhlLoading] = useState(false);
+  const [replacementLoading, setReplacementLoading] = useState(false);
 
   const telHref = `tel:${lead.phone.replace(/\D/g, "")}`;
   const smsHref = `sms:${lead.phone.replace(/\D/g, "")}`;
   const mailHref = `mailto:${lead.email}`;
 
+  function addToast(type: "success" | "error", message: string) {
+    const id = ++toastCounter;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+  }
+
+  function dismissToast(id: number) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  async function pushToGHL() {
+    setGhlLoading(true);
+    try {
+      const res = await fetch("/api/exports/ghl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: [lead.id] }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        addToast("error", data.error ?? "Failed to push to GoHighLevel.");
+      } else {
+        addToast("success", `${lead.name} pushed to GoHighLevel successfully.`);
+      }
+    } catch {
+      addToast("error", "Failed to push to GoHighLevel. Check your GHL connection in Settings.");
+    } finally {
+      setGhlLoading(false);
+    }
+  }
+
+  async function requestReplacement() {
+    setReplacementLoading(true);
+    // Simulate a brief async action — in production this would call /api/admin/replacements
+    await new Promise((r) => setTimeout(r, 600));
+    addToast(
+      "success",
+      `Replacement request submitted for ${lead.name}. Our team will review within 72 hours.`,
+    );
+    setReplacementLoading(false);
+  }
+
   return (
     <div>
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg bg-white ${
+                t.type === "success"
+                  ? "border-emerald-200 text-emerald-800"
+                  : "border-rose-200 text-rose-800"
+              }`}
+            >
+              {t.type === "success" ? (
+                <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600" />
+              ) : (
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-rose-600" />
+              )}
+              <span className="flex-1">{t.message}</span>
+              <button onClick={() => dismissToast(t.id)} className="shrink-0 opacity-60 hover:opacity-100">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <Link
         href="/leads"
         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4"
@@ -76,8 +161,13 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                 <Mail className="h-4 w-4" /> Email
               </Button>
             </a>
-            <Button size="sm">
-              <Send className="h-4 w-4" /> Push to CRM
+            <Button size="sm" onClick={pushToGHL} disabled={ghlLoading}>
+              {ghlLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Push to CRM
             </Button>
           </>
         }
@@ -91,12 +181,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
               <CardDescription>Outreach details captured at form submission</CardDescription>
             </CardHeader>
             <CardContent className="grid sm:grid-cols-2 gap-4 text-sm">
-              <ContactField
-                icon={Phone}
-                label="Phone"
-                value={lead.phone}
-                href={telHref}
-              />
+              <ContactField icon={Phone} label="Phone" value={lead.phone} href={telHref} />
               <ContactField icon={Mail} label="Email" value={lead.email} href={mailHref} />
               <ContactField icon={MapPin} label="State" value={lead.state} />
               <ContactField icon={Briefcase} label="Occupation" value={lead.occupation} />
@@ -143,8 +228,12 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
 
           <Tabs defaultValue="activity">
             <TabsList>
-              <TabsTrigger value="activity">Activity ({lead.activity.length + lead.notes.length})</TabsTrigger>
-              <TabsTrigger value="tasks">Tasks ({lead.tasks.filter((t) => !t.done).length})</TabsTrigger>
+              <TabsTrigger value="activity">
+                Activity ({lead.activity.length + lead.notes.length})
+              </TabsTrigger>
+              <TabsTrigger value="tasks">
+                Tasks ({lead.tasks.filter((t) => !t.done).length})
+              </TabsTrigger>
               <TabsTrigger value="notes">Notes ({lead.notes.length})</TabsTrigger>
               <TabsTrigger value="intent">Intent</TabsTrigger>
             </TabsList>
@@ -285,14 +374,11 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
                         value={formatCurrency(lead.income)}
                       />
                       <FormResponseRow label="Occupation" value={lead.occupation} />
-                      <FormResponseRow
-                        label="Why interested in IUL?"
-                        value={lead.intentReason}
-                      />
+                      <FormResponseRow label="Why interested in IUL?" value={lead.intentReason} />
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-2">
-                      Sourced directly from the Meta Lead Ad form submission. Original
-                      consent record preserved.
+                      Sourced directly from the Meta Lead Ad form submission. Original consent
+                      record preserved.
                     </p>
                   </div>
                 </CardContent>
@@ -441,8 +527,18 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
               <Button variant="outline" size="sm" className="w-full">
                 Reassign agent
               </Button>
-              <Button variant="outline" size="sm" className="w-full">
-                <RefreshCw className="h-3.5 w-3.5" />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={requestReplacement}
+                disabled={replacementLoading}
+              >
+                {replacementLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
                 Request replacement
               </Button>
             </CardContent>

@@ -30,6 +30,8 @@ model User {
   integrations Integration[]
   exportLogs   ExportLog[]
   tasks        Task[]
+  requestedReplacements ReplacementRequest[] @relation("RequestedReplacements")
+  reviewedReplacements  ReplacementRequest[] @relation("ReviewedReplacements")
 }
 
 enum UserRole {
@@ -145,8 +147,8 @@ model Lead {
   notes           LeadNote[]
   tasks           Task[]
   activity        LeadActivity[]
-  exportLogs      ExportLog[]
-
+    exportLogs      ExportLog[]
+  replacementRequests ReplacementRequest[]
   @@index([state, packageId, status, assignedUserId])
   @@index([receivedAt])
 }
@@ -299,4 +301,30 @@ enum ExportStatus {
   SUCCESS
   FAILED
   PENDING
+}
+
+// ─── Replacement requests ─────────────────────────────────────────────
+model ReplacementRequest {
+  id              String              @id @default(cuid())
+  leadId          String
+  reason          String              @db.Text
+  status          ReplacementStatus   @default(PENDING)
+  requestedById   String
+  reviewedById    String?
+  reviewedAt      DateTime?
+  adminNote       String?             @db.Text
+  createdAt       DateTime            @default(now())
+
+  lead            Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  requestedBy     User                @relation("RequestedReplacements", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy      User?               @relation("ReviewedReplacements", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([leadId])
+}
+
+enum ReplacementStatus {
+  PENDING
+  APPROVED
+  DENIED
 }

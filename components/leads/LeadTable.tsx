@@ -1,4 +1,5 @@
 "use client";
+
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -9,6 +10,9 @@ import {
   Phone,
   Mail,
   MessageSquare,
+  CheckCircle2,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import {
   Table,
@@ -48,10 +52,19 @@ interface LeadTableProps {
   compact?: boolean;
 }
 
+interface Toast {
+  id: number;
+  type: "success" | "error";
+  message: string;
+}
+
+let toastCounter = 0;
+
 export function LeadTable({ leads, showBulk = true, compact = false }: LeadTableProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -77,14 +90,53 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
     }
     setSelected(next);
   };
+
   const toggle = (id: string) => {
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
     setSelected(next);
   };
 
+  function addToast(type: "success" | "error", message: string) {
+    const id = ++toastCounter;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+  }
+
+  function dismissToast(id: number) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  const selectedIds = Array.from(selected);
+
   return (
     <div className="space-y-4">
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg bg-white ${
+                t.type === "success"
+                  ? "border-emerald-200 text-emerald-800"
+                  : "border-rose-200 text-rose-800"
+              }`}
+            >
+              {t.type === "success" ? (
+                <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600" />
+              ) : (
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-rose-600" />
+              )}
+              <span className="flex-1">{t.message}</span>
+              <button onClick={() => dismissToast(t.id)} className="shrink-0 opacity-60 hover:opacity-100">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {!compact && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-wrap gap-2 items-center">
@@ -134,12 +186,26 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
           </div>
           <div className="flex gap-2">
             {selected.size > 0 && (
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  addToast(
+                    "success",
+                    `Replacement request submitted for ${selected.size} lead${selected.size === 1 ? "" : "s"}. Our team will review within 72 hours.`,
+                  )
+                }
+              >
                 <RefreshCw className="h-4 w-4" />
                 Request replacement ({selected.size})
               </Button>
             )}
-            <ExportButton count={selected.size > 0 ? selected.size : undefined} />
+            <ExportButton
+              leadIds={selectedIds}
+              count={selected.size > 0 ? selected.size : undefined}
+              onSuccess={(msg) => addToast("success", msg)}
+              onError={(msg) => addToast("error", msg)}
+            />
           </div>
         </div>
       )}
@@ -253,8 +319,37 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                         <DropdownMenuItem>Add task / reminder</DropdownMenuItem>
                         <DropdownMenuItem>Change status</DropdownMenuItem>
                         <DropdownMenuItem>Add note</DropdownMenuItem>
-                        <DropdownMenuItem>Push to CRM</DropdownMenuItem>
-                        <DropdownMenuItem>Request replacement</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={async () => {
+                            try {
+                              const res = await fetch("/api/exports/ghl", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ leadIds: [lead.id] }),
+                              });
+                              const data = await res.json();
+                              if (!res.ok) {
+                                addToast("error", data.error ?? "GHL push failed.");
+                              } else {
+                                addToast("success", `${lead.name} pushed to GoHighLevel.`);
+                              }
+                            } catch {
+                              addToast("error", "Failed to push to GoHighLevel.");
+                            }
+                          }}
+                        >
+                          Push to CRM (GHL)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            addToast(
+                              "success",
+                              `Replacement request submitted for ${lead.name}. Our team will review within 72 hours.`,
+                            )
+                          }
+                        >
+                          Request replacement
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
