@@ -21,6 +21,18 @@ export const metadata: Metadata = {
   title: "Advertisely Leads — High-Intent IUL Leads for Agents Who Close",
   description:
     "Premium IUL lead marketplace for life insurance agents and IUL producers. Real-time delivery, TCPA compliant, CRM-ready.",
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png", sizes: "192x192" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+  },
+  manifest: "/site.webmanifest",
   openGraph: {
     title: "Advertisely Leads — High-Intent IUL Leads for Agents Who Close",
     description:
@@ -28,12 +40,21 @@ export const metadata: Metadata = {
     url: "https://advertisely.io",
     siteName: "Advertisely Leads",
     type: "website",
+    images: [
+      {
+        url: "/icon.png",
+        width: 512,
+        height: 512,
+        alt: "Advertisely Leads",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Advertisely Leads",
     description:
       "High-intent IUL leads built for agents who actually close.",
+    images: ["/icon.png"],
   },
 };
 
