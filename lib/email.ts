@@ -254,3 +254,165 @@ export async function sendOrderConfirmationEmail({
 
   return sendEmail({ to: agentEmail, subject, html });
 }
+
+/**
+ * Send a warm thank-you email to the client immediately after they place an order.
+ * This is personal and relationship-building — sets expectations for what happens next.
+ * Signed off from Ryan Rush personally.
+ */
+export async function sendThankYouEmail({
+  clientEmail,
+  clientName,
+  packageName,
+  quantity,
+  totalCents,
+  orderId,
+}: {
+  clientEmail: string;
+  clientName: string;
+  packageName: string;
+  quantity: number;
+  totalCents: number;
+  orderId: string;
+}) {
+  const firstName = clientName.split(" ")[0] || clientName;
+  const totalFormatted = `$${(totalCents / 100).toFixed(2)}`;
+  const subject = `Thank you for your order, ${firstName} — here's what happens next`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+          <!-- Header -->
+          <tr>
+            <td style="background:#dc2626;padding:28px 32px;">
+              <div style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">Advertisely</div>
+              <div style="color:#fca5a5;font-size:13px;margin-top:4px;">Premium Lead Generation for Insurance Agents</div>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 32px 28px;">
+              <p style="margin:0 0 6px;font-size:24px;font-weight:700;color:#0f172a;">
+                Thank you, ${firstName}!
+              </p>
+              <p style="margin:0 0 28px;font-size:16px;color:#475569;line-height:1.6;">
+                Your order is confirmed and we're already working on it. You made a smart move investing in high-quality leads — and we're going to make sure you get every dollar's worth.
+              </p>
+
+              <!-- Order Summary Box -->
+              <table cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;width:100%;margin-bottom:28px;">
+                <tr>
+                  <td colspan="2" style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:0.08em;text-transform:uppercase;padding-bottom:12px;">Order Summary</td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;color:#64748b;padding-bottom:8px;">Package</td>
+                  <td style="font-size:14px;font-weight:600;color:#0f172a;text-align:right;padding-bottom:8px;">${packageName}</td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;color:#64748b;padding-bottom:8px;">Leads ordered</td>
+                  <td style="font-size:14px;font-weight:600;color:#0f172a;text-align:right;padding-bottom:8px;">${quantity} leads</td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;color:#64748b;padding-bottom:8px;">Total charged</td>
+                  <td style="font-size:14px;font-weight:700;color:#dc2626;text-align:right;padding-bottom:8px;">${totalFormatted}</td>
+                </tr>
+                <tr style="border-top:1px solid #e2e8f0;">
+                  <td style="font-size:12px;color:#94a3b8;padding-top:10px;">Order ID</td>
+                  <td style="font-size:12px;color:#94a3b8;text-align:right;padding-top:10px;font-family:monospace;">${orderId.slice(0, 16)}...</td>
+                </tr>
+              </table>
+
+              <!-- What Happens Next -->
+              <p style="margin:0 0 16px;font-size:15px;font-weight:700;color:#0f172a;">What happens next</p>
+              <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:28px;">
+                <tr>
+                  <td style="vertical-align:top;padding-bottom:16px;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="vertical-align:top;padding-right:14px;">
+                          <div style="width:28px;height:28px;background:#dc2626;border-radius:50%;text-align:center;line-height:28px;color:#fff;font-size:13px;font-weight:700;">1</div>
+                        </td>
+                        <td style="vertical-align:top;">
+                          <div style="font-size:14px;font-weight:600;color:#0f172a;margin-bottom:2px;">Leads are matched to your order</div>
+                          <div style="font-size:13px;color:#64748b;">Our system immediately starts matching ${packageName} leads to your account based on your filters.</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="vertical-align:top;padding-bottom:16px;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="vertical-align:top;padding-right:14px;">
+                          <div style="width:28px;height:28px;background:#dc2626;border-radius:50%;text-align:center;line-height:28px;color:#fff;font-size:13px;font-weight:700;">2</div>
+                        </td>
+                        <td style="vertical-align:top;">
+                          <div style="font-size:14px;font-weight:600;color:#0f172a;margin-bottom:2px;">You get notified the moment leads land</div>
+                          <div style="font-size:13px;color:#64748b;">We'll email you as soon as leads are delivered to your CRM. Speed is everything — the best agents call within 5 minutes.</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="vertical-align:top;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="vertical-align:top;padding-right:14px;">
+                          <div style="width:28px;height:28px;background:#dc2626;border-radius:50%;text-align:center;line-height:28px;color:#fff;font-size:13px;font-weight:700;">3</div>
+                        </td>
+                        <td style="vertical-align:top;">
+                          <div style="font-size:14px;font-weight:600;color:#0f172a;margin-bottom:2px;">Track everything in your dashboard</div>
+                          <div style="font-size:13px;color:#64748b;">Log calls, update statuses, push to GoHighLevel, and request replacements — all from your Advertisely portal.</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA -->
+              <div style="text-align:center;margin-bottom:28px;">
+                <a href="https://advertisely.io/dashboard" style="display:inline-block;background:#dc2626;color:#ffffff;font-size:15px;font-weight:600;padding:15px 36px;border-radius:8px;text-decoration:none;letter-spacing:-0.2px;">
+                  Go to your dashboard →
+                </a>
+              </div>
+
+              <!-- Personal sign-off -->
+              <div style="border-top:1px solid #f1f5f9;padding-top:20px;">
+                <p style="margin:0 0 4px;font-size:14px;color:#475569;">To your success,</p>
+                <p style="margin:0 0 2px;font-size:15px;font-weight:700;color:#0f172a;">Ryan Rush</p>
+                <p style="margin:0;font-size:13px;color:#94a3b8;">Founder, Advertisely &nbsp;·&nbsp; <a href="https://advertisely.io" style="color:#94a3b8;text-decoration:none;">advertisely.io</a></p>
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+              <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">
+                Advertisely &nbsp;·&nbsp; <a href="https://advertisely.io" style="color:#94a3b8;">advertisely.io</a>
+                &nbsp;·&nbsp; You're receiving this because you placed an order.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+  return sendEmail({ to: clientEmail, subject, html });
+}

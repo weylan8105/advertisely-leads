@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
-import { sendOrderConfirmationEmail, isEmailConfigured } from "@/lib/email";
+import { sendOrderConfirmationEmail, sendThankYouEmail, isEmailConfigured } from "@/lib/email";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -114,6 +114,7 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
         select: { email: true, name: true },
       });
       if (user?.email) {
+        // Transactional receipt
         await sendOrderConfirmationEmail({
           agentEmail: user.email,
           agentName: user.name ?? "Agent",
@@ -122,9 +123,18 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
           totalCents: intent.amount,
           orderId: order.id,
         });
+        // Personal thank-you from Ryan Rush
+        await sendThankYouEmail({
+          clientEmail: user.email,
+          clientName: user.name ?? "Agent",
+          packageName: md.packageName ?? md.packageId,
+          quantity,
+          totalCents: intent.amount,
+          orderId: order.id,
+        });
       }
     } catch (emailErr) {
-      console.warn("Order confirmation email failed:", emailErr);
+      console.warn("Order emails failed:", emailErr);
     }
   }
 }
