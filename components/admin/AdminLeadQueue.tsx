@@ -18,15 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { mockLeads } from "@/data/leads";
-import { formatDateTime } from "@/lib/utils";
+import { Inbox } from "lucide-react";
 
 const agents = ["Jordan Pace", "Sam Vega", "Marina Coyle", "Auto-assign"];
 
 export function AdminLeadQueue() {
   const [assignments, setAssignments] = useState<Record<string, string>>({});
 
-  const unassigned = mockLeads.slice(0, 8);
+  // Real leads will come from the database via Stripe orders + Meta webhook
+  const unassigned: any[] = [];
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -46,49 +46,63 @@ export function AdminLeadQueue() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {unassigned.map((lead) => (
-            <TableRow key={lead.id}>
-              <TableCell>
-                <Checkbox />
-              </TableCell>
-              <TableCell>
-                <div className="font-medium">{lead.name}</div>
-                <div className="text-xs text-muted-foreground">{lead.phone}</div>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                <Badge variant="muted">{lead.leadTypeLabel}</Badge>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">{lead.state}</TableCell>
-              <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[200px] truncate">
-                {lead.source}
-              </TableCell>
-              <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                {formatDateTime(lead.receivedAt)}
-              </TableCell>
-              <TableCell>
-                <Select
-                  value={assignments[lead.id] ?? ""}
-                  onValueChange={(v) => setAssignments({ ...assignments, [lead.id]: v })}
-                >
-                  <SelectTrigger className="h-8 w-[160px]">
-                    <SelectValue placeholder="Pick agent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a) => (
-                      <SelectItem key={a} value={a}>
-                        {a}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </TableCell>
-              <TableCell className="text-right">
-                <Button size="sm" variant="outline">
-                  Disperse
-                </Button>
+          {unassigned.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="py-16 text-center">
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <Inbox className="h-8 w-8 opacity-30" />
+                  <p className="text-sm font-medium">No unassigned leads</p>
+                  <p className="text-xs">
+                    Leads will appear here once your Stripe webhook and Meta integration are configured.
+                  </p>
+                </div>
               </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            unassigned.map((lead) => (
+              <TableRow key={lead.id}>
+                <TableCell>
+                  <Checkbox />
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">{lead.name}</div>
+                  <div className="text-xs text-muted-foreground">{lead.phone}</div>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <Badge variant="muted">{lead.leadTypeLabel}</Badge>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">{lead.state}</TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground max-w-[200px] truncate">
+                  {lead.source}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                  {lead.receivedAt}
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={assignments[lead.id] ?? ""}
+                    onValueChange={(v) => setAssignments({ ...assignments, [lead.id]: v })}
+                  >
+                    <SelectTrigger className="h-8 w-[160px]">
+                      <SelectValue placeholder="Pick agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map((a) => (
+                        <SelectItem key={a} value={a}>
+                          {a}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="outline">
+                    Disperse
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
     </div>

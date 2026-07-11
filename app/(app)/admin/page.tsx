@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
-import { mockLeads, leadSources } from "@/data/leads";
+
 import { formatCurrency } from "@/lib/utils";
 
 // Seed replacement data with local state management
@@ -171,7 +171,7 @@ export default function AdminPage() {
         />
         <DashboardStatCard
           label="Unassigned leads"
-          value={mockLeads.length * 6}
+          value={0}
           delta={-3.1}
           hint="pending dispersal"
           accent="amber"

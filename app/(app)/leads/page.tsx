@@ -8,18 +8,17 @@ import { LeadKanban } from "@/components/leads/LeadKanban";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { mockLeads } from "@/data/leads";
 import { cn } from "@/lib/utils";
 
 export default function LeadsPage() {
   const [view, setView] = useState<"list" | "kanban">("list");
 
   const buckets = {
-    all: mockLeads,
-    new: mockLeads.filter((l) => l.status === "New"),
-    contacted: mockLeads.filter((l) => l.status === "Contacted"),
-    appointments: mockLeads.filter((l) => l.status === "Appointment Set"),
-    closed: mockLeads.filter((l) => l.status === "Closed"),
+    all: [] as any[],
+    new: [] as any[],
+    contacted: [] as any[],
+    appointments: [] as any[],
+    closed: [] as any[],
   };
 
   return (
@@ -100,7 +99,7 @@ export default function LeadsPage() {
               lead detail.
             </p>
           </div>
-          <LeadKanban leads={mockLeads} />
+          <LeadKanban leads={[]} />
         </Card>
       )}
 

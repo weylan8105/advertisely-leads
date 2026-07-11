@@ -19,7 +19,7 @@ import {
   AlertCircle,
   X,
   Loader2,
-  Lock,
+  ShoppingCart,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
@@ -30,7 +30,6 @@ import { ExportButton } from "@/components/leads/ExportButton";
 import { TaskList } from "@/components/leads/TaskList";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { mockLeads, allTasks } from "@/data/leads";
 import { mockOrders } from "@/data/orders";
 import { currentUser } from "@/data/user";
 
@@ -44,17 +43,7 @@ let toastCounter = 0;
 export default function DashboardPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [ghlLoading, setGhlLoading] = useState(false);
-  const [csvLoading, setCsvLoading] = useState(false);
   const [replacementLoading, setReplacementLoading] = useState(false);
-
-  const newCount = mockLeads.filter((l) => l.status === "New").length;
-  const contactedCount = mockLeads.filter((l) => l.status === "Contacted").length;
-  const apptCount = mockLeads.filter((l) => l.status === "Appointment Set").length;
-  const closedCount = mockLeads.filter((l) => l.status === "Closed").length;
-
-  const today = new Date();
-  const todayEnd = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-  const tasksToday = allTasks().filter((t) => !t.done && new Date(t.dueAt) <= todayEnd);
 
   function addToast(type: "success" | "error" | "info", message: string) {
     const id = ++toastCounter;
@@ -66,46 +55,19 @@ export default function DashboardPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
-  async function handleExportCSV() {
-    setCsvLoading(true);
-    try {
-      const res = await fetch("/api/exports/csv");
-      if (!res.ok) {
-        addToast("error", "CSV export failed. Please try again.");
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const cd = res.headers.get("Content-Disposition") ?? "";
-      const match = cd.match(/filename="([^"]+)"/);
-      a.download = match?.[1] ?? "advertisely-leads.csv";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      addToast("success", "All leads exported to CSV.");
-    } catch {
-      addToast("error", "Failed to download CSV. Please try again.");
-    } finally {
-      setCsvLoading(false);
-    }
-  }
-
   async function handleGHLPush() {
     setGhlLoading(true);
     try {
       const res = await fetch("/api/exports/ghl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds: mockLeads.map((l) => l.id) }),
+        body: JSON.stringify({ leadIds: [] }),
       });
       const data = await res.json();
       if (!res.ok) {
         addToast("error", data.error ?? "GHL push failed. Check your GHL connection in Settings.");
       } else {
-        addToast("success", `Pushed ${data.pushed ?? "all"} leads to GoHighLevel.`);
+        addToast("success", `Pushed ${data.pushed ?? 0} leads to GoHighLevel.`);
       }
     } catch {
       addToast("error", "Failed to push to GoHighLevel. Check your GHL connection in Settings.");
@@ -119,7 +81,7 @@ export default function DashboardPage() {
     await new Promise((r) => setTimeout(r, 600));
     addToast(
       "success",
-      "Replacement request submitted for all flagged leads. Our team will review within 72 hours.",
+      "Replacement request submitted. Our team will review within 72 hours.",
     );
     setReplacementLoading(false);
   }
@@ -182,40 +144,40 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard
           label="Total purchased leads"
-          value={mockLeads.length}
-          delta={12.4}
-          hint="vs last 30 days"
+          value={0}
+          delta={0}
+          hint="order leads to get started"
           accent="teal"
           icon={<Users className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="New leads"
-          value={newCount}
-          delta={8.2}
+          value={0}
+          delta={0}
           hint="last 7 days"
           accent="blue"
           icon={<UserPlus className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="Contacted"
-          value={contactedCount}
-          delta={4.1}
+          value={0}
+          delta={0}
           hint="last 7 days"
           accent="violet"
           icon={<PhoneCall className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="Appointments"
-          value={apptCount}
-          delta={22.0}
+          value={0}
+          delta={0}
           hint="last 7 days"
           accent="amber"
           icon={<CalendarCheck className="h-4 w-4" />}
         />
         <DashboardStatCard
-          label="Closed (placeholder)"
-          value={closedCount}
-          delta={-2.1}
+          label="Closed"
+          value={0}
+          delta={0}
           hint="connect AP tracking"
           accent="emerald"
           icon={<Trophy className="h-4 w-4" />}
@@ -243,10 +205,8 @@ export default function DashboardPage() {
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle>Today's tasks</CardTitle>
-              <CardDescription>
-                {tasksToday.length} due today across your pipeline
-              </CardDescription>
+              <CardTitle>Today&apos;s tasks</CardTitle>
+              <CardDescription>0 due today across your pipeline</CardDescription>
             </div>
             <Link href="/leads">
               <Button variant="ghost" size="sm">
@@ -255,7 +215,7 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="flex-1">
-            <TaskList tasks={tasksToday.slice(0, 5)} emptyHint="No tasks due today. Nice." />
+            <TaskList tasks={[]} emptyHint="No tasks yet. Order leads to get started." />
           </CardContent>
         </Card>
       </div>
@@ -267,66 +227,38 @@ export default function DashboardPage() {
             <CardDescription>One-click pipes to your stack</CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-2">
-            {/* Power dial — opens tel: link for first lead */}
             <QuickActionButton
               icon={Phone}
               label="Start power-dial session"
               tone="emerald"
-              onClick={() => {
-                const first = mockLeads[0];
-                if (first) window.open(`tel:${first.phone.replace(/\D/g, "")}`);
-              }}
+              onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace to start dialing.")}
             />
-
-            {/* Bulk SMS — opens SMS to first lead */}
             <QuickActionButton
               icon={MessageSquare}
               label="Send bulk SMS template"
               tone="sky"
-              onClick={() => {
-                const first = mockLeads[0];
-                if (first) window.open(`sms:${first.phone.replace(/\D/g, "")}`);
-              }}
+              onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace first.")}
             />
-
-            {/* Bulk email — opens mailto */}
             <QuickActionButton
               icon={Mail}
               label="Send bulk email template"
               tone="violet"
-              onClick={() => {
-                const emails = mockLeads
-                  .slice(0, 10)
-                  .map((l) => l.email)
-                  .join(",");
-                window.open(`mailto:${emails}`);
-              }}
+              onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace first.")}
             />
-
-            {/* Export to Google Sheets — coming soon */}
             <QuickActionButton
               icon={FileSpreadsheet}
               label="Export to Google Sheets"
               hint="Coming soon"
               tone="emerald"
               comingSoon
-              onClick={() =>
-                addToast(
-                  "info",
-                  "Google Sheets sync is coming soon. Use CSV export for now.",
-                )
-              }
+              onClick={() => addToast("info", "Google Sheets sync is coming soon. Use CSV export for now.")}
             />
-
-            {/* Push to GHL */}
             <QuickActionButton
               icon={ghlLoading ? Loader2 : Plug}
               label="Push all leads to GoHighLevel"
               loading={ghlLoading}
               onClick={handleGHLPush}
             />
-
-            {/* Request replacements */}
             <QuickActionButton
               icon={replacementLoading ? Loader2 : RefreshCw}
               label="Request replacements"
@@ -343,28 +275,28 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              ["New", newCount, "bg-brand-red/20"],
-              ["Contacted", contactedCount, "bg-sky-500/20"],
-              ["Appointment Set", apptCount, "bg-violet-500/20"],
-              ["Closed", closedCount, "bg-emerald-500/20"],
-            ].map(([label, count, color]) => {
-              const pct = mockLeads.length
-                ? Math.round(((count as number) / mockLeads.length) * 100)
-                : 0;
-              return (
-                <div key={label as string}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>{label}</span>
-                    <span className="text-muted-foreground">
-                      {count} · {pct}%
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div className={`h-full ${color as string}`} style={{ width: `${pct}%` }} />
-                  </div>
+              ["New", 0, "bg-brand-red/20"],
+              ["Contacted", 0, "bg-sky-500/20"],
+              ["Appointment Set", 0, "bg-violet-500/20"],
+              ["Closed", 0, "bg-emerald-500/20"],
+            ].map(([label, count, color]) => (
+              <div key={label as string}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span>{label}</span>
+                  <span className="text-muted-foreground">{count} · 0%</span>
                 </div>
-              );
-            })}
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className={`h-full ${color as string}`} style={{ width: "0%" }} />
+                </div>
+              </div>
+            ))}
+            <div className="pt-3 border-t border-slate-100">
+              <Link href="/marketplace">
+                <Button size="sm" variant="outline" className="w-full">
+                  <ShoppingCart className="h-3.5 w-3.5" /> Order leads to populate pipeline
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -398,7 +330,7 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
-        <LeadTable leads={mockLeads.slice(0, 6)} showBulk={false} compact />
+        <LeadTable leads={[]} showBulk={false} compact />
       </div>
     </div>
   );
@@ -421,25 +353,31 @@ function QuickActionButton({
   loading?: boolean;
   comingSoon?: boolean;
 }) {
-  const colors: Record<string, string> = {
-    emerald: "text-emerald-600",
-    sky: "text-sky-600",
-    violet: "text-violet-600",
-  };
+  const toneClass =
+    tone === "emerald"
+      ? "hover:border-emerald-500/30 hover:bg-emerald-500/[0.04]"
+      : tone === "sky"
+      ? "hover:border-sky-500/30 hover:bg-sky-500/[0.04]"
+      : tone === "violet"
+      ? "hover:border-violet-500/30 hover:bg-violet-500/[0.04]"
+      : "hover:border-brand-red/30 hover:bg-brand-red/[0.04]";
+
   return (
     <button
-      className="w-full flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2.5 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={onClick}
       disabled={loading}
+      className={`flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-left transition-colors w-full ${toneClass} disabled:opacity-60`}
     >
-      <span className="flex items-center gap-2.5 text-sm">
-        <Icon
-          className={`h-4 w-4 ${tone ? colors[tone] : "text-brand-red"} ${loading ? "animate-spin" : ""}`}
-        />
-        {label}
-      </span>
-      {hint && !comingSoon && <span className="text-[10px] text-emerald-600">{hint}</span>}
-      {comingSoon && <Lock className="h-3 w-3 text-muted-foreground" />}
+      <Icon className={`h-4 w-4 shrink-0 ${loading ? "animate-spin" : ""}`} />
+      <span className="flex-1 font-medium">{label}</span>
+      {comingSoon && (
+        <span className="text-[10px] text-muted-foreground border border-slate-200 rounded px-1.5 py-0.5">
+          Soon
+        </span>
+      )}
+      {hint && !comingSoon && (
+        <span className="text-[10px] text-muted-foreground">{hint}</span>
+      )}
     </button>
   );
 }
