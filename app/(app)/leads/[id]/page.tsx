@@ -54,7 +54,10 @@ let toastCounter = 0;
 export default function LeadDetailPage({ params }: { params: { id: string } }) {
   const lead = mockLeads.find((l) => l.id === params.id);
   if (!lead) return notFound();
+  return <LeadDetailContent lead={lead} />;
+}
 
+function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [ghlLoading, setGhlLoading] = useState(false);
   const [replacementLoading, setReplacementLoading] = useState(false);
@@ -547,7 +550,7 @@ export default function LeadDetailPage({ params }: { params: { id: string } }) {
       </div>
     </div>
   );
-}
+} // end LeadDetailContent
 
 function ContactField({
   icon: Icon,
