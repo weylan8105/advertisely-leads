@@ -291,7 +291,7 @@ export default function AdminPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {leadSources.slice(0, 8).map((s, i) => {
+                      {["Facebook — IUL Blue Collar", "Facebook — FIA Retirement", "Instagram — Final Expense", "Facebook — IUL Age 35-45", "Instagram — IUL Women", "Facebook — FIA Midwest", "Google — Retirement Planning", "Facebook — Final Expense Senior"].slice(0, 8).map((s, i) => {
                         const spend = 1200 + i * 380;
                         const leads = 32 + i * 7;
                         const cpl = spend / leads;
