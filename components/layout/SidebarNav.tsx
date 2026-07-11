@@ -51,7 +51,7 @@ export function SidebarNav() {
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white min-h-screen sticky top-0">
       <div className="px-5 h-16 flex items-center border-b border-slate-200">
-        <Logo />
+        <Logo href="/dashboard" />
       </div>
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-6 scrollbar-thin">
         {sections.map((section) => (
