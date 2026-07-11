@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Logo } from "@/components/layout/Logo";
 import { currentUser } from "@/data/user";
 import { initials } from "@/lib/utils";
 
@@ -20,17 +21,23 @@ export function DashboardTopbar() {
   const displayName = session?.user?.name ?? currentUser.name;
   const displayEmail = session?.user?.email ?? currentUser.email;
   const avatarUrl = session?.user?.image;
-
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="h-full px-6 flex items-center justify-between gap-6">
+        {/* Mobile logo — only visible when sidebar is hidden (< lg) */}
+        <div className="lg:hidden flex items-center">
+          <Logo href="/dashboard" size="sm" />
+        </div>
+
+        {/* Desktop search bar */}
         <div className="hidden md:flex items-center gap-2 max-w-md w-full">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search leads, orders, contacts…" className="pl-9 h-9" />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-3 ml-auto">
           <button className="relative h-9 w-9 grid place-items-center rounded-md border border-slate-300 hover:bg-slate-100">
             <Bell className="h-4 w-4 text-muted-foreground" />
             <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-brand-red" />
@@ -64,8 +71,8 @@ export function DashboardTopbar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="cursor-pointer"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="cursor-pointer text-rose-600 focus:text-rose-600"
               >
                 Sign out
               </DropdownMenuItem>
