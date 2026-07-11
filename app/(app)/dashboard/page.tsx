@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -25,13 +25,11 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
 import { LeadTable } from "@/components/leads/LeadTable";
-import { OrderTable } from "@/components/orders/OrderTable";
 import { ExportButton } from "@/components/leads/ExportButton";
 import { TaskList } from "@/components/leads/TaskList";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { mockOrders } from "@/data/orders";
-import { currentUser } from "@/data/user";
+import { useSession } from "next-auth/react";
 
 interface Toast {
   id: number;
@@ -44,6 +42,16 @@ export default function DashboardPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [ghlLoading, setGhlLoading] = useState(false);
   const [replacementLoading, setReplacementLoading] = useState(false);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const { data: session } = useSession();
+  const userName = (session?.user?.name ?? "there").split(" ")[0];
+
+  useEffect(() => {
+    fetch("/api/orders")
+      .then((r) => r.json())
+      .then((data) => { if (data.orders) setRecentOrders(data.orders.slice(0, 3)); })
+      .catch(() => {});
+  }, []);
 
   function addToast(type: "success" | "error" | "info", message: string) {
     const id = ++toastCounter;
@@ -122,7 +130,7 @@ export default function DashboardPage() {
       )}
 
       <PageHeader
-        eyebrow={`Welcome back, ${currentUser.name.split(" ")[0]}`}
+        eyebrow={`Welcome back, ${userName}`}
         title="Your IUL pipeline at a glance."
         description="Real-time view of your purchased leads, tasks for today, and pipeline performance across the last 7 days."
         actions={
@@ -313,7 +321,42 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
-        <OrderTable orders={mockOrders.slice(0, 3)} />
+        {recentOrders.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-muted-foreground">
+            No orders yet. <Link href="/marketplace" className="text-brand-red hover:underline">Browse packages</Link> to place your first order.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="border-b border-slate-100 bg-slate-50">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Order</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground hidden md:table-cell">Package</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground hidden md:table-cell">Total</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Status</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground hidden md:table-cell">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentOrders.map((o: any) => (
+                  <tr key={o.id} className="border-b border-slate-50 last:border-0">
+                    <td className="px-4 py-2 font-mono text-xs">{o.id.slice(0, 12)}...</td>
+                    <td className="px-4 py-2 hidden md:table-cell">{o.packageId}</td>
+                    <td className="px-4 py-2 hidden md:table-cell">${(o.totalCents / 100).toFixed(2)}</td>
+                    <td className="px-4 py-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        o.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' :
+                        o.status === 'DELIVERING' ? 'bg-sky-100 text-sky-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{o.status}</span>
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground hidden md:table-cell">{new Date(o.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="mt-8">
