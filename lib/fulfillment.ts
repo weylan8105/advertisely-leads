@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -76,6 +77,28 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       })),
     });
   });
+
+  // Send email notification to the agent
+  if (candidates.length > 0 && isEmailConfigured) {
+    try {
+      const user = await prisma?.user.findUnique({
+        where: { id: order.userId },
+        select: { email: true, name: true },
+      });
+      if (user?.email) {
+        await sendLeadDeliveryEmail({
+          agentEmail: user.email,
+          agentName: user.name ?? "Agent",
+          leadCount: candidates.length,
+          packageName: order.packageId,
+          orderId: order.id,
+        });
+      }
+    } catch (emailErr) {
+      // Never block fulfillment on email failure
+      console.warn("Email notification failed:", emailErr);
+    }
+  }
 
   return candidates.length;
 }

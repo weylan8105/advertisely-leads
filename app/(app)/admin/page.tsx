@@ -36,6 +36,7 @@ import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
 
 import { formatCurrency } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 // Seed replacement data with local state management
 const INITIAL_REPLACEMENTS = [
@@ -67,6 +68,10 @@ export default function AdminPage() {
   const [replacements, setReplacements] = useState<Replacement[]>(INITIAL_REPLACEMENTS);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [syncPaymentIntentId, setSyncPaymentIntentId] = useState("");
+  const [syncOverrideUserId, setSyncOverrideUserId] = useState("");
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
 
   function addToast(type: "success" | "error", message: string) {
     const id = ++toastCounter;
@@ -211,6 +216,7 @@ export default function AdminPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="accounts">Client accounts</TabsTrigger>
+            <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
           </TabsList>
 
           <TabsContent value="queue">
@@ -417,6 +423,84 @@ export default function AdminPage() {
                     })}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="stripe-sync">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-brand-red" />
+                  Recover missing Stripe order
+                </CardTitle>
+                <CardDescription>
+                  If a payment went through but the order didn&apos;t appear (webhook missed), paste the
+                  Stripe PaymentIntent ID here to manually sync it into the database.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <strong>How to find the PaymentIntent ID:</strong> Go to{" "}
+                  <a href="https://dashboard.stripe.com/payments" target="_blank" rel="noopener noreferrer" className="underline">Stripe Dashboard → Payments</a>,
+                  click the payment, and copy the ID starting with <code className="font-mono">pi_</code>.
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">PaymentIntent ID <span className="text-brand-red">*</span></label>
+                    <Input
+                      placeholder="pi_3ABC..."
+                      value={syncPaymentIntentId}
+                      onChange={(e) => setSyncPaymentIntentId(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Override User ID <span className="text-muted-foreground text-xs">(only if metadata is missing)</span></label>
+                    <Input
+                      placeholder="cuid or uuid from DB"
+                      value={syncOverrideUserId}
+                      onChange={(e) => setSyncOverrideUserId(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button
+                  disabled={!syncPaymentIntentId || syncLoading}
+                  onClick={async () => {
+                    setSyncLoading(true);
+                    setSyncResult(null);
+                    try {
+                      const method = syncOverrideUserId ? "PUT" : "POST";
+                      const body: any = { paymentIntentId: syncPaymentIntentId };
+                      if (syncOverrideUserId) body.overrideUserId = syncOverrideUserId;
+                      const res = await fetch("/api/admin/sync-order", {
+                        method,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                      });
+                      const data = await res.json();
+                      setSyncResult({ ok: res.ok, ...data });
+                      if (res.ok) {
+                        addToast("success", data.message ?? "Order synced successfully!");
+                      } else {
+                        addToast("error", data.error ?? "Sync failed.");
+                      }
+                    } catch {
+                      addToast("error", "Network error — sync failed.");
+                    } finally {
+                      setSyncLoading(false);
+                    }
+                  }}
+                >
+                  {syncLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  {syncLoading ? "Syncing..." : "Sync order"}
+                </Button>
+                {syncResult && (
+                  <div className={`rounded-lg border p-4 text-sm font-mono whitespace-pre-wrap ${
+                    syncResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"
+                  }`}>
+                    {JSON.stringify(syncResult, null, 2)}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

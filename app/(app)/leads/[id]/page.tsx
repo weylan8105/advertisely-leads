@@ -61,6 +61,9 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [ghlLoading, setGhlLoading] = useState(false);
   const [replacementLoading, setReplacementLoading] = useState(false);
+  const [statusValue, setStatusValue] = useState(lead.status);
+  const [dispositionValue, setDispositionValue] = useState(lead.disposition ?? "none");
+  const [statusSaving, setStatusSaving] = useState(false);
 
   const telHref = `tel:${lead.phone.replace(/\D/g, "")}`;
   const smsHref = `sms:${lead.phone.replace(/\D/g, "")}`;
@@ -405,7 +408,7 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
                   <Badge variant="info">{dispositionLabels[lead.disposition]}</Badge>
                 )}
               </div>
-              <Select defaultValue={lead.status}>
+              <Select value={statusValue} onValueChange={setStatusValue}>
                 <SelectTrigger>
                   <SelectValue placeholder="Update status" />
                 </SelectTrigger>
@@ -417,7 +420,7 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
                   ))}
                 </SelectContent>
               </Select>
-              <Select defaultValue={lead.disposition ?? "none"}>
+              <Select value={dispositionValue} onValueChange={setDispositionValue}>
                 <SelectTrigger>
                   <SelectValue placeholder="Log call disposition" />
                 </SelectTrigger>
@@ -430,7 +433,32 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
                   ))}
                 </SelectContent>
               </Select>
-              <Button className="w-full" size="sm">
+              <Button
+                className="w-full"
+                size="sm"
+                disabled={statusSaving}
+                onClick={async () => {
+                  setStatusSaving(true);
+                  try {
+                    const res = await fetch(`/api/leads/${lead.id}/status`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ status: statusValue, disposition: dispositionValue }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      addToast("error", data.error ?? "Failed to save status.");
+                    } else {
+                      addToast("success", "Status saved successfully.");
+                    }
+                  } catch {
+                    addToast("error", "Failed to save status. Please try again.");
+                  } finally {
+                    setStatusSaving(false);
+                  }
+                }}
+              >
+                {statusSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                 Save
               </Button>
             </CardContent>

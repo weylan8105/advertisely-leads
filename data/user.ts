@@ -1,11 +1,18 @@
+/**
+ * Mock user data — DEPRECATED.
+ * The current user is now read from the NextAuth session (useSession / getServerSession).
+ * This file is kept only for type compatibility during the transition.
+ */
+
 import type { User } from "@/types";
 
+// Deprecated — use useSession() or getServerSession(authOptions) instead
 export const currentUser: User = {
-  id: "u-001",
-  name: "Jordan Pace",
-  email: "jordan@paceagency.com",
-  agency: "Pace Financial Group",
+  id: "",
+  name: "",
+  email: "",
+  agency: "",
   role: "agent",
-  state: "TX",
-  joinedAt: "2025-09-12T00:00:00Z",
+  state: "",
+  joinedAt: "",
 };

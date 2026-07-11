@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
+import { sendOrderConfirmationEmail, isEmailConfigured } from "@/lib/email";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -104,4 +105,26 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
 
   // Immediately try to fill the new order from existing lead inventory.
   await fulfillOrder(order.id);
+
+  // Send order confirmation email
+  if (isEmailConfigured) {
+    try {
+      const user = await prisma?.user.findUnique({
+        where: { id: md.userId },
+        select: { email: true, name: true },
+      });
+      if (user?.email) {
+        await sendOrderConfirmationEmail({
+          agentEmail: user.email,
+          agentName: user.name ?? "Agent",
+          packageName: md.packageName ?? md.packageId,
+          quantity,
+          totalCents: intent.amount,
+          orderId: order.id,
+        });
+      }
+    } catch (emailErr) {
+      console.warn("Order confirmation email failed:", emailErr);
+    }
+  }
 }
