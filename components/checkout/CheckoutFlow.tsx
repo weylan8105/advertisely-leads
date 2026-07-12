@@ -48,7 +48,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
   const [step, setStep] = useState(initialPackageId ? 2 : 1);
   const [pkgId, setPkgId] = useState<LeadPackageId>(defaultPkg);
   const pkg = useMemo(() => leadPackages.find((p) => p.id === pkgId)!, [pkgId]);
-  const [qty, setQty] = useState<number>(pkg.minimumOrder);
+  const [qty, setQty] = useState<number>(1);
 
   const total = pkg.pricePerLead * qty;
 
@@ -109,7 +109,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                     onClick={() => {
                       if (!p.available) return;
                       setPkgId(p.id);
-                      setQty(p.minimumOrder);
+                      setQty(1);
                     }}
                     className={cn(
                       "text-left rounded-lg border p-4 transition-colors relative",
@@ -162,18 +162,23 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
               <div>
                 <h2 className="text-xl font-semibold">Set quantity & filters</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Minimum order: {pkg.minimumOrder} leads · Delivery: {pkg.estimatedDelivery}
+                  Choose 1–50 leads · Delivery: {pkg.estimatedDelivery}
                 </p>
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Quantity</Label>
+                  <Label>Quantity (1–50)</Label>
                   <Input
                     type="number"
                     value={qty}
-                    min={pkg.minimumOrder}
-                    onChange={(e) => setQty(Math.max(pkg.minimumOrder, +e.target.value))}
+                    min={1}
+                    max={50}
+                    onChange={(e) => {
+                      const v = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+                      setQty(v);
+                    }}
                   />
+                  <p className="text-[10px] text-muted-foreground mt-1">Max 50 leads per order.</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Daily delivery cap</Label>
@@ -215,20 +220,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                     Active states: TX, FL, CA, IL, PA, OH, CO, MI, WA. More unlock as inventory grows.
                   </p>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Income minimum</Label>
-                  <Select defaultValue="60">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Any</SelectItem>
-                      <SelectItem value="50">$50k+</SelectItem>
-                      <SelectItem value="60">$60k+</SelectItem>
-                      <SelectItem value="100">$100k+</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
               </div>
 
               <p className="text-xs text-muted-foreground">
@@ -251,7 +243,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <ReviewRow label="Quantity" value={`${qty} leads`} />
                 <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
                 <ReviewRow label="Estimated delivery" value={pkg.estimatedDelivery} />
-                <ReviewRow label="Filters" value="All 9 active states · Income $60k+" />
+                <ReviewRow label="Active states" value="TX, FL, CA, IL, PA, OH, CO, MI, WA" />
               </div>
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox defaultChecked className="mt-0.5" />

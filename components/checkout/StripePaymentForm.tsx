@@ -21,7 +21,6 @@ interface StripePaymentFormProps {
   packageId: string;
   quantity: number;
   filterStates?: string[];
-  filterIncomeMin?: number;
   onSuccess: () => void;
 }
 
@@ -43,7 +42,6 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
         packageId: props.packageId,
         quantity: props.quantity,
         filterStates: props.filterStates,
-        filterIncomeMin: props.filterIncomeMin,
       }),
     })
       .then(async (r) => {
@@ -55,7 +53,7 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
       })
       .then((data) => setClientSecret(data.clientSecret))
       .catch((e) => setError(e.message));
-  }, [props.packageId, props.quantity, props.filterStates, props.filterIncomeMin]);
+  }, [props.packageId, props.quantity, props.filterStates]);
 
   if (error) {
     return (

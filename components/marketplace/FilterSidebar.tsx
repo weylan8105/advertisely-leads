@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Filter, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { US_STATES, AVAILABLE_STATES } from "@/data/states";
@@ -15,9 +14,6 @@ interface FilterSidebarProps {
 
 export function FilterSidebar({ className }: FilterSidebarProps) {
   const [states, setStates] = useState<string[]>(["TX", "FL"]);
-  const [minInc, setMinInc] = useState(50000);
-  const [maxInc, setMaxInc] = useState(200000);
-
   const toggle = (arr: string[], setArr: (v: string[]) => void, v: string) => {
     setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   };
@@ -29,7 +25,10 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
           <Filter className="h-4 w-4 text-brand-red" />
           Filters
         </div>
-        <button className="text-xs text-muted-foreground hover:text-foreground">
+        <button
+          className="text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => setStates([])}
+        >
           Reset
         </button>
       </div>
@@ -83,27 +82,6 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
             states unlock as inventory grows.
           </span>
         </div>
-      </div>
-
-      <div>
-        <Label className="mb-2 block">Income range (annual)</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <Input
-            type="number"
-            value={minInc}
-            onChange={(e) => setMinInc(+e.target.value)}
-            placeholder="Min"
-          />
-          <Input
-            type="number"
-            value={maxInc}
-            onChange={(e) => setMaxInc(+e.target.value)}
-            placeholder="Max"
-          />
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-1.5">
-          Income is self-reported by prospect on form.
-        </p>
       </div>
 
       <Button className="w-full" size="sm">
