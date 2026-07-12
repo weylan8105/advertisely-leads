@@ -61,8 +61,8 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [ghlLoading, setGhlLoading] = useState(false);
   const [replacementLoading, setReplacementLoading] = useState(false);
-  const [statusValue, setStatusValue] = useState(lead.status);
-  const [dispositionValue, setDispositionValue] = useState(lead.disposition ?? "none");
+  const [statusValue, setStatusValue] = useState<string>(lead.status);
+  const [dispositionValue, setDispositionValue] = useState<string>(lead.disposition ?? "none");
   const [statusSaving, setStatusSaving] = useState(false);
 
   const telHref = `tel:${lead.phone.replace(/\D/g, "")}`;
