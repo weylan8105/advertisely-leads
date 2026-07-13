@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,10 @@ const navItems = [
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  // Reflect auth state (any login method) so signed-in visitors don't see
+  // "Sign in / Create account" and mistake it for having been logged out.
+  const { status } = useSession();
+  const isAuthed = status === "authenticated";
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between">
@@ -34,14 +39,22 @@ export function Navbar() {
           </nav>
         </div>
         <div className="hidden md:flex items-center gap-3">
-          <Link href="/login">
-            <Button variant="ghost" size="sm">
-              Sign in
-            </Button>
-          </Link>
-          <Link href="/signup">
-            <Button size="sm">Create account</Button>
-          </Link>
+          {isAuthed ? (
+            <Link href="/dashboard">
+              <Button size="sm">Go to dashboard</Button>
+            </Link>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button variant="ghost" size="sm">
+                  Sign in
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button size="sm">Create account</Button>
+              </Link>
+            </>
+          )}
         </div>
         <button
           className="md:hidden p-2 text-foreground"
@@ -69,16 +82,26 @@ export function Navbar() {
             </Link>
           ))}
           <div className="flex gap-2 pt-2">
-            <Link href="/login" className="flex-1">
-              <Button variant="outline" size="sm" className="w-full">
-                Sign in
-              </Button>
-            </Link>
-            <Link href="/signup" className="flex-1">
-              <Button size="sm" className="w-full">
-                Create account
-              </Button>
-            </Link>
+            {isAuthed ? (
+              <Link href="/dashboard" className="flex-1" onClick={() => setOpen(false)}>
+                <Button size="sm" className="w-full">
+                  Go to dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="flex-1" onClick={() => setOpen(false)}>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Sign in
+                  </Button>
+                </Link>
+                <Link href="/signup" className="flex-1" onClick={() => setOpen(false)}>
+                  <Button size="sm" className="w-full">
+                    Create account
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

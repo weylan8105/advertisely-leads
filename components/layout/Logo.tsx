@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
@@ -11,15 +12,22 @@ interface LogoProps {
 }
 
 export function Logo({
-  href = "/",
+  href,
   className,
   size = "md",
   withWordmark = true,
   tone = "light",
 }: LogoProps) {
+  // Route based on auth state so clicking the logo never *looks* like a logout.
+  // Works for every login method (Google, email/password) — useSession only
+  // reflects whether a session exists, not how it was created. If an explicit
+  // href is passed, honor it; otherwise send signed-in users to their dashboard
+  // and visitors to the marketing home.
+  const { status } = useSession();
+  const resolvedHref = href ?? (status === "authenticated" ? "/dashboard" : "/");
   const dims = size === "sm" ? "h-7 w-7" : size === "lg" ? "h-10 w-10" : "h-9 w-9";
   return (
-    <Link href={href} className={cn("group inline-flex items-center gap-2.5", className)}>
+    <Link href={resolvedHref} className={cn("group inline-flex items-center gap-2.5", className)}>
       <div
         className={cn(
           "relative grid place-items-center rounded-lg bg-white shrink-0 overflow-hidden ring-1",
