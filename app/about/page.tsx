@@ -289,7 +289,7 @@ export default function AboutPage() {
               </p>
               <div className="mt-9 grid sm:grid-cols-3 gap-4">
                 {[
-                  { icon: Zap, label: "Real-time delivery", body: "Live as opt-ins happen" },
+                  { icon: Zap, label: "24-hour delivery", body: "Leads land within a day" },
                   { icon: ShieldCheck, label: "Consent-first", body: "Certificate per lead" },
                   { icon: Database, label: "Source-tracked", body: "Campaign-level attribution" },
                 ].map((p) => {

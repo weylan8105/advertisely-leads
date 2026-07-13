@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://advertisely.io"),
   title: "Advertisely Leads — High-Intent IUL Leads for Agents Who Close",
   description:
-    "Premium IUL lead marketplace for life insurance agents and IUL producers. Real-time delivery, TCPA compliant, CRM-ready.",
+    "Premium IUL lead marketplace for life insurance agents and IUL producers. 24-hour delivery, TCPA compliant, CRM-ready.",
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png", sizes: "192x192" },

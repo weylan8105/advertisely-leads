@@ -18,6 +18,8 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
+  // Set for email/password accounts; null for OAuth-only (e.g. Google) users.
+  passwordHash  String?
   agency        String?
   role          UserRole  @default(AGENT)
   state         String?

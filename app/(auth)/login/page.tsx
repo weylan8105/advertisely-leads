@@ -64,7 +64,7 @@ export default function LoginPage() {
         </p>
         <ul className="mt-8 space-y-3 text-sm">
           <li className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-brand-red" /> Real-time lead delivery
+            <Zap className="h-4 w-4 text-brand-red" /> Leads delivered within 24 hours
           </li>
           <li className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-brand-red" /> TCPA-compliant by default

@@ -17,7 +17,7 @@ export default function MarketplacePage() {
             <PageHeader
               eyebrow="Lead marketplace"
               title="IUL lead packages built for one job."
-              description="Pick a package, set your filters, and your leads start flowing into your dashboard. Real-time delivery, TCPA-compliant capture, and full source attribution on every record."
+              description="Pick a package, set your filters, and your leads are delivered to your dashboard within 24 hours. TCPA-compliant capture and full source attribution on every record."
               actions={
                 <div className="flex gap-2 flex-wrap">
                   <Badge variant="success">Live inventory</Badge>

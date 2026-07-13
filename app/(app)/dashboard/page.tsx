@@ -313,7 +313,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold">Recent orders</h2>
-            <p className="text-xs text-muted-foreground">Delivery progress streams in real-time.</p>
+            <p className="text-xs text-muted-foreground">Delivery progress updates as leads arrive.</p>
           </div>
           <Link href="/orders">
             <Button variant="ghost" size="sm">

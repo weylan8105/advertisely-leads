@@ -34,7 +34,7 @@ export function Hero() {
           </h1>
           <p className="mt-6 text-base md:text-lg text-muted-foreground max-w-2xl">
             Advertisely Leads is the premium IUL lead marketplace for life insurance agents,
-            agency builders, and IUL producers. Real-time delivery, documented TCPA consent,
+            agency builders, and IUL producers. 24-hour delivery, documented TCPA consent,
             and a built-in CRM that ships your leads anywhere you need them.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -58,7 +58,7 @@ export function Hero() {
               <Database className="h-3.5 w-3.5 text-brand-red" /> Source-tracked records
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-brand-red" /> Real-time delivery
+              <Zap className="h-3.5 w-3.5 text-brand-red" /> 24-hour delivery
             </span>
           </div>
         </motion.div>

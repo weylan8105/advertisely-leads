@@ -17,7 +17,7 @@ const steps = [
     icon: Inbox,
     title: "Leads land in your dashboard",
     body:
-      "Fresh leads stream in real-time. Every record arrives with consent proof and source tracking.",
+      "Leads are delivered to your dashboard within 24 hours. Every record arrives with consent proof and source tracking.",
   },
   {
     icon: Download,
