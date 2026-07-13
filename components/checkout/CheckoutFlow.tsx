@@ -49,7 +49,23 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
   const [pkgId, setPkgId] = useState<LeadPackageId>(defaultPkg);
   const pkg = useMemo(() => leadPackages.find((p) => p.id === pkgId)!, [pkgId]);
   const [qty, setQty] = useState<number>(25);
-
+  const ACTIVE_STATES = [
+    { code: "TX", name: "Texas" },
+    { code: "FL", name: "Florida" },
+    { code: "CA", name: "California" },
+    { code: "IL", name: "Illinois" },
+    { code: "PA", name: "Pennsylvania" },
+    { code: "OH", name: "Ohio" },
+    { code: "CO", name: "Colorado" },
+    { code: "MI", name: "Michigan" },
+    { code: "WA", name: "Washington" },
+  ];
+  const [selectedStates, setSelectedStates] = useState<string[]>(ACTIVE_STATES.map((s) => s.code));
+  const toggleState = (code: string) => {
+    setSelectedStates((prev) =>
+      prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]
+    );
+  };
   const total = pkg.pricePerLead * qty;
 
   return (
@@ -196,31 +212,52 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>State filter</Label>
-                  <Select defaultValue="multi">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="multi">All 9 active states</SelectItem>
-                      <SelectItem value="tx">TX only</SelectItem>
-                      <SelectItem value="fl">FL only</SelectItem>
-                      <SelectItem value="ca">CA only</SelectItem>
-                      <SelectItem value="il">IL only</SelectItem>
-                      <SelectItem value="pa">PA only</SelectItem>
-                      <SelectItem value="oh">OH only</SelectItem>
-                      <SelectItem value="co">CO only</SelectItem>
-                      <SelectItem value="mi">MI only</SelectItem>
-                      <SelectItem value="wa">WA only</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Active states: TX, FL, CA, IL, PA, OH, CO, MI, WA. More unlock as inventory grows.
-                  </p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>State filter <span className="text-muted-foreground font-normal">({selectedStates.length} selected)</span></Label>
+                  <div className="flex gap-3 text-xs">
+                    <button
+                      type="button"
+                      className="text-red-600 hover:underline font-medium"
+                      onClick={() => setSelectedStates(ACTIVE_STATES.map((s) => s.code))}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="text-slate-500 hover:underline"
+                      onClick={() => setSelectedStates([])}
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
-
+                <div className="grid grid-cols-3 gap-2">
+                  {ACTIVE_STATES.map((s) => (
+                    <label
+                      key={s.code}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors select-none",
+                        selectedStates.includes(s.code)
+                          ? "border-red-500 bg-red-50 text-red-700 font-medium"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      )}
+                    >
+                      <Checkbox
+                        checked={selectedStates.includes(s.code)}
+                        onCheckedChange={() => toggleState(s.code)}
+                        className="h-3.5 w-3.5 shrink-0"
+                      />
+                      {s.code}
+                    </label>
+                  ))}
+                </div>
+                {selectedStates.length === 0 && (
+                  <p className="text-xs text-red-500">Please select at least one state.</p>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  More states unlock as inventory grows.
+                </p>
               </div>
 
               <p className="text-xs text-muted-foreground">
@@ -243,7 +280,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <ReviewRow label="Quantity" value={`${qty} leads`} />
                 <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
                 <ReviewRow label="Estimated delivery" value={pkg.estimatedDelivery} />
-                <ReviewRow label="Active states" value="TX, FL, CA, IL, PA, OH, CO, MI, WA" />
+                <ReviewRow label="States" value={selectedStates.length === ACTIVE_STATES.length ? "All 9 active states" : selectedStates.join(", ")} />
               </div>
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <Checkbox defaultChecked className="mt-0.5" />
@@ -301,7 +338,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
               >
                 <ArrowLeft className="h-4 w-4" /> Back
               </Button>
-              <Button onClick={() => setStep(Math.min(5, step + 1))}>
+              <Button onClick={() => setStep(Math.min(5, step + 1))} disabled={step === 2 && selectedStates.length === 0}>
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
