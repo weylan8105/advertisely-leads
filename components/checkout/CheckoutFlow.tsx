@@ -256,7 +256,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                   <p className="text-xs text-red-500">Please select at least one state.</p>
                 )}
                 <p className="text-[10px] text-muted-foreground">
-                  More states unlock as inventory grows.
+                  Selecting more states = faster delivery. Limiting to fewer states may slow fulfillment as lead volume is distributed across active campaigns. More states unlock as inventory grows.
                 </p>
               </div>
 
