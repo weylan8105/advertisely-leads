@@ -8,11 +8,8 @@ export type LeadStatus =
   | "Replaced";
 
 export type LeadPackageId =
-  | "fresh-iul"
   | "blue-collar-iul"
-  | "retirement-iul"
-  | "mortgage-iul"
-  | "aged-iul";
+  | "term-leads";
 
 export interface LeadPackage {
   id: LeadPackageId;
