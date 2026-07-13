@@ -23,7 +23,7 @@ export const leadPackages: LeadPackage[] = [
       "Pension-supplement scripts",
       "Agencies running PHP/IUL hybrid",
     ],
-    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter", "Nurse"],
+    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
   {
     id: "term-leads",
