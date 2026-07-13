@@ -178,7 +178,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
               <div>
                 <h2 className="text-xl font-semibold">Set quantity & filters</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Choose 25–50 leads · Delivery: {pkg.estimatedDelivery}
+                  Choose 25–50 leads · First leads arrive within 24 hours
                 </p>
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
@@ -279,7 +279,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <ReviewRow label="Package" value={pkg.name} />
                 <ReviewRow label="Quantity" value={`${qty} leads`} />
                 <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
-                <ReviewRow label="Estimated delivery" value={pkg.estimatedDelivery} />
+                <ReviewRow label="First leads" value="Within 24 hours of order" />
                 <ReviewRow label="States" value={selectedStates.length === ACTIVE_STATES.length ? "All 9 active states" : selectedStates.join(", ")} />
               </div>
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -316,7 +316,7 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
               <h2 className="text-2xl font-semibold tracking-tight">Order placed</h2>
               <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
                 Your {qty} {pkg.name} are in the queue. First leads typically land in your
-                dashboard within {pkg.estimatedDelivery.toLowerCase()}.
+                dashboard within 24 hours. Remaining leads deliver on a rolling basis.
               </p>
               <div className="mt-6 flex justify-center gap-2">
                 <Link href="/dashboard">
