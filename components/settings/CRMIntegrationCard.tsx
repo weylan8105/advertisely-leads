@@ -18,6 +18,7 @@ const colorMap: Record<string, string> = {
 
 export function CRMIntegrationCard({ integration }: { integration: Integration }) {
   const isConnected = integration.status === "connected";
+  const isComingSoon = integration.status === "coming_soon";
   return (
     <Card className="p-5 flex flex-col gap-4 hover:border-slate-300 transition-colors">
       <div className="flex items-start justify-between gap-3">
@@ -40,8 +41,13 @@ export function CRMIntegrationCard({ integration }: { integration: Integration }
         <div className="font-semibold tracking-tight">{integration.name}</div>
         <p className="mt-1 text-xs text-muted-foreground">{integration.description}</p>
       </div>
-      <Button variant={isConnected ? "outline" : "default"} size="sm" className="w-fit">
-        {isConnected ? "Manage" : "Connect"}
+      <Button
+        variant={isConnected ? "outline" : "default"}
+        size="sm"
+        className="w-fit"
+        disabled={isComingSoon}
+      >
+        {isConnected ? "Manage" : isComingSoon ? "Coming soon" : "Connect"}
       </Button>
     </Card>
   );

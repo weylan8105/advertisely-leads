@@ -1,34 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import {
+  EXPORT_HEADERS,
+  buildExportRows,
+  fetchExportLeads,
+  toTSV,
+} from "@/lib/leadExport";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/exports/sheets
+ * GET /api/exports/sheets
  *
- * Google Sheets sync — coming soon.
- * This route is a stub that returns a clear "coming soon" response.
- * When Google Sheets integration is ready, this will:
- *   1. Exchange the user's stored OAuth refresh token for an access token
- *   2. Append rows to the user's configured Google Sheet via the Sheets API
- *   3. Return the number of rows written and the sheet URL
+ * Returns the authenticated user's leads as tab-separated values (TSV). The
+ * client copies this to the clipboard and opens a new Google Sheet, where the
+ * user pastes it in — every lead lands on its own row/column. This works today
+ * without a Google service account or OAuth setup.
+ *
+ * Optional query params:
+ *   - leadIds: comma-separated list of lead IDs (defaults to all assigned leads)
+ *   - status: filter by status
  */
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user || !(session.user as any).id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json(
-    {
-      error: "Google Sheets sync is coming soon.",
-      message:
-        "Connect your Google Sheet in Settings → Integrations once this feature launches. " +
-        "In the meantime, use CSV export and import it into Sheets manually.",
-      comingSoon: true,
-    },
-    { status: 501 },
+  const userId = (session.user as any).id as string;
+  const { searchParams } = new URL(req.url);
+  const leads = await fetchExportLeads(
+    userId,
+    searchParams.get("leadIds"),
+    searchParams.get("status"),
   );
+
+  const tsv = toTSV(EXPORT_HEADERS, buildExportRows(leads));
+
+  return new NextResponse(tsv, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/tab-separated-values; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Lead-Count": String(leads.length),
+    },
+  });
 }

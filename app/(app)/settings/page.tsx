@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -13,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
-import { GHLConnectCard } from "@/components/settings/GHLConnectCard";
+import { SheetsExportButton } from "@/components/settings/SheetsExportButton";
 import { integrations } from "@/data/integrations";
 import { currentUser } from "@/data/user";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -121,12 +120,9 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <GHLConnectCard />
-                {integrations
-                  .filter((i) => i.type !== "gohighlevel")
-                  .map((i) => (
-                    <CRMIntegrationCard key={i.id} integration={i} />
-                  ))}
+                {integrations.map((i) => (
+                  <CRMIntegrationCard key={i.id} integration={i} />
+                ))}
               </div>
             </div>
 
@@ -174,30 +170,19 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                  Google Sheets connection
+                  Google Sheets export
                 </CardTitle>
                 <CardDescription>
-                  Auto-append new leads to a connected sheet. Shared visibility for your agency.
+                  Export your leads to a Google Sheet for shared visibility across your agency.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.04] p-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium">advertisely-leads-pace-agency</div>
-                    <div className="text-xs text-muted-foreground">
-                      Connected · last sync 2 minutes ago
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="success">Connected</Badge>
-                    <Button size="sm" variant="outline">
-                      Disconnect
-                    </Button>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm">
-                  Connect another sheet
-                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Copies your leads to the clipboard and opens a new Google Sheet — just paste
+                  (⌘/Ctrl+V) and every lead lands on its own row. You can also export selected
+                  leads from the Leads CRM.
+                </p>
+                <SheetsExportButton />
               </CardContent>
             </Card>
           </div>

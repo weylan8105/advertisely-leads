@@ -40,7 +40,7 @@ let toastCounter = 0;
 
 export default function DashboardPage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [ghlLoading, setGhlLoading] = useState(false);
+  const [sheetsLoading, setSheetsLoading] = useState(false);
   const [replacementLoading, setReplacementLoading] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const { data: session } = useSession();
@@ -63,24 +63,36 @@ export default function DashboardPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
-  async function handleGHLPush() {
-    setGhlLoading(true);
+  async function handleSheetsExport() {
+    setSheetsLoading(true);
     try {
-      const res = await fetch("/api/exports/ghl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds: [] }),
-      });
-      const data = await res.json();
+      const res = await fetch("/api/exports/sheets");
       if (!res.ok) {
-        addToast("error", data.error ?? "GHL push failed. Check your GHL connection in Settings.");
-      } else {
-        addToast("success", `Pushed ${data.pushed ?? 0} leads to GoHighLevel.`);
+        const err = await res.json().catch(() => ({ error: "Export failed" }));
+        addToast("error", err.error ?? "Google Sheets export failed.");
+        return;
       }
+      const tsv = await res.text();
+      const leadCount = res.headers.get("X-Lead-Count");
+      if (leadCount === "0") {
+        addToast("info", "No leads to export yet. Order leads from the Marketplace first.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(tsv);
+      } catch {
+        addToast("error", "Couldn't access your clipboard. Use Export → Download CSV instead.");
+        return;
+      }
+      window.open("https://sheets.new", "_blank", "noopener,noreferrer");
+      addToast(
+        "success",
+        `Copied ${leadCount} leads to your clipboard. Paste (⌘/Ctrl+V) into the Google Sheet that just opened.`,
+      );
     } catch {
-      addToast("error", "Failed to push to GoHighLevel. Check your GHL connection in Settings.");
+      addToast("error", "Failed to export to Google Sheets. Please try again.");
     } finally {
-      setGhlLoading(false);
+      setSheetsLoading(false);
     }
   }
 
@@ -254,18 +266,18 @@ export default function DashboardPage() {
               onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace first.")}
             />
             <QuickActionButton
-              icon={FileSpreadsheet}
+              icon={sheetsLoading ? Loader2 : FileSpreadsheet}
               label="Export to Google Sheets"
-              hint="Coming soon"
               tone="emerald"
-              comingSoon
-              onClick={() => addToast("info", "Google Sheets sync is coming soon. Use CSV export for now.")}
+              loading={sheetsLoading}
+              onClick={handleSheetsExport}
             />
             <QuickActionButton
-              icon={ghlLoading ? Loader2 : Plug}
+              icon={Plug}
               label="Push all leads to GoHighLevel"
-              loading={ghlLoading}
-              onClick={handleGHLPush}
+              hint="Coming soon"
+              comingSoon
+              onClick={() => addToast("info", "GoHighLevel push is coming soon.")}
             />
             <QuickActionButton
               icon={replacementLoading ? Loader2 : RefreshCw}
