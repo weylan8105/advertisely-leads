@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: "How fast do leads show up after I order?",
-    a: "Fresh and Retirement-Focused packages deliver in real-time (typically under 5 minutes from prospect submission). Blue-Collar and MP-to-IUL deliver within 24 hours. Aged packs deliver instantly as a CSV.",
+    a: "Blue-Collar IUL leads deliver within 24 hours of your order. Every record arrives with documented consent and source tracking. Term Life leads are launching soon — join the notify list to be first in line.",
   },
   {
     q: "Are these TCPA-compliant?",
@@ -30,7 +30,7 @@ const faqs = [
   },
   {
     q: "Is there a minimum order?",
-    a: "Minimums vary by package, starting at 10 leads (Retirement-Focused) and ranging up to 100 leads for Aged packs. Minimums exist so we can fairly allocate campaign capacity across agents.",
+    a: "Blue-Collar IUL leads start at a 25-lead minimum. Minimums exist so we can fairly allocate campaign capacity across agents.",
   },
   {
     q: "How is this different from Goat Leads or other lead vendors?",

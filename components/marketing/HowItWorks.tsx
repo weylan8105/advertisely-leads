@@ -5,7 +5,7 @@ const steps = [
     icon: Package,
     title: "Choose a lead package",
     body:
-      "Pick from Fresh IUL, Blue-Collar, Retirement-focused, MP-to-IUL cross-sell, or Aged volume packs.",
+      "Start with Blue-Collar IUL leads, available now. Term Life leads are coming soon.",
   },
   {
     icon: CreditCard,

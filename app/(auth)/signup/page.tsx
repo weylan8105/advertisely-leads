@@ -13,7 +13,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { CheckCircle2, Info } from "lucide-react";
 
 const perks = [
-  "Real-time delivery on Fresh & Retirement-Focused packages",
+  "Blue-Collar IUL leads delivered within 24 hours of your order",
   "Built-in lightweight CRM with notes, statuses, and agent assignment",
   "CSV + Google Sheets exports in one click",
   "Native GoHighLevel, Salesforce, HubSpot, and webhook integrations",

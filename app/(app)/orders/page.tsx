@@ -54,13 +54,8 @@ function statusLabel(status: string) {
 
 function packageLabel(packageId: string) {
   const map: Record<string, string> = {
-    "fresh-iul": "Fresh IUL Leads",
     "blue-collar-iul": "Blue-Collar IUL Leads",
-    "retirement-iul": "Retirement-Focused IUL Leads",
-    "aged-iul": "Aged IUL Leads",
-    "mortgage-iul": "Mortgage Protection to IUL",
-    "final-expense": "Final Expense Leads",
-    "fia-leads": "FIA Leads",
+    "term-leads": "Term Life Leads",
   };
   return map[packageId] ?? packageId;
 }
