@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
+import { findPackage } from "@/data/packages";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -90,7 +91,7 @@ export async function fulfillOrder(orderId: string): Promise<number> {
           agentEmail: user.email,
           agentName: user.name ?? "Agent",
           leadCount: candidates.length,
-          packageName: order.packageId,
+          packageName: findPackage(order.packageId)?.name ?? order.packageId,
           orderId: order.id,
         });
       }
