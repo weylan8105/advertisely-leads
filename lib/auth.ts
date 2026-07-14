@@ -82,6 +82,16 @@ export const authOptions: NextAuthOptions = {
       if (profile && (profile as { picture?: string }).picture) {
         token.picture = (profile as { picture?: string }).picture;
       }
+      // Bootstrap admins without database access: any email listed in the
+      // ADMIN_EMAILS env var (comma-separated) is granted the ADMIN role.
+      const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const email = ((user as { email?: string })?.email ?? token.email)?.toLowerCase();
+      if (email && adminEmails.includes(email)) {
+        token.role = "ADMIN";
+      }
       return token;
     },
     async session({ session, token }) {
