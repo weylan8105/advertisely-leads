@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const faqs = [
   {
     q: "How do I know these are real IUL-interested leads and not generic life leads?",
-    a: "Every lead self-selects an IUL-specific intent reason on the form — tax-free retirement, 401k alternative, pension supplement, college savings, or business owner exit. Generic life inquiries never enter our IUL packages.",
+    a: "Every lead comes from a dedicated IUL campaign on Meta and self-selects an IUL-specific reason on the form — tax-free retirement income, a 401(k) alternative, pension supplement, or cash value with living benefits. Generic life inquiries don't get funneled into our IUL packages.",
   },
   {
     q: "How fast do leads show up after I order?",
@@ -14,19 +14,19 @@ const faqs = [
   },
   {
     q: "Are these TCPA-compliant?",
-    a: "Yes. Every Advertisely lead carries documented express written consent, a timestamp, IP address, and a TrustedForm or Jornaya certificate URL. We do not ship leads without a paper trail.",
+    a: "Every lead opts in through a Meta Lead Ads form with express consent language and a captured opt-in timestamp, and each record keeps its source campaign for traceability. As with any lead source, confirm consent and follow your own DNC and TCPA process before you dial.",
   },
   {
     q: "Can I filter by state, age, or occupation before I order?",
-    a: "Yes. Each package includes filters for state, age range, income range, and occupation/niche. Filters apply to what's delivered into your account — not retroactively.",
+    a: "You can filter by state at checkout — choose the states you're licensed in and we only deliver from those. Occupation isn't a separate filter; it's built into the package itself (Blue-Collar IUL targets trades and union workers), so you get that niche by design. Age and income filters aren't self-serve yet.",
   },
   {
     q: "What's your replacement policy?",
-    a: "Bad numbers, disconnected lines, and clear mismatches are eligible for replacement within 72 hours of delivery, subject to a brief quality review. Submit replacements directly inside your CRM with one click.",
+    a: "Bad numbers, disconnected lines, and clear mismatches are eligible for replacement within 72 hours of delivery, subject to a brief quality review. Request one from the lead's page in your dashboard and our team follows up.",
   },
   {
     q: "Do you integrate with my CRM?",
-    a: "We offer native integrations with GoHighLevel, Salesforce, HubSpot, and Zapier. You can also use the custom webhook to POST leads to any endpoint, or export to CSV / Google Sheets in one click.",
+    a: "Right now you can export leads to Google Sheets or download a CSV in one click. Native CRM push — GoHighLevel, Salesforce, HubSpot, Zapier, and custom webhooks — is on the roadmap and marked coming soon in your settings.",
   },
   {
     q: "Is there a minimum order?",
