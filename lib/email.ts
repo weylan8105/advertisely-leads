@@ -60,6 +60,19 @@ async function sendEmail({
   }
 }
 
+/**
+ * Escape untrusted values before interpolating into email HTML. Lead data
+ * originates from external Meta lead forms, so it must never be trusted raw.
+ */
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /* ─────────────────────────────────────────────────────────────
    Email Templates
 ───────────────────────────────────────────────────────────── */
@@ -67,6 +80,16 @@ async function sendEmail({
 /**
  * Notify an agent that new leads have been delivered to their account.
  */
+export interface DeliveredLead {
+  name: string;
+  phone: string;
+  email: string;
+  state: string;
+  occupation?: string | null;
+  age?: number | null;
+  intentReason?: string | null;
+}
+
 export async function sendLeadDeliveryEmail({
   agentEmail,
   agentName,
@@ -74,6 +97,7 @@ export async function sendLeadDeliveryEmail({
   packageName,
   orderId,
   dashboardUrl,
+  leads = [],
 }: {
   agentEmail: string;
   agentName: string;
@@ -81,9 +105,56 @@ export async function sendLeadDeliveryEmail({
   packageName: string;
   orderId: string;
   dashboardUrl?: string;
+  leads?: DeliveredLead[];
 }) {
   const url = dashboardUrl ?? "https://advertisely.io/leads";
-  const subject = `🎯 ${leadCount} new ${packageName} lead${leadCount === 1 ? "" : "s"} delivered`;
+  const subject = `🎯 ${leadCount} new lead${leadCount === 1 ? "" : "s"} delivered — ${packageName}`;
+
+  // Build a contact card per lead so the agent can call/email straight from
+  // their inbox. All values are HTML-escaped (lead data is external input).
+  const leadCardsHtml = leads
+    .map((l) => {
+      const telHref = String(l.phone ?? "").replace(/[^0-9+]/g, "");
+      const metaBits = [
+        l.state ? escapeHtml(l.state) : "",
+        l.occupation ? escapeHtml(l.occupation) : "",
+        l.age ? `Age ${escapeHtml(l.age)}` : "",
+      ].filter(Boolean).join(" &middot; ");
+
+      return `
+      <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;">
+        <tr>
+          <td style="padding:16px;">
+            <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:2px;">${escapeHtml(l.name)}</div>
+            ${metaBits ? `<div style="font-size:12px;color:#94a3b8;margin-bottom:12px;">${metaBits}</div>` : ""}
+            <table cellpadding="0" cellspacing="0" style="width:100%;">
+              <tr>
+                <td style="font-size:13px;color:#64748b;padding:2px 0;width:70px;">Phone</td>
+                <td style="font-size:13px;font-weight:600;padding:2px 0;">
+                  <a href="tel:${telHref}" style="color:#dc2626;text-decoration:none;">${escapeHtml(l.phone)}</a>
+                </td>
+              </tr>
+              ${l.email ? `<tr>
+                <td style="font-size:13px;color:#64748b;padding:2px 0;">Email</td>
+                <td style="font-size:13px;font-weight:600;padding:2px 0;">
+                  <a href="mailto:${encodeURIComponent(l.email)}" style="color:#dc2626;text-decoration:none;">${escapeHtml(l.email)}</a>
+                </td>
+              </tr>` : ""}
+              ${l.intentReason ? `<tr>
+                <td style="font-size:13px;color:#64748b;padding:2px 0;vertical-align:top;">Interest</td>
+                <td style="font-size:13px;color:#0f172a;padding:2px 0;">${escapeHtml(l.intentReason)}</td>
+              </tr>` : ""}
+            </table>
+          </td>
+        </tr>
+      </table>`;
+    })
+    .join("");
+
+  const leadsSectionHtml = leads.length
+    ? `<p style="margin:0 0 12px;font-size:15px;font-weight:700;color:#0f172a;">Your new lead${leads.length === 1 ? "" : "s"}</p>
+       ${leadCardsHtml}`
+    : "";
 
   const html = `
 <!DOCTYPE html>
@@ -130,9 +201,11 @@ export async function sendLeadDeliveryEmail({
                 </tr>
               </table>
 
-              <div style="text-align:center;margin-bottom:24px;">
+              ${leadsSectionHtml}
+
+              <div style="text-align:center;margin:24px 0;">
                 <a href="${url}" style="display:inline-block;background:#dc2626;color:#ffffff;font-size:15px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
-                  View leads in CRM →
+                  Open in CRM →
                 </a>
               </div>
 

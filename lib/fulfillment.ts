@@ -93,6 +93,15 @@ export async function fulfillOrder(orderId: string): Promise<number> {
           leadCount: candidates.length,
           packageName: findPackage(order.packageId)?.name ?? order.packageId,
           orderId: order.id,
+          leads: candidates.map((l) => ({
+            name: l.name,
+            phone: l.phone,
+            email: l.email,
+            state: l.state,
+            occupation: l.occupation,
+            age: l.age,
+            intentReason: l.intentReason,
+          })),
         });
       }
     } catch (emailErr) {
