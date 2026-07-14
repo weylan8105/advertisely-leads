@@ -1,5 +1,7 @@
 import { prisma } from "./prisma";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
+import { appendRows, isSheetsConfigured } from "./sheets";
+import { buildExportRows } from "./leadExport";
 import { findPackage } from "@/data/packages";
 
 /**
@@ -107,6 +109,42 @@ export async function fulfillOrder(orderId: string): Promise<number> {
     } catch (emailErr) {
       // Never block fulfillment on email failure
       console.warn("Email notification failed:", emailErr);
+    }
+  }
+
+  // Live-sync the newly delivered leads into the customer's connected Google
+  // Sheet, if they've set one up. Rows use the same columns as CSV export.
+  if (candidates.length > 0 && isSheetsConfigured && prisma) {
+    try {
+      const integration = await prisma.integration.findUnique({
+        where: { userId_type: { userId: order.userId, type: "GOOGLE_SHEETS" } },
+      });
+      const spreadsheetId = (integration?.config as any)?.spreadsheetId as
+        | string
+        | undefined;
+      if (integration?.enabled && spreadsheetId) {
+        const result = await appendRows(
+          spreadsheetId,
+          buildExportRows(candidates),
+          (integration.config as any)?.sheetName ?? "Sheet1",
+        );
+        await prisma.exportLog.create({
+          data: {
+            userId: order.userId,
+            destination: "sheets",
+            status: result.ok ? "SUCCESS" : "FAILED",
+            responseCode: result.status || null,
+            errorMessage: result.ok ? null : result.error?.slice(0, 500),
+          },
+        });
+        await prisma.integration.update({
+          where: { id: integration.id },
+          data: { lastUsedAt: new Date() },
+        });
+      }
+    } catch (sheetsErr) {
+      // Never block fulfillment on a Sheets failure
+      console.warn("Google Sheets sync failed:", sheetsErr);
     }
   }
 

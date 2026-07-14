@@ -12,11 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
-import { SheetsExportButton } from "@/components/settings/SheetsExportButton";
+import { GoogleSheetsConnectCard } from "@/components/settings/GoogleSheetsConnectCard";
 import { integrations } from "@/data/integrations";
 import { currentUser } from "@/data/user";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Webhook, FileSpreadsheet, Eye, Copy } from "lucide-react";
+import { Webhook, Eye, Copy } from "lucide-react";
 
 export default function SettingsPage() {
   return (
@@ -120,9 +120,11 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {integrations.map((i) => (
-                  <CRMIntegrationCard key={i.id} integration={i} />
-                ))}
+                {integrations
+                  .filter((i) => i.type !== "sheets")
+                  .map((i) => (
+                    <CRMIntegrationCard key={i.id} integration={i} />
+                  ))}
               </div>
             </div>
 
@@ -166,25 +168,7 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                  Google Sheets export
-                </CardTitle>
-                <CardDescription>
-                  Export your leads to a Google Sheet for shared visibility across your agency.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Copies your leads to the clipboard and opens a new Google Sheet — just paste
-                  (⌘/Ctrl+V) and every lead lands on its own row. You can also export selected
-                  leads from the Leads CRM.
-                </p>
-                <SheetsExportButton />
-              </CardContent>
-            </Card>
+            <GoogleSheetsConnectCard />
           </div>
         </TabsContent>
 
