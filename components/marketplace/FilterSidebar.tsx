@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Filter, X, Info } from "lucide-react";
+import { Filter, X, Info, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -14,25 +14,52 @@ interface FilterSidebarProps {
 
 export function FilterSidebar({ className }: FilterSidebarProps) {
   const [states, setStates] = useState<string[]>(["TX", "FL"]);
+  // Collapsed by default on mobile so it doesn't push the packages off-screen;
+  // always expanded on desktop (lg) where it's a proper sidebar.
+  const [open, setOpen] = useState(false);
   const toggle = (arr: string[], setArr: (v: string[]) => void, v: string) => {
     setArr(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   };
 
   return (
-    <Card className={cn("p-5 space-y-6 h-fit sticky top-20", className)}>
-      <div className="flex items-center justify-between">
+    <Card className={cn("p-5 space-y-5 h-fit lg:sticky lg:top-20", className)}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between lg:cursor-default"
+        aria-expanded={open}
+      >
         <div className="flex items-center gap-2 font-medium">
           <Filter className="h-4 w-4 text-brand-red" />
           Filters
+          {states.length > 0 && (
+            <Badge variant="muted" className="text-[10px] lg:hidden">
+              {states.length}
+            </Badge>
+          )}
         </div>
-        <button
-          className="text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => setStates([])}
-        >
-          Reset
-        </button>
-      </div>
+        <span className="flex items-center gap-3">
+          <span
+            role="button"
+            tabIndex={0}
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              setStates([]);
+            }}
+          >
+            Reset
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform lg:hidden",
+              open && "rotate-180",
+            )}
+          />
+        </span>
+      </button>
 
+      <div className={cn("space-y-5", open ? "block" : "hidden", "lg:block")}>
       <div>
         <div className="flex items-center justify-between mb-2">
           <Label>States</Label>
@@ -92,6 +119,7 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
         Occupation niche is set by the lead package you choose. Lead availability varies by
         state and campaign volume.
       </p>
+      </div>
     </Card>
   );
 }

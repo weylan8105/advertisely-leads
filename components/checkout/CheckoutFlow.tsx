@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
   Check,
@@ -11,6 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
+import { CheckoutAuthPanel } from "@/components/checkout/CheckoutAuthPanel";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,9 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
     initialPackageId && leadPackages.find((p) => p.id === initialPackageId)?.available
       ? initialPackageId
       : (leadPackages.find((p) => p.available)?.id ?? "blue-collar-iul");
+  const { status } = useSession();
+  const [justAuthed, setJustAuthed] = useState(false);
+  const isAuthed = status === "authenticated" || justAuthed;
   const [step, setStep] = useState(initialPackageId ? 2 : 1);
   const [pkgId, setPkgId] = useState<LeadPackageId>(defaultPkg);
   const pkg = useMemo(() => leadPackages.find((p) => p.id === pkgId)!, [pkgId]);
@@ -300,11 +305,16 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                   Securely process via Stripe. Card, Apple Pay, Google Pay, and ACH supported.
                 </p>
               </div>
-              <StripePaymentForm
-                packageId={pkg.id}
-                quantity={qty}
-                onSuccess={() => setStep(5)}
-              />
+              {isAuthed ? (
+                <StripePaymentForm
+                  packageId={pkg.id}
+                  quantity={qty}
+                  filterStates={selectedStates}
+                  onSuccess={() => setStep(5)}
+                />
+              ) : (
+                <CheckoutAuthPanel onAuthed={() => setJustAuthed(true)} />
+              )}
             </div>
           )}
 

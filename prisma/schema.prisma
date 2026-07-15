@@ -240,6 +240,9 @@ model Order {
   filterIncomeMin Int?
   status          OrderStatus @default(PENDING)
   fulfilledCount  Int         @default(0)
+  // Optional per-order Google Sheet. When set, this order's leads sync here
+  // instead of the customer's default connected sheet.
+  sheetOverrideId String?
   stripePaymentIntentId String?
   createdAt       DateTime    @default(now())
   fulfilledAt     DateTime?

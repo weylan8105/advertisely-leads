@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -20,9 +21,10 @@ type NavItem = {
   label: string;
   icon: typeof LayoutDashboard;
   badge?: string;
+  adminOnly?: boolean;
 };
 
-const sections: { title: string; items: NavItem[] }[] = [
+const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
   {
     title: "Workspace",
     items: [
@@ -40,6 +42,7 @@ const sections: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "Internal",
+    adminOnly: true,
     items: [
       { href: "/admin", label: "Admin Console", icon: Shield, badge: "Admin" },
     ],
@@ -48,13 +51,17 @@ const sections: { title: string; items: NavItem[] }[] = [
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "ADMIN";
+  // Hide admin-only sections from everyone who isn't an admin.
+  const visibleSections = sections.filter((s) => !s.adminOnly || isAdmin);
   return (
     <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white min-h-screen sticky top-0">
       <div className="px-5 h-16 flex items-center border-b border-slate-200">
         <Logo href="/dashboard" />
       </div>
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-6 scrollbar-thin">
-        {sections.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.title}>
             <div className="px-2 mb-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-medium">
               {section.title}

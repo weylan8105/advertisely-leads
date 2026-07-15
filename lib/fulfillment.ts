@@ -112,21 +112,33 @@ export async function fulfillOrder(orderId: string): Promise<number> {
     }
   }
 
-  // Live-sync the newly delivered leads into the customer's connected Google
-  // Sheet, if they've set one up. Rows use the same columns as CSV export.
+  // Live-sync the newly delivered leads into a Google Sheet. By default this is
+  // the customer's connected sheet (all their orders flow there automatically);
+  // if this specific order has a per-order sheet override, that wins. Rows use
+  // the same columns as CSV export.
   if (candidates.length > 0 && isSheetsConfigured && prisma) {
     try {
-      const integration = await prisma.integration.findUnique({
-        where: { userId_type: { userId: order.userId, type: "GOOGLE_SHEETS" } },
-      });
-      const spreadsheetId = (integration?.config as any)?.spreadsheetId as
-        | string
-        | undefined;
-      if (integration?.enabled && spreadsheetId) {
+      let targetSheetId: string | undefined =
+        (order as { sheetOverrideId?: string | null }).sheetOverrideId ?? undefined;
+      let integrationId: string | undefined;
+      let sheetName = "Sheet1";
+
+      if (!targetSheetId) {
+        const integration = await prisma.integration.findUnique({
+          where: { userId_type: { userId: order.userId, type: "GOOGLE_SHEETS" } },
+        });
+        if (integration?.enabled) {
+          targetSheetId = (integration.config as any)?.spreadsheetId;
+          sheetName = (integration.config as any)?.sheetName ?? "Sheet1";
+          integrationId = integration.id;
+        }
+      }
+
+      if (targetSheetId) {
         const result = await appendRows(
-          spreadsheetId,
+          targetSheetId,
           buildExportRows(candidates),
-          (integration.config as any)?.sheetName ?? "Sheet1",
+          sheetName,
         );
         await prisma.exportLog.create({
           data: {
@@ -137,10 +149,12 @@ export async function fulfillOrder(orderId: string): Promise<number> {
             errorMessage: result.ok ? null : result.error?.slice(0, 500),
           },
         });
-        await prisma.integration.update({
-          where: { id: integration.id },
-          data: { lastUsedAt: new Date() },
-        });
+        if (integrationId) {
+          await prisma.integration.update({
+            where: { id: integrationId },
+            data: { lastUsedAt: new Date() },
+          });
+        }
       }
     } catch (sheetsErr) {
       // Never block fulfillment on a Sheets failure

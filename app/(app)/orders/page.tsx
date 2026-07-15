@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { PlusCircle, Loader2, Inbox } from "lucide-react";
+import { PlusCircle, Loader2, Inbox, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
@@ -29,6 +30,7 @@ interface DbOrder {
   status: string;
   fulfilledCount: number;
   filterStates: string[];
+  sheetOverrideId?: string | null;
   createdAt: string;
 }
 
@@ -64,6 +66,49 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<DbOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [sheetInput, setSheetInput] = useState("");
+  const [savingSheet, setSavingSheet] = useState(false);
+  const [sheetMsg, setSheetMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  function openSheetEditor(order: DbOrder) {
+    setEditingId(order.id);
+    setSheetMsg(null);
+    setSheetInput(
+      order.sheetOverrideId
+        ? `https://docs.google.com/spreadsheets/d/${order.sheetOverrideId}`
+        : "",
+    );
+  }
+
+  async function saveSheet(orderId: string, clear = false) {
+    setSavingSheet(true);
+    setSheetMsg(null);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, sheetUrl: clear ? "" : sheetInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSheetMsg({ type: "error", text: data.error ?? "Couldn't update the sheet." });
+        return;
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, sheetOverrideId: data.sheetOverrideId } : o)),
+      );
+      setSheetMsg({
+        type: "success",
+        text: clear ? "Now using your default sheet." : "Custom sheet connected for this order.",
+      });
+      if (clear) setEditingId(null);
+    } catch {
+      setSheetMsg({ type: "error", text: "Something went wrong. Please try again." });
+    } finally {
+      setSavingSheet(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/orders")
@@ -164,6 +209,7 @@ export default function OrdersPage() {
                   <TableHead className="hidden md:table-cell">Total</TableHead>
                   <TableHead>Delivery</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Sheet</TableHead>
                   <TableHead className="hidden md:table-cell">Date</TableHead>
                 </TableRow>
               </TableHeader>
@@ -173,7 +219,8 @@ export default function OrdersPage() {
                     ? Math.round((order.fulfilledCount / order.quantity) * 100)
                     : 0;
                   return (
-                    <TableRow key={order.id}>
+                    <Fragment key={order.id}>
+                    <TableRow>
                       <TableCell className="font-mono text-xs">{order.id.slice(0, 12)}...</TableCell>
                       <TableCell className="text-sm">{packageLabel(order.packageId)}</TableCell>
                       <TableCell className="hidden md:table-cell">{order.quantity}</TableCell>
@@ -193,10 +240,80 @@ export default function OrdersPage() {
                           {statusLabel(order.status)}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => openSheetEditor(order)}
+                          className="inline-flex items-center gap-1.5 text-xs hover:underline"
+                        >
+                          <FileSpreadsheet className={order.sheetOverrideId ? "h-3.5 w-3.5 text-emerald-600" : "h-3.5 w-3.5 text-muted-foreground"} />
+                          {order.sheetOverrideId ? (
+                            <span className="text-emerald-700 font-medium">Custom</span>
+                          ) : (
+                            <span className="text-muted-foreground">Default</span>
+                          )}
+                        </button>
+                      </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                         {formatDate(order.createdAt)}
                       </TableCell>
                     </TableRow>
+                    {editingId === order.id && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="bg-slate-50">
+                          <div className="py-1 space-y-2 max-w-2xl">
+                            <div className="text-xs text-muted-foreground">
+                              By default this order's leads sync to your connected sheet
+                              (Settings → Integrations). To send <strong>this order</strong> to a
+                              different sheet, share it with the Advertisely service account as an
+                              Editor, then paste its link here.
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <Input
+                                value={sheetInput}
+                                onChange={(e) => setSheetInput(e.target.value)}
+                                placeholder="https://docs.google.com/spreadsheets/d/…"
+                                className="flex-1"
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => saveSheet(order.id)}
+                                  disabled={savingSheet || !sheetInput.trim()}
+                                >
+                                  {savingSheet ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  Save
+                                </Button>
+                                {order.sheetOverrideId && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => saveSheet(order.id, true)}
+                                    disabled={savingSheet}
+                                  >
+                                    Use default
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingId(null)}
+                                  disabled={savingSheet}
+                                >
+                                  Close
+                                </Button>
+                              </div>
+                            </div>
+                            {sheetMsg && (
+                              <p className={sheetMsg.type === "error" ? "text-xs text-rose-600" : "text-xs text-emerald-600"}>
+                                {sheetMsg.text}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </Fragment>
                   );
                 })}
               </TableBody>
