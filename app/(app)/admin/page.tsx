@@ -35,6 +35,7 @@ import {
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
 import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButton";
+import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -235,8 +236,9 @@ export default function AdminPage() {
       </div>
 
       <div className="mt-8">
-        <Tabs defaultValue="queue">
+        <Tabs defaultValue="all-leads">
           <TabsList>
+            <TabsTrigger value="all-leads">All leads</TabsTrigger>
             <TabsTrigger value="queue">Manual assignment</TabsTrigger>
             <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
             <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
@@ -252,6 +254,21 @@ export default function AdminPage() {
             <TabsTrigger value="accounts">Client accounts</TabsTrigger>
             <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="all-leads">
+            <Card>
+              <CardHeader>
+                <CardTitle>Lead database</CardTitle>
+                <CardDescription>
+                  Every lead in the system — assigned or not. Search and filter to verify
+                  exactly what has come in from Meta and where it went.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminAllLeads />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="queue">
             <Card>

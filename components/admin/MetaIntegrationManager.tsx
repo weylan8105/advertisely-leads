@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
-import { Plus, Plug, ExternalLink, Eye, Copy } from "lucide-react";
+import { Plus, Plug, ExternalLink, Eye, Copy, SlidersHorizontal } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { FieldMappingDialog } from "@/components/admin/FieldMappingDialog";
 import {
   Select,
   SelectContent,
@@ -199,6 +200,7 @@ function FormMappingList({
   const [formId, setFormId] = useState("");
   const [formName, setFormName] = useState("");
   const [packageId, setPackageId] = useState<string>(leadPackages[0].id);
+  const [configForm, setConfigForm] = useState<any | null>(null);
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-200">
@@ -287,14 +289,46 @@ function FormMappingList({
                   <Badge variant="muted" className="text-[10px]">
                     {pkg?.name ?? m.packageId}
                   </Badge>
+                  {(() => {
+                    const mapped = Object.keys((m.fieldMapping as Record<string, string>) ?? {}).length;
+                    return (
+                      <Badge variant={mapped > 0 ? "info" : "warning"} className="text-[10px]">
+                        {mapped > 0 ? `${mapped} field${mapped > 1 ? "s" : ""} mapped` : "no custom mapping"}
+                      </Badge>
+                    );
+                  })()}
                 </div>
-                <Badge variant={m.enabled ? "success" : "muted"} className="text-[10px]">
-                  {m.enabled ? "Active" : "Off"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setConfigForm(m)}
+                  >
+                    <SlidersHorizontal className="h-3 w-3" /> Configure fields
+                  </Button>
+                  <Badge variant={m.enabled ? "success" : "muted"} className="text-[10px]">
+                    {m.enabled ? "Active" : "Off"}
+                  </Badge>
+                </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {configForm && (
+        <FieldMappingDialog
+          open={!!configForm}
+          onOpenChange={(o) => !o && setConfigForm(null)}
+          mapping={{
+            id: configForm.id,
+            formId: configForm.formId,
+            formName: configForm.formName,
+            packageId: configForm.packageId,
+            pageConnectionId,
+          }}
+        />
       )}
     </div>
   );
