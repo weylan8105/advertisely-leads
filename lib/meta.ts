@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { normalizeState } from "./leadImport";
 
 const META_GRAPH_API = "https://graph.facebook.com/v20.0";
 
@@ -86,6 +87,51 @@ export async function fetchMetaLeadDetail(
  * Meta returns: [{ name: "full_name", values: ["Marcus Halloway"] }, ...]
  * We return:   { full_name: "Marcus Halloway", ... }
  */
+export interface MetaFormQuestion {
+  key: string;
+  label: string;
+  type?: string;
+}
+
+// Meta lead-form "built-in" question keys that our webhook maps automatically
+// (no per-form fieldMapping needed). Everything else is a custom question.
+export const META_BUILTIN_KEYS = new Set([
+  "full_name", "first_name", "last_name", "email", "phone_number",
+  "state", "province", "city", "zip", "post_code", "country", "dob", "gender",
+]);
+
+// The DB columns a custom question can be mapped to.
+export const MAPPABLE_DB_FIELDS = [
+  "name", "email", "phone", "state", "age", "income", "occupation", "intentReason",
+] as const;
+
+/**
+ * Fetch a lead form's questions from the Graph API so an admin can see the
+ * exact question keys and map each to a DB column. Requires the page token.
+ */
+export async function fetchMetaFormQuestions(
+  formId: string,
+  pageAccessToken: string,
+): Promise<{ name?: string; questions: MetaFormQuestion[] }> {
+  const url = `${META_GRAPH_API}/${encodeURIComponent(
+    formId,
+  )}?fields=name,questions&access_token=${encodeURIComponent(pageAccessToken)}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Meta Graph API ${res.status}: ${text}`);
+  }
+  const data = await res.json();
+  return {
+    name: data.name,
+    questions: (data.questions ?? []).map((q: any) => ({
+      key: String(q.key ?? "").toLowerCase().trim(),
+      label: q.label ?? q.key ?? "",
+      type: q.type,
+    })),
+  };
+}
+
 export function flattenMetaFields(
   fieldData: MetaLeadFieldData[],
 ): Record<string, string> {
@@ -122,7 +168,10 @@ export function mapLeadFields(
   if (flat.full_name) standardized.name = flat.full_name;
   if (flat.email) standardized.email = flat.email;
   if (flat.phone_number) standardized.phone = flat.phone_number;
-  if (flat.state) standardized.state = flat.state.toUpperCase();
+  // Normalize state to a 2-letter code so it matches order.filterStates.
+  // Meta can send full names ("Florida"), mixed case, or codes — all must
+  // resolve to "FL", or the lead silently matches no order and never delivers.
+  if (flat.state) standardized.state = normalizeState(flat.state).code;
 
   // Apply custom mapping for non-standard form questions.
   for (const [metaKey, ourField] of Object.entries(fieldMapping)) {
@@ -131,6 +180,8 @@ export function mapLeadFields(
     if (ourField === "age") standardized.age = parseInt(v, 10) || undefined!;
     else if (ourField === "income")
       standardized.income = parseInt(v.replace(/[^0-9]/g, ""), 10) || undefined!;
+    // Many IUL forms ask state as a custom question — normalize it too.
+    else if (ourField === "state") standardized.state = normalizeState(v).code;
     else standardized[ourField] = v;
   }
 
