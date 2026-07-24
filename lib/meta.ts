@@ -64,6 +64,66 @@ export function verifyMetaSignature(
 }
 
 /**
+ * Validate a page access token against the Graph API. Confirms the token works
+ * and (optionally) that it belongs to the expected page. Returns the page's
+ * real name so the admin UI can confirm they pasted the right token.
+ */
+export async function validatePageToken(
+  pageId: string,
+  pageAccessToken: string,
+): Promise<{ ok: boolean; name?: string; error?: string }> {
+  const url = `${META_GRAPH_API}/${encodeURIComponent(
+    pageId,
+  )}?fields=name&access_token=${encodeURIComponent(pageAccessToken)}`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: data?.error?.message ?? `Graph API ${res.status}`,
+      };
+    }
+    return { ok: true, name: data?.name };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Subscribe a page to this app's `leadgen` webhook field. Until this succeeds,
+ * Meta delivers NO leadgen events for the page — connecting a page and mapping
+ * forms is not enough on its own. Idempotent: re-subscribing is a no-op.
+ */
+export async function subscribePageToLeadgen(
+  pageId: string,
+  pageAccessToken: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const url = `${META_GRAPH_API}/${encodeURIComponent(pageId)}/subscribed_apps`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        subscribed_fields: "leadgen",
+        access_token: pageAccessToken,
+      }),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      return {
+        ok: false,
+        error: data?.error?.message ?? `Graph API ${res.status}`,
+      };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+/**
  * Fetch the actual lead detail (field values etc.) from Meta Graph API
  * using the page access token. Webhook only gives us a leadgen_id.
  */

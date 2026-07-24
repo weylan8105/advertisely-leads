@@ -4,10 +4,9 @@ import {
   verifyMetaSignature,
   fetchMetaLeadDetail,
   flattenMetaFields,
-  mapLeadFields,
   type MetaLeadgenWebhookPayload,
 } from "@/lib/meta";
-import { tryFulfillForNewLead } from "@/lib/fulfillment";
+import { ingestLeadFromFields } from "@/lib/leadIngest";
 
 // Force this route to run in Node.js runtime (not Edge) — Prisma requires Node.
 export const runtime = "nodejs";
@@ -100,15 +99,6 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // Idempotency — don't re-insert if we've already ingested this leadgen_id
-      const existing = await prisma.lead.findUnique({
-        where: { externalId: event.leadgen_id },
-      });
-      if (existing) {
-        skipped.push(event.leadgen_id);
-        continue;
-      }
-
       try {
         const detail = await fetchMetaLeadDetail(
           event.leadgen_id,
@@ -117,47 +107,32 @@ export async function POST(req: NextRequest) {
         const flat = flattenMetaFields(detail.field_data);
         const fieldMapping =
           (formMapping.fieldMapping as Record<string, string>) ?? {};
-        const { standardized, raw } = mapLeadFields(flat, fieldMapping);
 
-        if (!standardized.name || !standardized.phone || !standardized.state) {
-          console.warn(
-            `Meta webhook: skipping ${event.leadgen_id} - missing required fields (name/phone/state)`,
-          );
-          skipped.push(event.leadgen_id);
-          continue;
-        }
-
-        const created = await prisma.lead.create({
-          data: {
-            externalId: event.leadgen_id,
-            name: standardized.name,
-            phone: standardized.phone,
-            email: standardized.email ?? "",
-            state: standardized.state,
-            age: standardized.age,
-            income: standardized.income,
-            occupation: standardized.occupation,
-            intentReason: standardized.intentReason,
-            packageId: formMapping.packageId,
-            source: `Meta - ${formMapping.formName}`,
-            campaignName: detail.campaign_id,
+        const result = await ingestLeadFromFields({
+          externalId: event.leadgen_id,
+          flat,
+          fieldMapping,
+          packageId: formMapping.packageId,
+          source: `Meta - ${formMapping.formName}`,
+          meta: {
+            campaignId: detail.campaign_id,
             adsetId: detail.adset_id,
-            creativeId: detail.ad_id,
-            consentMethod: "TCPA_WEB_FORM",
-            consentTime: new Date(detail.created_time),
-            rawFormData: raw,
-            activity: {
-              create: {
-                type: "LEAD_RECEIVED",
-                body: `Lead received from Meta form "${formMapping.formName}".`,
-              },
-            },
+            adId: detail.ad_id,
+            createdTime: new Date(detail.created_time),
           },
+          activityBody: `Lead received from Meta form "${formMapping.formName}".`,
         });
 
-        // Try to immediately assign to an open order
-        await tryFulfillForNewLead(created.id);
-        ingested.push(event.leadgen_id);
+        if (result.status === "ingested") {
+          ingested.push(event.leadgen_id);
+        } else {
+          if (result.status === "missing_fields") {
+            console.warn(
+              `Meta webhook: skipping ${event.leadgen_id} - missing required fields (${result.missing?.join(", ")})`,
+            );
+          }
+          skipped.push(event.leadgen_id);
+        }
       } catch (err) {
         console.error("Meta webhook ingest failed:", err);
         skipped.push(event.leadgen_id);

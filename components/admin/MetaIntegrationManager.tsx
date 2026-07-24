@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { Plus, Plug, ExternalLink, Eye, Copy, SlidersHorizontal } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Plug, ExternalLink, Copy, SlidersHorizontal, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,10 +18,33 @@ import { leadPackages } from "@/data/packages";
 
 export function MetaIntegrationManager() {
   const [pages, setPages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddPage, setShowAddPage] = useState(false);
   const [pageId, setPageId] = useState("");
   const [pageName, setPageName] = useState("");
   const [pageToken, setPageToken] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Load already-connected pages from the DB on mount. Without this, connecting
+  // a page and refreshing made it (and its form mappings) disappear from view.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/meta/pages");
+        if (res.ok && active) {
+          const { pages: loaded } = await res.json();
+          setPages(loaded ?? []);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const webhookUrl =
     typeof window !== "undefined"
@@ -129,28 +152,53 @@ export function MetaIntegrationManager() {
                 </Button>
                 <Button
                   size="sm"
+                  disabled={saving}
                   onClick={async () => {
-                    const res = await fetch("/api/admin/meta/pages", {
-                      method: "POST",
-                      body: JSON.stringify({ pageId, pageName, pageAccessToken: pageToken }),
-                    });
-                    if (res.ok) {
-                      const { page } = await res.json();
-                      setPages([...pages, page]);
+                    setSaving(true);
+                    setSaveError(null);
+                    try {
+                      const res = await fetch("/api/admin/meta/pages", {
+                        method: "POST",
+                        body: JSON.stringify({ pageId, pageName, pageAccessToken: pageToken }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        setSaveError(data?.error ?? "Failed to connect page.");
+                        return;
+                      }
+                      // Replace an existing page with the same id, otherwise append.
+                      setPages((prev) => [
+                        data.page,
+                        ...prev.filter((p) => p.pageId !== data.page.pageId),
+                      ]);
                       setPageId("");
                       setPageName("");
                       setPageToken("");
                       setShowAddPage(false);
+                    } catch {
+                      setSaveError("Network error connecting page.");
+                    } finally {
+                      setSaving(false);
                     }
                   }}
                 >
-                  Save page
+                  {saving ? "Connecting…" : "Save page"}
                 </Button>
               </div>
+              {saveError && (
+                <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
             </div>
           )}
 
-          {pages.length === 0 ? (
+          {loading ? (
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-muted-foreground">
+              Loading connected pages…
+            </div>
+          ) : pages.length === 0 ? (
             <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
               <Plug className="h-6 w-6 mx-auto text-brand-red mb-2" />
               <div className="text-sm font-medium">No pages connected yet.</div>
@@ -177,6 +225,22 @@ export function MetaIntegrationManager() {
                       {p.enabled ? "Active" : "Disabled"}
                     </Badge>
                   </div>
+                  {p.subscribedAt ? (
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Subscribed to leadgen — leads will flow to mapped forms.
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Not subscribed to leadgen — Meta will send no leads yet.
+                        {p.subscriptionError ? ` (${p.subscriptionError})` : ""} Re-save the
+                        page token with <code className="font-mono">leads_retrieval</code> +{" "}
+                        <code className="font-mono">pages_manage_metadata</code> scopes to fix.
+                      </span>
+                    </div>
+                  )}
                   <FormMappingList pageConnectionId={p.id} mappings={p.formMappings ?? []} />
                 </div>
               ))}
@@ -184,7 +248,125 @@ export function MetaIntegrationManager() {
           )}
         </CardContent>
       </Card>
+
+      <SimulateLeadCard />
     </div>
+  );
+}
+
+function SimulateLeadCard() {
+  const [pkg, setPkg] = useState<string>(leadPackages[0].id);
+  const [name, setName] = useState("Test Prospect");
+  const [phone, setPhone] = useState("+15555550123");
+  const [state, setState] = useState("FL");
+  const [email, setEmail] = useState("test@example.com");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<
+    { ok: boolean; message: string; delivered?: boolean } | null
+  >(null);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Test the pipeline</CardTitle>
+        <CardDescription>
+          Fire a synthetic lead through the real ingest + fulfillment path (no
+          live Meta app needed) to confirm matching, delivery email, and Sheets
+          sync all work.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Package</Label>
+            <Select value={pkg} onValueChange={setPkg}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {leadPackages.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>State (2-letter or full name)</Label>
+            <Input value={state} onChange={(e) => setState(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Phone</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Email</Label>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setResult(null);
+              try {
+                const res = await fetch("/api/admin/meta/simulate", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    packageId: pkg,
+                    name,
+                    phone,
+                    state,
+                    email,
+                  }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  setResult({ ok: false, message: data?.error ?? "Failed." });
+                } else {
+                  setResult({
+                    ok: true,
+                    message: data.message,
+                    delivered: data.delivered,
+                  });
+                }
+              } catch {
+                setResult({ ok: false, message: "Network error." });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Sending…" : "Send test lead"}
+          </Button>
+        </div>
+        {result && (
+          <div
+            className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+              result.ok
+                ? result.delivered
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {result.ok && result.delivered ? (
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            )}
+            <span>{result.message}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
