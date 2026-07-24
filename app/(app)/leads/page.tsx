@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PlusCircle, Rows3, KanbanSquare } from "lucide-react";
+import { PlusCircle, Rows3, KanbanSquare, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { LeadKanban } from "@/components/leads/LeadKanban";
@@ -9,16 +9,38 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import type { Lead } from "@/types";
 
 export default function LeadsPage() {
   const [view, setView] = useState<"list" | "kanban">("list");
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/leads")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data) => {
+        if (active) setLeads(data.leads ?? []);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const buckets = {
-    all: [] as any[],
-    new: [] as any[],
-    contacted: [] as any[],
-    appointments: [] as any[],
-    closed: [] as any[],
+    all: leads,
+    new: leads.filter((l) => l.status === "New"),
+    contacted: leads.filter((l) => l.status === "Contacted"),
+    appointments: leads.filter((l) => l.status === "Appointment Set"),
+    closed: leads.filter((l) => l.status === "Closed"),
   };
 
   return (
@@ -63,7 +85,18 @@ export default function LeadsPage() {
         }
       />
 
-      {view === "list" ? (
+      {error && (
+        <Card className="p-5 mb-4 border-destructive/40">
+          <p className="text-sm text-destructive">Couldn’t load leads: {error}</p>
+        </Card>
+      )}
+
+      {loading ? (
+        <Card className="p-12 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-sm text-muted-foreground">Loading your leads…</span>
+        </Card>
+      ) : view === "list" ? (
         <Card className="p-5">
           <Tabs defaultValue="all">
             <TabsList>
@@ -99,7 +132,7 @@ export default function LeadsPage() {
               lead detail.
             </p>
           </div>
-          <LeadKanban leads={[]} />
+          <LeadKanban leads={buckets.all} />
         </Card>
       )}
 
