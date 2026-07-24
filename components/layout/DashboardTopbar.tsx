@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Search, Bell, ChevronDown } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/layout/Logo";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 import { currentUser } from "@/data/user";
 import { initials } from "@/lib/utils";
 
@@ -38,10 +39,7 @@ export function DashboardTopbar() {
         </div>
 
         <div className="flex items-center gap-3 ml-auto">
-          <button className="relative h-9 w-9 grid place-items-center rounded-md border border-slate-300 hover:bg-slate-100">
-            <Bell className="h-4 w-4 text-muted-foreground" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-brand-red" />
-          </button>
+          <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 rounded-md border border-slate-300 pl-1 pr-2.5 py-1 hover:bg-slate-100">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -38,14 +38,6 @@ import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManage
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
-// Seed replacement data with local state management
-const INITIAL_REPLACEMENTS = [
-  { id: "rep_1", lead: "Hannah Lipinski", reason: "Disconnected number", agent: "Sam Vega", submitted: "May 10", status: "PENDING" as const },
-  { id: "rep_2", lead: "Monica Aslan", reason: "Bad email + phone", agent: "Sam Vega", submitted: "May 10", status: "APPROVED" as const },
-  { id: "rep_3", lead: "Reggie Tate", reason: "Wrong niche (FE not IUL)", agent: "Jordan Pace", submitted: "May 9", status: "PENDING" as const },
-  { id: "rep_4", lead: "Andrea Cho", reason: "Spam/test entry", agent: "Jordan Pace", submitted: "May 9", status: "APPROVED" as const },
-];
-
 type ReplacementStatus = "PENDING" | "APPROVED" | "DENIED";
 
 interface Replacement {
@@ -65,13 +57,56 @@ interface Toast {
 let toastCounter = 0;
 
 export default function AdminPage() {
-  const [replacements, setReplacements] = useState<Replacement[]>(INITIAL_REPLACEMENTS);
+  const [replacements, setReplacements] = useState<Replacement[]>([]);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [syncPaymentIntentId, setSyncPaymentIntentId] = useState("");
   const [syncOverrideUserId, setSyncOverrideUserId] = useState("");
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+
+  // Real data from the database (replaces the old hardcoded demo figures).
+  const [stats, setStats] = useState<{
+    leadsInDatabase: number;
+    unassignedLeads: number;
+    soldLeads: number;
+    activeClientAccounts: number;
+  } | null>(null);
+  const [accounts, setAccounts] = useState<
+    { name: string; seats: number; lifetimeSpendCents: number; lastOrder: string | null; status: string }[]
+  >([]);
+
+  useEffect(() => {
+    fetch("/api/admin/overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setStats(d.stats);
+          setAccounts(d.accounts ?? []);
+        }
+      })
+      .catch(() => {});
+
+    fetch("/api/admin/replacements")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.replacements) {
+          setReplacements(
+            d.replacements.map((r: any) => ({
+              id: r.id,
+              lead: r.lead?.name ?? "—",
+              reason: r.reason,
+              agent: r.requestedBy?.name ?? r.requestedBy?.email ?? "—",
+              submitted: new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+              status: r.status,
+            })),
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const fmtNum = (n: number | undefined) => (n ?? 0).toLocaleString("en-US");
 
   function addToast(type: "success" | "error", message: string) {
     const id = ++toastCounter;
@@ -168,7 +203,7 @@ export default function AdminPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardStatCard
           label="Leads in database"
-          value="14,892"
+          value={stats ? fmtNum(stats.leadsInDatabase) : "—"}
           delta={9.4}
           hint="last 30 days"
           accent="teal"
@@ -176,7 +211,7 @@ export default function AdminPage() {
         />
         <DashboardStatCard
           label="Unassigned leads"
-          value={0}
+          value={stats ? fmtNum(stats.unassignedLeads) : "—"}
           delta={-3.1}
           hint="pending dispersal"
           accent="amber"
@@ -184,7 +219,7 @@ export default function AdminPage() {
         />
         <DashboardStatCard
           label="Sold leads"
-          value="9,114"
+          value={stats ? fmtNum(stats.soldLeads) : "—"}
           delta={12.6}
           hint="last 30 days"
           accent="violet"
@@ -192,7 +227,7 @@ export default function AdminPage() {
         />
         <DashboardStatCard
           label="Active client accounts"
-          value="284"
+          value={stats ? fmtNum(stats.activeClientAccounts) : "—"}
           delta={6.0}
           hint="paying agents"
           accent="emerald"
@@ -523,29 +558,32 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[
-                      ["Pace Financial Group", 4, 18420, "May 11", "Active"],
-                      ["North Star IUL Partners", 12, 64800, "May 10", "Active"],
-                      ["Halverson Agency", 2, 8950, "May 7", "Active"],
-                      ["Summit Wealth Solutions", 6, 22300, "May 6", "Trial"],
-                      ["Lone Star Producers", 3, 11200, "May 5", "Active"],
-                    ].map((r, i) => (
+                    {accounts.map((a, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium flex items-center gap-2">
-                          <Users className="h-4 w-4 text-brand-red" /> {r[0]}
+                          <Users className="h-4 w-4 text-brand-red" /> {a.name}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell">{r[1]}</TableCell>
+                        <TableCell className="hidden md:table-cell">{a.seats}</TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {formatCurrency(r[2] as number)}
+                          {formatCurrency(a.lifetimeSpendCents / 100)}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                          {r[3]}
+                          {a.lastOrder
+                            ? new Date(a.lastOrder).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                            : "—"}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={r[4] === "Active" ? "success" : "info"}>{r[4]}</Badge>
+                          <Badge variant={a.status === "Active" ? "success" : "info"}>{a.status}</Badge>
                         </TableCell>
                       </TableRow>
                     ))}
+                    {accounts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                          No paying client accounts yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
