@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
+import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButton";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -190,9 +191,7 @@ export default function AdminPage() {
         description="Manage the entire lead pipeline — inbound from Meta, dispersal to agents, replacement queue, and source attribution."
         actions={
           <>
-            <Button size="sm" variant="outline">
-              <Upload className="h-4 w-4" /> Import leads (CSV)
-            </Button>
+            <AdminImportLeadsButton />
             <Button size="sm">
               <Sparkles className="h-4 w-4" /> Open auto-distribution
             </Button>
