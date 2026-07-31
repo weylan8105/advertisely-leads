@@ -3,6 +3,7 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
 import { findPackage } from "@/data/packages";
+import { tagContact, enhancedWealthGHLConfig } from "./ghl";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -80,6 +81,41 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       })),
     });
   });
+
+  // Exclusive-sold suppression: tag each purchased lead's GHL contact
+  // `advertisely-sold` so Enhanced Wealth stops dialing it. Their GHL workflow
+  // moves tagged contacts into the Advertisely stage. No-op until the
+  // ENHANCED_WEALTH_GHL_* env vars are set; never blocks fulfillment.
+  const ewGHL = enhancedWealthGHLConfig();
+  if (ewGHL) {
+    for (const l of candidates) {
+      if (!l.ghlContactId) continue;
+      try {
+        const r = await tagContact(l.ghlContactId, ["advertisely-sold"], ewGHL);
+        if (r.ok) {
+          await prisma.lead.update({
+            where: { id: l.id },
+            data: { ghlSoldTaggedAt: new Date() },
+          });
+        } else {
+          await prisma.exportLog
+            .create({
+              data: {
+                userId: order.userId,
+                leadId: l.id,
+                destination: "ghl-sold-tag",
+                status: "FAILED",
+                responseCode: r.status,
+                errorMessage: r.error,
+              },
+            })
+            .catch(() => {});
+        }
+      } catch (err) {
+        console.warn("GHL sold-tag failed for lead", l.id, err);
+      }
+    }
+  }
 
   // Send email notification to the agent
   if (candidates.length > 0 && isEmailConfigured) {
