@@ -118,7 +118,9 @@ model MetaFormMapping {
 
 model Lead {
   id              String      @id @default(cuid())
-  externalId      String?     @unique // Meta leadgen_id
+  externalId      String?     @unique // Meta leadgen_id (legacy)
+  ghlContactId    String?     @unique // GHL contact id — arrives with GHL intake; powers sold-tagging
+  ghlSoldTaggedAt DateTime?           // set when we tag the GHL contact advertisely-sold
   name            String
   phone           String
   email           String
@@ -134,6 +136,10 @@ model Lead {
   campaignName    String?
   adsetId         String?
   creativeId      String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  fbclid          String?
   consentMethod   ConsentMethod @default(TCPA_WEB_FORM)
   consentTime     DateTime
   consentIp       String?
