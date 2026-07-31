@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { parseCsv, mapCsvToLeads } from "@/lib/leadImport";
 import { leadPackages } from "@/data/packages";
+import { sendLeadDeliveryEmail, isEmailConfigured } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -138,8 +139,36 @@ export async function POST(req: NextRequest) {
   });
 
   const pkgName = leadPackages.find((p) => p.id === packageId)?.name ?? packageId;
+
+  // Automatically notify the client their leads are ready (same email the
+  // auto-fulfillment path sends). Never block delivery on an email failure.
+  let emailed = false;
+  if (isEmailConfigured) {
+    try {
+      await sendLeadDeliveryEmail({
+        agentEmail: user.email,
+        agentName: user.name ?? "there",
+        leadCount: created + updated,
+        packageName: pkgName,
+        orderId: order.id,
+        leads: leads.slice(0, 50).map((l) => ({
+          name: l.name,
+          phone: l.phone,
+          email: l.email,
+          state: l.state,
+          occupation: l.occupation,
+          intentReason: l.intentReason,
+        })),
+      });
+      emailed = true;
+    } catch (e) {
+      console.warn("Delivery email failed:", e);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
+    emailed,
     client: { name: user.name, email: user.email },
     package: pkgName,
     created, updated,

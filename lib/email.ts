@@ -331,7 +331,7 @@ export async function sendOrderConfirmationEmail({
 /**
  * Send a warm thank-you email to the client immediately after they place an order.
  * This is personal and relationship-building — sets expectations for what happens next.
- * Signed off from Ryan Rush personally.
+ * Signed off from the Advertisely Team.
  */
 export async function sendThankYouEmail({
   clientEmail,
@@ -462,11 +462,11 @@ export async function sendThankYouEmail({
                 </a>
               </div>
 
-              <!-- Personal sign-off -->
+              <!-- Sign-off -->
               <div style="border-top:1px solid #f1f5f9;padding-top:20px;">
                 <p style="margin:0 0 4px;font-size:14px;color:#475569;">To your success,</p>
-                <p style="margin:0 0 2px;font-size:15px;font-weight:700;color:#0f172a;">Ryan Rush</p>
-                <p style="margin:0;font-size:13px;color:#94a3b8;">Founder, Advertisely &nbsp;·&nbsp; <a href="https://advertisely.io" style="color:#94a3b8;text-decoration:none;">advertisely.io</a></p>
+                <p style="margin:0 0 2px;font-size:15px;font-weight:700;color:#0f172a;">The Advertisely Team</p>
+                <p style="margin:0;font-size:13px;color:#94a3b8;"><a href="https://advertisely.io" style="color:#94a3b8;text-decoration:none;">advertisely.io</a></p>
               </div>
             </td>
           </tr>
