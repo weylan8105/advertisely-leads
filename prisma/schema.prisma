@@ -86,6 +86,12 @@ model MetaPageConnection {
   pageName        String
   pageAccessToken String   @db.Text
   enabled         Boolean  @default(true)
+  // Set when the page is successfully subscribed to the app's `leadgen` field
+  // (POST /{page-id}/subscribed_apps). Until this is set, Meta will NOT send
+  // leadgen webhooks for this page, so no leads can flow.
+  subscribedAt     DateTime?
+  // Last error from token validation or the subscribe call, surfaced in admin UI.
+  subscriptionError String? @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

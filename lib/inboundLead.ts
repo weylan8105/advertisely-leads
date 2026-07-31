@@ -1,4 +1,5 @@
 import { findPackage } from "@/data/packages";
+import { normalizeState } from "./leadImport";
 
 /**
  * Normalize a flat inbound lead payload (from Make.com / Zapier forwarding a
@@ -91,7 +92,10 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
       name,
       email: pick("email"),
       phone: pick("phone"),
-      state: pick("state").toUpperCase(),
+      // Normalize to a 2-letter code ("Florida" -> "FL") so the lead matches an
+      // order's filterStates. A raw .toUpperCase() ("FLORIDA") silently matches
+      // no order and never delivers — the same bug fixed on the Meta path.
+      state: normalizeState(pick("state")).code,
       age: Number.isFinite(age) ? age : undefined,
       income: Number.isFinite(income) ? income : undefined,
       occupation: pick("occupation") || undefined,
