@@ -37,7 +37,9 @@ function toDate(s){const d=s?new Date(s):null;return d&&!isNaN(d)?d:new Date();}
 
 // ── read all CSVs (UTF-16, tab-delimited) ────────────────────────────
 function walk(d){let out=[];for(const e of readdirSync(d)){const p=join(d,e);const st=statSync(p);if(st.isDirectory())out=out.concat(walk(p));else if(e.toLowerCase().endsWith(".csv"))out.push(p);}return out;}
-function parseTab(text){return text.split(/\r?\n/).filter(l=>l.trim()!=="").map(l=>l.split("\t"));}
+// Strip Meta's wrapping quotes from a tab-delimited cell (handles "" escapes).
+function unq(s){let t=(s??"").trim();while(t.length>=2&&t[0]==='"'&&t[t.length-1]==='"'){t=t.slice(1,-1).replace(/""/g,'"');}return t;}
+function parseTab(text){return text.split(/\r?\n/).filter(l=>l.trim()!=="").map(l=>l.split("\t").map(unq));}
 function readCsv(f){const raw=readFileSync(f);for(const enc of ["utf-16le","utf-8"]){try{let t=raw.toString(enc);if(t.charCodeAt(0)===0xFEFF)t=t.slice(1);const rows=parseTab(t);if(rows.length&&rows[0].length>3)return rows;}catch{}}return[];}
 
 const files=walk(resolve(dir));

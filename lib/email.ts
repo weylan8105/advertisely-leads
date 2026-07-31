@@ -22,10 +22,12 @@ async function sendEmail({
   to,
   subject,
   html,
+  attachments,
 }: {
   to: string;
   subject: string;
   html: string;
+  attachments?: { filename: string; content: string }[];
 }): Promise<{ success: boolean; error?: string }> {
   if (!isEmailConfigured) {
     console.warn("Email: RESEND_API_KEY not set — skipping email to", to);
@@ -44,6 +46,7 @@ async function sendEmail({
         to: [to],
         subject,
         html,
+        ...(attachments && attachments.length ? { attachments } : {}),
       }),
     });
 
@@ -87,6 +90,7 @@ export interface DeliveredLead {
   state: string;
   occupation?: string | null;
   age?: number | null;
+  income?: number | null;
   intentReason?: string | null;
 }
 
@@ -107,131 +111,84 @@ export async function sendLeadDeliveryEmail({
   dashboardUrl?: string;
   leads?: DeliveredLead[];
 }) {
+  // CANONICAL DELIVERY EMAIL — must stay identical to
+  // scripts/build-delivery-preview.mjs. See memory: advertisely-delivery-email-template.
   const url = dashboardUrl ?? "https://advertisely.io/leads";
-  const subject = `🎯 ${leadCount} new lead${leadCount === 1 ? "" : "s"} delivered — ${packageName}`;
+  const first = String(agentName ?? "there").split(" ")[0] || "there";
+  const subject = `Your ${leadCount} ${packageName} lead${leadCount === 1 ? "" : "s"} are ready, ${first}`;
 
-  // Build a contact card per lead so the agent can call/email straight from
-  // their inbox. All values are HTML-escaped (lead data is external input).
-  const leadCardsHtml = leads
-    .map((l) => {
-      const telHref = String(l.phone ?? "").replace(/[^0-9+]/g, "");
-      const metaBits = [
-        l.state ? escapeHtml(l.state) : "",
-        l.occupation ? escapeHtml(l.occupation) : "",
-        l.age ? `Age ${escapeHtml(l.age)}` : "",
-      ].filter(Boolean).join(" &middot; ");
+  const money = (n?: number | null) =>
+    typeof n === "number" && n > 0 ? "$" + n.toLocaleString() : "";
+  const timelineOf = (l: DeliveredLead) =>
+    escapeHtml(String(l.intentReason ?? "").replace(/^Retirement timeline:\s*/i, ""));
 
-      return `
-      <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;">
-        <tr>
-          <td style="padding:16px;">
-            <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:2px;">${escapeHtml(l.name)}</div>
-            ${metaBits ? `<div style="font-size:12px;color:#94a3b8;margin-bottom:12px;">${metaBits}</div>` : ""}
-            <table cellpadding="0" cellspacing="0" style="width:100%;">
-              <tr>
-                <td style="font-size:13px;color:#64748b;padding:2px 0;width:70px;">Phone</td>
-                <td style="font-size:13px;font-weight:600;padding:2px 0;">
-                  <a href="tel:${telHref}" style="color:#dc2626;text-decoration:none;">${escapeHtml(l.phone)}</a>
-                </td>
-              </tr>
-              ${l.email ? `<tr>
-                <td style="font-size:13px;color:#64748b;padding:2px 0;">Email</td>
-                <td style="font-size:13px;font-weight:600;padding:2px 0;">
-                  <a href="mailto:${encodeURIComponent(l.email)}" style="color:#dc2626;text-decoration:none;">${escapeHtml(l.email)}</a>
-                </td>
-              </tr>` : ""}
-              ${l.intentReason ? `<tr>
-                <td style="font-size:13px;color:#64748b;padding:2px 0;vertical-align:top;">Interest</td>
-                <td style="font-size:13px;color:#0f172a;padding:2px 0;">${escapeHtml(l.intentReason)}</td>
-              </tr>` : ""}
-            </table>
-          </td>
-        </tr>
-      </table>`;
-    })
+  const states = Array.from(new Set(leads.map((l) => l.state).filter(Boolean)));
+  const counts: Record<string, number> = {};
+  for (const l of leads) if (l.state) counts[l.state] = (counts[l.state] || 0) + 1;
+  const chips = Object.entries(counts)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([s, n]) => `<span style="color:#0f172a;font-weight:600;">${escapeHtml(s)}</span> <span style="color:#94a3b8;">${n}</span>`)
+    .join(' <span style="color:#cbd5e1;">·</span> ');
+  const deliveredStr = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  const box = (label: string, val: string | number) =>
+    `<td style="width:33.3%;padding:0 6px;vertical-align:top;"><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;"><div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">${label}</div><div style="font-size:22px;font-weight:700;color:#dc2626;margin-top:6px;">${val}</div></div></td>`;
+
+  const rows = leads
+    .map((l, i) => `<tr style="border-bottom:1px solid #eef2f7;">
+<td style="padding:8px 10px;font-size:12px;color:#94a3b8;">${i + 1}</td>
+<td style="padding:8px 10px;font-size:13px;font-weight:600;color:#0f172a;">${escapeHtml(l.name)}</td>
+<td style="padding:8px 10px;font-size:12px;"><span style="background:#f1f5f9;border-radius:4px;padding:2px 6px;">${escapeHtml(l.state)}</span></td>
+<td style="padding:8px 10px;font-size:12px;color:#0f172a;white-space:nowrap;">${escapeHtml(l.phone)}</td>
+<td style="padding:8px 10px;font-size:12px;color:#0f172a;">${escapeHtml(l.email)}</td>
+<td style="padding:8px 10px;font-size:12px;color:#475569;">${escapeHtml(l.occupation ?? "")}</td>
+<td style="padding:8px 10px;font-size:12px;color:#475569;">${timelineOf(l)}</td>
+<td style="padding:8px 10px;font-size:12px;color:#475569;white-space:nowrap;">${money(l.income)}</td></tr>`)
     .join("");
 
-  const leadsSectionHtml = leads.length
-    ? `<p style="margin:0 0 12px;font-size:15px;font-weight:700;color:#0f172a;">Your new lead${leads.length === 1 ? "" : "s"}</p>
-       ${leadCardsHtml}`
+  const tableHtml = leads.length
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate;overflow:hidden;">
+<thead><tr style="background:#0f172a;text-align:left;">${["#", "Name", "State", "Phone", "Email", "Trade", "Timeline", "Income"].map((h) => `<th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;">${h}</th>`).join("")}</tr></thead>
+<tbody>${rows}</tbody></table>`
     : "";
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${subject}</title>
-</head>
+  // Attach a client-ready CSV (same columns as the table).
+  const csvEsc = (v: unknown) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csvHeader = ["Name", "State", "Phone", "Email", "Trade", "Timeline", "Income"];
+  const csvBody = leads.map((l) =>
+    [l.name, l.state, l.phone, l.email, l.occupation ?? "", String(l.intentReason ?? "").replace(/^Retirement timeline:\s*/i, ""), money(l.income)].map(csvEsc).join(","),
+  );
+  const csv = [csvHeader.join(","), ...csvBody].join("\r\n");
+  const csvB64 = Buffer.from(csv, "utf8").toString("base64");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
-          <!-- Header -->
-          <tr>
-            <td style="background:#dc2626;padding:24px 32px;">
-              <div style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">Advertisely</div>
-              <div style="color:#fca5a5;font-size:13px;margin-top:2px;">Lead Delivery Notification</div>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px;">
-              <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">
-                ${leadCount} new lead${leadCount === 1 ? "" : "s"} ready for you
-              </p>
-              <p style="margin:0 0 24px;font-size:15px;color:#64748b;">
-                Hi ${agentName}, your <strong>${packageName}</strong> order just had ${leadCount} lead${leadCount === 1 ? "" : "s"} delivered. They're live in your CRM right now.
-              </p>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 12px;"><tr><td align="center">
+<table width="760" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;max-width:100%;">
+<tr><td style="background:#dc2626;padding:24px 32px;"><div style="color:#fff;font-size:20px;font-weight:700;">Advertisely</div><div style="color:#fca5a5;font-size:13px;margin-top:2px;">Lead Delivery</div></td></tr>
+<tr><td style="padding:32px;">
+<p style="margin:0 0 10px;font-size:24px;font-weight:700;color:#0f172a;">Your ${leadCount} leads are ready, ${escapeHtml(first)}</p>
+<p style="margin:0 0 22px;font-size:15px;color:#475569;line-height:1.6;">Here's your <strong>${escapeHtml(packageName)}</strong> order — <strong>${leadCount}</strong> verified, consent-captured leads across ${states.length} states. Download them below or import the attached CSV straight into your dialer or CRM.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 -6px 18px;"><tr>${box("Leads delivered", leadCount)}${box("States covered", states.length)}${box("Delivered", deliveredStr)}</tr></table>
+${chips ? `<p style="margin:0 0 22px;font-size:13px;line-height:1.9;">${chips}</p>` : ""}
+${tableHtml}
+<div style="text-align:center;margin:24px 0 4px;"><a href="${url}" style="display:inline-block;background:#dc2626;color:#fff;font-size:15px;font-weight:600;padding:14px 34px;border-radius:8px;text-decoration:none;">⬇&nbsp;&nbsp;Download your leads (CSV)</a></div>
+<p style="margin:16px 0 0;font-size:13px;color:#94a3b8;">The CSV is also attached to this email. Full details are in your dashboard. Speed matters — top agents call within 5 minutes.</p>
+<div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
+<p style="margin:0 0 4px;font-size:14px;color:#475569;">To your success,</p>
+<p style="margin:0 0 2px;font-size:15px;font-weight:700;color:#0f172a;">The Advertisely Team</p>
+<p style="margin:0;font-size:13px;color:#94a3b8;"><a href="https://advertisely.io" style="color:#94a3b8;text-decoration:none;">advertisely.io</a></p>
+</div></td></tr></table></td></tr></table></body></html>`;
 
-              <table cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-radius:8px;padding:16px;width:100%;margin-bottom:24px;">
-                <tr>
-                  <td style="font-size:13px;color:#64748b;">Package</td>
-                  <td style="font-size:13px;font-weight:600;color:#0f172a;text-align:right;">${packageName}</td>
-                </tr>
-                <tr>
-                  <td style="font-size:13px;color:#64748b;padding-top:8px;">Leads delivered</td>
-                  <td style="font-size:13px;font-weight:600;color:#0f172a;text-align:right;padding-top:8px;">${leadCount}</td>
-                </tr>
-                <tr>
-                  <td style="font-size:13px;color:#64748b;padding-top:8px;">Order ID</td>
-                  <td style="font-size:13px;font-weight:600;color:#0f172a;text-align:right;padding-top:8px;font-family:monospace;">${orderId.slice(0, 16)}...</td>
-                </tr>
-              </table>
-
-              ${leadsSectionHtml}
-
-              <div style="text-align:center;margin:24px 0;">
-                <a href="${url}" style="display:inline-block;background:#dc2626;color:#ffffff;font-size:15px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
-                  Open in CRM →
-                </a>
-              </div>
-
-              <p style="margin:0;font-size:13px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:16px;">
-                Speed matters. The best agents contact new leads within 5 minutes. Don't let these go cold.
-              </p>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-              <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">
-                Advertisely · <a href="https://advertisely.io" style="color:#94a3b8;">advertisely.io</a>
-                · You're receiving this because you have an active lead order.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-`;
-
-  return sendEmail({ to: agentEmail, subject, html });
+  return sendEmail({
+    to: agentEmail,
+    subject,
+    html,
+    attachments: leads.length ? [{ filename: "Advertisely_Leads.csv", content: csvB64 }] : undefined,
+  });
 }
 
 /**

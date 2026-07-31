@@ -157,6 +157,7 @@ export async function POST(req: NextRequest) {
           email: l.email,
           state: l.state,
           occupation: l.occupation,
+          income: l.income,
           intentReason: l.intentReason,
         })),
       });

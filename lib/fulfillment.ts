@@ -102,6 +102,7 @@ export async function fulfillOrder(orderId: string): Promise<number> {
             state: l.state,
             occupation: l.occupation,
             age: l.age,
+            income: l.income,
             intentReason: l.intentReason,
           })),
         });
