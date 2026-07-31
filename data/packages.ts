@@ -26,6 +26,30 @@ export const leadPackages: LeadPackage[] = [
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
   {
+    id: "aged-iul",
+    name: "Aged IUL Leads",
+    tagline: "Real Blue-Collar IUL prospects at a fraction of the price.",
+    description:
+      "Previously-generated Blue-Collar IUL leads from our Meta campaigns — the same high-intent tradesmen, aged 30+ days. Fully TCPA-consented and deeply discounted for agents who work volume.",
+    pricePerLead: 12,
+    minimumOrder: 25,
+    estimatedDelivery: "Within 24 hours",
+    badge: "Available now",
+    available: true,
+    features: [
+      "Same Blue-Collar IUL source",
+      "TCPA consent captured",
+      "Aged 30+ days",
+      "Deeply discounted volume pricing",
+    ],
+    ideal: [
+      "High-volume dialers",
+      "Agencies running call nights",
+      "Agents testing new scripts",
+    ],
+    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
+  },
+  {
     id: "term-leads",
     name: "Term Life Leads",
     tagline: "High-intent prospects shopping for term coverage.",

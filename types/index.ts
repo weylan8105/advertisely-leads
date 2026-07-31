@@ -9,6 +9,7 @@ export type LeadStatus =
 
 export type LeadPackageId =
   | "blue-collar-iul"
+  | "aged-iul"
   | "term-leads";
 
 export interface LeadPackage {
