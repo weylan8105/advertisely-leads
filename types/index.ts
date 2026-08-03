@@ -15,7 +15,8 @@ export type LeadPackageId =
   | "iul-6-29"
   | "iul-30-44"
   | "iul-45-89"
-  | "iul-90plus"
+  | "iul-90-150"
+  | "iul-150plus"
   | "term-leads";
 
 export interface LeadPackage {
