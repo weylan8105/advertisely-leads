@@ -48,7 +48,10 @@ for(const f of files){const rows=readCsv(f);if(!rows.length)continue;if(!header)
 const idx={};header.forEach((h,i)=>idx[h.trim()]=i);
 const G=(r,c)=>{const i=idx[c];return i>=0&&i<r.length?(r[i]||"").trim():"";};
 
-const COL={id:"id",created:"created_time",name:"full_name",email:"email",phone:"phone_number",altphone:"user_provided_phone_number",state:"state",trade:"what_trade_do_you_work_in?",age:"_what's_your_age_range?",retire:"when_would_you_ideally_like_to_retire?",income:"what's_your_current_household_income?",budget:"how_much_could_you_comfortably_put_towards_building_your_tax-free_retirement_each_month?",form:"form_name",campaign:"campaign_name",adname:"ad_name",adid:"ad_id",adset:"adset_id"};
+// Income column name varies across Meta exports (some have a "._" prefix), so
+// resolve it by pattern rather than an exact string.
+const INCOME_KEY = header.map(h=>(h||"").trim()).find(h=>/current_household_income/i.test(h)) || "what's_your_current_household_income?";
+const COL={id:"id",created:"created_time",name:"full_name",email:"email",phone:"phone_number",altphone:"user_provided_phone_number",state:"state",trade:"what_trade_do_you_work_in?",age:"_what's_your_age_range?",retire:"when_would_you_ideally_like_to_retire?",income:INCOME_KEY,budget:"how_much_could_you_comfortably_put_towards_building_your_tax-free_retirement_each_month?",form:"form_name",campaign:"campaign_name",adname:"ad_name",adid:"ad_id",adset:"adset_id"};
 
 // ── map + intra-batch dedupe ─────────────────────────────────────────
 const seenEmail=new Set(), seenPhone=new Set();
