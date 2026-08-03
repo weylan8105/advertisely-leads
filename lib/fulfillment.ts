@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { ensureOrgContext } from "./org";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
@@ -44,17 +45,79 @@ export async function fulfillOrder(orderId: string): Promise<number> {
 
   if (candidates.length === 0) return 0;
 
-  // Assign in a single transaction so concurrent fulfillment doesn't double-assign
-  const assignedIds = candidates.map((l) => l.id);
-  await prisma.$transaction(async (tx) => {
-    await tx.lead.updateMany({
-      where: { id: { in: assignedIds }, assignedUserId: null },
-      data: {
-        assignedUserId: order.userId,
-        assignedAt: new Date(),
-        orderId: order.id,
+  // ── Distribution (Phase 1) ─────────────────────────────────────────
+  // Decide who each lead goes to. MANUAL (default) → the buyer/owner, exactly
+  // as before. ROUND_ROBIN → spread evenly across the org's in-rotation members
+  // using a persisted cursor so the rotation stays fair across separate runs.
+  let orgId = order.organizationId as string | null;
+  // Orders created before Phase 1 (or before stamping) may have no org — resolve
+  // and persist the buyer's org so distribution + scoping work.
+  if (!orgId) {
+    const ctx = await ensureOrgContext(order.userId);
+    orgId = ctx?.organizationId ?? null;
+    if (orgId) {
+      await prisma.order.update({ where: { id: order.id }, data: { organizationId: orgId } });
+    }
+  }
+  let mode: "MANUAL" | "ROUND_ROBIN" = "MANUAL";
+  let rotation: string[] = [];
+  let rrCursor = 0;
+  if (orgId) {
+    const org = await prisma.organization.findUnique({
+      where: { id: orgId },
+      select: {
+        distributionMode: true,
+        rrCursor: true,
+        memberships: {
+          where: { inRotation: true },
+          select: { userId: true },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
+    if (org) {
+      mode = org.distributionMode;
+      rrCursor = org.rrCursor;
+      rotation = org.memberships.map((m) => m.userId);
+    }
+  }
+  const useRR = mode === "ROUND_ROBIN" && rotation.length > 0;
+
+  // leadId → assigned userId
+  const assigneeOf = new Map<string, string>();
+  candidates.forEach((l, i) => {
+    assigneeOf.set(l.id, useRR ? rotation[(rrCursor + i) % rotation.length] : order.userId);
+  });
+  // Group ids by assignee for batched updates.
+  const idsByAssignee = new Map<string, string[]>();
+  for (const [leadId, assignee] of assigneeOf) {
+    const arr = idsByAssignee.get(assignee) ?? [];
+    arr.push(leadId);
+    idsByAssignee.set(assignee, arr);
+  }
+
+  const now = new Date();
+  // Assign in a single transaction so concurrent fulfillment doesn't double-assign
+  await prisma.$transaction(async (tx) => {
+    for (const [assignee, ids] of idsByAssignee) {
+      await tx.lead.updateMany({
+        where: { id: { in: ids }, assignedUserId: null },
+        data: {
+          assignedUserId: assignee,
+          assignedAt: now,
+          orderId: order.id,
+          ...(orgId ? { organizationId: orgId } : {}),
+        },
+      });
+    }
+
+    // Advance the round-robin cursor so the next batch continues the rotation.
+    if (useRR && orgId) {
+      await tx.organization.update({
+        where: { id: orgId },
+        data: { rrCursor: (rrCursor + candidates.length) % rotation.length },
+      });
+    }
 
     const newFulfilled = order.fulfilledCount + candidates.length;
     await tx.order.update({
@@ -76,7 +139,9 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       data: candidates.map((l) => ({
         leadId: l.id,
         type: "LEAD_ASSIGNED" as const,
-        body: `Lead assigned to customer via order ${order.id}.`,
+        body: useRR
+          ? `Lead routed to a team member via round-robin (order ${order.id}).`
+          : `Lead assigned to customer via order ${order.id}.`,
       })),
     });
   });

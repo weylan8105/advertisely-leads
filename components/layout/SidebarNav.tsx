@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ShoppingBag,
   Users,
+  UsersRound,
   Package,
   Settings,
   Shield,
@@ -30,6 +31,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/leads", label: "Leads CRM", icon: Users },
+      { href: "/team", label: "Team", icon: UsersRound },
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
     ],
@@ -94,15 +96,18 @@ export function SidebarNav() {
         ))}
       </div>
       <div className="p-4 border-t border-slate-200 space-y-3">
-        <div className="rounded-lg p-3 bg-gradient-to-br from-brand-red/15 to-brand-redDark/15 border border-slate-300">
+        <Link
+          href="/team"
+          className="block rounded-lg p-3 bg-gradient-to-br from-brand-red/15 to-brand-redDark/15 border border-slate-300 hover:border-brand-red/40 transition-colors"
+        >
           <div className="flex items-center gap-2 text-xs font-medium">
             <Sparkles className="h-3.5 w-3.5 text-brand-red" />
             Auto-distribution
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Coming soon. New leads auto-dispersed to your account based on filters.
+            Route new leads across your team automatically. Set it up under Team →
           </p>
-        </div>
+        </Link>
         <Link
           href="#"
           className="flex items-center gap-2 px-2 text-xs text-muted-foreground hover:text-foreground"

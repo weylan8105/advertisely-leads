@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { serializeLead } from "@/lib/serialize";
+import { ensureOrgContext, canManageTeam } from "@/lib/org";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +31,18 @@ export async function GET(req: NextRequest) {
   const emailParam = searchParams.get("email");
 
   const isAdmin = (session.user as any).role === "ADMIN";
+  const myId = (session.user as any).id as string;
+  // Owners/admins can narrow the team view to one agent.
+  const agentParam = searchParams.get("agent");
 
-  // Resolve whose leads to fetch.
-  let targetUserId = (session.user as any).id as string;
+  const where: any = {};
+  if (statusParam && statusParam !== "all") {
+    // Accept both UI labels ("Appointment Set") and DB enums ("APPOINTMENT_SET").
+    where.status = statusParam.toUpperCase().replace(/ /g, "_");
+  }
+
   if (emailParam) {
+    // Platform ADMIN: fetch a specific user's leads by email (support tooling).
     if (!isAdmin) {
       return NextResponse.json({ error: "Admin access required for email lookup" }, { status: 403 });
     }
@@ -44,13 +53,16 @@ export async function GET(req: NextRequest) {
     if (!target) {
       return NextResponse.json({ error: `No account found for "${emailParam}"` }, { status: 404 });
     }
-    targetUserId = target.id;
-  }
-
-  const where: any = { assignedUserId: targetUserId };
-  if (statusParam && statusParam !== "all") {
-    // Accept both UI labels ("Appointment Set") and DB enums ("APPOINTMENT_SET").
-    where.status = statusParam.toUpperCase().replace(/ /g, "_");
+    where.assignedUserId = target.id;
+  } else {
+    // Team scoping: owners/admins see the whole org; agents see only their own.
+    const ctx = await ensureOrgContext(myId);
+    if (ctx && canManageTeam(ctx.role)) {
+      where.organizationId = ctx.organizationId;
+      if (agentParam) where.assignedUserId = agentParam;
+    } else {
+      where.assignedUserId = myId;
+    }
   }
 
   const leads = await prisma.lead.findMany({

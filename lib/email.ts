@@ -446,3 +446,36 @@ export async function sendThankYouEmail({
 
   return sendEmail({ to: clientEmail, subject, html });
 }
+
+/**
+ * Invite a teammate to join an organization (seat invite).
+ */
+export async function sendTeamInviteEmail({
+  toEmail,
+  orgName,
+  inviterName,
+  role,
+  acceptUrl,
+}: {
+  toEmail: string;
+  orgName: string;
+  inviterName: string;
+  role: string;
+  acceptUrl: string;
+}) {
+  const roleLabel = role.charAt(0) + role.slice(1).toLowerCase();
+  const subject = `${inviterName} invited you to join ${orgName} on Advertisely`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:#dc2626;padding:24px 32px;"><div style="color:#fff;font-size:20px;font-weight:700;">Advertisely</div><div style="color:#fca5a5;font-size:13px;margin-top:2px;">Team Invitation</div></td></tr>
+<tr><td style="padding:32px;">
+<p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">You're invited to join ${escapeHtml(orgName)}</p>
+<p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;"><strong>${escapeHtml(inviterName)}</strong> has invited you to join <strong>${escapeHtml(orgName)}</strong> on Advertisely as ${/^[aeiou]/i.test(roleLabel) ? "an" : "a"} <strong>${escapeHtml(roleLabel)}</strong>. Accept below to start receiving and working leads.</p>
+<div style="text-align:center;margin:8px 0 24px;"><a href="${acceptUrl}" style="display:inline-block;background:#dc2626;color:#fff;font-size:15px;font-weight:600;padding:14px 34px;border-radius:8px;text-decoration:none;">Accept invitation →</a></div>
+<p style="margin:0;font-size:13px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:16px;">If the button doesn't work, paste this link into your browser:<br/><span style="color:#64748b;word-break:break-all;">${escapeHtml(acceptUrl)}</span></p>
+</td></tr></table></td></tr></table></body></html>`;
+
+  return sendEmail({ to: toEmail, subject, html });
+}

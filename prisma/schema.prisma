@@ -25,15 +25,21 @@ model User {
   state         String?
   createdAt     DateTime  @default(now())
 
-  accounts     Account[]
-  sessions     Session[]
-  orders       Order[]
-  assignedLeads Lead[]      @relation("AssignedAgent")
-  integrations Integration[]
-  exportLogs   ExportLog[]
-  tasks        Task[]
+  accounts              Account[]
+  sessions              Session[]
+  orders                Order[]
+  assignedLeads         Lead[]               @relation("AssignedAgent")
+  integrations          Integration[]
+  exportLogs            ExportLog[]
+  tasks                 Task[]
   requestedReplacements ReplacementRequest[] @relation("RequestedReplacements")
   reviewedReplacements  ReplacementRequest[] @relation("ReviewedReplacements")
+
+  // Teams / multi-seat (Phase 1)
+  defaultOrganizationId String?
+  ownedOrganizations    Organization[] @relation("OrgOwner")
+  memberships           Membership[]
+  sentInvitations       Invitation[]   @relation("InvitedBy")
 }
 
 enum UserRole {
@@ -81,46 +87,46 @@ model VerificationToken {
 // One row per Meta Page that we ingest leads from.
 // Admin-only; customers never touch this.
 model MetaPageConnection {
-  id              String   @id @default(cuid())
-  pageId          String   @unique
-  pageName        String
-  pageAccessToken String   @db.Text
-  enabled         Boolean  @default(true)
+  id                String    @id @default(cuid())
+  pageId            String    @unique
+  pageName          String
+  pageAccessToken   String    @db.Text
+  enabled           Boolean   @default(true)
   // Set when the page is successfully subscribed to the app's `leadgen` field
   // (POST /{page-id}/subscribed_apps). Until this is set, Meta will NOT send
   // leadgen webhooks for this page, so no leads can flow.
-  subscribedAt     DateTime?
+  subscribedAt      DateTime?
   // Last error from token validation or the subscribe call, surfaced in admin UI.
-  subscriptionError String? @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  subscriptionError String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  formMappings    MetaFormMapping[]
+  formMappings MetaFormMapping[]
 }
 
 // Maps a specific Meta Lead Ad Form to an Advertisely package.
 // e.g. "Lineman Retirement Q2" form_id 12345 → "blue-collar-iul" package.
 model MetaFormMapping {
-  id                 String              @id @default(cuid())
-  formId             String              @unique
-  formName           String
-  packageId          String              // matches LeadPackageId in TypeScript
-  pageConnectionId   String
-  enabled            Boolean             @default(true)
+  id               String             @id @default(cuid())
+  formId           String             @unique
+  formName         String
+  packageId        String // matches LeadPackageId in TypeScript
+  pageConnectionId String
+  enabled          Boolean            @default(true)
   // Mapping from Meta form question key → our standardized field name.
   // E.g. {"what_state_do_you_live_in?": "state", "your_occupation?": "occupation"}
-  fieldMapping       Json                @default("{}")
-  createdAt          DateTime            @default(now())
-  pageConnection     MetaPageConnection  @relation(fields: [pageConnectionId], references: [id], onDelete: Cascade)
+  fieldMapping     Json               @default("{}")
+  createdAt        DateTime           @default(now())
+  pageConnection   MetaPageConnection @relation(fields: [pageConnectionId], references: [id], onDelete: Cascade)
 }
 
 // ─── Lead pipeline ───────────────────────────────────────────────────
 
 model Lead {
-  id              String      @id @default(cuid())
-  externalId      String?     @unique // Meta leadgen_id (legacy)
-  ghlContactId    String?     @unique // GHL contact id — arrives with GHL intake; powers sold-tagging
-  ghlSoldTaggedAt DateTime?           // set when we tag the GHL contact advertisely-sold
+  id              String        @id @default(cuid())
+  externalId      String?       @unique // Meta leadgen_id (legacy)
+  ghlContactId    String?       @unique // GHL contact id — arrives with GHL intake; powers sold-tagging
+  ghlSoldTaggedAt DateTime? // set when we tag the GHL contact advertisely-sold
   name            String
   phone           String
   email           String
@@ -128,11 +134,11 @@ model Lead {
   age             Int?
   income          Int?
   occupation      String?
-  intentReason    String?     @db.Text
-  packageId       String      // which package this lead belongs to
-  status          LeadStatus  @default(NEW)
+  intentReason    String?       @db.Text
+  packageId       String // which package this lead belongs to
+  status          LeadStatus    @default(NEW)
   disposition     String?
-  source          String      // e.g. "Meta - Lineman Retirement Q2"
+  source          String // e.g. "Meta - Lineman Retirement Q2"
   campaignName    String?
   adsetId         String?
   creativeId      String?
@@ -145,26 +151,30 @@ model Lead {
   consentIp       String?
   trustedFormUrl  String?
   // Every question/answer from the Meta instant form, even ones we don't model
-  rawFormData     Json        @default("{}")
-  tags            String[]    @default([])
-  callAttempts    Int         @default(0)
+  rawFormData     Json          @default("{}")
+  tags            String[]      @default([])
+  callAttempts    Int           @default(0)
   lastContactedAt DateTime?
-  receivedAt      DateTime    @default(now())
+  receivedAt      DateTime      @default(now())
 
   // Assignment + order
-  assignedUserId  String?
-  assignedAt      DateTime?
-  orderId         String?
-  assignedUser    User?       @relation("AssignedAgent", fields: [assignedUserId], references: [id])
-  order           Order?      @relation(fields: [orderId], references: [id])
+  assignedUserId String?
+  assignedAt     DateTime?
+  orderId        String?
+  organizationId String? // team that owns this lead (Phase 1)
+  assignedUser   User?         @relation("AssignedAgent", fields: [assignedUserId], references: [id])
+  order          Order?        @relation(fields: [orderId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
-  notes           LeadNote[]
-  tasks           Task[]
-  activity        LeadActivity[]
-    exportLogs      ExportLog[]
+  notes               LeadNote[]
+  tasks               Task[]
+  activity            LeadActivity[]
+  exportLogs          ExportLog[]
   replacementRequests ReplacementRequest[]
+
   @@index([state, packageId, status, assignedUserId])
   @@index([receivedAt])
+  @@index([organizationId])
 }
 
 enum LeadStatus {
@@ -184,23 +194,23 @@ enum ConsentMethod {
 }
 
 model LeadNote {
-  id       String   @id @default(cuid())
-  leadId   String
-  author   String
-  body     String   @db.Text
+  id        String   @id @default(cuid())
+  leadId    String
+  author    String
+  body      String   @db.Text
   createdAt DateTime @default(now())
-  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 model LeadActivity {
-  id       String       @id @default(cuid())
-  leadId   String
-  type     ActivityType
-  author   String?
-  body     String       @db.Text
-  metadata Json?
-  createdAt DateTime    @default(now())
-  lead     Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
+  leadId    String
+  type      ActivityType
+  author    String?
+  body      String       @db.Text
+  metadata  Json?
+  createdAt DateTime     @default(now())
+  lead      Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 enum ActivityType {
@@ -241,27 +251,30 @@ enum TaskType {
 // ─── Orders + fulfillment ────────────────────────────────────────────
 
 model Order {
-  id              String      @id @default(cuid())
-  userId          String
-  packageId       String
-  quantity        Int
-  pricePerLeadCents Int
-  totalCents      Int
+  id                    String        @id @default(cuid())
+  userId                String
+  packageId             String
+  quantity              Int
+  pricePerLeadCents     Int
+  totalCents            Int
   // Filters that gate which leads can fulfill this order
-  filterStates    String[]    @default([])
-  filterIncomeMin Int?
-  status          OrderStatus @default(PENDING)
-  fulfilledCount  Int         @default(0)
+  filterStates          String[]      @default([])
+  filterIncomeMin       Int?
+  status                OrderStatus   @default(PENDING)
+  fulfilledCount        Int           @default(0)
   // Optional per-order Google Sheet. When set, this order's leads sync here
   // instead of the customer's default connected sheet.
-  sheetOverrideId String?
+  sheetOverrideId       String?
   stripePaymentIntentId String?
-  createdAt       DateTime    @default(now())
-  fulfilledAt     DateTime?
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  leads           Lead[]
+  createdAt             DateTime      @default(now())
+  fulfilledAt           DateTime?
+  organizationId        String? // team that placed this order (Phase 1)
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization          Organization? @relation(fields: [organizationId], references: [id])
+  leads                 Lead[]
 
   @@index([status])
+  @@index([organizationId])
 }
 
 enum OrderStatus {
@@ -275,15 +288,15 @@ enum OrderStatus {
 // ─── Customer integrations (GHL, Sheets, Webhook) ────────────────────
 
 model Integration {
-  id        String          @id @default(cuid())
-  userId    String
-  type      IntegrationType
-  enabled   Boolean         @default(true)
+  id         String          @id @default(cuid())
+  userId     String
+  type       IntegrationType
+  enabled    Boolean         @default(true)
   // Encrypted credentials: { apiKey, locationId, sheetUrl, webhookUrl, etc. }
-  config    Json
+  config     Json
   lastUsedAt DateTime?
-  createdAt DateTime        @default(now())
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
 }
@@ -300,16 +313,16 @@ enum IntegrationType {
 // ─── Export audit log ────────────────────────────────────────────────
 
 model ExportLog {
-  id          String     @id @default(cuid())
-  userId      String
-  leadId      String?
-  destination String     // 'ghl', 'sheets', 'webhook', etc.
-  status      ExportStatus @default(SUCCESS)
+  id           String       @id @default(cuid())
+  userId       String
+  leadId       String?
+  destination  String // 'ghl', 'sheets', 'webhook', etc.
+  status       ExportStatus @default(SUCCESS)
   responseCode Int?
   errorMessage String?
-  createdAt   DateTime   @default(now())
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lead        Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
 }
@@ -322,19 +335,19 @@ enum ExportStatus {
 
 // ─── Replacement requests ─────────────────────────────────────────────
 model ReplacementRequest {
-  id              String              @id @default(cuid())
-  leadId          String
-  reason          String              @db.Text
-  status          ReplacementStatus   @default(PENDING)
-  requestedById   String
-  reviewedById    String?
-  reviewedAt      DateTime?
-  adminNote       String?             @db.Text
-  createdAt       DateTime            @default(now())
+  id            String            @id @default(cuid())
+  leadId        String
+  reason        String            @db.Text
+  status        ReplacementStatus @default(PENDING)
+  requestedById String
+  reviewedById  String?
+  reviewedAt    DateTime?
+  adminNote     String?           @db.Text
+  createdAt     DateTime          @default(now())
 
-  lead            Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  requestedBy     User                @relation("RequestedReplacements", fields: [requestedById], references: [id], onDelete: Cascade)
-  reviewedBy      User?               @relation("ReviewedReplacements", fields: [reviewedById], references: [id])
+  lead        Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  requestedBy User  @relation("RequestedReplacements", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy  User? @relation("ReviewedReplacements", fields: [reviewedById], references: [id])
 
   @@index([status])
   @@index([leadId])
@@ -344,4 +357,86 @@ enum ReplacementStatus {
   PENDING
   APPROVED
   DENIED
+}
+
+// ─── Teams / multi-seat + lead distribution (Phase 1) ────────────────
+
+// An agency/team account. Every user gets a personal Organization they own;
+// owners can invite additional seats (agents) and route purchased leads to
+// them. Leads and Orders are stamped with the owning organization.
+model Organization {
+  id               String           @id @default(cuid())
+  name             String
+  ownerId          String
+  // How purchased leads are handed out to the team.
+  distributionMode DistributionMode @default(MANUAL)
+  // Round-robin pointer — advanced each time a lead is auto-assigned so the
+  // rotation is fair and survives across separate fulfillment runs.
+  rrCursor         Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  owner       User         @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+  invitations Invitation[]
+  orders      Order[]
+  leads       Lead[]
+
+  @@index([ownerId])
+}
+
+// A user's seat within an organization, with a role and rotation flag.
+model Membership {
+  id             String         @id @default(cuid())
+  organizationId String
+  userId         String
+  role           MembershipRole @default(AGENT)
+  // Whether this member receives leads under ROUND_ROBIN distribution.
+  inRotation     Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+// A pending seat invite. May be sent to someone without an account yet; the
+// Membership is created when they accept (sign in with the invited email).
+model Invitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           MembershipRole   @default(AGENT)
+  token          String           @unique @default(cuid())
+  status         InvitationStatus @default(PENDING)
+  invitedById    String
+  createdAt      DateTime         @default(now())
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum DistributionMode {
+  MANUAL // all purchased leads go to the buyer/owner; reassign by hand
+  ROUND_ROBIN // purchased leads are spread across in-rotation members
 }
