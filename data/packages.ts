@@ -200,7 +200,7 @@ export const productGroups: ProductGroup[] = [
     name: "IUL Leads",
     tagline: "Tax-free retirement prospects who raised their hand.",
     blurb:
-      "Blue-collar W-2 earners and tradesmen actively asking about cash-value IUL and “be your own bank” strategies. Start with fresh leads for the highest contact rates, or go older for deep volume discounts.",
+      "Blue-collar W-2 earners and tradesmen who responded to a tax-free, tax-advantaged early-retirement offer — high-intent prospects looking to retire sooner and keep more of what they earn. Start with fresh leads for the highest contact rates, or go older for deep volume discounts.",
     available: true,
   },
   {
