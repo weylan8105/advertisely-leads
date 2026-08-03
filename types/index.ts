@@ -40,6 +40,10 @@ export interface LeadPackage {
   ageMinDays?: number;
   ageMaxDays?: number;
   hidden?: boolean;
+  // Exclusivity: exclusive leads are sold to one agent only; non-exclusive
+  // (shared) leads are resold to multiple agents until marked sold. Premium
+  // fresh tiers are exclusive; discounted aged tiers are shared.
+  exclusive?: boolean;
   // Marketing angle this purchasable belongs to. The marketplace groups tiers by
   // group and shows one product per group with age subcategories inside.
   group?: string;
