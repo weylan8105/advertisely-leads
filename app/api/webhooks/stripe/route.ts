@@ -88,6 +88,10 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   const filterIncomeMin = md.filterIncomeMin
     ? parseInt(md.filterIncomeMin, 10)
     : undefined;
+  // Aged-bucket age window (days). packageId stays the bucket id (for display);
+  // fulfillment resolves the underlying lead pool + applies this window.
+  const filterAgeMinDays = md.ageMinDays ? parseInt(md.ageMinDays, 10) : undefined;
+  const filterAgeMaxDays = md.ageMaxDays ? parseInt(md.ageMaxDays, 10) : undefined;
 
   const order = await prisma.order.create({
     data: {
@@ -98,6 +102,8 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
       totalCents: intent.amount,
       filterStates,
       filterIncomeMin,
+      filterAgeMinDays,
+      filterAgeMaxDays,
       status: "PROCESSING",
       stripePaymentIntentId: intent.id,
     },

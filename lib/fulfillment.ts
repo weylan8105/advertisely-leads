@@ -3,7 +3,7 @@ import { ensureOrgContext } from "./org";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
-import { findPackage } from "@/data/packages";
+import { findPackage, leadPoolFor, purchasableIdsForPool } from "@/data/packages";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -26,10 +26,21 @@ export async function fulfillOrder(orderId: string): Promise<number> {
   const remaining = order.quantity - order.fulfilledCount;
   if (remaining <= 0) return 0;
 
-  // Find unassigned leads matching this order's package + state filter
+  // Aged buckets carry an age window (days) relative to receivedAt. Translate
+  // it into a receivedAt range; null bounds are left open.
+  const dayMs = 86_400_000;
+  const nowMs = Date.now();
+  // ageMaxDays is the exclusive upper edge (shared with the next bucket's
+  // ageMinDays) → gt, so adjacent buckets tile with no gap or overlap.
+  const receivedAtFilter: { gt?: Date; lte?: Date } = {};
+  if (order.filterAgeMaxDays != null) receivedAtFilter.gt = new Date(nowMs - order.filterAgeMaxDays * dayMs);
+  if (order.filterAgeMinDays != null) receivedAtFilter.lte = new Date(nowMs - order.filterAgeMinDays * dayMs);
+
+  // Find unassigned leads from this order's underlying lead pool, matching its
+  // state + income + age filters. Buckets resolve to their pool (e.g. aged-iul).
   const candidates = await prisma.lead.findMany({
     where: {
-      packageId: order.packageId,
+      packageId: leadPoolFor(order.packageId),
       assignedUserId: null,
       orderId: null,
       ...(order.filterStates.length > 0
@@ -38,6 +49,7 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       ...(order.filterIncomeMin
         ? { income: { gte: order.filterIncomeMin } }
         : {}),
+      ...(receivedAtFilter.gt || receivedAtFilter.lte ? { receivedAt: receivedAtFilter } : {}),
     },
     orderBy: { receivedAt: "asc" },
     take: remaining,
@@ -244,7 +256,9 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const pendingOrders = await prisma.order.findMany({
     where: {
       status: { in: ["PENDING", "PROCESSING", "DELIVERING"] },
-      packageId: lead.packageId,
+      // Match direct-pool orders and any aged-bucket order drawing from this pool.
+      // fulfillOrder re-checks each order's age window, so mismatched ages are skipped.
+      packageId: { in: purchasableIdsForPool(lead.packageId) },
       OR: [
         { filterStates: { isEmpty: true } },
         { filterStates: { has: lead.state } },

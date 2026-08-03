@@ -10,6 +10,9 @@ export type LeadStatus =
 export type LeadPackageId =
   | "blue-collar-iul"
   | "aged-iul"
+  | "aged-iul-0-14"
+  | "aged-iul-15-30"
+  | "aged-iul-31plus"
   | "term-leads";
 
 export interface LeadPackage {
@@ -27,6 +30,13 @@ export interface LeadPackage {
   niches: string[];
   available: boolean;
   comingSoonNote?: string;
+  // Aged-bucket support: a bucket sells from an underlying lead pool
+  // (`leadPackageId`) filtered to an age window. `hidden` keeps the raw pool
+  // entry out of the marketplace grid (used only for label resolution).
+  leadPackageId?: LeadPackageId;
+  ageMinDays?: number;
+  ageMaxDays?: number;
+  hidden?: boolean;
 }
 
 export interface LeadFilters {

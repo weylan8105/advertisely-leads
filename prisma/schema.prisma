@@ -260,6 +260,8 @@ model Order {
   // Filters that gate which leads can fulfill this order
   filterStates          String[]      @default([])
   filterIncomeMin       Int?
+  filterAgeMinDays      Int?
+  filterAgeMaxDays      Int?
   status                OrderStatus   @default(PENDING)
   fulfilledCount        Int           @default(0)
   // Optional per-order Google Sheet. When set, this order's leads sync here

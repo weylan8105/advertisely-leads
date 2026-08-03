@@ -74,6 +74,11 @@ export async function POST(req: NextRequest) {
       userEmail: session.user.email ?? "",
       packageId: pkg.id,
       packageName: pkg.name,
+      // For aged buckets, leads are fulfilled from the underlying pool
+      // (`leadPackageId`) filtered to this age window.
+      leadPackageId: pkg.leadPackageId ?? pkg.id,
+      ageMinDays: pkg.ageMinDays != null ? String(pkg.ageMinDays) : "",
+      ageMaxDays: pkg.ageMaxDays != null ? String(pkg.ageMaxDays) : "",
       quantity: String(qty),
       pricePerLead: String(pkg.pricePerLead),
       filterStates: (body.filterStates ?? []).join(","),
