@@ -46,15 +46,15 @@ export default function MarketplacePage() {
               </div>
               <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-800">
                 <span className="font-medium">Heads up: </span>
-                <strong>Blue-Collar IUL</strong> and the <strong>Aged IUL</strong> tiers are available now —
-                aged leads are priced by age, deepest discount on the oldest. Term Life is in pre-launch;
-                click <em>Notify me</em> on any "Coming soon" card and we'll email you when it opens.
+                <strong>IUL leads are priced by age</strong> — from fresh (under 48 hours) down to 90+ days,
+                with the deepest discount on the oldest. Every order is a 25-lead minimum. Term Life is in
+                pre-launch; click <em>Notify me</em> on any "Coming soon" card and we'll email you when it opens.
               </div>
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {leadPackages
                   .filter((p) => !p.hidden)
                   .map((p) => (
-                    <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "blue-collar-iul"} />
+                    <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "iul-fresh"} />
                   ))}
               </div>
 

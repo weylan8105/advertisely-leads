@@ -1,42 +1,20 @@
 import type { LeadPackage } from "@/types";
 
+// The IUL lead pool spans two historical packageId labels — `blue-collar-iul`
+// (what GHL intake stamps on new leads) and `aged-iul` (existing stock). They're
+// the same IUL leads, so the age-tiered store below sells across both, priced by
+// how old each lead is. Any IUL lead is sellable in exactly one tier by its age.
+export const IUL_POOL_IDS = ["blue-collar-iul", "aged-iul"];
+
 export const leadPackages: LeadPackage[] = [
+  // ── Hidden pool entries (not sold directly; used for lead-label resolution
+  //    and as the underlying pool the age tiers draw from) ──────────────
   {
     id: "blue-collar-iul",
     name: "Blue-Collar IUL Leads",
     tagline: "Working professionals who actually pick up.",
-    description:
-      "Union members, tradesmen, and W-2 earners actively asking about cash-value life insurance and tax-free income strategies. Currently the only package we deliver live.",
+    description: "Union members, tradesmen, and W-2 earners asking about cash-value life insurance.",
     pricePerLead: 45,
-    minimumOrder: 25,
-    estimatedDelivery: "Within 24 hours",
-    badge: "Available now",
-    available: true,
-    features: [
-      "Income-qualified ($55k+ W-2)",
-      "Trade & union niches",
-      "Filtered for pension supplement intent",
-      "Mobile-first lead form",
-    ],
-    ideal: [
-      "Trade union recruiters",
-      "Pension-supplement scripts",
-      "Agencies running PHP/IUL hybrid",
-    ],
-    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
-  },
-  // ── Aged IUL store ─────────────────────────────────────────────────
-  // The raw aged pool. Hidden from the marketplace grid; kept so lead labels
-  // ("Aged IUL Leads") still resolve. All three buckets below sell from it,
-  // filtered by age window (`ageMinDays`/`ageMaxDays`). Prices step down with
-  // age and are easy to tune here.
-  {
-    id: "aged-iul",
-    name: "Aged IUL Leads",
-    tagline: "Real Blue-Collar IUL prospects at a fraction of the price.",
-    description:
-      "Previously-generated Blue-Collar IUL leads — the same high-intent tradesmen, sold by age at a discount.",
-    pricePerLead: 12,
     minimumOrder: 25,
     estimatedDelivery: "Within 24 hours",
     available: true,
@@ -46,65 +24,109 @@ export const leadPackages: LeadPackage[] = [
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
   {
-    id: "aged-iul-0-14",
-    name: "Aged IUL — Recent (0–14 days)",
-    tagline: "Freshest of the aged pool — barely a couple weeks old.",
-    description:
-      "Blue-Collar IUL prospects generated within the last 14 days. The most responsive aged tier, at a fraction of fresh pricing.",
+    id: "aged-iul",
+    name: "Aged IUL Leads",
+    tagline: "Real Blue-Collar IUL prospects at a fraction of the price.",
+    description: "Previously-generated Blue-Collar IUL leads, sold by age at a discount.",
     pricePerLead: 12,
     minimumOrder: 25,
     estimatedDelivery: "Within 24 hours",
-    badge: "Best answer rates",
+    available: true,
+    hidden: true,
+    features: [],
+    ideal: [],
+    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
+  },
+
+  // ── IUL age ladder ─────────────────────────────────────────────────
+  // Priced by lead age. Windows tile with an exclusive upper edge (`ageMaxDays`,
+  // shared with the next tier's `ageMinDays`) so no lead falls between tiers.
+  // Minimum order = 25 leads floor, raised only where needed to reach $150 of
+  // leads → minimumOrder = max(25, ceil(150 / price)). So only $3 and $1 exceed 25.
+  {
+    id: "iul-fresh",
+    name: "Fresh IUL — under 48 hours",
+    tagline: "The freshest leads on the platform — called back the same day.",
+    description:
+      "Blue-Collar IUL prospects generated within the last 48 hours. Highest contact and conversion rates.",
+    pricePerLead: 45,
+    minimumOrder: 25, // max(25, ceil(150/45)=4) = 25
+    estimatedDelivery: "Within 24 hours",
+    badge: "Freshest",
     available: true,
     leadPackageId: "aged-iul",
-    // Windows tile contiguously: ageMaxDays is the exclusive upper edge (shared
-    // with the next bucket's ageMinDays) so no lead falls between tiers.
     ageMinDays: 0,
-    ageMaxDays: 15,
-    features: [
-      "Same Blue-Collar IUL source",
-      "TCPA consent captured",
-      "0–14 days old",
-      "Highest contact rate of the aged tiers",
-    ],
-    ideal: ["High-volume dialers", "Agencies running call nights", "Agents testing new scripts"],
+    ageMaxDays: 2,
+    features: ["Under 48 hours old", "Highest answer rate", "TCPA consent captured", "Full source attribution"],
+    ideal: ["Speed-to-lead callers", "Closers who work fresh intent", "Agencies with live floors"],
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
   {
-    id: "aged-iul-15-30",
-    name: "Aged IUL — 15–30 days",
-    tagline: "Two-to-four weeks old at a deeper discount.",
-    description:
-      "Blue-Collar IUL prospects aged 15–30 days. Great volume value for teams that dial hard.",
-    pricePerLead: 9,
-    minimumOrder: 25,
+    id: "iul-3-29",
+    name: "IUL — 3–29 days",
+    tagline: "Recent leads at a fraction of fresh pricing.",
+    description: "Blue-Collar IUL prospects aged roughly 3–29 days. Strong value for consistent dialers.",
+    pricePerLead: 12,
+    minimumOrder: 25, // max(25, ceil(150/12)=13) = 25
     estimatedDelivery: "Within 24 hours",
     badge: "Best value",
     available: true,
     leadPackageId: "aged-iul",
-    ageMinDays: 15,
-    ageMaxDays: 31,
-    features: ["Same Blue-Collar IUL source", "TCPA consent captured", "15–30 days old", "Deep volume pricing"],
-    ideal: ["High-volume dialers", "Agencies running call nights", "Agents testing new scripts"],
+    ageMinDays: 2,
+    ageMaxDays: 30,
+    features: ["3–29 days old", "TCPA consent captured", "Deep discount vs fresh", "Great answer rates"],
+    ideal: ["High-volume dialers", "Agencies running call nights", "Agents testing scripts"],
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
   {
-    id: "aged-iul-31plus",
-    name: "Aged IUL — 31+ days",
-    tagline: "Our deepest discount for high-volume call floors.",
-    description:
-      "Blue-Collar IUL prospects aged 31 days and older. Lowest per-lead price for agents who work volume at scale.",
+    id: "iul-30-44",
+    name: "IUL — 30–44 days",
+    tagline: "A month old, priced to move volume.",
+    description: "Blue-Collar IUL prospects aged 30–44 days. Volume value for hard-dialing teams.",
     pricePerLead: 6,
-    minimumOrder: 25,
+    minimumOrder: 25, // max(25, 150/6=25) = 25
+    estimatedDelivery: "Within 24 hours",
+    available: true,
+    leadPackageId: "aged-iul",
+    ageMinDays: 30,
+    ageMaxDays: 45,
+    features: ["30–44 days old", "TCPA consent captured", "Deep volume pricing", "Same IUL source"],
+    ideal: ["High-volume dialers", "Call floors", "Script testing"],
+    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
+  },
+  {
+    id: "iul-45-89",
+    name: "IUL — 45–89 days",
+    tagline: "Aged and deeply discounted for scale.",
+    description: "Blue-Collar IUL prospects aged 45–89 days. Rock-bottom pricing for high-volume floors.",
+    pricePerLead: 3,
+    minimumOrder: 50, // max(25, 150/3=50) = 50
+    estimatedDelivery: "Within 24 hours",
+    available: true,
+    leadPackageId: "aged-iul",
+    ageMinDays: 45,
+    ageMaxDays: 90,
+    features: ["45–89 days old", "TCPA consent captured", "Rock-bottom pricing", "Same IUL source"],
+    ideal: ["High-volume dialers", "Call floors at scale", "Reactivation campaigns"],
+    niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
+  },
+  {
+    id: "iul-90plus",
+    name: "IUL — 90+ days",
+    tagline: "Our deepest discount — pennies per lead.",
+    description: "Blue-Collar IUL prospects aged 90 days and older. The lowest per-lead price we offer.",
+    pricePerLead: 1,
+    minimumOrder: 150, // max(25, 150/1=150) = 150
     estimatedDelivery: "Within 24 hours",
     badge: "Lowest price",
     available: true,
     leadPackageId: "aged-iul",
-    ageMinDays: 31,
-    features: ["Same Blue-Collar IUL source", "TCPA consent captured", "31+ days old", "Rock-bottom volume pricing"],
-    ideal: ["High-volume dialers", "Agencies running call nights", "Agents testing new scripts"],
+    ageMinDays: 90,
+    features: ["90+ days old", "TCPA consent captured", "Deepest discount", "Same IUL source"],
+    ideal: ["Bulk dialers", "Reactivation & nurture", "Pennies-per-lead volume"],
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
+
   {
     id: "term-leads",
     name: "Term Life Leads",
@@ -136,12 +158,18 @@ export function findPackage(id: string) {
   return leadPackages.find((p) => p.id === id);
 }
 
-/** The underlying lead pool a purchasable draws from (buckets → their pool). */
-export function leadPoolFor(id: string): string {
-  return findPackage(id)?.leadPackageId ?? id;
+/**
+ * Lead pools a purchasable draws from. IUL age tiers span the whole IUL pool
+ * (both the `blue-collar-iul` and `aged-iul` labels) so any IUL lead is sellable
+ * by its age; everything else draws from its own single pool.
+ */
+export function leadPoolIdsFor(id: string): string[] {
+  const primary = findPackage(id)?.leadPackageId ?? id;
+  return IUL_POOL_IDS.includes(primary) ? [...IUL_POOL_IDS] : [primary];
 }
 
-/** All purchasable ids (buckets + pool entry) that draw from a given lead pool. */
+/** Purchasable ids that a lead in the given pool could fulfill. */
 export function purchasableIdsForPool(poolId: string): string[] {
-  return leadPackages.filter((p) => (p.leadPackageId ?? p.id) === poolId).map((p) => p.id);
+  const pools = IUL_POOL_IDS.includes(poolId) ? IUL_POOL_IDS : [poolId];
+  return leadPackages.filter((p) => pools.includes(p.leadPackageId ?? p.id)).map((p) => p.id);
 }

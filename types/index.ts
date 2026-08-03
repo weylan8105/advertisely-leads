@@ -10,9 +10,11 @@ export type LeadStatus =
 export type LeadPackageId =
   | "blue-collar-iul"
   | "aged-iul"
-  | "aged-iul-0-14"
-  | "aged-iul-15-30"
-  | "aged-iul-31plus"
+  | "iul-fresh"
+  | "iul-3-29"
+  | "iul-30-44"
+  | "iul-45-89"
+  | "iul-90plus"
   | "term-leads";
 
 export interface LeadPackage {

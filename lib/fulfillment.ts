@@ -3,7 +3,7 @@ import { ensureOrgContext } from "./org";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
-import { findPackage, leadPoolFor, purchasableIdsForPool } from "@/data/packages";
+import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -40,7 +40,7 @@ export async function fulfillOrder(orderId: string): Promise<number> {
   // state + income + age filters. Buckets resolve to their pool (e.g. aged-iul).
   const candidates = await prisma.lead.findMany({
     where: {
-      packageId: leadPoolFor(order.packageId),
+      packageId: { in: leadPoolIdsFor(order.packageId) },
       assignedUserId: null,
       orderId: null,
       ...(order.filterStates.length > 0
