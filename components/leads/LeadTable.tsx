@@ -341,6 +341,26 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                           Push to CRM (GHL)
                         </DropdownMenuItem>
                         <DropdownMenuItem
+                          className="text-emerald-700 focus:text-emerald-700"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/leads/${lead.id}/sold`, {
+                                method: "POST",
+                              });
+                              const data = await res.json();
+                              if (!res.ok) {
+                                addToast("error", data.error ?? "Couldn't mark sold.");
+                              } else {
+                                addToast("success", `${lead.name} marked SOLD — removed from the pool.`);
+                              }
+                            } catch {
+                              addToast("error", "Failed to mark sold.");
+                            }
+                          }}
+                        >
+                          Mark as Sold
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() =>
                             addToast(
                               "success",
