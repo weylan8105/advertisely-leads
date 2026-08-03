@@ -1,4 +1,4 @@
-import type { LeadPackage } from "@/types";
+import type { LeadPackage, ProductGroup } from "@/types";
 
 // The IUL lead pool spans two historical packageId labels — `blue-collar-iul`
 // (what GHL intake stamps on new leads) and `aged-iul` (existing stock). They're
@@ -189,4 +189,37 @@ export function leadPoolIdsFor(id: string): string[] {
 export function purchasableIdsForPool(poolId: string): string[] {
   const pools = IUL_POOL_IDS.includes(poolId) ? IUL_POOL_IDS : [poolId];
   return leadPackages.filter((p) => pools.includes(p.leadPackageId ?? p.id)).map((p) => p.id);
+}
+
+// ── Marketing-angle product groups ───────────────────────────────────
+// The marketplace shows ONE product per group with its age tiers as
+// subcategories, rather than a flat wall of price points.
+export const productGroups: ProductGroup[] = [
+  {
+    id: "iul",
+    name: "IUL Leads",
+    tagline: "Tax-free retirement prospects who raised their hand.",
+    blurb:
+      "Blue-collar W-2 earners and tradesmen actively asking about cash-value IUL and “be your own bank” strategies. Start with fresh leads for the highest contact rates, or go older for deep volume discounts.",
+    available: true,
+  },
+  {
+    id: "term",
+    name: "Term Life Leads",
+    tagline: "High-intent prospects shopping for term coverage.",
+    blurb:
+      "Families and individuals actively researching term life insurance — ideal for agents who convert term to permanent.",
+    available: false,
+    comingSoonNote: "Term campaign launching soon.",
+  },
+];
+
+/** Which marketing group a purchasable belongs to (explicit `group`, else derived). */
+export function groupIdFor(pkg: LeadPackage): string {
+  return pkg.group ?? (pkg.id === "term-leads" ? "term" : "iul");
+}
+
+/** Visible, purchasable tiers within a group, cheapest-age-first ordering preserved. */
+export function tiersForGroup(groupId: string): LeadPackage[] {
+  return leadPackages.filter((p) => !p.hidden && groupIdFor(p) === groupId);
 }

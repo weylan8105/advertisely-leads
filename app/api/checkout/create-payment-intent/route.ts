@@ -7,11 +7,17 @@ import { leadPackages } from "@/data/packages";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-interface CreateIntentBody {
+interface CartLine {
   packageId: string;
   quantity: number;
+}
+interface CreateIntentBody {
+  // Multi-item cart checkout.
+  items?: CartLine[];
   filterStates?: string[];
-  filterIncomeMin?: number;
+  // Legacy single-item fields (still accepted).
+  packageId?: string;
+  quantity?: number;
 }
 
 /**
@@ -42,47 +48,67 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const pkg = leadPackages.find((p) => p.id === body.packageId);
-  if (!pkg) {
-    return NextResponse.json({ error: "Unknown package" }, { status: 400 });
+  // Normalize to a list of cart lines (accept the legacy single-item body too).
+  const rawLines: CartLine[] =
+    body.items && body.items.length > 0
+      ? body.items
+      : body.packageId
+        ? [{ packageId: body.packageId, quantity: Number(body.quantity) }]
+        : [];
+  if (rawLines.length === 0) {
+    return NextResponse.json({ error: "Your cart is empty" }, { status: 400 });
   }
-  if (!pkg.available) {
+
+  let amountCents = 0;
+  const validated: CartLine[] = [];
+  for (const line of rawLines) {
+    const pkg = leadPackages.find((p) => p.id === line.packageId && !p.hidden);
+    if (!pkg) {
+      return NextResponse.json({ error: `Unknown package: ${line.packageId}` }, { status: 400 });
+    }
+    if (!pkg.available) {
+      return NextResponse.json(
+        { error: `${pkg.name} is coming soon — pricing pending.` },
+        { status: 400 },
+      );
+    }
+    const qty = Number(line.quantity);
+    if (!Number.isInteger(qty) || qty < pkg.minimumOrder) {
+      return NextResponse.json(
+        { error: `${pkg.name}: minimum order is ${pkg.minimumOrder} leads.` },
+        { status: 400 },
+      );
+    }
+    amountCents += Math.round(qty * pkg.pricePerLead * 100);
+    validated.push({ packageId: pkg.id, quantity: qty });
+  }
+
+  // Compact line encoding for Stripe metadata (500-char/value limit).
+  const itemsMeta = JSON.stringify(validated.map((v) => ({ p: v.packageId, q: v.quantity })));
+  if (itemsMeta.length > 480) {
     return NextResponse.json(
-      { error: `${pkg.name} is coming soon — pricing pending.` },
+      { error: "Too many line items in one order — please split it." },
       { status: 400 },
     );
   }
 
-  const qty = Number(body.quantity);
-  if (!Number.isInteger(qty) || qty < pkg.minimumOrder) {
-    return NextResponse.json(
-      { error: `Quantity must be at least ${pkg.minimumOrder}` },
-      { status: 400 },
-    );
-  }
-
-  const amountCents = Math.round(qty * pkg.pricePerLead * 100);
+  const totalLeads = validated.reduce((s, v) => s + v.quantity, 0);
+  const description =
+    validated.length === 1
+      ? `${validated[0].quantity}× ${leadPackages.find((p) => p.id === validated[0].packageId)?.name ?? "leads"}`
+      : `${validated.length} lead tiers (${totalLeads} leads)`;
 
   const intent = await stripe.paymentIntents.create({
     amount: amountCents,
     currency: "usd",
     automatic_payment_methods: { enabled: true },
     receipt_email: session.user.email ?? undefined,
-    description: `${qty}× ${pkg.name}`,
+    description,
     metadata: {
       userId: (session.user as any).id ?? "",
       userEmail: session.user.email ?? "",
-      packageId: pkg.id,
-      packageName: pkg.name,
-      // For aged buckets, leads are fulfilled from the underlying pool
-      // (`leadPackageId`) filtered to this age window.
-      leadPackageId: pkg.leadPackageId ?? pkg.id,
-      ageMinDays: pkg.ageMinDays != null ? String(pkg.ageMinDays) : "",
-      ageMaxDays: pkg.ageMaxDays != null ? String(pkg.ageMaxDays) : "",
-      quantity: String(qty),
-      pricePerLead: String(pkg.pricePerLead),
+      items: itemsMeta,
       filterStates: (body.filterStates ?? []).join(","),
-      filterIncomeMin: body.filterIncomeMin ? String(body.filterIncomeMin) : "",
     },
   });
 

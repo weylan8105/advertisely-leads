@@ -1,9 +1,8 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { LeadPackageCard } from "@/components/marketplace/LeadPackageCard";
+import { MarketplaceStore } from "@/components/marketplace/MarketplaceStore";
 import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
-import { leadPackages } from "@/data/packages";
 import { Badge } from "@/components/ui/badge";
 
 export default function MarketplacePage() {
@@ -32,31 +31,13 @@ export default function MarketplacePage() {
           <div className="grid lg:grid-cols-[280px_1fr] gap-8">
             <FilterSidebar />
             <div>
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  <span className="text-foreground font-medium">
-                    {leadPackages.filter((p) => !p.hidden).length}
-                  </span>{" "}
-                  packages
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Sorted by: <span className="text-foreground">Recommended</span>
-                </div>
-              </div>
               <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-800">
                 <span className="font-medium">Heads up: </span>
-                <strong>IUL leads are priced by age</strong> — from fresh (under 48 hours) down to 90+ days,
-                with the deepest discount on the oldest. Every order is a 25-lead minimum. Term Life is in
-                pre-launch; click <em>Notify me</em> on any "Coming soon" card and we'll email you when it opens.
+                <strong>IUL leads are priced by age</strong> — pick fresh (under 48 hours) or go older for
+                deep discounts, all under one product. Mix any ages in your cart; every order is a 25-lead
+                minimum. Term Life is in pre-launch.
               </div>
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                {leadPackages
-                  .filter((p) => !p.hidden)
-                  .map((p) => (
-                    <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "iul-fresh"} />
-                  ))}
-              </div>
+              <MarketplaceStore />
 
               <div className="mt-10 rounded-xl border border-slate-200 bg-white p-5 text-xs text-muted-foreground">
                 <span className="text-foreground font-medium">Disclaimers: </span>

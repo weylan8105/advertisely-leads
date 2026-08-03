@@ -1,77 +1,84 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
   Check,
   ChevronRight,
-  Lock,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Clock,
+  Trash2,
+  Plus,
+  Minus,
+  ShoppingCart,
 } from "lucide-react";
 import { StripePaymentForm } from "@/components/checkout/StripePaymentForm";
 import { CheckoutAuthPanel } from "@/components/checkout/CheckoutAuthPanel";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { leadPackages } from "@/data/packages";
+import { useCart } from "@/context/CartContext";
+import { findPackage } from "@/data/packages";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { LeadPackageId } from "@/types";
 
-const steps = [
-  { id: 1, label: "Package" },
-  { id: 2, label: "Quantity & filters" },
-  { id: 3, label: "Review" },
-  { id: 4, label: "Payment" },
-  { id: 5, label: "Confirmation" },
+const ACTIVE_STATES = [
+  { code: "TX" }, { code: "FL" }, { code: "CA" }, { code: "IL" }, { code: "PA" },
+  { code: "OH" }, { code: "CO" }, { code: "MI" }, { code: "WA" },
 ];
 
-interface CheckoutFlowProps {
-  initialPackageId?: LeadPackageId;
-}
+const steps = [
+  { id: 1, label: "Cart & filters" },
+  { id: 2, label: "Payment" },
+  { id: 3, label: "Confirmation" },
+];
 
-export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
-  const defaultPkg: LeadPackageId =
-    initialPackageId && leadPackages.find((p) => p.id === initialPackageId)?.available
-      ? initialPackageId
-      : (leadPackages.find((p) => p.available)?.id ?? "blue-collar-iul");
+export function CheckoutFlow({ initialPackageId }: { initialPackageId?: LeadPackageId }) {
   const { status } = useSession();
+  const { items, hydrated, addItem, setQuantity, removeItem, subtotalCents, count, clear } = useCart();
+
   const [justAuthed, setJustAuthed] = useState(false);
   const isAuthed = status === "authenticated" || justAuthed;
-  const [step, setStep] = useState(initialPackageId ? 2 : 1);
-  const [pkgId, setPkgId] = useState<LeadPackageId>(defaultPkg);
-  const pkg = useMemo(() => leadPackages.find((p) => p.id === pkgId)!, [pkgId]);
-  const [qty, setQty] = useState<number>(25);
-  const ACTIVE_STATES = [
-    { code: "TX", name: "Texas" },
-    { code: "FL", name: "Florida" },
-    { code: "CA", name: "California" },
-    { code: "IL", name: "Illinois" },
-    { code: "PA", name: "Pennsylvania" },
-    { code: "OH", name: "Ohio" },
-    { code: "CO", name: "Colorado" },
-    { code: "MI", name: "Michigan" },
-    { code: "WA", name: "Washington" },
-  ];
+  const [step, setStep] = useState(1);
   const [selectedStates, setSelectedStates] = useState<string[]>(ACTIVE_STATES.map((s) => s.code));
-  const toggleState = (code: string) => {
-    setSelectedStates((prev) =>
-      prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]
+
+  // Seed the cart from a ?pkg= link (legacy "Order leads" buttons) exactly once.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!hydrated || seeded.current) return;
+    seeded.current = true;
+    if (items.length === 0 && initialPackageId) {
+      const pkg = findPackage(initialPackageId);
+      if (pkg && pkg.available && !pkg.hidden) addItem(pkg.id, pkg.minimumOrder);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  const toggleState = (code: string) =>
+    setSelectedStates((prev) => (prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]));
+
+  const belowMin = items.some((i) => {
+    const p = findPackage(i.packageId);
+    return p && i.quantity < p.minimumOrder;
+  });
+
+  const paymentItems = items.map((i) => ({ packageId: i.packageId, quantity: i.quantity }));
+
+  // Empty-cart state (unless we're on the confirmation screen post-purchase).
+  if (hydrated && items.length === 0 && step !== 3) {
+    return (
+      <Card className="p-10 text-center max-w-lg mx-auto">
+        <ShoppingCart className="h-10 w-10 mx-auto text-slate-300 mb-4" />
+        <h2 className="text-xl font-semibold">Your cart is empty</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Add lead tiers from the marketplace to get started.</p>
+        <Link href="/marketplace" className="inline-block mt-6">
+          <Button>Browse the marketplace</Button>
+        </Link>
+      </Card>
     );
-  };
-  const total = pkg.pricePerLead * qty;
+  }
 
   return (
     <div>
@@ -86,26 +93,15 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
                 <div
                   className={cn(
                     "h-7 w-7 grid place-items-center rounded-full text-xs font-medium",
-                    done
-                      ? "bg-brand-red text-slate-950"
-                      : active
-                      ? "bg-slate-200 text-foreground ring-2 ring-brand-red/40"
-                      : "bg-slate-100 text-muted-foreground",
+                    done ? "bg-brand-red text-white" : active ? "bg-slate-200 text-foreground ring-2 ring-brand-red/40" : "bg-slate-100 text-muted-foreground",
                   )}
                 >
                   {done ? <Check className="h-3.5 w-3.5" /> : s.id}
                 </div>
-                <div
-                  className={cn(
-                    "text-xs",
-                    active ? "text-foreground font-medium" : "text-muted-foreground",
-                  )}
-                >
+                <div className={cn("text-xs", active ? "text-foreground font-medium" : "text-muted-foreground")}>
                   {s.label}
                 </div>
-                {i !== steps.length - 1 && (
-                  <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-                )}
+                {i !== steps.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground/50" />}
               </div>
             );
           })}
@@ -115,202 +111,93 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
         <Card className="p-6">
           {step === 1 && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-semibold">Choose your lead package</h2>
+                <h2 className="text-xl font-semibold">Review your cart</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Pick the niche that fits your script.
+                  Mix any lead types and ages. One order is created per line.
                 </p>
               </div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {leadPackages.map((p) => (
-                  <button
-                    key={p.id}
-                    disabled={!p.available}
-                    onClick={() => {
-                      if (!p.available) return;
-                      setPkgId(p.id);
-                      setQty(25);
-                    }}
-                    className={cn(
-                      "text-left rounded-lg border p-4 transition-colors relative",
-                      pkgId === p.id && p.available
-                        ? "border-brand-red/50 bg-brand-red/[0.04]"
-                        : "border-slate-200 bg-slate-50",
-                      p.available
-                        ? "hover:bg-slate-100 cursor-pointer"
-                        : "opacity-60 cursor-not-allowed",
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium">{p.name}</div>
-                      {pkgId === p.id && p.available && (
-                        <Check className="h-4 w-4 text-brand-red" />
-                      )}
-                      {!p.available && (
-                        <Badge variant="muted" className="text-[10px]">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Soon
-                        </Badge>
-                      )}
+
+              {/* Line items */}
+              <div className="space-y-2">
+                {items.map((item) => {
+                  const pkg = findPackage(item.packageId);
+                  if (!pkg) return null;
+                  const min = pkg.minimumOrder;
+                  return (
+                    <div key={item.packageId} className="rounded-lg border border-slate-200 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{pkg.name}</div>
+                          <div className="text-xs text-muted-foreground">{formatCurrency(pkg.pricePerLead)} / lead · min {min}</div>
+                        </div>
+                        <button onClick={() => removeItem(item.packageId)} className="text-muted-foreground hover:text-rose-600" aria-label="Remove">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="inline-flex items-center rounded-lg border border-slate-200">
+                          <button onClick={() => setQuantity(item.packageId, Math.max(min, item.quantity - 25))} className="h-8 w-8 grid place-items-center text-muted-foreground hover:text-foreground" aria-label="Decrease">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            min={min}
+                            onChange={(e) => setQuantity(item.packageId, Math.max(min, parseInt(e.target.value) || min))}
+                            className="h-8 w-16 text-center text-sm border-x border-slate-200 outline-none"
+                          />
+                          <button onClick={() => setQuantity(item.packageId, item.quantity + 25)} className="h-8 w-8 grid place-items-center text-muted-foreground hover:text-foreground" aria-label="Increase">
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div className="text-sm font-semibold">{formatCurrency(pkg.pricePerLead * item.quantity)}</div>
+                      </div>
+                      {item.quantity < min && <p className="mt-2 text-[11px] text-rose-600">Minimum {min} leads for this tier.</p>}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{p.tagline}</div>
-                    <div className="mt-3 flex items-end gap-1">
-                      {p.available ? (
-                        <>
-                          <span className="text-lg font-semibold">
-                            {formatCurrency(p.pricePerLead)}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">/ lead</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-lg font-semibold text-muted-foreground">
-                            Pending
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">pricing</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
+              </div>
+
+              {/* State filter (cart-wide) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">
+                    State filter <span className="text-muted-foreground font-normal">({selectedStates.length} selected)</span>
+                  </div>
+                  <div className="flex gap-3 text-xs">
+                    <button type="button" className="text-red-600 hover:underline font-medium" onClick={() => setSelectedStates(ACTIVE_STATES.map((s) => s.code))}>Select all</button>
+                    <button type="button" className="text-slate-500 hover:underline" onClick={() => setSelectedStates([])}>Clear</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {ACTIVE_STATES.map((s) => (
+                    <label key={s.code} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors select-none", selectedStates.includes(s.code) ? "border-red-500 bg-red-50 text-red-700 font-medium" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300")}>
+                      <Checkbox checked={selectedStates.includes(s.code)} onCheckedChange={() => toggleState(s.code)} className="h-3.5 w-3.5 shrink-0" />
+                      {s.code}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground">Applies to every tier in this order. More states = faster fulfillment.</p>
               </div>
             </div>
           )}
 
           {step === 2 && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-semibold">Set quantity & filters</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Choose 25–50 leads · First leads arrive within 24 hours
-                </p>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Quantity (25–50)</Label>
-                  <Input
-                    type="number"
-                    value={qty}
-                    min={25}
-                    max={50}
-                    onChange={(e) => {
-                      const v = Math.min(50, Math.max(25, parseInt(e.target.value) || 25));
-                      setQty(v);
-                    }}
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">Min 25 · Max 50 leads per order.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Daily delivery cap</Label>
-                  <Select defaultValue="auto">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Deliver as available</SelectItem>
-                      <SelectItem value="10">Max 10/day</SelectItem>
-                      <SelectItem value="20">Max 20/day</SelectItem>
-                      <SelectItem value="50">Max 50/day</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>State filter <span className="text-muted-foreground font-normal">({selectedStates.length} selected)</span></Label>
-                  <div className="flex gap-3 text-xs">
-                    <button
-                      type="button"
-                      className="text-red-600 hover:underline font-medium"
-                      onClick={() => setSelectedStates(ACTIVE_STATES.map((s) => s.code))}
-                    >
-                      Select all
-                    </button>
-                    <button
-                      type="button"
-                      className="text-slate-500 hover:underline"
-                      onClick={() => setSelectedStates([])}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {ACTIVE_STATES.map((s) => (
-                    <label
-                      key={s.code}
-                      className={cn(
-                        "flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors select-none",
-                        selectedStates.includes(s.code)
-                          ? "border-red-500 bg-red-50 text-red-700 font-medium"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      )}
-                    >
-                      <Checkbox
-                        checked={selectedStates.includes(s.code)}
-                        onCheckedChange={() => toggleState(s.code)}
-                        className="h-3.5 w-3.5 shrink-0"
-                      />
-                      {s.code}
-                    </label>
-                  ))}
-                </div>
-                {selectedStates.length === 0 && (
-                  <p className="text-xs text-red-500">Please select at least one state.</p>
-                )}
-                <p className="text-[10px] text-muted-foreground">
-                  Selecting more states = faster delivery. Limiting to fewer states may slow fulfillment as lead volume is distributed across active campaigns. More states unlock as inventory grows.
-                </p>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                Occupation niche is set by the lead package itself. Filters above apply to
-                delivered leads — availability depends on live campaign volume.
-              </p>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-5">
-              <div>
-                <h2 className="text-xl font-semibold">Review your order</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Double-check everything before payment.
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200">
-                <ReviewRow label="Package" value={pkg.name} />
-                <ReviewRow label="Quantity" value={`${qty} leads`} />
-                <ReviewRow label="Price per lead" value={formatCurrency(pkg.pricePerLead)} />
-                <ReviewRow label="First leads" value="Within 24 hours of order" />
-                <ReviewRow label="States" value={selectedStates.length === ACTIVE_STATES.length ? "All 9 active states" : selectedStates.join(", ")} />
-              </div>
-              <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Checkbox defaultChecked className="mt-0.5" />
-                <span>
-                  I acknowledge replacement eligibility is subject to quality review and that I will
-                  only contact these leads after confirming captured TCPA consent.
-                </span>
-              </label>
-            </div>
-          )}
-
-          {step === 4 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-xl font-semibold">Payment</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Securely process via Stripe. Card, Apple Pay, Google Pay, and ACH supported.
-                </p>
+                <p className="text-sm text-muted-foreground mt-1">Securely processed via Stripe. Card, Apple Pay, Google Pay, and ACH supported.</p>
               </div>
               {isAuthed ? (
                 <StripePaymentForm
-                  packageId={pkg.id}
-                  quantity={qty}
+                  items={paymentItems}
                   filterStates={selectedStates}
-                  onSuccess={() => setStep(5)}
+                  onSuccess={() => {
+                    clear();
+                    setStep(3);
+                  }}
                 />
               ) : (
                 <CheckoutAuthPanel onAuthed={() => setJustAuthed(true)} />
@@ -318,104 +205,73 @@ export function CheckoutFlow({ initialPackageId }: CheckoutFlowProps) {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 3 && (
             <div className="text-center py-10">
               <div className="mx-auto h-14 w-14 grid place-items-center rounded-full bg-emerald-500/15 text-emerald-600 mb-4">
                 <CheckCircle2 className="h-7 w-7" />
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">Order placed</h2>
               <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-                Your {qty} {pkg.name} are in the queue. First leads typically land in your
-                dashboard within 24 hours. Remaining leads deliver on a rolling basis.
+                Your leads are in the queue. First leads typically land in your dashboard within 24 hours; the rest deliver on a rolling basis as inventory is generated.
               </p>
               <div className="mt-6 flex justify-center gap-2">
-                <Link href="/dashboard">
-                  <Button>Go to dashboard</Button>
-                </Link>
-                <Link href="/orders">
-                  <Button variant="outline">View order history</Button>
-                </Link>
+                <Link href="/dashboard"><Button>Go to dashboard</Button></Link>
+                <Link href="/orders"><Button variant="outline">View order history</Button></Link>
               </div>
             </div>
           )}
 
-          {step < 4 && (
-            <div className="flex justify-between mt-8 pt-6 border-t border-slate-200">
-              <Button
-                variant="outline"
-                onClick={() => setStep(Math.max(1, step - 1))}
-                disabled={step === 1}
-              >
-                <ArrowLeft className="h-4 w-4" /> Back
-              </Button>
-              <Button onClick={() => setStep(Math.min(5, step + 1))} disabled={step === 2 && selectedStates.length === 0}>
-                Continue <ArrowRight className="h-4 w-4" />
+          {step === 1 && (
+            <div className="flex justify-end mt-8 pt-6 border-t border-slate-200">
+              <Button onClick={() => setStep(2)} disabled={items.length === 0 || belowMin || selectedStates.length === 0}>
+                Continue to payment <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           )}
-          {step === 4 && (
+          {step === 2 && (
             <div className="mt-6 pt-4 border-t border-slate-200">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStep(3)}
-              >
-                <ArrowLeft className="h-4 w-4" /> Back to review
+              <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                <ArrowLeft className="h-4 w-4" /> Back to cart
               </Button>
             </div>
           )}
         </Card>
 
+        {/* Summary sidebar */}
         <div className="h-fit space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Order summary</CardTitle>
-              <CardDescription>Live total updates as you change quantity.</CardDescription>
+              <CardDescription>{count} leads across {items.length} {items.length === 1 ? "tier" : "tiers"}.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Package</span>
-                <span>{pkg.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Quantity</span>
-                <span>{qty} leads</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Price per lead</span>
-                <span>{formatCurrency(pkg.pricePerLead)}</span>
-              </div>
+              {items.map((item) => {
+                const pkg = findPackage(item.packageId);
+                if (!pkg) return null;
+                return (
+                  <div key={item.packageId} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground truncate">{pkg.name} × {item.quantity}</span>
+                    <span className="shrink-0">{formatCurrency(pkg.pricePerLead * item.quantity)}</span>
+                  </div>
+                );
+              })}
               <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
                 <span className="font-medium">Total</span>
-                <span className="font-semibold text-gradient">{formatCurrency(total)}</span>
-              </div>
-              <div className="text-[10px] text-muted-foreground">
-                Replacement credits applied for bad numbers within 72 hours of delivery.
+                <span className="font-semibold text-gradient">{formatCurrency(subtotalCents / 100)}</span>
               </div>
             </CardContent>
           </Card>
-
           <Card className="p-4">
             <div className="flex items-center gap-2">
               <Badge variant="success">Compliant</Badge>
               <span className="text-xs">TCPA capture on every lead</span>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              TrustedForm / Jornaya certificate stored on every record. Replacement eligibility
-              subject to quality review.
+              TrustedForm / Jornaya certificate on every record. Replacement eligibility subject to quality review.
             </p>
           </Card>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ReviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between items-center p-3 text-sm">
-      <span className="text-muted-foreground text-xs">{label}</span>
-      <span className="font-medium">{value}</span>
     </div>
   );
 }

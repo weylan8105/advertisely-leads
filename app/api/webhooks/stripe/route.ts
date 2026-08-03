@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
+import { findPackage } from "@/data/packages";
 import { sendOrderConfirmationEmail, sendThankYouEmail, isEmailConfigured } from "@/lib/email";
 import Stripe from "stripe";
 
@@ -75,44 +76,66 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   }
 
   const md = intent.metadata ?? {};
-  if (!md.userId || !md.packageId || !md.quantity) {
-    console.error("Stripe webhook: missing metadata on", intent.id, md);
+  if (!md.userId) {
+    console.error("Stripe webhook: missing userId on", intent.id, md);
     return;
   }
 
-  const quantity = parseInt(md.quantity, 10);
-  const pricePerLeadCents = Math.round(parseFloat(md.pricePerLead) * 100);
-  const filterStates = md.filterStates
-    ? md.filterStates.split(",").filter(Boolean)
-    : [];
-  const filterIncomeMin = md.filterIncomeMin
-    ? parseInt(md.filterIncomeMin, 10)
-    : undefined;
-  // Aged-bucket age window (days). packageId stays the bucket id (for display);
-  // fulfillment resolves the underlying lead pool + applies this window.
-  const filterAgeMinDays = md.ageMinDays ? parseInt(md.ageMinDays, 10) : undefined;
-  const filterAgeMaxDays = md.ageMaxDays ? parseInt(md.ageMaxDays, 10) : undefined;
+  const filterStates = md.filterStates ? md.filterStates.split(",").filter(Boolean) : [];
 
-  const order = await prisma.order.create({
-    data: {
-      userId: md.userId,
-      packageId: md.packageId,
-      quantity,
-      pricePerLeadCents,
-      totalCents: intent.amount,
-      filterStates,
-      filterIncomeMin,
-      filterAgeMinDays,
-      filterAgeMaxDays,
-      status: "PROCESSING",
-      stripePaymentIntentId: intent.id,
-    },
-  });
+  // Cart line items. New checkouts send `items` (JSON [{p,q}]); fall back to the
+  // legacy single-item metadata for any older intents.
+  type Line = { packageId: string; quantity: number };
+  let lines: Line[] = [];
+  if (md.items) {
+    try {
+      const parsed = JSON.parse(md.items) as { p: string; q: number }[];
+      lines = parsed.map((x) => ({ packageId: x.p, quantity: Number(x.q) }));
+    } catch {
+      console.error("Stripe webhook: bad items metadata on", intent.id, md.items);
+    }
+  } else if (md.packageId && md.quantity) {
+    lines = [{ packageId: md.packageId, quantity: parseInt(md.quantity, 10) }];
+  }
+  if (lines.length === 0) {
+    console.error("Stripe webhook: no line items on", intent.id, md);
+    return;
+  }
 
-  // Immediately try to fill the new order from existing lead inventory.
-  await fulfillOrder(order.id);
+  // One Order per cart line. Price + age window resolve from the package def so
+  // buckets keep their identity while fulfillment matches the underlying pool.
+  const createdOrders: { id: string; packageId: string }[] = [];
+  let totalQty = 0;
+  for (const line of lines) {
+    const pkg = findPackage(line.packageId);
+    if (!pkg) {
+      console.error("Stripe webhook: unknown package on", intent.id, line.packageId);
+      continue;
+    }
+    const cents = Math.round(pkg.pricePerLead * 100);
+    const order = await prisma.order.create({
+      data: {
+        userId: md.userId,
+        packageId: pkg.id, // bucket id, for display
+        quantity: line.quantity,
+        pricePerLeadCents: cents,
+        totalCents: cents * line.quantity,
+        filterStates,
+        filterAgeMinDays: pkg.ageMinDays,
+        filterAgeMaxDays: pkg.ageMaxDays,
+        status: "PROCESSING",
+        stripePaymentIntentId: intent.id,
+      },
+    });
+    createdOrders.push({ id: order.id, packageId: order.packageId });
+    totalQty += line.quantity;
+    // Immediately try to fill each order from existing inventory.
+    await fulfillOrder(order.id);
+  }
+  if (createdOrders.length === 0) return;
+  const firstOrder = createdOrders[0];
 
-  // Send order confirmation email
+  // Send order confirmation + thank-you, summarized across the whole cart.
   if (isEmailConfigured) {
     try {
       const user = await prisma?.user.findUnique({
@@ -120,23 +143,27 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
         select: { email: true, name: true },
       });
       if (user?.email) {
+        const label =
+          createdOrders.length === 1
+            ? findPackage(createdOrders[0].packageId)?.name ?? createdOrders[0].packageId
+            : `${createdOrders.length} lead tiers`;
         // Transactional receipt
         await sendOrderConfirmationEmail({
           agentEmail: user.email,
           agentName: user.name ?? "Agent",
-          packageName: md.packageName ?? md.packageId,
-          quantity,
+          packageName: label,
+          quantity: totalQty,
           totalCents: intent.amount,
-          orderId: order.id,
+          orderId: firstOrder.id,
         });
-        // Personal thank-you from Ryan Rush
+        // Personal thank-you
         await sendThankYouEmail({
           clientEmail: user.email,
           clientName: user.name ?? "Agent",
-          packageName: md.packageName ?? md.packageId,
-          quantity,
+          packageName: label,
+          quantity: totalQty,
           totalCents: intent.amount,
-          orderId: order.id,
+          orderId: firstOrder.id,
         });
       }
     } catch (emailErr) {

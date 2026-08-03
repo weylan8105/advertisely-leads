@@ -40,6 +40,18 @@ export interface LeadPackage {
   ageMinDays?: number;
   ageMaxDays?: number;
   hidden?: boolean;
+  // Marketing angle this purchasable belongs to. The marketplace groups tiers by
+  // group and shows one product per group with age subcategories inside.
+  group?: string;
+}
+
+export interface ProductGroup {
+  id: string;
+  name: string;
+  tagline: string;
+  blurb: string;
+  available: boolean;
+  comingSoonNote?: string;
 }
 
 export interface LeadFilters {

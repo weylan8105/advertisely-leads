@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { CartProvider } from "@/context/CartContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -62,7 +63,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
       <body className="min-h-screen bg-background text-foreground font-sans">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <CartProvider>{children}</CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
