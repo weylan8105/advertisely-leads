@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { UserPlus, Loader2, Check, Inbox, ArrowRight } from "lucide-react";
+import { UserPlus, UserMinus, Loader2, Check, Inbox, Briefcase, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,42 +17,50 @@ export function AssignToMeCard() {
   const [quantity, setQuantity] = useState(50);
   const [tierId, setTierId] = useState("any");
   const [states, setStates] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"assign" | "return" | "return-all" | null>(null);
   const [poolCount, setPoolCount] = useState<number | null>(null);
+  const [myCount, setMyCount] = useState<number | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
-  async function loadPool() {
+  async function loadCounts() {
     try {
-      const r = await fetch("/api/admin/leads?assigned=unassigned&limit=1");
-      const d = await r.json();
-      setPoolCount(d?.counts?.unassigned ?? d?.counts?.total ?? null);
+      const [pool, mine] = await Promise.all([
+        fetch("/api/admin/leads?assigned=unassigned&limit=1").then((r) => r.json()),
+        fetch("/api/leads").then((r) => r.json()),
+      ]);
+      setPoolCount(pool?.counts?.unassigned ?? pool?.counts?.total ?? null);
+      setMyCount(Array.isArray(mine?.leads) ? mine.leads.length : null);
     } catch {
       /* ignore */
     }
   }
   useEffect(() => {
-    loadPool();
+    loadCounts();
   }, []);
 
   const toggleState = (s: string) =>
     setStates((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
-  async function assign() {
-    setBusy(true);
-    setResult(null);
+  function tierWindow() {
     const tier = AGE_TIERS.find((t) => t.id === tierId);
-    const body: any = { quantity, states };
+    const body: any = {};
     if (tier) {
       body.ageMinDays = tier.ageMinDays;
       if (tier.ageMaxDays != null) body.ageMaxDays = tier.ageMaxDays;
     }
+    return body;
+  }
+
+  async function assign() {
+    setBusy("assign");
+    setResult(null);
     const res = await fetch("/api/admin/assign-to-me", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ quantity, states, ...tierWindow() }),
     });
     const data = await res.json().catch(() => ({}));
-    setBusy(false);
+    setBusy(null);
     if (res.ok) {
       setResult({
         ok: true,
@@ -61,9 +69,34 @@ export function AssignToMeCard() {
             ? `Assigned ${data.assigned} lead${data.assigned === 1 ? "" : "s"} to your CRM — free.`
             : "No matching unassigned leads in the pool right now.",
       });
-      loadPool();
+      loadCounts();
     } else {
       setResult({ ok: false, text: data.error ?? "Could not assign leads" });
+    }
+  }
+
+  async function returnToPool(all: boolean) {
+    if (all && !confirm("Return ALL your self-assigned leads to the pool for other clients to buy?")) return;
+    setBusy(all ? "return-all" : "return");
+    setResult(null);
+    const res = await fetch("/api/admin/unassign-from-me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(all ? { all: true } : { quantity, states, ...tierWindow() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (res.ok) {
+      setResult({
+        ok: true,
+        text:
+          data.unassigned > 0
+            ? `Returned ${data.unassigned} lead${data.unassigned === 1 ? "" : "s"} to the pool — now purchasable.`
+            : "No returnable leads matched that.",
+      });
+      loadCounts();
+    } else {
+      setResult({ ok: false, text: data.error ?? "Could not return leads" });
     }
   }
 
@@ -72,22 +105,32 @@ export function AssignToMeCard() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="font-semibold tracking-tight flex items-center gap-2">
-            <UserPlus className="h-4 w-4 text-brand-red" /> Assign leads to my CRM
+            <UserPlus className="h-4 w-4 text-brand-red" /> My CRM — assign &amp; return leads
           </h2>
           <p className="mt-1 text-sm text-muted-foreground max-w-lg">
-            Pull unassigned leads from the house pool straight into your own CRM at{" "}
-            <span className="font-medium text-foreground">zero cost</span> — no order, no charge.
+            Pull unassigned leads into your own CRM at <span className="font-medium text-foreground">zero cost</span>,
+            or return them to the house pool for other clients to purchase.
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Unassigned pool</div>
-          <div className="text-2xl font-semibold flex items-center gap-1 justify-end">
-            <Inbox className="h-4 w-4 text-muted-foreground" />
-            {poolCount ?? "—"}
+        <div className="flex gap-6">
+          <div className="text-right">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Unassigned pool</div>
+            <div className="text-2xl font-semibold flex items-center gap-1 justify-end">
+              <Inbox className="h-4 w-4 text-muted-foreground" />
+              {poolCount ?? "—"}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">My CRM</div>
+            <div className="text-2xl font-semibold flex items-center gap-1 justify-end">
+              <Briefcase className="h-4 w-4 text-muted-foreground" />
+              {myCount ?? "—"}
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Filters (shared by assign + return) */}
       <div className="mt-5 grid sm:grid-cols-[120px_1fr] gap-4 items-end">
         <div className="space-y-1.5">
           <Label>Quantity</Label>
@@ -138,13 +181,21 @@ export function AssignToMeCard() {
         </div>
       </div>
 
-      <div className="mt-5 flex items-center gap-3 flex-wrap">
-        <Button onClick={assign} disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+      <div className="mt-5 flex items-center gap-2 flex-wrap">
+        <Button onClick={assign} disabled={busy !== null}>
+          {busy === "assign" ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
           Assign {quantity} to my CRM (free)
         </Button>
-        {result?.ok && (
-          <Link href="/leads" className="text-sm text-brand-red hover:underline inline-flex items-center gap-1">
+        <Button variant="outline" onClick={() => returnToPool(false)} disabled={busy !== null}>
+          {busy === "return" ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
+          Return {quantity} to pool
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => returnToPool(true)} disabled={busy !== null}>
+          {busy === "return-all" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Return all my leads
+        </Button>
+        {myCount != null && myCount > 0 && (
+          <Link href="/leads" className="text-sm text-brand-red hover:underline inline-flex items-center gap-1 ml-auto">
             Open my CRM <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         )}
@@ -155,6 +206,10 @@ export function AssignToMeCard() {
           {result.text}
         </p>
       )}
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Returning leads only affects your free self-assigned leads — never leads tied to a paid order. Age &amp;
+        state filters above apply to both actions.
+      </p>
     </Card>
   );
 }
