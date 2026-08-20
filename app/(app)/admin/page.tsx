@@ -36,6 +36,7 @@ import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
 import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButton";
 import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
+import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -234,6 +235,8 @@ export default function AdminPage() {
           icon={<Building2 className="h-4 w-4" />}
         />
       </div>
+
+      <AssignToMeCard />
 
       <div className="mt-8">
         <Tabs defaultValue="all-leads">
