@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import type { Lead } from "@/types";
 
 export default function LeadsPage() {
-  const [view, setView] = useState<"list" | "kanban">("list");
+  const [view, setView] = useState<"list" | "kanban">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,26 +53,26 @@ export default function LeadsPage() {
           <>
             <div className="inline-flex rounded-md border border-slate-300 overflow-hidden">
               <button
-                onClick={() => setView("list")}
-                className={cn(
-                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
-                  view === "list"
-                    ? "bg-slate-200 text-foreground"
-                    : "text-muted-foreground hover:bg-slate-100",
-                )}
-              >
-                <Rows3 className="h-3.5 w-3.5" /> List
-              </button>
-              <button
                 onClick={() => setView("kanban")}
                 className={cn(
-                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-slate-300",
+                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
                   view === "kanban"
                     ? "bg-slate-200 text-foreground"
                     : "text-muted-foreground hover:bg-slate-100",
                 )}
               >
                 <KanbanSquare className="h-3.5 w-3.5" /> Pipeline
+              </button>
+              <button
+                onClick={() => setView("list")}
+                className={cn(
+                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-slate-300",
+                  view === "list"
+                    ? "bg-slate-200 text-foreground"
+                    : "text-muted-foreground hover:bg-slate-100",
+                )}
+              >
+                <Rows3 className="h-3.5 w-3.5" /> List
               </button>
             </div>
             <Link href="/marketplace">
