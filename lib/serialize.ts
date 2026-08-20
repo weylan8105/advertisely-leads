@@ -43,6 +43,7 @@ export function serializeLead(l: any): Lead {
     leadTypeLabel: packageLabel(l.packageId),
     status: STATUS_LABEL[l.status] ?? "New",
     disposition: l.disposition ?? undefined,
+    pipelineStage: l.pipelineStage ?? "new-lead",
     source: l.source,
     tags: Array.isArray(l.tags) ? l.tags : [],
     consent: {

@@ -1,0 +1,51 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { getOrgContext, canManageTeam } from "@/lib/org";
+import { STAGE_IDS, stageLabel } from "@/data/pipeline";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * PATCH /api/leads/:id/stage — move a lead to a CRM pipeline stage.
+ * Body: { stage: string }  (must be a valid stage id)
+ * Allowed if the lead is assigned to the caller, the caller is a platform
+ * admin, or the caller manages the lead's organization.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isDatabaseConfigured || !prisma) {
+    return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  }
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id;
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isPlatformAdmin = (session?.user as any)?.role === "ADMIN";
+
+  const body = (await req.json().catch(() => ({}))) as { stage?: string };
+  const stage = body.stage ?? "";
+  if (!STAGE_IDS.includes(stage)) {
+    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
+
+  const lead = await prisma.lead.findUnique({
+    where: { id: params.id },
+    select: { id: true, assignedUserId: true, organizationId: true },
+  });
+  if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  let allowed = isPlatformAdmin || lead.assignedUserId === userId;
+  if (!allowed && lead.organizationId) {
+    const ctx = await getOrgContext(userId);
+    allowed = !!ctx && ctx.organizationId === lead.organizationId && canManageTeam(ctx.role);
+  }
+  if (!allowed) return NextResponse.json({ error: "You can't move this lead" }, { status: 403 });
+
+  await prisma.lead.update({ where: { id: params.id }, data: { pipelineStage: stage } });
+  await prisma.leadActivity.create({
+    data: { leadId: params.id, type: "STATUS_CHANGED", body: `Moved to "${stageLabel(stage)}" in the pipeline.` },
+  });
+
+  return NextResponse.json({ ok: true, stage });
+}

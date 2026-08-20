@@ -86,6 +86,7 @@ export interface Lead {
   leadTypeLabel: string;
   status: LeadStatus;
   disposition?: LeadDisposition;
+  pipelineStage: string;
   source: string;
   tags: string[];
   consent: {

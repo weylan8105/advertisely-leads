@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PlusCircle, Rows3, KanbanSquare, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
-import { LeadKanban } from "@/components/leads/LeadKanban";
+import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -126,13 +126,13 @@ export default function LeadsPage() {
       ) : (
         <Card className="p-5">
           <div className="mb-4">
-            <h3 className="text-sm font-semibold">Pipeline view</h3>
+            <h3 className="text-sm font-semibold">Pipeline</h3>
             <p className="text-xs text-muted-foreground">
-              Drag leads between stages to update their status. Click any card to open the full
-              lead detail.
+              Drag leads between stages to move them through your sales pipeline. Click any card to
+              open the full lead detail.
             </p>
           </div>
-          <LeadKanban leads={buckets.all} />
+          <PipelineBoard leads={leads} setLeads={setLeads} />
         </Card>
       )}
 

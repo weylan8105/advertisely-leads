@@ -138,6 +138,7 @@ model Lead {
   packageId       String // which package this lead belongs to
   status          LeadStatus    @default(NEW)
   disposition     String?
+  pipelineStage   String        @default("new-lead") // CRM kanban stage id (see data/pipeline.ts)
   source          String // e.g. "Meta - Lineman Retirement Q2"
   campaignName    String?
   adsetId         String?
