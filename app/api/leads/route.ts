@@ -58,8 +58,14 @@ export async function GET(req: NextRequest) {
     // Team scoping: owners/admins see the whole org; agents see only their own.
     const ctx = await ensureOrgContext(myId);
     if (ctx && canManageTeam(ctx.role)) {
-      where.organizationId = ctx.organizationId;
-      if (agentParam) where.assignedUserId = agentParam;
+      if (agentParam) {
+        where.organizationId = ctx.organizationId;
+        where.assignedUserId = agentParam;
+      } else {
+        // Whole org PLUS any lead assigned directly to them — so leads that were
+        // assigned without an org stamp still show up for their owner.
+        where.OR = [{ organizationId: ctx.organizationId }, { assignedUserId: myId }];
+      }
     } else {
       where.assignedUserId = myId;
     }

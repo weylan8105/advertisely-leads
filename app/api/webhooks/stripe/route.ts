@@ -3,6 +3,7 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
 import { findPackage } from "@/data/packages";
+import { ensureOrgContext } from "@/lib/org";
 import { sendOrderConfirmationEmail, sendThankYouEmail, isEmailConfigured } from "@/lib/email";
 import Stripe from "stripe";
 
@@ -106,6 +107,8 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   // buckets keep their identity while fulfillment matches the underlying pool.
   const createdOrders: { id: string; packageId: string }[] = [];
   let totalQty = 0;
+  // Stamp the buyer's org on every order up front so leads always inherit it.
+  const buyerOrgId = (await ensureOrgContext(md.userId))?.organizationId ?? undefined;
   for (const line of lines) {
     const pkg = findPackage(line.packageId);
     if (!pkg) {
@@ -116,6 +119,7 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
     const order = await prisma.order.create({
       data: {
         userId: md.userId,
+        organizationId: buyerOrgId,
         packageId: pkg.id, // bucket id, for display
         quantity: line.quantity,
         pricePerLeadCents: cents,
