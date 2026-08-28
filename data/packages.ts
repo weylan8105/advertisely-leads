@@ -161,29 +161,30 @@ export const leadPackages: LeadPackage[] = [
   },
 
   {
-    id: "term-leads",
-    name: "Term Life Leads",
-    tagline: "High-intent prospects shopping for term coverage.",
+    id: "trucker-leads",
+    name: "Trucker IUL Leads",
+    tagline: "Owner-operators and CDL drivers planning tax-free retirement.",
     description:
-      "Families and individuals actively researching term life insurance. Pre-qualified for coverage need and budget — ideal for agents who convert term to permanent.",
-    pricePerLead: 30,
+      "Truckers and CDL drivers who responded to a tax-free, tax-advantaged early-retirement offer. The same high-intent IUL angle, tuned to the trucking market.",
+    pricePerLead: 45,
     minimumOrder: 25,
     estimatedDelivery: "Within 24 hours",
     badge: "Coming soon",
     available: false,
-    comingSoonNote: "Term campaign launching soon.",
+    group: "trucker",
+    comingSoonNote: "Trucker IUL campaign launching soon.",
     features: [
-      "Coverage-intent verified",
+      "IUL / tax-free retirement intent",
       "TCPA consent captured",
-      "Budget pre-qualified",
+      "CDL / owner-operator targeting",
       "TrustedForm certificate",
     ],
     ideal: [
-      "Term-to-perm conversion scripts",
-      "Family protection agents",
+      "Agents working the trucking niche",
+      "IUL closers",
       "Agencies building volume",
     ],
-    niches: ["Families", "Young professionals", "Breadwinners"],
+    niches: ["Owner-operators", "CDL drivers", "Fleet drivers"],
   },
 ];
 
@@ -220,19 +221,19 @@ export const productGroups: ProductGroup[] = [
     available: true,
   },
   {
-    id: "term",
-    name: "Term Life Leads",
-    tagline: "High-intent prospects shopping for term coverage.",
+    id: "trucker",
+    name: "Trucker IUL Leads",
+    tagline: "Owner-operators and CDL drivers planning tax-free retirement.",
     blurb:
-      "Families and individuals actively researching term life insurance — ideal for agents who convert term to permanent.",
+      "Truckers and CDL drivers who raised their hand for a tax-free, tax-advantaged early-retirement plan. The same high-intent IUL angle, tuned to the trucking market.",
     available: false,
-    comingSoonNote: "Term campaign launching soon.",
+    comingSoonNote: "Trucker IUL campaign launching soon.",
   },
 ];
 
 /** Which marketing group a purchasable belongs to (explicit `group`, else derived). */
 export function groupIdFor(pkg: LeadPackage): string {
-  return pkg.group ?? (pkg.id === "term-leads" ? "term" : "iul");
+  return pkg.group ?? "iul";
 }
 
 /** Visible, purchasable tiers within a group, cheapest-age-first ordering preserved. */

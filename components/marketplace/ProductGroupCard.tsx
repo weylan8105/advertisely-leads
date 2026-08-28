@@ -51,7 +51,7 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
           </Badge>
         </div>
         <div className="p-6 flex-1 flex flex-col">
-          <h3 className="text-lg font-semibold tracking-tight">{group.name}</h3>
+          <h3 className="text-lg font-semibold tracking-tight pr-28">{group.name}</h3>
           <p className="text-xs text-brand-red mt-1">{group.tagline}</p>
           <p className="mt-3 text-sm text-muted-foreground flex-1">{group.blurb}</p>
           {group.comingSoonNote && (
@@ -78,7 +78,7 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
         </Badge>
       </div>
       <div className="p-6 flex-1 flex flex-col">
-        <h3 className="text-lg font-semibold tracking-tight">{group.name}</h3>
+        <h3 className="text-lg font-semibold tracking-tight pr-28">{group.name}</h3>
         <p className="text-xs text-brand-red mt-1">{group.tagline}</p>
         <p className="mt-3 text-sm text-muted-foreground">{group.blurb}</p>
 

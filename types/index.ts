@@ -17,7 +17,7 @@ export type LeadPackageId =
   | "iul-45-89"
   | "iul-90-150"
   | "iul-150plus"
-  | "term-leads";
+  | "trucker-leads";
 
 export interface LeadPackage {
   id: LeadPackageId;

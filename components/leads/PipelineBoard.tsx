@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Phone, GripVertical } from "lucide-react";
-import { PIPELINE_STAGES } from "@/data/pipeline";
+import { PIPELINE_STAGES, STAGE_IDS, DEFAULT_STAGE } from "@/data/pipeline";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/types";
 
@@ -51,7 +51,11 @@ export function PipelineBoard({
     <div className="overflow-x-auto pb-4 scrollbar-thin">
       <div className="flex gap-3 min-w-max">
         {PIPELINE_STAGES.map((stage) => {
-          const colLeads = leads.filter((l) => (l.pipelineStage || "new-lead") === stage.id);
+          const colLeads = leads.filter((l) => {
+            // Fold any unknown/removed stage back into New Lead so no lead vanishes.
+            const s = STAGE_IDS.includes(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
+            return s === stage.id;
+          });
           const isOver = overStage === stage.id;
           return (
             <div
