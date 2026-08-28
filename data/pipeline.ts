@@ -14,6 +14,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   { id: "new-lead", label: "New Lead (Form Submitted)", tone: "red" },
   { id: "aged-lead", label: "Aged Lead (3 Days +)", tone: "slate" },
   { id: "follow-up", label: "Follow Up", tone: "amber" },
+  { id: "call-back", label: "Call Back", tone: "blue" },
   { id: "dnc", label: "DNC / Not Interested / Unqualified", tone: "rose" },
   { id: "presentation-ran", label: "Presentation Ran / Follow up", tone: "indigo" },
   { id: "underwriting", label: "Underwriting", tone: "blue" },

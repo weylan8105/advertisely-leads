@@ -103,6 +103,8 @@ export interface Lead {
   tasks: LeadTask[];
   activity: LeadActivity[];
   callAttempts: number;
+  callbackAt?: string;
+  rawFormData?: Record<string, unknown>;
 }
 
 export interface LeadNote {

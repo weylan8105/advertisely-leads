@@ -141,6 +141,7 @@ model Lead {
   pipelineStage   String        @default("new-lead") // CRM kanban stage id (see data/pipeline.ts)
   soldPremiumCents Int?         // annual premium (AP) logged when moved to Issued PAID — powers P&L
   soldAt          DateTime?
+  callbackAt      DateTime?     // scheduled call-back reminder (card counts down / flashes when due)
   source          String // e.g. "Meta - Lineman Retirement Q2"
   campaignName    String?
   adsetId         String?

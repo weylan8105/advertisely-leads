@@ -80,5 +80,10 @@ export function serializeLead(l: any): Lead {
       at: new Date(a.createdAt).toISOString(),
     })),
     callAttempts: l.callAttempts ?? 0,
+    callbackAt: l.callbackAt ? new Date(l.callbackAt).toISOString() : undefined,
+    rawFormData:
+      l.rawFormData && typeof l.rawFormData === "object" && !Array.isArray(l.rawFormData)
+        ? (l.rawFormData as Record<string, unknown>)
+        : {},
   };
 }
