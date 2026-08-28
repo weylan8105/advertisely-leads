@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
+import { PnlSummary } from "@/components/dashboard/PnlSummary";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { ExportButton } from "@/components/leads/ExportButton";
@@ -203,6 +204,8 @@ export default function DashboardPage() {
           icon={<Trophy className="h-4 w-4" />}
         />
       </div>
+
+      <PnlSummary />
 
       <div className="grid lg:grid-cols-3 gap-5 mt-6">
         <Card className="lg:col-span-2">
