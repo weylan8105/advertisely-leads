@@ -57,7 +57,7 @@ function statusLabel(status: string) {
 function packageLabel(packageId: string) {
   const map: Record<string, string> = {
     "blue-collar-iul": "Blue-Collar IUL Leads",
-    "term-leads": "Term Life Leads",
+    "trucker-leads": "Trucker IUL Leads",
   };
   return map[packageId] ?? packageId;
 }

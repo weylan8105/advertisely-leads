@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: "How fast do leads show up after I order?",
-    a: "Blue-Collar IUL leads deliver within 24 hours of your order. Every record arrives with documented consent and source tracking. Term Life leads are launching soon — join the notify list to be first in line.",
+    a: "Blue-Collar IUL leads deliver within 24 hours of your order. Every record arrives with documented consent and source tracking. Trucker IUL leads are launching soon — join the notify list to be first in line.",
   },
   {
     q: "Are these TCPA-compliant?",

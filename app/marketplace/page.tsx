@@ -35,7 +35,7 @@ export default function MarketplacePage() {
                 <span className="font-medium">Heads up: </span>
                 <strong>IUL leads are priced by age</strong> — pick fresh (under 48 hours) or go older for
                 deep discounts, all under one product. Mix any ages in your cart; every order is a 25-lead
-                minimum. Term Life is in pre-launch.
+                minimum. Trucker IUL leads are coming soon.
               </div>
               <MarketplaceStore />
 

@@ -5,7 +5,7 @@ const steps = [
     icon: Package,
     title: "Choose a lead package",
     body:
-      "Start with Blue-Collar IUL leads, available now. Term Life leads are coming soon.",
+      "Start with Blue-Collar IUL leads, available now. Trucker IUL leads are coming soon.",
   },
   {
     icon: CreditCard,
