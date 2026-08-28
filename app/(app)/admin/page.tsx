@@ -37,6 +37,7 @@ import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManage
 import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButton";
 import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
 import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
+import { AdminAccounts } from "@/components/admin/AdminAccounts";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ export default function AdminPage() {
   const [syncOverrideUserId, setSyncOverrideUserId] = useState("");
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [tab, setTab] = useState("all-leads");
 
   // Real data from the database (replaces the old hardcoded demo figures).
   const [stats, setStats] = useState<{
@@ -226,20 +228,26 @@ export default function AdminPage() {
           accent="violet"
           icon={<ShoppingCart className="h-4 w-4" />}
         />
-        <DashboardStatCard
-          label="Active client accounts"
-          value={stats ? fmtNum(stats.activeClientAccounts) : "—"}
-          delta={6.0}
-          hint="paying agents"
-          accent="emerald"
-          icon={<Building2 className="h-4 w-4" />}
-        />
+        <button
+          onClick={() => setTab("accounts")}
+          className="text-left transition-transform hover:-translate-y-0.5"
+          title="See client accounts + conversion"
+        >
+          <DashboardStatCard
+            label="Active client accounts"
+            value={stats ? fmtNum(stats.activeClientAccounts) : "—"}
+            delta={6.0}
+            hint="paying agents · click to view"
+            accent="emerald"
+            icon={<Building2 className="h-4 w-4" />}
+          />
+        </button>
       </div>
 
       <AssignToMeCard />
 
       <div className="mt-8">
-        <Tabs defaultValue="all-leads">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="all-leads">All leads</TabsTrigger>
             <TabsTrigger value="queue">Manual assignment</TabsTrigger>
@@ -566,45 +574,7 @@ export default function AdminPage() {
                 <CardDescription>Agencies and individual agents currently paying.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="hidden md:table-cell">Seats</TableHead>
-                      <TableHead className="hidden md:table-cell">Lifetime spend</TableHead>
-                      <TableHead className="hidden md:table-cell">Last order</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {accounts.map((a, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium flex items-center gap-2">
-                          <Users className="h-4 w-4 text-brand-red" /> {a.name}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">{a.seats}</TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {formatCurrency(a.lifetimeSpendCents / 100)}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                          {a.lastOrder
-                            ? new Date(a.lastOrder).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={a.status === "Active" ? "success" : "info"}>{a.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {accounts.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
-                          No paying client accounts yet.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                <AdminAccounts />
               </CardContent>
             </Card>
           </TabsContent>
