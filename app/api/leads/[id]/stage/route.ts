@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const isPlatformAdmin = (session?.user as any)?.role === "ADMIN";
 
-  const body = (await req.json().catch(() => ({}))) as { stage?: string };
+  const body = (await req.json().catch(() => ({}))) as { stage?: string; premiumCents?: number };
   const stage = body.stage ?? "";
   if (!STAGE_IDS.includes(stage)) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
@@ -42,7 +42,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (!allowed) return NextResponse.json({ error: "You can't move this lead" }, { status: 403 });
 
-  await prisma.lead.update({ where: { id: params.id }, data: { pipelineStage: stage } });
+  // Marking a policy sold ("Issued PAID") captures the annual premium for P&L;
+  // moving off that stage clears it.
+  const isSold = stage === "issued-paid";
+  const premiumCents =
+    isSold && body.premiumCents != null ? Math.max(0, Math.round(Number(body.premiumCents))) : null;
+  await prisma.lead.update({
+    where: { id: params.id },
+    data: {
+      pipelineStage: stage,
+      soldPremiumCents: isSold ? premiumCents : null,
+      soldAt: isSold ? new Date() : null,
+    },
+  });
   await prisma.leadActivity.create({
     data: { leadId: params.id, type: "STATUS_CHANGED", body: `Moved to "${stageLabel(stage)}" in the pipeline.` },
   });

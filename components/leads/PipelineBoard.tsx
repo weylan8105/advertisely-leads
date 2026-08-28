@@ -30,6 +30,19 @@ export function PipelineBoard({
   async function move(leadId: string, stageId: string) {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.pipelineStage === stageId) return;
+
+    // Logging a sale: capture the annual premium (AP) for the P&L.
+    let premiumCents: number | undefined;
+    if (stageId === "issued-paid") {
+      const input = window.prompt(
+        "Policy sold! Enter the annual premium (AP) in dollars — this feeds your Profit & Loss:",
+        "",
+      );
+      if (input === null) return; // cancelled — don't move
+      const dollars = parseFloat(input.replace(/[^0-9.]/g, ""));
+      premiumCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+    }
+
     const prev = lead.pipelineStage;
     // Optimistic
     setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: stageId } : l)));
@@ -37,7 +50,7 @@ export function PipelineBoard({
       const res = await fetch(`/api/leads/${leadId}/stage`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: stageId }),
+        body: JSON.stringify({ stage: stageId, ...(premiumCents != null ? { premiumCents } : {}) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Move failed");
     } catch (e: any) {
