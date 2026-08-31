@@ -36,8 +36,12 @@ export async function POST(req: NextRequest) {
     states?: string[];
     ageMinDays?: number;
     ageMaxDays?: number;
+    leadIds?: string[];
   };
 
+  const leadIds = Array.isArray(body.leadIds)
+    ? body.leadIds.map((x) => String(x)).filter(Boolean)
+    : [];
   const all = body.all === true;
   const quantity = Math.min(Math.max(parseInt(String(body.quantity), 10) || 0, 1), 5000);
   const states = Array.isArray(body.states)
@@ -55,6 +59,7 @@ export async function POST(req: NextRequest) {
   const where: any = {
     assignedUserId: userId,
     orderId: null, // only zero-cost self-assigned leads — never touch paid orders
+    ...(leadIds.length ? { id: { in: leadIds } } : {}),
     ...(states.length ? { state: { in: states } } : {}),
     ...(receivedAt.gt || receivedAt.lte ? { receivedAt } : {}),
   };
@@ -62,11 +67,16 @@ export async function POST(req: NextRequest) {
   const candidates = await prisma.lead.findMany({
     where,
     orderBy: { assignedAt: "asc" },
-    ...(all ? {} : { take: quantity }),
+    ...(all || leadIds.length ? {} : { take: quantity }),
     select: { id: true },
   });
   if (candidates.length === 0) {
-    return NextResponse.json({ unassigned: 0, message: "You have no returnable leads matching that." });
+    return NextResponse.json({
+      unassigned: 0,
+      message: leadIds.length
+        ? "That lead isn't one of your returnable self-assigned leads."
+        : "You have no returnable leads matching that.",
+    });
   }
 
   const ids = candidates.map((c) => c.id);

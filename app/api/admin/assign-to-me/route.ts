@@ -39,7 +39,14 @@ export async function POST(req: NextRequest) {
     states?: string[];
     ageMinDays?: number;
     ageMaxDays?: number;
+    leadIds?: string[];
   };
+
+  // Targeted assign: specific leads picked from search (assign only the ones
+  // you've actually closed, not a blind batch).
+  const leadIds = Array.isArray(body.leadIds)
+    ? body.leadIds.map((x) => String(x)).filter(Boolean)
+    : [];
 
   const quantity = Math.min(Math.max(parseInt(String(body.quantity), 10) || 0, 1), 2000);
   const states = Array.isArray(body.states)
@@ -59,22 +66,36 @@ export async function POST(req: NextRequest) {
   if (ageMaxDays != null) receivedAt.gt = new Date(nowMs - ageMaxDays * dayMs);
   if (ageMinDays != null) receivedAt.lte = new Date(nowMs - ageMinDays * dayMs);
 
-  const where: any = {
-    assignedUserId: null,
-    orderId: null,
-    packageId: { in: IUL_POOL_IDS },
-    ...(states.length ? { state: { in: states } } : {}),
-    ...(receivedAt.gt || receivedAt.lte ? { receivedAt } : {}),
-  };
+  // Only assignable leads: unassigned, not on a paid order, in the IUL pool.
+  // For a targeted pick we restrict to the given ids; otherwise we filter+take.
+  const where: any = leadIds.length
+    ? {
+        id: { in: leadIds },
+        assignedUserId: null,
+        orderId: null,
+        packageId: { in: IUL_POOL_IDS },
+      }
+    : {
+        assignedUserId: null,
+        orderId: null,
+        packageId: { in: IUL_POOL_IDS },
+        ...(states.length ? { state: { in: states } } : {}),
+        ...(receivedAt.gt || receivedAt.lte ? { receivedAt } : {}),
+      };
 
   const candidates = await prisma.lead.findMany({
     where,
     orderBy: { receivedAt: "desc" }, // freshest first — best to work
-    take: quantity,
+    ...(leadIds.length ? {} : { take: quantity }),
     select: { id: true },
   });
   if (candidates.length === 0) {
-    return NextResponse.json({ assigned: 0, message: "No matching unassigned leads in the pool." });
+    return NextResponse.json({
+      assigned: 0,
+      message: leadIds.length
+        ? "That lead is no longer assignable (already assigned or on a paid order)."
+        : "No matching unassigned leads in the pool.",
+    });
   }
 
   const ids = candidates.map((c) => c.id);

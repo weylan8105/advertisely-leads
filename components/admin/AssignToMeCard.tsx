@@ -1,19 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { UserPlus, UserMinus, Loader2, Check, Inbox, Briefcase, ArrowRight } from "lucide-react";
+import { useSession } from "next-auth/react";
+import {
+  UserPlus,
+  UserMinus,
+  Loader2,
+  Check,
+  Inbox,
+  Briefcase,
+  ArrowRight,
+  Search,
+  Lock,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { tiersForGroup } from "@/data/packages";
 import { cn } from "@/lib/utils";
+
+interface SearchLead {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  state: string;
+  packageName: string;
+  receivedAt: string;
+  orderId: string | null;
+  assignedTo: { name: string | null; email: string | null } | null;
+}
+
+function ageDays(iso: string): string {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  return d <= 0 ? "today" : `${d}d old`;
+}
 
 const ACTIVE_STATES = ["TX", "FL", "CA", "IL", "PA", "OH", "CO", "MI", "WA"];
 const AGE_TIERS = tiersForGroup("iul"); // freshest → oldest, each with age window
 
 export function AssignToMeCard() {
+  const { data: session } = useSession();
+  const myEmail = (session?.user?.email ?? "").toLowerCase();
+
   const [quantity, setQuantity] = useState(50);
   const [tierId, setTierId] = useState("any");
   const [states, setStates] = useState<string[]>([]);
@@ -21,6 +53,94 @@ export function AssignToMeCard() {
   const [poolCount, setPoolCount] = useState<number | null>(null);
   const [myCount, setMyCount] = useState<number | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // ── Search-and-assign ──────────────────────────────────────────────
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<SearchLead[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    const seq = ++searchSeq.current;
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/leads?search=${encodeURIComponent(q)}&limit=25`);
+        const data = await res.json();
+        if (seq === searchSeq.current) {
+          setResults(Array.isArray(data?.leads) ? data.leads : []);
+          setSearched(true);
+        }
+      } catch {
+        if (seq === searchSeq.current) setResults([]);
+      } finally {
+        if (seq === searchSeq.current) setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  function leadState(l: SearchLead): "mine" | "locked" | "assignable" {
+    const owner = l.assignedTo?.email?.toLowerCase();
+    if (owner && myEmail && owner === myEmail && !l.orderId) return "mine";
+    if (l.orderId || l.assignedTo) return "locked";
+    return "assignable";
+  }
+
+  async function assignOne(l: SearchLead) {
+    setRowBusy(l.id);
+    setResult(null);
+    const res = await fetch("/api/admin/assign-to-me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadIds: [l.id] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setRowBusy(null);
+    if (res.ok && data.assigned > 0) {
+      // Reflect the new ownership in-place so the row flips to "In your CRM".
+      setResults((prev) =>
+        prev.map((r) =>
+          r.id === l.id
+            ? { ...r, assignedTo: { name: session?.user?.name ?? "You", email: myEmail }, orderId: null }
+            : r,
+        ),
+      );
+      setResult({ ok: true, text: `Assigned ${l.name} to your CRM — free.` });
+      loadCounts();
+    } else {
+      setResult({ ok: false, text: data.message ?? data.error ?? "Could not assign that lead." });
+    }
+  }
+
+  async function returnOne(l: SearchLead) {
+    setRowBusy(l.id);
+    setResult(null);
+    const res = await fetch("/api/admin/unassign-from-me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadIds: [l.id] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setRowBusy(null);
+    if (res.ok && data.unassigned > 0) {
+      setResults((prev) =>
+        prev.map((r) => (r.id === l.id ? { ...r, assignedTo: null, orderId: null } : r)),
+      );
+      setResult({ ok: true, text: `Returned ${l.name} to the pool.` });
+      loadCounts();
+    } else {
+      setResult({ ok: false, text: data.message ?? data.error ?? "Could not return that lead." });
+    }
+  }
 
   async function loadCounts() {
     try {
@@ -130,8 +250,105 @@ export function AssignToMeCard() {
         </div>
       </div>
 
+      {/* Search-and-assign — pick the exact leads you've closed */}
+      <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+        <Label className="flex items-center gap-2">
+          <Search className="h-4 w-4 text-brand-red" /> Find a lead to assign
+        </Label>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Search by name, phone, or email — then assign just the ones you&apos;ve actually spoken to and closed.
+          Leads you never work stay in the new batch for clients to buy.
+        </p>
+        <div className="relative mt-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, phone number, or email…"
+            className="pl-9"
+          />
+          {searching && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
+
+        {query.trim().length >= 2 && (
+          <div className="mt-3 space-y-2 max-h-80 overflow-auto">
+            {!searching && searched && results.length === 0 && (
+              <p className="text-sm text-muted-foreground py-2">No leads match “{query.trim()}”.</p>
+            )}
+            {results.map((l) => {
+              const st = leadState(l);
+              return (
+                <div
+                  key={l.id}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm truncate">{l.name}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">
+                        {l.state} · {ageDays(l.receivedAt)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {l.phone} · {l.email}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground/80 truncate">{l.packageName}</div>
+                  </div>
+                  <div className="shrink-0">
+                    {st === "assignable" && (
+                      <Button size="sm" onClick={() => assignOne(l)} disabled={rowBusy === l.id}>
+                        {rowBusy === l.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-3.5 w-3.5" />
+                        )}
+                        Assign
+                      </Button>
+                    )}
+                    {st === "mine" && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="success">In your CRM</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => returnOne(l)}
+                          disabled={rowBusy === l.id}
+                        >
+                          {rowBusy === l.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <UserMinus className="h-3.5 w-3.5" />
+                          )}
+                          Return
+                        </Button>
+                      </div>
+                    )}
+                    {st === "locked" && (
+                      <Badge variant="muted" className="whitespace-nowrap">
+                        <Lock className="h-3 w-3 mr-1" />
+                        {l.orderId
+                          ? "Sold (paid order)"
+                          : `Assigned${l.assignedTo?.name ? ` · ${l.assignedTo.name}` : ""}`}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 border-t border-slate-100 pt-5">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3">
+          Or pull a batch by filter
+        </p>
+      </div>
+
       {/* Filters (shared by assign + return) */}
-      <div className="mt-5 grid sm:grid-cols-[120px_1fr] gap-4 items-end">
+      <div className="mt-1 grid sm:grid-cols-[120px_1fr] gap-4 items-end">
         <div className="space-y-1.5">
           <Label>Quantity</Label>
           <Input
