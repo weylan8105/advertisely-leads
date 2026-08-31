@@ -4,6 +4,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { normalizeInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
 import { authenticateApiKey, hasScope } from "@/lib/apikey";
+import { fireMetaLeadEvent } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,6 +150,8 @@ export async function POST(req: NextRequest) {
       created++;
       // Assign to an open order immediately (fires email + Sheets sync).
       await tryFulfillForNewLead(record.id);
+      // Server-side Meta "Lead" event (deduped with the browser pixel).
+      await fireMetaLeadEvent(record);
     } catch (err) {
       skipped++;
       errors.push((err as Error).message.slice(0, 200));

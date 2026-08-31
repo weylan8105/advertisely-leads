@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { authenticateApiKey, hasScope } from "@/lib/apikey";
+import { fireMetaPurchaseEvent } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -162,6 +163,9 @@ async function applyConversion(input: ConversionInput) {
       },
     },
   });
+
+  // Fire the server-side Meta "Purchase" conversion (no-op if unconfigured).
+  await fireMetaPurchaseEvent(lead.id, valueCents);
 
   return { ok: true as const, leadId: lead.id, name: lead.name, valueCents };
 }

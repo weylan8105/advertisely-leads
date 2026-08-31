@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getOrgContext, canManageTeam } from "@/lib/org";
 import { STAGE_IDS, stageLabel } from "@/data/pipeline";
+import { fireMetaPurchaseEvent } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +59,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   await prisma.leadActivity.create({
     data: { leadId: params.id, type: "STATUS_CHANGED", body: `Moved to "${stageLabel(stage)}" in the pipeline.` },
   });
+
+  // Sold → fire the server-side Meta "Purchase" conversion (no-op if unconfigured).
+  if (isSold) await fireMetaPurchaseEvent(params.id, premiumCents);
 
   return NextResponse.json({ ok: true, stage });
 }
