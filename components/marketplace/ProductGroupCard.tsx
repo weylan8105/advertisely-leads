@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Sparkles, Lock, Bell, Clock, Plus, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,15 +14,36 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
   const tiers = useMemo(() => tiersForGroup(group.id), [group.id]);
   const { addItem } = useCart();
 
-  const [selectedId, setSelectedId] = useState<string | undefined>(tiers[0]?.id);
-  const selected = tiers.find((t) => t.id === selectedId) ?? tiers[0];
-  const [qty, setQty] = useState(selected?.minimumOrder ?? 25);
+  const firstAvailable = tiers.find((t) => t.available !== false) ?? tiers[0];
+  const [selectedId, setSelectedId] = useState<string | undefined>(firstAvailable?.id);
+  const selected = tiers.find((t) => t.id === selectedId) ?? firstAvailable;
+  const [qty, setQty] = useState(firstAvailable?.minimumOrder ?? 25);
   const [justAdded, setJustAdded] = useState(false);
 
+  // Live availability, refreshed on an interval so counts stay current.
+  const [avail, setAvail] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let active = true;
+    const load = () =>
+      fetch("/api/inventory")
+        .then((r) => r.json())
+        .then((d) => {
+          if (active) setAvail(d.tiers ?? {});
+        })
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, 30_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+
   function selectTier(id: string) {
-    setSelectedId(id);
     const t = tiers.find((x) => x.id === id);
-    if (t) setQty(t.minimumOrder); // reset to the new tier's minimum
+    if (!t || t.available === false) return; // can't select an unavailable tier
+    setSelectedId(id);
+    setQty(t.minimumOrder); // reset to the new tier's minimum
   }
 
   function changeQty(next: number) {
@@ -84,7 +105,7 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
 
         <div className="mt-4 flex items-baseline gap-2">
           <span className="text-3xl font-semibold tracking-tight">{formatCurrency(headlinePrice ?? 0)}</span>
-          <span className="text-xs text-muted-foreground">/ lead fresh</span>
+          <span className="text-xs text-muted-foreground">/ lead</span>
           {lowestPrice !== undefined && lowestPrice !== headlinePrice && (
             <span className="text-xs text-muted-foreground">· down to {formatCurrency(lowestPrice)} aged</span>
           )}
@@ -95,34 +116,59 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
         <div className="mt-2 space-y-1.5">
           {tiers.map((t) => {
             const active = t.id === selected?.id;
+            const disabled = t.available === false;
+            const count = avail[t.id];
             return (
               <button
                 key={t.id}
                 onClick={() => selectTier(t.id)}
+                disabled={disabled}
                 className={cn(
                   "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors",
-                  active
-                    ? "border-brand-red/50 bg-brand-red/[0.05]"
-                    : "border-slate-200 bg-white hover:border-slate-300",
+                  disabled
+                    ? "border-slate-200 bg-slate-50 opacity-70 cursor-not-allowed"
+                    : active
+                      ? "border-brand-red/50 bg-brand-red/[0.05]"
+                      : "border-slate-200 bg-white hover:border-slate-300",
                 )}
               >
                 <span className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={cn(
-                      "h-4 w-4 rounded-full border grid place-items-center shrink-0",
-                      active ? "border-brand-red bg-brand-red text-white" : "border-slate-300",
-                    )}
-                  >
-                    {active && <Check className="h-2.5 w-2.5" />}
-                  </span>
+                  {!disabled && (
+                    <span
+                      className={cn(
+                        "h-4 w-4 rounded-full border grid place-items-center shrink-0",
+                        active ? "border-brand-red bg-brand-red text-white" : "border-slate-300",
+                      )}
+                    >
+                      {active && <Check className="h-2.5 w-2.5" />}
+                    </span>
+                  )}
                   <span className="text-sm truncate">
                     {t.name.replace(/^Fresh IUL — /, "").replace(/^IUL — /, "")}
-                    {t.badge && (
-                      <span className="ml-2 text-[10px] text-brand-red">{t.badge}</span>
-                    )}
+                    {disabled ? (
+                      <span className="ml-2 text-[10px] text-amber-600">
+                        {t.comingSoonNote ?? "Temporarily unavailable"}
+                      </span>
+                    ) : count != null ? (
+                      <span
+                        className={cn(
+                          "ml-2 text-[10px]",
+                          count > 0 ? "text-emerald-600" : "text-muted-foreground",
+                        )}
+                      >
+                        {count > 0 ? `${count} available` : "0 available"}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
-                <span className="text-sm font-semibold shrink-0">{formatCurrency(t.pricePerLead)}</span>
+                <span
+                  className={cn(
+                    "text-sm font-semibold shrink-0",
+                    disabled && "text-muted-foreground line-through",
+                  )}
+                >
+                  {formatCurrency(t.pricePerLead)}
+                </span>
               </button>
             );
           })}

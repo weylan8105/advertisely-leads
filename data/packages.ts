@@ -46,14 +46,15 @@ export const leadPackages: LeadPackage[] = [
   {
     id: "iul-fresh",
     name: "Fresh IUL — under 48 hours",
-    tagline: "The freshest leads on the platform — generated to order, always available.",
+    tagline: "The freshest leads on the platform — highest contact and conversion rates.",
     description:
-      "Blue-Collar IUL prospects generated within the last 48 hours. Generated fresh to order, so this tier is never out of stock. Highest contact and conversion rates.",
+      "Blue-Collar IUL prospects generated within the last 48 hours. Highest contact and conversion rates.",
     pricePerLead: 45,
     minimumOrder: 25, // max(25, ceil(150/45)=4) = 25
     estimatedDelivery: "Within 24 hours",
-    badge: "Freshest",
-    available: true,
+    badge: "Returning soon",
+    available: false,
+    comingSoonNote: "Returning soon, temporarily unavailable.",
     leadPackageId: "aged-iul",
     ageMinDays: 0,
     ageMaxDays: 2,
