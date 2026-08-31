@@ -19,6 +19,21 @@ export const dynamic = "force-dynamic";
  * fulfillment pipeline (assignment -> delivery email -> Google Sheets).
  */
 
+// Allow the hosted quiz funnel (any domain) to POST directly from the browser.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "content-type, x-api-key, authorization",
+} as const;
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: CORS_HEADERS });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 function secretMatches(provided: string | null): boolean {
   const expected = process.env.INBOUND_LEAD_SECRET;
   if (!expected || !provided) return false;
@@ -50,7 +65,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) {
-    return NextResponse.json({ error: "Database not configured." }, { status: 503 });
+    return json({ error: "Database not configured." }, 503);
   }
 
   // Auth: a DB-backed API key with the `leads:write` scope, OR the legacy
@@ -59,14 +74,14 @@ export async function POST(req: NextRequest) {
   const authorized =
     (apiKey != null && hasScope(apiKey, "leads:write")) || secretMatches(extractKey(req));
   if (!authorized) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Unauthorized" }, 401);
   }
 
   let payload: unknown;
   try {
     payload = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+    return json({ error: "Invalid JSON." }, 400);
   }
 
   const items = Array.isArray(payload) ? payload : [payload];
@@ -121,6 +136,7 @@ export async function POST(req: NextRequest) {
           utmCampaign: lead.attribution.utmCampaign,
           fbclid: lead.attribution.fbclid,
           consentTime: new Date(),
+          consentIp: lead.raw["consent_ip"] || undefined,
           rawFormData: lead.raw,
           activity: {
             create: {
@@ -139,5 +155,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, created, skipped, errors: errors.slice(0, 5) });
+  return json({ ok: true, created, skipped, errors: errors.slice(0, 5) });
 }
