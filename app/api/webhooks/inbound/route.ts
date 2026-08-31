@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { normalizeInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
+import { authenticateApiKey, hasScope } from "@/lib/apikey";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,17 +49,17 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!process.env.INBOUND_LEAD_SECRET) {
-    return NextResponse.json(
-      { error: "Inbound lead capture isn't enabled yet." },
-      { status: 503 },
-    );
-  }
-  if (!secretMatches(extractKey(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   if (!isDatabaseConfigured || !prisma) {
     return NextResponse.json({ error: "Database not configured." }, { status: 503 });
+  }
+
+  // Auth: a DB-backed API key with the `leads:write` scope, OR the legacy
+  // INBOUND_LEAD_SECRET shared secret (kept for existing connectors).
+  const apiKey = await authenticateApiKey(req);
+  const authorized =
+    (apiKey != null && hasScope(apiKey, "leads:write")) || secretMatches(extractKey(req));
+  if (!authorized) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let payload: unknown;
@@ -112,6 +113,13 @@ export async function POST(req: NextRequest) {
           intentReason: lead.standardized.intentReason,
           packageId: lead.packageId,
           source: lead.source,
+          campaignName: lead.attribution.campaignName,
+          adsetId: lead.attribution.adsetId,
+          creativeId: lead.attribution.creativeId,
+          utmSource: lead.attribution.utmSource,
+          utmMedium: lead.attribution.utmMedium,
+          utmCampaign: lead.attribution.utmCampaign,
+          fbclid: lead.attribution.fbclid,
           consentTime: new Date(),
           rawFormData: lead.raw,
           activity: {

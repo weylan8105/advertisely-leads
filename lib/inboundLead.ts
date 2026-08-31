@@ -24,8 +24,17 @@ const ALIASES: Record<string, string[]> = {
   occupation: ["occupation", "job", "job_title", "trade", "profession", "what_do_you_do"],
   intentReason: ["intent", "intent_reason", "reason", "why", "interest", "interested", "why_interested"],
   packageId: ["packageid", "package_id", "package"],
-  source: ["source", "campaign", "campaign_name", "form", "form_name", "adset", "adset_name", "ad_set"],
+  source: ["source", "form", "form_name"],
   externalId: ["externalid", "external_id", "lead_id", "leadgen_id", "id"],
+  // Ad attribution — captured into dedicated columns so the Conversions API can
+  // return them for Meta/Google server-side matching (fbclid + UTMs).
+  fbclid: ["fbclid", "fbc", "facebook_click_id"],
+  utmSource: ["utm_source", "utmsource"],
+  utmMedium: ["utm_medium", "utmmedium"],
+  utmCampaign: ["utm_campaign", "utmcampaign"],
+  campaignName: ["campaign_name", "campaignname", "campaign"],
+  adsetId: ["adset_id", "adsetid", "adset", "adset_name", "ad_set"],
+  creativeId: ["creative_id", "creativeid", "ad_id", "adid", "creative"],
 };
 
 export interface NormalizedInboundLead {
@@ -38,6 +47,15 @@ export interface NormalizedInboundLead {
     income?: number;
     occupation?: string;
     intentReason?: string;
+  };
+  attribution: {
+    fbclid?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    campaignName?: string;
+    adsetId?: string;
+    creativeId?: string;
   };
   packageId: string;
   source: string;
@@ -101,8 +119,17 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
       occupation: pick("occupation") || undefined,
       intentReason: pick("intentReason") || undefined,
     },
+    attribution: {
+      fbclid: pick("fbclid") || undefined,
+      utmSource: pick("utmSource") || undefined,
+      utmMedium: pick("utmMedium") || undefined,
+      utmCampaign: pick("utmCampaign") || undefined,
+      campaignName: pick("campaignName") || undefined,
+      adsetId: pick("adsetId") || undefined,
+      creativeId: pick("creativeId") || undefined,
+    },
     packageId,
-    source: pick("source") || DEFAULT_SOURCE,
+    source: pick("source") || pick("campaignName") || DEFAULT_SOURCE,
     externalId: pick("externalId") || undefined,
     raw,
   };
