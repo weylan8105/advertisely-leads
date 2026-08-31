@@ -316,6 +316,25 @@ enum IntegrationType {
   ZAPIER
 }
 
+// ─── Programmatic API keys ────────────────────────────────────────────
+// Bearer keys for external integrations (e.g. the Conversions API used by
+// our marketing/attribution partner). Only the SHA-256 hash of the token is
+// stored — the plaintext is shown once at creation and can never be read back.
+// Revoke by setting revokedAt; rotate by creating a new key and revoking old.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String // human label, e.g. "Marketing — Conversions API"
+  prefix     String // first chars of the token, for identification in UI/logs
+  hashedKey  String    @unique // sha256(token) hex
+  scopes     String[]  @default([]) // e.g. ["conversions:read","conversions:write"]
+  createdById String?
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([hashedKey])
+}
+
 // ─── Export audit log ────────────────────────────────────────────────
 
 model ExportLog {
