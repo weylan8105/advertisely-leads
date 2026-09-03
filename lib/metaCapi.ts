@@ -147,6 +147,48 @@ export async function fireMetaPurchaseEvent(leadId: string, valueCents?: number 
   }).catch(() => {});
 }
 
+/**
+ * Fire a benign server test event to confirm the token + pixel are wired,
+ * returning Meta's raw response. Lets us verify configuration end-to-end
+ * without access to Events Manager. Never returns the access token.
+ */
+export async function sendMetaTestEvent(): Promise<{
+  configured: boolean;
+  pixelId?: string;
+  status?: number;
+  body?: unknown;
+}> {
+  if (!isMetaCapiConfigured) return { configured: false };
+  const em = crypto.createHash("sha256").update("test@advertisely.io").digest("hex");
+  const payload: Record<string, unknown> = {
+    data: [
+      {
+        event_name: "AdvertiselyServerTest", // custom, non-polluting event name
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: `test_${Date.now()}`,
+        action_source: "system_generated",
+        user_data: { em: [em] },
+      },
+    ],
+  };
+  if (TEST_EVENT_CODE) payload.test_event_code = TEST_EVENT_CODE;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${PIXEL_ID}/events?access_token=${encodeURIComponent(ACCESS_TOKEN)}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    );
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      body = await res.text();
+    }
+    return { configured: true, pixelId: PIXEL_ID, status: res.status, body };
+  } catch (e) {
+    return { configured: true, pixelId: PIXEL_ID, status: 0, body: (e as Error).message };
+  }
+}
+
 // CRM stages that count as a "converting" signal worth sending to Meta, and the
 // event each maps to. Facebook uses these to find more people like the ones who
 // progress this far. Only the actual paid sale carries the premium as value.
