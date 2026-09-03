@@ -146,3 +146,44 @@ export async function fireMetaPurchaseEvent(leadId: string, valueCents?: number 
     valueCents: valueCents ?? lead.soldPremiumCents ?? null,
   }).catch(() => {});
 }
+
+// CRM stages that count as a "converting" signal worth sending to Meta, and the
+// event each maps to. Facebook uses these to find more people like the ones who
+// progress this far. Only the actual paid sale carries the premium as value.
+const STAGE_EVENTS: Record<string, { event: string; withValue?: boolean }> = {
+  underwriting: { event: "SubmitApplication" },
+  approved: { event: "Approved" },
+  "issued-not-paid": { event: "IssuedNotPaid" },
+  "issued-paid": { event: PURCHASE_EVENT, withValue: true },
+};
+
+export function isMetaConversionStage(stage: string): boolean {
+  return stage in STAGE_EVENTS;
+}
+
+/**
+ * Fire a server-side conversion signal to Meta when a lead advances to a
+ * high-intent stage (underwriting → approved → issued-not-paid → issued-paid).
+ * Each stage is its own event, deduped per lead+stage; the paid sale carries the
+ * premium as value. No-op for any other stage, or when CAPI isn't configured.
+ */
+export async function fireMetaStageEvent(
+  leadId: string,
+  stage: string,
+  valueCents?: number | null,
+): Promise<void> {
+  if (!isMetaCapiConfigured || !prisma) return;
+  const cfg = STAGE_EVENTS[stage];
+  if (!cfg) return;
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  if (!lead) return;
+  // Issued-paid shares the "Purchase" event id used by the partner Conversions
+  // API so the sale is never double-counted; other stages dedupe per stage.
+  const eventId = stage === "issued-paid" ? `conv_${lead.id}` : `${stage}_${lead.id}`;
+  await sendMetaEvent(lead, {
+    eventName: cfg.event,
+    eventId,
+    actionSource: "system_generated",
+    valueCents: cfg.withValue ? (valueCents ?? lead.soldPremiumCents ?? null) : null,
+  }).catch(() => {});
+}
