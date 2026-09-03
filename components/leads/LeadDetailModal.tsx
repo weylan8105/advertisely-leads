@@ -100,6 +100,10 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
   const consentTime = lead.consent?.timestamp
     ? new Date(lead.consent.timestamp).toLocaleString()
     : "";
+  const consentLanguage = (() => {
+    const hit = Object.entries(raw).find(([k]) => k.toLowerCase() === "consent_language");
+    return hit ? prettyVal(hit[1]) : "";
+  })();
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
@@ -200,6 +204,11 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
                 {consentTime ? ` · ${consentTime}` : ""}
                 {lead.consent.ip ? ` · IP ${lead.consent.ip}` : ""}
               </p>
+              {consentLanguage && (
+                <p className="mt-2 text-[10px] leading-relaxed text-emerald-700/60 border-t border-emerald-200/70 pt-2">
+                  <span className="font-medium">Consent language on record:</span> {consentLanguage}
+                </p>
+              )}
             </div>
           )}
         </div>
