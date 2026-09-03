@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Phone, Mail, MapPin, ShieldCheck } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList } from "lucide-react";
 import type { Lead } from "@/types";
 import { localTimeForState } from "@/data/states";
 import { formatCurrency } from "@/lib/utils";
@@ -27,10 +27,63 @@ function prettyVal(v: unknown): string {
   return String(v);
 }
 
+// Backend / tracking / redundant fields agents should never see on a lead card.
+// (Everything here is either shown elsewhere in the modal, or is internal
+// marketing/attribution plumbing.)
+const HIDDEN_KEYS = new Set(
+  [
+    // identity — already in the header / Lead details
+    "first_name", "last_name", "full_name", "name", "phone", "phone_number", "email",
+    "email_address", "state", "occupation", "trade", "age", "intent", "intent_reason",
+    "reason", "why", "source", "packageid", "package_id", "package",
+    // consent — shown in the TCPA box
+    "consent_given", "consent_language", "consent_timestamp", "consent_ip", "consent", "tcpa",
+    // Meta / tracking / attribution plumbing
+    "fbc", "fbp", "fbclid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+    "event_id", "event_name", "lead_source", "landing_url", "submitted_at",
+    "campaign", "campaign_name", "campaign_id", "adset", "adset_id", "adset_name",
+    "ad_id", "ad_name", "adgroup_id", "creative", "creative_id", "page_id",
+    "form_id", "form_name", "leadgen_id", "created_time", "platform", "is_organic",
+    "partner_name", "user_agent", "client_user_agent", "external_id", "id", "lead_id",
+  ].map((k) => k.toLowerCase()),
+);
+
+// Quiz answers that duplicate Lead details — hidden to avoid repetition.
+const HIDDEN_QUIZ = new Set(["quiz_trade", "quiz_age"]);
+
+// Nicer labels + priority order for the quiz answers shown up top.
+const QUIZ_LABELS: Record<string, string> = {
+  quiz_iul_interest: "IUL Interest",
+  quiz_household_income: "Household Income",
+  quiz_monthly_contribution: "Monthly Contribution",
+  quiz_lead_tier: "Lead Tier",
+};
+const QUIZ_ORDER = [
+  "quiz_iul_interest",
+  "quiz_household_income",
+  "quiz_monthly_contribution",
+  "quiz_lead_tier",
+];
+
 export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const local = localTimeForState(lead.state);
   const raw = lead.rawFormData ?? {};
-  const entries = Object.entries(raw).filter(([, v]) => prettyVal(v).trim() !== "");
+  const rawEntries = Object.entries(raw).filter(([, v]) => prettyVal(v).trim() !== "");
+
+  // Quiz answers (surfaced at the top), sorted by priority.
+  const quizEntries = rawEntries
+    .filter(([k]) => k.toLowerCase().startsWith("quiz_") && !HIDDEN_QUIZ.has(k.toLowerCase()))
+    .sort((a, b) => {
+      const ia = QUIZ_ORDER.indexOf(a[0].toLowerCase());
+      const ib = QUIZ_ORDER.indexOf(b[0].toLowerCase());
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+
+  // Any other genuine form answers (e.g. Meta lead-form questions) — minus the
+  // backend/tracking/redundant keys.
+  const otherEntries = rawEntries.filter(
+    ([k]) => !k.toLowerCase().startsWith("quiz_") && !HIDDEN_KEYS.has(k.toLowerCase()),
+  );
 
   const facts: [string, string][] = (
     [
@@ -41,9 +94,12 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
       ["Income", lead.income ? formatCurrency(lead.income) : ""],
       ["Occupation", lead.occupation],
       ["Lead type", lead.leadTypeLabel],
-      ["Source", lead.source],
     ] as [string, string][]
   ).filter(([, v]) => v);
+
+  const consentTime = lead.consent?.timestamp
+    ? new Date(lead.consent.timestamp).toLocaleString()
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
@@ -73,6 +129,25 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
         </div>
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">
+          {/* Quiz answers — the highest-value sales data, surfaced first. */}
+          {quizEntries.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-brand-red mb-2 flex items-center gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" /> Quiz answers
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {quizEntries.map(([k, v]) => (
+                  <div key={k} className="rounded-lg border border-brand-red/20 bg-brand-red/[0.03] p-3">
+                    <div className="text-xs text-muted-foreground">
+                      {QUIZ_LABELS[k.toLowerCase()] ?? prettyKey(k)}
+                    </div>
+                    <div className="text-sm font-semibold mt-0.5 break-words">{prettyVal(v)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Lead details</div>
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
@@ -85,20 +160,22 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
             </div>
           </div>
 
-          {lead.intentReason && (
+          {/* Free-text intent only for non-quiz leads (quiz interest is shown above). */}
+          {quizEntries.length === 0 && lead.intentReason && (
             <div>
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Why IUL / intent</div>
               <p className="text-sm">{lead.intentReason}</p>
             </div>
           )}
 
-          {entries.length > 0 && (
+          {/* Any other genuine form answers (e.g. Meta lead-form questions). */}
+          {otherEntries.length > 0 && (
             <div>
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Form answers <span className="text-muted-foreground/70">({entries.length} fields)</span>
+                Other form answers
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
-                {entries.map(([k, v]) => (
+                {otherEntries.map(([k, v]) => (
                   <div key={k} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <div className="text-xs text-muted-foreground">{prettyKey(k)}</div>
                     <div className="text-sm font-medium mt-0.5 break-words">{prettyVal(v)}</div>
@@ -106,12 +183,6 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
                 ))}
               </div>
             </div>
-          )}
-
-          {entries.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No extra form answers were captured for this lead beyond the details above.
-            </p>
           )}
 
           {lead.consent?.captured && (
@@ -126,6 +197,7 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
                 This lead agreed to be called and texted by a licensed agent, including by automated technology.
                 {" "}
                 {lead.consent.method}
+                {consentTime ? ` · ${consentTime}` : ""}
                 {lead.consent.ip ? ` · IP ${lead.consent.ip}` : ""}
               </p>
             </div>
