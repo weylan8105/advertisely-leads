@@ -10,6 +10,8 @@ interface DashboardStatCardProps {
   hint?: string;
   icon?: React.ReactNode;
   accent?: "teal" | "blue" | "violet" | "emerald" | "amber";
+  /** When true, renders a persistent highlighted (selected/active-filter) state. */
+  selected?: boolean;
 }
 
 const accentMap: Record<NonNullable<DashboardStatCardProps["accent"]>, string> = {
@@ -20,10 +22,26 @@ const accentMap: Record<NonNullable<DashboardStatCardProps["accent"]>, string> =
   amber: "from-amber-500/20 to-transparent",
 };
 
-export function DashboardStatCard({ label, value, delta, hint, icon, accent = "teal" }: DashboardStatCardProps) {
+// Strong ring + border shown when the card is the active filter.
+const selectedMap: Record<NonNullable<DashboardStatCardProps["accent"]>, string> = {
+  teal: "ring-brand-red border-brand-red",
+  blue: "ring-brand-redDark border-brand-redDark",
+  violet: "ring-violet-500 border-violet-500",
+  emerald: "ring-emerald-500 border-emerald-500",
+  amber: "ring-amber-500 border-amber-500",
+};
+
+export function DashboardStatCard({ label, value, delta, hint, icon, accent = "teal", selected = false }: DashboardStatCardProps) {
   const positive = (delta ?? 0) >= 0;
   return (
-    <Card className={cn("relative overflow-hidden p-5")}>
+    <Card
+      className={cn(
+        "relative overflow-hidden p-5 transition-all",
+        selected
+          ? cn("ring-2 shadow-md -translate-y-0.5", selectedMap[accent])
+          : "ring-0",
+      )}
+    >
       <div
         className={cn(
           "absolute inset-0 bg-gradient-to-br pointer-events-none opacity-90",
@@ -32,7 +50,14 @@ export function DashboardStatCard({ label, value, delta, hint, icon, accent = "t
       />
       <div className="relative">
         <div className="flex items-start justify-between">
-          <div className="text-xs text-muted-foreground">{label}</div>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+            {label}
+            {selected && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/85 text-white text-[9px] font-medium px-1.5 py-0.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Filtering
+              </span>
+            )}
+          </div>
           {icon && (
             <div className="h-8 w-8 grid place-items-center rounded-md bg-slate-100 border border-slate-300 text-brand-red">
               {icon}

@@ -69,6 +69,8 @@ export default function AdminPage() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [tab, setTab] = useState("all-leads");
+  // Active CRM-status filter for the All-leads tab, driven by the stat cards.
+  const [leadFilter, setLeadFilter] = useState("all");
 
   // Real data from the database (replaces the old hardcoded demo figures).
   const [stats, setStats] = useState<{
@@ -204,30 +206,51 @@ export default function AdminPage() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardStatCard
-          label="Leads in database"
-          value={stats ? fmtNum(stats.leadsInDatabase) : "—"}
-          delta={9.4}
-          hint="last 30 days"
-          accent="teal"
-          icon={<Database className="h-4 w-4" />}
-        />
-        <DashboardStatCard
-          label="Unassigned leads"
-          value={stats ? fmtNum(stats.unassignedLeads) : "—"}
-          delta={-3.1}
-          hint="pending dispersal"
-          accent="amber"
-          icon={<ShieldAlert className="h-4 w-4" />}
-        />
-        <DashboardStatCard
-          label="Sold leads"
-          value={stats ? fmtNum(stats.soldLeads) : "—"}
-          delta={12.6}
-          hint="last 30 days"
-          accent="violet"
-          icon={<ShoppingCart className="h-4 w-4" />}
-        />
+        <button
+          onClick={() => { setLeadFilter("all"); setTab("all-leads"); }}
+          className="text-left transition-transform hover:-translate-y-0.5"
+          title="Show every lead in the database"
+        >
+          <DashboardStatCard
+            label="Leads in database"
+            value={stats ? fmtNum(stats.leadsInDatabase) : "—"}
+            delta={9.4}
+            hint="click to view all"
+            accent="teal"
+            icon={<Database className="h-4 w-4" />}
+            selected={tab === "all-leads" && leadFilter === "all"}
+          />
+        </button>
+        <button
+          onClick={() => { setLeadFilter("unassigned"); setTab("all-leads"); }}
+          className="text-left transition-transform hover:-translate-y-0.5"
+          title="Filter to leads not in a CRM"
+        >
+          <DashboardStatCard
+            label="Unassigned leads"
+            value={stats ? fmtNum(stats.unassignedLeads) : "—"}
+            delta={-3.1}
+            hint="click to filter"
+            accent="amber"
+            icon={<ShieldAlert className="h-4 w-4" />}
+            selected={tab === "all-leads" && leadFilter === "unassigned"}
+          />
+        </button>
+        <button
+          onClick={() => { setLeadFilter("assigned"); setTab("all-leads"); }}
+          className="text-left transition-transform hover:-translate-y-0.5"
+          title="Filter to sold / in-CRM leads"
+        >
+          <DashboardStatCard
+            label="Sold leads"
+            value={stats ? fmtNum(stats.soldLeads) : "—"}
+            delta={12.6}
+            hint="click to filter"
+            accent="violet"
+            icon={<ShoppingCart className="h-4 w-4" />}
+            selected={tab === "all-leads" && leadFilter === "assigned"}
+          />
+        </button>
         <button
           onClick={() => setTab("accounts")}
           className="text-left transition-transform hover:-translate-y-0.5"
@@ -240,6 +263,7 @@ export default function AdminPage() {
             hint="paying agents · click to view"
             accent="emerald"
             icon={<Building2 className="h-4 w-4" />}
+            selected={tab === "accounts"}
           />
         </button>
       </div>
@@ -276,7 +300,7 @@ export default function AdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <AdminAllLeads />
+                <AdminAllLeads assigned={leadFilter} onAssignedChange={setLeadFilter} />
               </CardContent>
             </Card>
           </TabsContent>

@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { leadPackages } from "@/data/packages";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 
 interface AdminLead {
   id: string; name: string; phone: string; email: string; state: string;
@@ -24,11 +24,18 @@ interface AdminLead {
 interface Counts { total: number; assigned: number; unassigned: number; }
 
 const DEFAULTS = {
-  assigned: "all", pkg: "all", source: "all", campaign: "all", occupation: "all",
+  pkg: "all", source: "all", campaign: "all", occupation: "all",
   dateFrom: "", dateTo: "", ageMin: "", ageMax: "", incomeMin: "", search: "",
 };
 
-export function AdminAllLeads() {
+export function AdminAllLeads({
+  assigned: assignedProp,
+  onAssignedChange,
+}: {
+  /** Controlled "in a CRM" filter (all | assigned | unassigned). Falls back to internal state. */
+  assigned?: string;
+  onAssignedChange?: (v: string) => void;
+} = {}) {
   const [leads, setLeads] = useState<AdminLead[]>([]);
   const [counts, setCounts] = useState<Counts>({ total: 0, assigned: 0, unassigned: 0 });
   const [matched, setMatched] = useState(0);
@@ -37,14 +44,19 @@ export function AdminAllLeads() {
   const [occupations, setOccupations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Assignment filter can be driven by the dashboard cards (controlled) or on its own.
+  const [assignedInternal, setAssignedInternal] = useState("all");
+  const assigned = assignedProp ?? assignedInternal;
+  const setAssigned = (v: string) => (onAssignedChange ? onAssignedChange(v) : setAssignedInternal(v));
+
   const [f, setF] = useState({ ...DEFAULTS });
   const set = (k: keyof typeof DEFAULTS, v: string) => setF((prev) => ({ ...prev, [k]: v }));
-  const clear = () => setF({ ...DEFAULTS });
+  const clear = () => { setF({ ...DEFAULTS }); setAssigned("all"); };
 
   const load = useCallback(() => {
     setLoading(true);
     const qs = new URLSearchParams();
-    if (f.assigned !== "all") qs.set("assigned", f.assigned);
+    if (assigned !== "all") qs.set("assigned", assigned);
     if (f.pkg !== "all") qs.set("packageId", f.pkg);
     if (f.source !== "all") qs.set("source", f.source);
     if (f.campaign !== "all") qs.set("campaign", f.campaign);
@@ -67,7 +79,7 @@ export function AdminAllLeads() {
       })
       .catch(() => setLeads([]))
       .finally(() => setLoading(false));
-  }, [f]);
+  }, [f, assigned]);
 
   // Refetch on filter change (debounce the free-text search).
   useEffect(() => {
@@ -75,22 +87,42 @@ export function AdminAllLeads() {
     return () => clearTimeout(t);
   }, [load, f.search]);
 
-  const filtersActive = JSON.stringify(f) !== JSON.stringify(DEFAULTS);
+  const filtersActive = JSON.stringify(f) !== JSON.stringify(DEFAULTS) || assigned !== "all";
 
   return (
     <div>
-      {/* Count summary */}
+      {/* Count summary — click a card to filter the table by CRM status. */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[
-          ["Total in database", counts.total, "text-foreground"],
-          ["In a CRM (assigned)", counts.assigned, "text-emerald-600"],
-          ["Not in a CRM", counts.unassigned, "text-amber-600"],
-        ].map(([label, val, cls]) => (
-          <div key={label as string} className="rounded-lg border border-slate-200 bg-white p-3">
-            <div className="text-xs text-muted-foreground">{label}</div>
-            <div className={`text-xl font-semibold ${cls}`}>{(val as number).toLocaleString()}</div>
-          </div>
-        ))}
+          { label: "Total in database", val: counts.total, value: "all", numCls: "text-foreground",
+            active: "border-slate-800 ring-2 ring-slate-800/25 bg-slate-50" },
+          { label: "Not in a CRM", val: counts.unassigned, value: "unassigned", numCls: "text-amber-600",
+            active: "border-amber-500 ring-2 ring-amber-500/30 bg-amber-50" },
+          { label: "In a CRM (sold)", val: counts.assigned, value: "assigned", numCls: "text-emerald-600",
+            active: "border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50" },
+        ].map((c) => {
+          const on = assigned === c.value;
+          return (
+            <button
+              key={c.value}
+              onClick={() => setAssigned(c.value)}
+              className={cn(
+                "text-left rounded-lg border p-3 transition-all",
+                on ? c.active : "border-slate-200 bg-white hover:border-slate-300",
+              )}
+            >
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                {c.label}
+                {on && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/85 text-white text-[9px] font-medium px-1.5 py-0.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Filtering
+                  </span>
+                )}
+              </div>
+              <div className={cn("text-xl font-semibold", c.numCls)}>{c.val.toLocaleString()}</div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters — row 1: search + CRM status + actions */}
@@ -100,7 +132,7 @@ export function AdminAllLeads() {
           <Input placeholder="Search name, email, phone…" className="pl-9 h-9"
             value={f.search} onChange={(e) => set("search", e.target.value)} />
         </div>
-        <Select value={f.assigned} onValueChange={(v) => set("assigned", v)}>
+        <Select value={assigned} onValueChange={setAssigned}>
           <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All leads</SelectItem>
