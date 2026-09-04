@@ -23,7 +23,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ views: 0, completes: 0, steps: [] });
   }
 
-  const range = new URL(req.url).searchParams.get("range") ?? "7d";
+  const params = new URL(req.url).searchParams;
+  const range = params.get("range") ?? "7d";
+  const source = params.get("source") ?? "abca-quiz";
   const now = new Date();
   let from: Date;
   if (range === "today") {
@@ -37,14 +39,14 @@ export async function GET(req: NextRequest) {
   const [viewsRows, stepRows, completeRows] = await Promise.all([
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
-      WHERE type = 'view' AND "createdAt" >= ${from}`,
+      WHERE type = 'view' AND "source" = ${source} AND "createdAt" >= ${from}`,
     prisma.$queryRaw<{ step: number; c: number }[]>`
       SELECT "step", COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
-      WHERE type = 'step' AND "step" IS NOT NULL AND "createdAt" >= ${from}
+      WHERE type = 'step' AND "step" IS NOT NULL AND "source" = ${source} AND "createdAt" >= ${from}
       GROUP BY "step" ORDER BY "step"`,
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
-      WHERE type = 'complete' AND "createdAt" >= ${from}`,
+      WHERE type = 'complete' AND "source" = ${source} AND "createdAt" >= ${from}`,
   ]);
 
   const views = viewsRows[0]?.c ?? 0;
