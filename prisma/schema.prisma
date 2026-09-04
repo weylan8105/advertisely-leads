@@ -335,6 +335,23 @@ model ApiKey {
   @@index([hashedKey])
 }
 
+// ─── Funnel analytics ────────────────────────────────────────────────
+// Lightweight, first-party funnel tracking for the landing page: one row per
+// event (page view, each quiz step reached, completion), keyed by an anonymous
+// per-visit session id. Powers click-through and step drop-off in the admin.
+model FunnelEvent {
+  id        String   @id @default(cuid())
+  sessionId String
+  type      String // "view" | "step" | "complete"
+  step      Int? // 1-based step index for "step" events
+  source    String   @default("abca-quiz")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@index([sessionId])
+}
+
 // ─── Export audit log ────────────────────────────────────────────────
 
 model ExportLog {

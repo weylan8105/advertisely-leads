@@ -38,6 +38,7 @@ import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButto
 import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
 import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
+import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -278,6 +279,7 @@ export default function AdminPage() {
             <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
             <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
             <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
+            <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
             <TabsTrigger value="replacements">
               Replacement queue
               {replacements.filter((r) => r.status === "PENDING").length > 0 && (
@@ -599,6 +601,21 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent>
                 <AdminAccounts />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="funnel">
+            <Card>
+              <CardHeader>
+                <CardTitle>Landing page funnel</CardTitle>
+                <CardDescription>
+                  Click-through and step-by-step drop-off on the ABCA quiz funnel — see where visitors
+                  leave so we know what to improve.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <FunnelAnalytics />
               </CardContent>
             </Card>
           </TabsContent>

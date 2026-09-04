@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex" />
 <title>Blue-Collar Early Retirement Quiz</title>
+<!-- Vercel Web Analytics (starts collecting once enabled in the Vercel dashboard). -->
+<script defer src="/_vercel/insights/script.js"></script>
 <!-- ============================================================
      ENHANCED WEALTH / IUL QUIZ + VSL — hosted on Vercel (Advertisely).
      Posts leads straight into the Advertisely inbound endpoint.
@@ -211,6 +213,23 @@
 // from any domain it's later served on. The key is a leads-write-only token.
 const WEBHOOK_URL = "/api/webhooks/inbound?key=adv_live_sk__G9rQOAZxsV_oFx0g3IdQmuMU1e9X2THv-dsy1eAX5w";
 
+/* ---- First-party funnel tracking (page view, step reach, completion) ----
+   Anonymous per-visit session id; no PII. Powers click-through + drop-off
+   reporting in the Advertisely admin console. ---------------------------- */
+const TRACK_URL = "/api/track";
+const sessionId = "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+function track(type, step) {
+  try {
+    const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz" });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(TRACK_URL, new Blob([body], { type: "text/plain" }));
+    } else {
+      fetch(TRACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+    }
+  } catch (e) {}
+}
+track("view");
+
 const META_PIXEL_ID = "717587103522110";   // Enhanced Wealth account pixel
 const META_EVENT    = "Lead";               // MUST match the event your ad set optimizes for
 let   leadIp = "";                          // captured for TCPA consent proof
@@ -318,6 +337,7 @@ function paintProgress(){
 
 function render(){
   paintProgress();
+  track("step", step + 1); // 1-based: which quiz step the visitor reached
   const s = STEPS[step];
   const wrap = document.createElement('div'); wrap.className='step';
 
@@ -460,6 +480,7 @@ function scoreLead(a){
 }
 
 function finish(){
+  track("complete");
   const tier = scoreLead(answers);
   const parts = (answers.name||"").trim().split(/\s+/);
   const firstName_ = parts[0]||"";
