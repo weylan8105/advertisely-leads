@@ -218,7 +218,7 @@ const WEBHOOK_URL = "/api/webhooks/inbound?key=adv_live_sk__G9rQOAZxsV_oFx0g3IdQ
    reporting in the Advertisely admin console. ---------------------------- */
 const TRACK_URL = "/api/track";
 const sessionId = "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
-function track(type, step) {
+function trackEvent(type, step) {
   try {
     const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz" });
     if (navigator.sendBeacon) {
@@ -228,7 +228,7 @@ function track(type, step) {
     }
   } catch (e) {}
 }
-track("view");
+trackEvent("view");
 
 const META_PIXEL_ID = "717587103522110";   // Enhanced Wealth account pixel
 const META_EVENT    = "Lead";               // MUST match the event your ad set optimizes for
@@ -337,7 +337,7 @@ function paintProgress(){
 
 function render(){
   paintProgress();
-  track("step", step + 1); // 1-based: which quiz step the visitor reached
+  trackEvent("step", step + 1); // 1-based: which quiz step the visitor reached
   const s = STEPS[step];
   const wrap = document.createElement('div'); wrap.className='step';
 
@@ -480,7 +480,7 @@ function scoreLead(a){
 }
 
 function finish(){
-  track("complete");
+  trackEvent("complete");
   const tier = scoreLead(answers);
   const parts = (answers.name||"").trim().split(/\s+/);
   const firstName_ = parts[0]||"";
