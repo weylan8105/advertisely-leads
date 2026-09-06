@@ -34,6 +34,16 @@
   }
   .hazard{height:6px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,var(--navy) 18px 36px)}
 
+  /* ---- How-it-works instructions (above the video) ---- */
+  .howto{padding:18px 18px 6px;text-align:center}
+  .howto h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:20px;line-height:1.15;letter-spacing:.02em;text-transform:uppercase;color:var(--ink);margin-bottom:7px}
+  .howto p{font-size:13px;color:var(--ink-dim);max-width:540px;margin:0 auto;line-height:1.55}
+  .howto p b{color:var(--ink)}
+  .howto .steps{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:11px}
+  .howto .steps span{font-size:11.5px;color:var(--ink-dim);background:var(--card-2);border:1px solid var(--line);border-radius:20px;padding:5px 12px}
+  .howto .steps b{color:var(--orange);font-family:'Oswald',sans-serif;font-weight:600}
+  @media (max-width:620px){.howto h1{font-size:17px}}
+
   .quiz-page{
     position:relative;
     width:100%; max-width:100%;
@@ -170,6 +180,18 @@
   <div class="quiz-page">
   <div class="hazard"></div>
   <div class="wrap">
+
+    <!-- How this works — instructions for the visitor -->
+    <div class="howto">
+      <h1>Watch the video &amp; fill out the form below</h1>
+      <p>Press play and follow along — the video breaks down exactly how an <b>IUL</b> lets blue-collar workers
+        build tax-free retirement money. Fill out the quick form <b>while you watch</b> to see if you qualify.</p>
+      <div class="steps">
+        <span><b>1.</b> Press play</span>
+        <span><b>2.</b> Fill out the form as you watch</span>
+        <span><b>3.</b> A licensed specialist reaches out</span>
+      </div>
+    </div>
 
     <!-- video slot (your VSL goes here) -->
     <div class="video">
@@ -545,16 +567,12 @@ function finish(){
   console.log("LEAD PAYLOAD →", payload);
 
   paintProgress(); [...track.children].forEach(s=>s.classList.add('done'));
-  const tierLine = tier==="HOT" ? "You're a strong fit — expect a call shortly."
-                 : tier==="NURTURE" ? "We'll send you a plan and check in."
-                 : "A specialist will reach out to walk you through it.";
   stage.replaceChildren();
   const d=document.createElement('div'); d.className='done-screen';
   d.innerHTML=`
     <div class="badge"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></div>
-    <h2>You're in, ${escapeHtml(firstName(answers.name))}</h2>
-    <p>${tierLine} Keep an eye on your phone and email — we move fast.</p>
-    <div class="tag">Lead tier: ${tier}</div>`;
+    <h2>You're all set, ${escapeHtml(firstName(answers.name))}</h2>
+    <p>Thanks for completing the form. A licensed specialist will review your answers and <b>contact you shortly</b> — keep an eye on your phone and email.</p>`;
   stage.appendChild(d);
   window.scrollTo({top:0,behavior:'smooth'});
 }
