@@ -561,21 +561,25 @@ function finish(){
   // Browser pixel event — deduped against any server CAPI event via eventID
   if(window.fbq){ try{ fbq('track', META_EVENT, { lead_tier:tier }, { eventID:eventId }); }catch(e){} }
 
-  // Send to Advertisely (creates the lead + drops it into fulfillment)
+  // Send to Advertisely — keepalive so the lead still lands as we redirect away.
   if(WEBHOOK_URL){
-    fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(()=>{});
+    try{ fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{}); }catch(e){}
   }
   console.log("LEAD PAYLOAD →", payload);
 
+  // Show a brief inline confirmation, then redirect to the thank-you page.
   paintProgress(); [...track.children].forEach(s=>s.classList.add('done'));
   stage.replaceChildren();
   const d=document.createElement('div'); d.className='done-screen';
   d.innerHTML=`
     <div class="badge"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></div>
     <h2>You're all set, ${escapeHtml(firstName(answers.name))}</h2>
-    <p>Thanks for completing the form. A licensed specialist will review your answers and <b>contact you shortly</b> — keep an eye on your phone and email.</p>`;
+    <p>Taking you to the next step…</p>`;
   stage.appendChild(d);
   window.scrollTo({top:0,behavior:'smooth'});
+  // Give the pixel + keepalive beacons a moment to flush, then go to the thank-you page.
+  const thanksUrl = "/thank-you.html?name=" + encodeURIComponent(firstName(answers.name));
+  setTimeout(function(){ window.location.href = thanksUrl; }, 400);
 }
 function firstName(n){ return (n||"").trim().split(/\s+/)[0]||"friend"; }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

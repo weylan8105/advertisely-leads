@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>You're All Set — American Blue Collar Advantage</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
+  :root{
+    --navy:#0F1419; --card:#141A21; --card-2:#1B222B; --line:#2A3542;
+    --orange:#FF6B1A; --amber:#F5A623; --ink:#EDF0F3; --ink-dim:#95A1AE; --ink-faint:#5E6B78; --good:#3FB950;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Barlow',-apple-system,sans-serif;color:var(--ink);min-height:100vh;overflow-x:hidden;
+    background:radial-gradient(900px 420px at 50% -10%, rgba(255,107,26,0.10), transparent 60%), var(--navy);}
+  .hazard{height:6px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,var(--navy) 18px 36px)}
+  .wrap{max-width:640px;margin:0 auto;padding:40px 20px 56px;text-align:center}
+
+  .badge{width:82px;height:82px;border-radius:50%;margin:8px auto 22px;background:rgba(63,185,80,0.14);
+    border:2px solid var(--good);display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,.7,.2,1)}
+  .badge svg{width:40px;height:40px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  @keyframes pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+
+  .eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--orange);margin-bottom:10px}
+  h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:34px;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;margin-bottom:14px}
+  .lead{font-size:16px;color:var(--ink-dim);line-height:1.6;max-width:460px;margin:0 auto 8px}
+  .lead b{color:var(--ink)}
+
+  .next{margin:34px auto 0;text-align:left;max-width:460px}
+  .next .h{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px;text-align:center}
+  .step{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 16px;margin-bottom:10px}
+  .step .n{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(255,107,26,0.14);border:1px solid var(--orange);
+    color:var(--orange);font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .step .t{font-family:'Oswald',sans-serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.02em}
+  .step .d{font-size:13.5px;color:var(--ink-dim);margin-top:2px;line-height:1.5}
+
+  .trust{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:30px}
+  .trust .chip{display:inline-flex;align-items:center;gap:7px;background:var(--card-2);border:1px solid var(--line);
+    border-radius:22px;padding:8px 14px;font-size:12.5px;color:var(--ink-dim)}
+  .trust .chip svg{width:14px;height:14px;fill:var(--good)}
+  .trust .chip b{color:var(--ink);font-weight:600}
+
+  .foot{margin-top:34px;font-size:12px;color:var(--ink-faint);line-height:1.6}
+  .foot a{color:var(--ink-faint);text-decoration:none}
+  @media (max-width:560px){h1{font-size:27px}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+  <div class="hazard"></div>
+  <div class="wrap">
+    <div class="badge"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div>
+
+    <div class="eyebrow">Application Received</div>
+    <h1 id="headline">You're all set!</h1>
+    <p class="lead">Thanks for completing your quiz. A <b>licensed specialist</b> will review your answers and
+      <b>contact you shortly</b> to walk you through your personalized IUL plan — no pressure, no obligation.</p>
+    <p class="lead"><b>Keep an eye on your phone and email.</b> We move fast.</p>
+
+    <div class="next">
+      <div class="h">What happens next</div>
+      <div class="step">
+        <div class="n">1</div>
+        <div><div class="t">We review your answers</div><div class="d">Your responses go straight to a licensed specialist who works your situation.</div></div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div><div class="t">A specialist calls you</div><div class="d">Expect a call from a licensed agent shortly — often the same day.</div></div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div><div class="t">You get your plan</div><div class="d">They'll walk you through exactly how an IUL can build tax-free retirement money for you.</div></div>
+      </div>
+    </div>
+
+    <div class="trust">
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><b>Licensed</b>&nbsp;specialists</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>Secure &amp; <b>TCPA-compliant</b></span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><b>No obligation</b></span>
+    </div>
+
+    <div class="foot">
+      American Blue Collar Advantage · For the people who build America<br/>
+      Questions? Reply to the email we send you.
+    </div>
+  </div>
+
+  <script>
+    // Personalize the headline with the first name passed from the quiz redirect.
+    try {
+      const n = new URLSearchParams(location.search).get("name");
+      if (n) {
+        const clean = n.replace(/[^a-zA-Z\s'-]/g, "").trim().slice(0, 40);
+        if (clean) document.getElementById("headline").textContent = "You're all set, " + clean + "!";
+      }
+    } catch (e) {}
+  </script>
+</body>
+</html>
