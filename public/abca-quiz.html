@@ -464,24 +464,25 @@ function wireStep(s){
     const submit=document.getElementById('submit');
     const nameEl=document.getElementById('c_name'), phoneEl=document.getElementById('c_phone'),
           emailEl=document.getElementById('c_email'), consentEl=document.getElementById('c_consent');
-    // light phone formatting
-    phoneEl.addEventListener('input',()=>{
-      let d=phoneEl.value.replace(/\D/g,'').slice(0,10); let out=d;
-      if(d.length>6) out=`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
-      else if(d.length>3) out=`(${d.slice(0,3)}) ${d.slice(3)}`;
-      else if(d.length>0) out=`(${d}`;
-      phoneEl.value=out; clearMsg(phoneEl,'m_phone');
-    });
+    // Phone: normalize to 10 US digits, dropping a leading "1" country code so
+    // autofilled numbers like "+1 954-937-6333" aren't truncated into a wrong
+    // number. Reformat on input AND change (browser autofill may fire only change).
+    const phoneTen=(v)=>{ let d=(v||"").replace(/\D/g,''); if(d.length===11 && d[0]==='1') d=d.slice(1); return d.slice(0,10); };
+    const fmtPhone=(d)=>{ if(d.length>6) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`; if(d.length>3) return `(${d.slice(0,3)}) ${d.slice(3)}`; if(d.length>0) return `(${d}`; return ''; };
+    const reformatPhone=()=>{ phoneEl.value=fmtPhone(phoneTen(phoneEl.value)); clearMsg(phoneEl,'m_phone'); };
+    phoneEl.addEventListener('input', reformatPhone);
+    phoneEl.addEventListener('change', reformatPhone);
     [nameEl,emailEl].forEach(el=>el.addEventListener('input',()=>clearMsg(el,el===nameEl?'m_name':'m_email')));
     consentEl.addEventListener('change',()=>document.getElementById('consentBox').classList.remove('err'));
     submit.onclick=()=>{
       let ok=true;
       if(nameEl.value.trim().length<2){ setMsg(nameEl,'m_name','Please enter your name'); ok=false; }
-      if(phoneEl.value.replace(/\D/g,'').length!==10){ setMsg(phoneEl,'m_phone','Enter a 10-digit phone'); ok=false; }
+      const phoneD=phoneTen(phoneEl.value);
+      if(phoneD.length!==10){ setMsg(phoneEl,'m_phone','Enter a 10-digit phone'); ok=false; }
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value)){ setMsg(emailEl,'m_email','Enter a valid email'); ok=false; }
       if(!consentEl.checked){ ok=false; document.getElementById('consentBox').classList.add('err'); }
       if(!ok) return;
-      answers.name=nameEl.value.trim(); answers.phone=phoneEl.value; answers.email=emailEl.value.trim();
+      answers.name=nameEl.value.trim(); answers.phone=fmtPhone(phoneD); answers.email=emailEl.value.trim();
       finish();
     };
   }
