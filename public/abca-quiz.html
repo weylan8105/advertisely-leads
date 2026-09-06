@@ -171,6 +171,19 @@
   .tag{display:inline-block;margin-top:14px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
     color:var(--amber);border:1px solid rgba(245,166,35,0.4);border-radius:20px;padding:5px 14px}
 
+  /* ---- In-place thank-you view (video keeps playing above) ---- */
+  .ty{text-align:center;padding:18px 4px 8px;animation:enter .4s ease}
+  .ty-badge{width:70px;height:70px;border-radius:50%;margin:0 auto 16px;background:rgba(63,185,80,0.14);border:2px solid var(--good);display:flex;align-items:center;justify-content:center}
+  .ty-badge svg{width:34px;height:34px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .ty-eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:8px}
+  .ty-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:24px;text-transform:uppercase;margin-bottom:10px}
+  .ty-lead{font-size:14px;color:var(--ink-dim);line-height:1.6;max-width:430px;margin:0 auto 18px}
+  .ty-lead b{color:var(--ink)}
+  .ty-next{text-align:left;max-width:430px;margin:0 auto}
+  .ty-step{display:flex;gap:12px;align-items:flex-start;background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:9px;font-size:13px;color:var(--ink-dim);line-height:1.45}
+  .ty-step b{color:var(--ink);font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px}
+  .ty-n{flex:none;width:26px;height:26px;border-radius:50%;background:rgba(255,107,26,0.14);border:1px solid var(--orange);color:var(--orange);font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px}
+
   @media (max-width:620px){.q{font-size:23px}.prog-labels span{font-size:8.5px}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto}}
 </style>
@@ -561,25 +574,34 @@ function finish(){
   // Browser pixel event — deduped against any server CAPI event via eventID
   if(window.fbq){ try{ fbq('track', META_EVENT, { lead_tier:tier }, { eventID:eventId }); }catch(e){} }
 
-  // Send to Advertisely — keepalive so the lead still lands as we redirect away.
+  // Send the lead into Advertisely. No page navigation happens, so the video
+  // above keeps playing uninterrupted.
   if(WEBHOOK_URL){
     try{ fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{}); }catch(e){}
   }
   console.log("LEAD PAYLOAD →", payload);
 
-  // Show a brief inline confirmation, then redirect to the thank-you page.
+  // Swap ONLY the form area to the thank-you view — the video stays mounted.
   paintProgress(); [...track.children].forEach(s=>s.classList.add('done'));
-  stage.replaceChildren();
-  const d=document.createElement('div'); d.className='done-screen';
-  d.innerHTML=`
-    <div class="badge"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></div>
-    <h2>You're all set, ${escapeHtml(firstName(answers.name))}</h2>
-    <p>Taking you to the next step…</p>`;
-  stage.appendChild(d);
-  window.scrollTo({top:0,behavior:'smooth'});
-  // Give the pixel + keepalive beacons a moment to flush, then go to the thank-you page.
-  const thanksUrl = "/thank-you.html?name=" + encodeURIComponent(firstName(answers.name));
-  setTimeout(function(){ window.location.href = thanksUrl; }, 400);
+  showThankYou(firstName(answers.name));
+}
+
+function showThankYou(name){
+  const prog = document.querySelector('.prog'); if(prog) prog.style.display='none';
+  const hi = name ? `You're all set, ${escapeHtml(name)}!` : "You're all set!";
+  stage.innerHTML = `
+    <div class="ty">
+      <div class="ty-badge"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div>
+      <div class="ty-eyebrow">Application received</div>
+      <h2 class="ty-h">${hi}</h2>
+      <p class="ty-lead"><b>Keep watching the video above.</b> A licensed specialist will review your answers and
+        <b>contact you shortly</b> to walk you through your personalized IUL plan — no pressure, no obligation.</p>
+      <div class="ty-next">
+        <div class="ty-step"><span class="ty-n">1</span><span><b>We review your answers</b><br>Your responses go straight to a licensed specialist.</span></div>
+        <div class="ty-step"><span class="ty-n">2</span><span><b>A specialist calls you</b><br>Often the same day — keep an eye on your phone and email.</span></div>
+        <div class="ty-step"><span class="ty-n">3</span><span><b>You get your plan</b><br>See exactly how an IUL builds tax-free retirement money for you.</span></div>
+      </div>
+    </div>`;
 }
 function firstName(n){ return (n||"").trim().split(/\s+/)[0]||"friend"; }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
