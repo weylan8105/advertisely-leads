@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { leadPackages } from "@/data/packages";
+import { isDatabaseConfigured } from "@/lib/prisma";
+import { availableForPackage, GENERATED_TO_ORDER } from "@/lib/inventory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +83,35 @@ export async function POST(req: NextRequest) {
     }
     amountCents += Math.round(qty * pkg.pricePerLead * 100);
     validated.push({ packageId: pkg.id, quantity: qty });
+  }
+
+  // ── Inventory cap ────────────────────────────────────────────────
+  // Never let an order exceed what's actually available for the selected
+  // states. Fresh (<48h) is generated-to-order and exempt. Requested
+  // quantities are summed per tier in case a cart has the tier twice.
+  if (isDatabaseConfigured) {
+    const statesSel = (body.filterStates ?? []).map((s) => String(s).toUpperCase()).filter(Boolean);
+    const reqByPkg = new Map<string, number>();
+    for (const v of validated) reqByPkg.set(v.packageId, (reqByPkg.get(v.packageId) ?? 0) + v.quantity);
+    for (const [pid, qty] of reqByPkg) {
+      if (GENERATED_TO_ORDER.has(pid)) continue; // fresh: sellable ahead of stock
+      const avail = await availableForPackage(pid, statesSel);
+      if (qty > avail) {
+        const pkg = leadPackages.find((p) => p.id === pid);
+        const scope = statesSel.length ? ` in the selected states (${statesSel.join(", ")})` : "";
+        return NextResponse.json(
+          {
+            error:
+              avail > 0
+                ? `Only ${avail} ${pkg?.name ?? pid} lead${avail === 1 ? "" : "s"} are available${scope} right now. Lower that tier to ${avail} or fewer.`
+                : `${pkg?.name ?? pid} is out of stock${scope} right now. Remove it or pick another age tier.`,
+            packageId: pid,
+            available: avail,
+          },
+          { status: 409 },
+        );
+      }
+    }
   }
 
   // Compact line encoding for Stripe metadata (500-char/value limit).

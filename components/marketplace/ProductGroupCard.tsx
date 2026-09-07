@@ -46,13 +46,23 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
     setQty(t.minimumOrder); // reset to the new tier's minimum
   }
 
+  // Live cap for a tier: fresh (<48h) is generated-to-order (uncapped); every
+  // other tier can't exceed what's in stock. `undefined` = not yet known.
+  const tierCap = (t?: typeof selected) =>
+    t && t.id !== "iul-fresh" ? avail[t.id] : undefined;
+
   function changeQty(next: number) {
     const min = selected?.minimumOrder ?? 25;
-    setQty(Math.max(min, Math.round(next) || min));
+    let v = Math.max(min, Math.round(next) || min);
+    const cap = tierCap(selected);
+    if (typeof cap === "number" && cap >= min && v > cap) v = cap;
+    setQty(v);
   }
 
   function add() {
     if (!selected) return;
+    const cap = tierCap(selected);
+    if (typeof cap === "number" && (qty > cap || cap < selected.minimumOrder)) return;
     addItem(selected.id, qty);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 1600);
@@ -61,6 +71,11 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
 
   const headlinePrice = tiers[0]?.pricePerLead; // freshest tier ($45)
   const lowestPrice = tiers.length ? Math.min(...tiers.map((t) => t.pricePerLead)) : undefined;
+
+  // Availability guards for the selected tier (fresh is uncapped).
+  const selCap = tierCap(selected);
+  const belowMin = typeof selCap === "number" && selCap < (selected?.minimumOrder ?? 25);
+  const atCap = typeof selCap === "number" && qty >= selCap && !belowMin;
 
   // ── Coming-soon group (e.g. Term) ──
   if (!group.available || tiers.length === 0) {
@@ -215,7 +230,18 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
           {selected?.estimatedDelivery}
         </div>
 
-        <Button className="mt-5 w-full" onClick={add}>
+        {belowMin ? (
+          <p className="mt-3 text-xs text-amber-600">
+            Only {selCap} available right now — below the {selected?.minimumOrder}-lead minimum for this tier. Try
+            another age tier or check back soon.
+          </p>
+        ) : atCap ? (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Capped at {selCap} — all that&apos;s currently in stock for this tier.
+          </p>
+        ) : null}
+
+        <Button className="mt-3 w-full" onClick={add} disabled={belowMin}>
           {justAdded ? (
             <>
               <Check className="h-4 w-4" /> Added to cart
