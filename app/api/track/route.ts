@@ -40,9 +40,10 @@ export async function POST(req: NextRequest) {
   const stepNum = Number(body?.step);
   const step = type === "step" && Number.isFinite(stepNum) ? Math.min(Math.max(Math.round(stepNum), 1), 30) : null;
   const source = String(body?.source ?? "abca-quiz").slice(0, 64);
+  const fbclid = body?.fbclid ? String(body.fbclid).slice(0, 255) : null;
 
   try {
-    await prisma.funnelEvent.create({ data: { sessionId, type, step, source } });
+    await prisma.funnelEvent.create({ data: { sessionId, type, step, source, fbclid } });
   } catch {
     /* analytics must never break the page */
   }

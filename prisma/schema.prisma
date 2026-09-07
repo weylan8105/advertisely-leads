@@ -345,6 +345,7 @@ model FunnelEvent {
   type      String // "view" | "step" | "complete"
   step      Int? // 1-based step index for "step" events
   source    String   @default("abca-quiz")
+  fbclid    String? // Facebook click id from the landing URL — present = ad visitor
   createdAt DateTime @default(now())
 
   @@index([createdAt])

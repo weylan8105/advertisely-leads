@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, TrendingDown, Eye, CheckCircle2, RefreshCw } from "lucide-react";
+import { Loader2, TrendingDown, Eye, CheckCircle2, RefreshCw, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface Step { step: number; label: string; count: number; stepConversion: number; }
 interface FunnelData {
-  range: string; views: number; completes: number; completionRate: number; steps: Step[];
+  range: string; views: number; completes: number; completionRate: number;
+  adViews?: number; adCompletes?: number; adCompletionRate?: number;
+  steps: Step[];
 }
 
 const RANGES: [string, string][] = [["today", "Today"], ["7d", "Last 7 days"], ["30d", "Last 30 days"]];
@@ -65,10 +67,15 @@ export function FunnelAnalytics() {
       ) : (
         <>
           {/* Headline stats */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <div className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Eye className="h-3.5 w-3.5" /> Page views</div>
               <div className="text-2xl font-semibold">{data.views.toLocaleString()}</div>
+            </div>
+            <div className="rounded-lg border border-brand-red/30 bg-brand-red/[0.03] p-3">
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Megaphone className="h-3.5 w-3.5 text-brand-red" /> From ads (FB)</div>
+              <div className="text-2xl font-semibold">{(data.adViews ?? 0).toLocaleString()}</div>
+              <div className="text-[11px] text-muted-foreground">{data.adCompletes ?? 0} completed · {data.adCompletionRate ?? 0}%</div>
             </div>
             <div className="rounded-lg border border-slate-200 bg-white p-3">
               <div className="text-xs text-muted-foreground flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" /> Completed</div>
@@ -79,6 +86,10 @@ export function FunnelAnalytics() {
               <div className="text-2xl font-semibold">{data.completionRate}%</div>
             </div>
           </div>
+          <p className="-mt-4 mb-5 text-[11px] text-muted-foreground">
+            <span className="font-medium text-foreground">From ads</span> = visitors who arrived with a Facebook click ID
+            (real ad traffic). &quot;Page views&quot; includes all visits (ads + direct + testing).
+          </p>
 
           {/* Step funnel */}
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">How far visitors get</div>

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     from = new Date(Date.now() - 7 * 86_400_000);
   }
 
-  const [viewsRows, stepRows, completeRows] = await Promise.all([
+  const [viewsRows, stepRows, completeRows, adViewsRows, adCompletesRows] = await Promise.all([
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
       WHERE type = 'view' AND "source" = ${source} AND "createdAt" >= ${from}`,
@@ -47,10 +47,21 @@ export async function GET(req: NextRequest) {
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
       WHERE type = 'complete' AND "source" = ${source} AND "createdAt" >= ${from}`,
+    // Ad visitors = sessions that arrived with a Facebook click id.
+    prisma.$queryRaw<{ c: number }[]>`
+      SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
+      WHERE type = 'view' AND "source" = ${source} AND "fbclid" IS NOT NULL AND "fbclid" <> ''
+        AND "createdAt" >= ${from}`,
+    prisma.$queryRaw<{ c: number }[]>`
+      SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
+      WHERE type = 'complete' AND "source" = ${source} AND "fbclid" IS NOT NULL AND "fbclid" <> ''
+        AND "createdAt" >= ${from}`,
   ]);
 
   const views = viewsRows[0]?.c ?? 0;
   const completes = completeRows[0]?.c ?? 0;
+  const adViews = adViewsRows[0]?.c ?? 0;
+  const adCompletes = adCompletesRows[0]?.c ?? 0;
   const byStep = new Map(stepRows.map((r) => [Number(r.step), Number(r.c)]));
 
   // Each session fires a "step" event for every step it renders, so the distinct
@@ -75,6 +86,9 @@ export async function GET(req: NextRequest) {
     views,
     completes,
     completionRate: views > 0 ? Math.round((completes / views) * 100) : 0,
+    adViews,
+    adCompletes,
+    adCompletionRate: adViews > 0 ? Math.round((adCompletes / adViews) * 100) : 0,
     steps,
   });
 }

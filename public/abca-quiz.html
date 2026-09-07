@@ -255,7 +255,8 @@ const TRACK_URL = "/api/track";
 const sessionId = "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
 function trackEvent(type, step) {
   try {
-    const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz" });
+    const fbclid = new URLSearchParams(location.search).get("fbclid") || "";
+    const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz", fbclid });
     if (navigator.sendBeacon) {
       navigator.sendBeacon(TRACK_URL, new Blob([body], { type: "text/plain" }));
     } else {
