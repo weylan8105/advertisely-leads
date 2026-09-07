@@ -52,9 +52,8 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 45,
     minimumOrder: 25, // max(25, ceil(150/45)=4) = 25
     estimatedDelivery: "Within 24 hours",
-    badge: "Returning soon",
-    available: false,
-    comingSoonNote: "Returning soon, temporarily unavailable.",
+    badge: "Freshest",
+    available: true,
     leadPackageId: "aged-iul",
     ageMinDays: 0,
     ageMaxDays: 2,
