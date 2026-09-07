@@ -1,9 +1,10 @@
 "use client";
 
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList } from "lucide-react";
+import { useState } from "react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check } from "lucide-react";
 import type { Lead } from "@/types";
 import { localTimeForState } from "@/data/states";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 
 function prettyKey(k: string) {
   return k
@@ -105,6 +106,31 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
     return hit ? prettyVal(hit[1]) : "";
   })();
 
+  // Lead replacement request (files to the admin Replacement queue).
+  const [rep, setRep] = useState<"idle" | "loading" | "done">("idle");
+  const [repErr, setRepErr] = useState("");
+  async function requestReplacement() {
+    const reason = window.prompt(
+      `What's wrong with ${lead.name}? (e.g., disconnected number, wrong info, never opted in)`,
+    );
+    if (reason === null) return; // cancelled
+    setRep("loading");
+    setRepErr("");
+    try {
+      const res = await fetch("/api/admin/replacements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, reason: reason.trim() || "No reason provided" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) setRep("done");
+      else { setRep("idle"); setRepErr(data.error || "Could not submit the request."); }
+    } catch {
+      setRep("idle");
+      setRepErr("Could not submit the request.");
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
@@ -127,10 +153,35 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={requestReplacement}
+              disabled={rep === "loading" || rep === "done"}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                rep === "done"
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 hover:border-slate-300 text-foreground disabled:opacity-60",
+              )}
+              title="Request a replacement for this lead"
+            >
+              {rep === "loading" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : rep === "done" ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              {rep === "done" ? "Replacement requested" : "Request replacement"}
+            </button>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
+        {repErr && (
+          <div className="px-6 pt-2 text-xs text-rose-600">{repErr}</div>
+        )}
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">
           {/* Quiz answers — the highest-value sales data, surfaced first. */}
