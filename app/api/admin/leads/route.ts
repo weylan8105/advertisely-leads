@@ -48,6 +48,20 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search")?.trim();
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "200", 10) || 200, 1000);
 
+  // Column sorting. "assigned" sorts by CRM ownership. Nullable columns sink
+  // empty values to the bottom so a sort surfaces real data first.
+  const sortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
+  const sortByRaw = searchParams.get("sortBy") ?? "receivedAt";
+  const SORT_FIELD: Record<string, string> = {
+    name: "name", state: "state", occupation: "occupation", age: "age",
+    campaign: "campaignName", source: "source", assigned: "assignedUserId", receivedAt: "receivedAt",
+  };
+  const NULLABLE = new Set(["occupation", "age", "campaign", "assigned"]);
+  const sortField = SORT_FIELD[sortByRaw] ?? "receivedAt";
+  const orderBy: any = NULLABLE.has(sortByRaw)
+    ? { [sortField]: { sort: sortDir, nulls: "last" } }
+    : { [sortField]: sortDir };
+
   const where: any = {};
   // "In a CRM" = assigned to someone; "Not in a CRM" = still in the raw pool.
   if (assigned === "assigned") where.assignedUserId = { not: null };
@@ -83,7 +97,7 @@ export async function GET(req: NextRequest) {
   const [rows, total, assignedCount, matchedCount, srcRows, campRows, occRows] = await Promise.all([
     prisma.lead.findMany({
       where,
-      orderBy: { receivedAt: "desc" },
+      orderBy,
       take: limit,
       include: { assignedUser: { select: { name: true, email: true } } },
     }),

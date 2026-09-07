@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Search, Database, RefreshCw, X } from "lucide-react";
+import { Loader2, Search, Database, RefreshCw, X, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -51,7 +51,18 @@ export function AdminAllLeads({
 
   const [f, setF] = useState({ ...DEFAULTS });
   const set = (k: keyof typeof DEFAULTS, v: string) => setF((prev) => ({ ...prev, [k]: v }));
-  const clear = () => { setF({ ...DEFAULTS }); setAssigned("all"); };
+
+  // Column sort (server-side, so it sorts the whole matched set, not just the page).
+  const [sortBy, setSortBy] = useState("receivedAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const sortActive = !(sortBy === "receivedAt" && sortDir === "desc");
+  const toggleSort = (k: string) => {
+    if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(k); setSortDir(k === "receivedAt" || k === "age" ? "desc" : "asc"); }
+  };
+  const resetSort = () => { setSortBy("receivedAt"); setSortDir("desc"); };
+
+  const clear = () => { setF({ ...DEFAULTS }); setAssigned("all"); resetSort(); };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -67,6 +78,8 @@ export function AdminAllLeads({
     if (f.ageMax) qs.set("ageMax", f.ageMax);
     if (f.incomeMin) qs.set("incomeMin", f.incomeMin);
     if (f.search.trim()) qs.set("search", f.search.trim());
+    qs.set("sortBy", sortBy);
+    qs.set("sortDir", sortDir);
     fetch(`/api/admin/leads?${qs.toString()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => {
@@ -79,7 +92,7 @@ export function AdminAllLeads({
       })
       .catch(() => setLeads([]))
       .finally(() => setLoading(false));
-  }, [f, assigned]);
+  }, [f, assigned, sortBy, sortDir]);
 
   // Refetch on filter change (debounce the free-text search).
   useEffect(() => {
@@ -87,7 +100,30 @@ export function AdminAllLeads({
     return () => clearTimeout(t);
   }, [load, f.search]);
 
-  const filtersActive = JSON.stringify(f) !== JSON.stringify(DEFAULTS) || assigned !== "all";
+  const filtersActive =
+    JSON.stringify(f) !== JSON.stringify(DEFAULTS) || assigned !== "all" || sortActive;
+
+  // Sortable column header with an up/down (or idle) arrow.
+  const sortHead = (label: string, k: string, className?: string) => {
+    const on = sortBy === k;
+    const Icon = on ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          className={cn(
+            "inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:text-foreground",
+            on ? "text-foreground font-semibold" : "text-muted-foreground",
+          )}
+          title={`Sort by ${label}`}
+        >
+          {label}
+          <Icon className={cn("h-3 w-3", !on && "opacity-40")} />
+        </button>
+      </TableHead>
+    );
+  };
 
   return (
     <div>
@@ -221,14 +257,14 @@ export function AdminAllLeads({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Lead</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead className="hidden md:table-cell">Occupation</TableHead>
-              <TableHead className="hidden lg:table-cell">Age</TableHead>
-              <TableHead className="hidden lg:table-cell">Campaign</TableHead>
-              <TableHead className="hidden xl:table-cell">Source</TableHead>
-              <TableHead>CRM</TableHead>
-              <TableHead className="hidden md:table-cell">Generated</TableHead>
+              {sortHead("Lead", "name")}
+              {sortHead("State", "state")}
+              {sortHead("Occupation", "occupation", "hidden md:table-cell")}
+              {sortHead("Age", "age", "hidden lg:table-cell")}
+              {sortHead("Campaign", "campaign", "hidden lg:table-cell")}
+              {sortHead("Source", "source", "hidden xl:table-cell")}
+              {sortHead("CRM", "assigned")}
+              {sortHead("Generated", "receivedAt", "hidden md:table-cell")}
             </TableRow>
           </TableHeader>
           <TableBody>
