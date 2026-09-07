@@ -157,8 +157,18 @@ export async function sendMetaTestEvent(): Promise<{
   pixelId?: string;
   status?: number;
   body?: unknown;
+  tokenDiag?: Record<string, unknown>;
 }> {
   if (!isMetaCapiConfigured) return { configured: false };
+  // Safe diagnostics on the saved token (no secret revealed) to spot a bad paste:
+  // a valid Meta token is long and starts with "EAA"; quotes/spaces = paste error.
+  const tokenDiag = {
+    length: ACCESS_TOKEN.length,
+    startsWithEAA: ACCESS_TOKEN.startsWith("EAA"),
+    prefix: ACCESS_TOKEN.slice(0, 4),
+    hasQuotes: /["']/.test(ACCESS_TOKEN),
+    hasWhitespace: /\s/.test(ACCESS_TOKEN),
+  };
   const em = crypto.createHash("sha256").update("test@advertisely.io").digest("hex");
   const payload: Record<string, unknown> = {
     data: [
@@ -183,9 +193,9 @@ export async function sendMetaTestEvent(): Promise<{
     } catch {
       body = await res.text();
     }
-    return { configured: true, pixelId: PIXEL_ID, status: res.status, body };
+    return { configured: true, pixelId: PIXEL_ID, status: res.status, body, tokenDiag };
   } catch (e) {
-    return { configured: true, pixelId: PIXEL_ID, status: 0, body: (e as Error).message };
+    return { configured: true, pixelId: PIXEL_ID, status: 0, body: (e as Error).message, tokenDiag };
   }
 }
 
