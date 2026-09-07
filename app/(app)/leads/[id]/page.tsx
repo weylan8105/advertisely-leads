@@ -101,14 +101,28 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
   }
 
   async function requestReplacement() {
-    setReplacementLoading(true);
-    // Simulate a brief async action — in production this would call /api/admin/replacements
-    await new Promise((r) => setTimeout(r, 600));
-    addToast(
-      "success",
-      `Replacement request submitted for ${lead.name}. Our team will review within 72 hours.`,
+    const reason = window.prompt(
+      `What's wrong with ${lead.name}? (e.g., disconnected number, wrong info, never opted in)`,
     );
-    setReplacementLoading(false);
+    if (reason === null) return; // cancelled
+    setReplacementLoading(true);
+    try {
+      const res = await fetch("/api/admin/replacements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, reason: reason.trim() || "No reason provided" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        addToast("success", data.message || `Replacement request submitted for ${lead.name}.`);
+      } else {
+        addToast("error", data.error || "Could not submit the replacement request.");
+      }
+    } catch {
+      addToast("error", "Could not submit the replacement request.");
+    } finally {
+      setReplacementLoading(false);
+    }
   }
 
   return (

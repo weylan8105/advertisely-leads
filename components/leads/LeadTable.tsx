@@ -109,6 +109,40 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
 
   const selectedIds = Array.from(selected);
 
+  async function submitReplacement(leadId: string, reason: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await fetch("/api/admin/replacements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, reason: reason || "No reason provided" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok && data.success, error: data.error };
+    } catch {
+      return { ok: false, error: "Network error" };
+    }
+  }
+
+  async function requestReplacementOne(leadId: string, name: string) {
+    const reason = window.prompt(`What's wrong with ${name}? (e.g., disconnected number, wrong info, never opted in)`);
+    if (reason === null) return;
+    const r = await submitReplacement(leadId, reason.trim());
+    if (r.ok) addToast("success", `Replacement request submitted for ${name}. Our team will review within 72 hours.`);
+    else addToast("error", r.error || "Could not submit the replacement request.");
+  }
+
+  async function requestReplacementBulk() {
+    if (selected.size === 0) return;
+    const reason = window.prompt(`What's wrong with these ${selected.size} lead${selected.size === 1 ? "" : "s"}? (e.g., disconnected number, wrong info)`);
+    if (reason === null) return;
+    const results = await Promise.all(selectedIds.map((id) => submitReplacement(id, reason.trim())));
+    const ok = results.filter((r) => r.ok).length;
+    const fail = results.length - ok;
+    if (ok) addToast("success", `Replacement request submitted for ${ok} lead${ok === 1 ? "" : "s"}. Our team will review within 72 hours.`);
+    if (fail) addToast("error", `${fail} couldn't be submitted (a request may already be pending).`);
+    setSelected(new Set());
+  }
+
   return (
     <div className="space-y-4">
       {/* Toast notifications */}
@@ -189,12 +223,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  addToast(
-                    "success",
-                    `Replacement request submitted for ${selected.size} lead${selected.size === 1 ? "" : "s"}. Our team will review within 72 hours.`,
-                  )
-                }
+                onClick={requestReplacementBulk}
               >
                 <RefreshCw className="h-4 w-4" />
                 Request replacement ({selected.size})
@@ -340,14 +369,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                         >
                           Push to CRM (GHL)
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() =>
-                            addToast(
-                              "success",
-                              `Replacement request submitted for ${lead.name}. Our team will review within 72 hours.`,
-                            )
-                          }
-                        >
+                        <DropdownMenuItem onClick={() => requestReplacementOne(lead.id, lead.name)}>
                           Request replacement
                         </DropdownMenuItem>
                       </DropdownMenuContent>
