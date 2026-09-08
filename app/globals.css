@@ -49,6 +49,25 @@
     font-feature-settings: "ss01", "cv02", "cv11";
     color-scheme: light;
   }
+  /* Mobile tap safeguard: taps on interactive elements must register as clicks,
+     not text selection — the bug that stalled the funnel on question 1. */
+  button,
+  a,
+  label,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
 @layer utilities {
