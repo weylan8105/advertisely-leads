@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Search, Database, RefreshCw, X, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Loader2, Search, Database, RefreshCw, X, ArrowUp, ArrowDown, ArrowUpDown, Trash2 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -43,6 +43,7 @@ export function AdminAllLeads({
   const [campaigns, setCampaigns] = useState<string[]>([]);
   const [occupations, setOccupations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   // Assignment filter can be driven by the dashboard cards (controlled) or on its own.
   const [assignedInternal, setAssignedInternal] = useState("all");
@@ -124,6 +125,42 @@ export function AdminAllLeads({
       </TableHead>
     );
   };
+
+  // Flag obviously-fake / internal test leads so admins can spot + remove them.
+  const isTestLead = (l: AdminLead) => {
+    const n = (l.name || "").toLowerCase();
+    const e = (l.email || "").toLowerCase();
+    return (
+      n.includes("ryan hernandez") ||
+      n.includes("weylan walker") ||
+      ["ryanrush129", "weylanwalker", "weylanw@", "@example.com"].some((p) => e.includes(p))
+    );
+  };
+
+  async function deleteLead(l: AdminLead) {
+    const warn = l.assignedTo ? `\n\n⚠️ This lead is in ${l.assignedTo.name ?? l.assignedTo.email}'s CRM — deleting removes it from their dashboard.` : "";
+    if (!window.confirm(`Delete "${l.name}" (${l.email})? This can't be undone.${warn}`)) return;
+    setDeleting(l.id);
+    try {
+      const res = await fetch("/api/admin/leads/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: [l.id] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.deleted > 0) {
+        setLeads((prev) => prev.filter((x) => x.id !== l.id));
+        setMatched((m) => Math.max(0, m - 1));
+        load(); // refresh counts
+      } else {
+        alert(data.error ?? "Could not delete the lead.");
+      }
+    } catch {
+      alert("Could not delete the lead.");
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   return (
     <div>
@@ -265,23 +302,27 @@ export function AdminAllLeads({
               {sortHead("Source", "source", "hidden xl:table-cell")}
               {sortHead("CRM", "assigned")}
               {sortHead("Generated", "receivedAt", "hidden md:table-cell")}
+              <TableHead className="text-right pr-3">Delete</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10">
+              <TableRow><TableCell colSpan={9} className="text-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin inline text-muted-foreground" />
               </TableCell></TableRow>
             ) : leads.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
+              <TableRow><TableCell colSpan={9} className="text-center py-10 text-sm text-muted-foreground">
                 <Database className="h-5 w-5 mx-auto mb-2 opacity-40" />
                 No leads match these filters.
               </TableCell></TableRow>
             ) : (
               leads.map((l) => (
-                <TableRow key={l.id}>
+                <TableRow key={l.id} className={cn(isTestLead(l) && "bg-rose-50/60")}>
                   <TableCell>
-                    <div className="font-medium text-sm">{l.name}</div>
+                    <div className="font-medium text-sm flex items-center gap-1.5">
+                      {l.name}
+                      {isTestLead(l) && <Badge variant="destructive" className="text-[9px]">TEST</Badge>}
+                    </div>
                     <div className="text-xs text-muted-foreground">{l.phone} · {l.email}</div>
                   </TableCell>
                   <TableCell><Badge variant="muted">{l.state || "—"}</Badge></TableCell>
@@ -298,6 +339,16 @@ export function AdminAllLeads({
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                     {formatDate(new Date(l.receivedAt).toISOString())}
+                  </TableCell>
+                  <TableCell className="text-right pr-3">
+                    <button
+                      onClick={() => deleteLead(l)}
+                      disabled={deleting === l.id}
+                      title="Delete this lead permanently"
+                      className="text-muted-foreground hover:text-rose-600 transition-colors disabled:opacity-50"
+                    >
+                      {deleting === l.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
                   </TableCell>
                 </TableRow>
               ))

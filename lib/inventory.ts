@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { findPackage, leadPoolIdsFor } from "@/data/packages";
+import { NOT_TEST_LEAD } from "@/lib/testLeads";
 
 /**
  * How many leads are actually available to sell for a given tier (age window)
@@ -29,6 +30,7 @@ export async function availableForPackage(packageId: string, states: string[] = 
       packageId: { in: pools },
       ...(cleanStates.length ? { state: { in: cleanStates } } : {}),
       ...(receivedAt.gt || receivedAt.lte ? { receivedAt } : {}),
+      ...NOT_TEST_LEAD, // don't count fake/test leads as sellable
     },
   });
 }

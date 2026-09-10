@@ -4,6 +4,7 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
 import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
+import { NOT_TEST_LEAD } from "@/lib/testLeads";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -50,6 +51,8 @@ export async function fulfillOrder(orderId: string): Promise<number> {
         ? { income: { gte: order.filterIncomeMin } }
         : {}),
       ...(receivedAtFilter.gt || receivedAtFilter.lte ? { receivedAt: receivedAtFilter } : {}),
+      // Never deliver obviously-fake / internal test leads to a buyer.
+      ...NOT_TEST_LEAD,
     },
     orderBy: { receivedAt: "asc" },
     take: remaining,

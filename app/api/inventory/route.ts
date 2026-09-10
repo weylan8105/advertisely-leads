@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { leadPackages, IUL_POOL_IDS } from "@/data/packages";
+import { NOT_TEST_LEAD } from "@/lib/testLeads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
       orderId: null,
       packageId: { in: IUL_POOL_IDS },
       ...(states.length ? { state: { in: states } } : {}),
+      ...NOT_TEST_LEAD, // exclude fake/test leads from availability
     },
     select: { receivedAt: true },
   });
