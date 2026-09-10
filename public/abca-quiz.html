@@ -34,15 +34,11 @@
   }
   .hazard{height:6px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,var(--navy) 18px 36px)}
 
-  /* ---- How-it-works instructions (above the video) ---- */
-  .howto{padding:18px 18px 6px;text-align:center}
-  .howto h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:20px;line-height:1.15;letter-spacing:.02em;text-transform:uppercase;color:var(--ink);margin-bottom:7px}
-  .howto p{font-size:13px;color:var(--ink-dim);max-width:540px;margin:0 auto;line-height:1.55}
-  .howto p b{color:var(--ink)}
-  .howto .steps{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:11px}
-  .howto .steps span{font-size:11.5px;color:var(--ink-dim);background:var(--card-2);border:1px solid var(--line);border-radius:20px;padding:5px 12px}
-  .howto .steps b{color:var(--orange);font-family:'Oswald',sans-serif;font-weight:600}
-  @media (max-width:620px){.howto h1{font-size:17px}}
+  /* ---- Compact instruction line (kept short so Q1 stays above the fold) ---- */
+  .howto{padding:10px 16px 8px;text-align:center}
+  .howto p{font-size:13.5px;color:var(--ink-dim);max-width:540px;margin:0 auto;line-height:1.4}
+  .howto p b{color:var(--ink);font-weight:600}
+  @media (max-width:620px){.howto{padding:8px 14px 7px}.howto p{font-size:12.5px}}
 
   .quiz-page{
     position:relative;
@@ -197,16 +193,9 @@
   <div class="hazard"></div>
   <div class="wrap">
 
-    <!-- How this works — instructions for the visitor -->
+    <!-- One compact line — keeps the first question above the fold on mobile -->
     <div class="howto">
-      <h1>Watch the video &amp; fill out the form below</h1>
-      <p>Press play — see how one <b>IUL</b> gives you <b>life insurance</b>, <b>income if you get hurt</b>, and
-        <b>tax-free retirement</b>, all in one. Fill out the form <b>while you watch</b> to see if you qualify.</p>
-      <div class="steps">
-        <span><b>1.</b> Press play</span>
-        <span><b>2.</b> Fill out the form as you watch</span>
-        <span><b>3.</b> A licensed specialist reaches out</span>
-      </div>
+      <p><b>Watch the video</b> &amp; answer the questions below to see if you qualify.</p>
     </div>
 
     <!-- video slot (your VSL goes here) -->
