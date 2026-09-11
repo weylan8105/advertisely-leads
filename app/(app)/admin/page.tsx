@@ -39,6 +39,7 @@ import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
 import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
+import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -268,6 +269,9 @@ export default function AdminPage() {
           />
         </button>
       </div>
+
+      {/* Always-visible live landing-page traffic — deep-links to the full funnel tab */}
+      <TrafficSnapshot onOpenFunnel={() => setTab("funnel")} />
 
       <AssignToMeCard />
 
