@@ -1,0 +1,220 @@
+openapi: 3.1.0
+info:
+  title: Advertisely Integration API
+  version: "2026-09-15"
+  description: >
+    Read/write API for Advertisely's own tracking + attribution tooling
+    (e.g. Conversion Hammer). Covers the conversions feed used to report and
+    read lead conversions across the whole platform. Lead-level read is NOT yet
+    part of this API — /api/leads is browser-session only (see x-notes).
+  x-notes:
+    tenancy: >
+      The conversions feed is intentionally cross-pipeline: it reports
+      conversions for every lead the platform generates, regardless of which
+      buyer worked the lead. There is no per-tenant scoping on this endpoint.
+    leads-read: >
+      GET /api/leads authenticates via browser session cookie only (NextAuth)
+      and is org-scoped for the CRM UI. It does NOT accept an API key and is not
+      part of the service integration. A dedicated read-only lead endpoint would
+      be added separately if needed.
+    incremental-sync: >
+      The sync feed is keyed on soldAt (the conversion timestamp). New
+      conversions always append in (soldAt,id) order, so a poller that stores
+      next_cursor never skips one. Limitation: a value correction that re-uses
+      the original conversion time will not re-appear, because there is no
+      per-row updatedAt column yet. Full change-tracking (corrections, refunds,
+      un-conversions) would require adding Lead.updatedAt.
+servers:
+  - url: https://advertisely.io
+    description: Production
+security:
+  - BearerAuth: []
+paths:
+  /api/conversions:
+    get:
+      operationId: listConversions
+      summary: Read conversions (converted leads + ad attribution)
+      description: >
+        Two response shapes. Legacy (default): { ok, count, conversions }.
+        Sync (opt-in via cursor / updated_since / mode=sync): adds cursor
+        pagination with next_cursor + has_more, ordered by (soldAt,id) ascending.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [converted, all], default: converted }
+          description: converted = pipelineStage issued-paid only; all = every lead.
+        - name: mode
+          in: query
+          schema: { type: string, enum: [sync] }
+          description: Force the paginated sync feed (from the beginning).
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Opaque next_cursor from a prior sync response. Continues the feed.
+        - name: updated_since
+          in: query
+          schema: { type: string, format: date-time }
+          description: RFC 3339 UTC. Sync feed of conversions with soldAt >= this time.
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+          description: (Legacy only) filter on receivedAt >= this time.
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+      responses:
+        "200":
+          description: Conversions page.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/LegacyConversionList"
+                  - $ref: "#/components/schemas/SyncConversionList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/DatabaseDown" }
+    post:
+      operationId: reportConversions
+      summary: Report one or more conversions (marks matching leads Issued PAID)
+      description: >
+        Match by leadId, email, or phone (last-10-digits). Accepts a single
+        object or an array (1..500). NOT idempotent — re-posting re-writes the
+        lead and re-fires the server-side Meta Purchase event. Requires
+        conversions:write (the read integration key must NOT have this scope).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/ConversionInput"
+                - type: array
+                  items: { $ref: "#/components/schemas/ConversionInput" }
+                  minItems: 1
+                  maxItems: 500
+      responses:
+        "200":
+          description: Per-item result set.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, recorded, unmatched, results]
+                properties:
+                  ok: { type: boolean }
+                  recorded: { type: integer }
+                  unmatched: { type: integer }
+                  results:
+                    type: array
+                    items: { type: object }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/DatabaseDown" }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Canonical: Authorization: Bearer <adv_live_sk_...>. Also accepted for
+        backward compatibility: X-API-Key: <key>, and ?key=<key> (discouraged —
+        leaks into logs). Scopes: conversions:read (GET), conversions:write (POST).
+  responses:
+    BadRequest:
+      description: Invalid parameter (bad cursor, bad date, bad JSON, bad batch size).
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unauthorized:
+      description: Missing or invalid API key.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Forbidden:
+      description: Key is valid but missing the required scope.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    DatabaseDown:
+      description: Database not configured/unavailable.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    ConversionInput:
+      type: object
+      description: At least one of leadId, email, phone is required.
+      properties:
+        leadId: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, description: Any format; matched on last 10 digits. }
+        event: { type: string, description: Free-text label stored on the activity log. }
+        value: { type: number, description: Annual premium in dollars (converted to cents). }
+        currency: { type: string, description: Informational; storage is cents. }
+        occurredAt: { type: string, format: date-time }
+    Conversion:
+      type: object
+      description: A converted lead with attribution. Legacy + normalized fields.
+      properties:
+        # Stable identity
+        id: { type: string, description: Lead ID (immutable). }
+        lead_id: { type: string }
+        conversion_id: { type: string, description: "Stable per lead: cv_<leadId>." }
+        event_id: { type: string, description: Same as conversion_id (dedup key). }
+        # Event
+        event_type: { type: string, examples: [Purchase] }
+        event_status: { type: string, enum: [recorded, pending] }
+        pipelineStage: { type: string, examples: [issued-paid] }
+        status: { type: string }
+        converted: { type: boolean }
+        # Timestamps (RFC 3339 UTC)
+        event_time: { type: [string, "null"], format: date-time, description: When it converted (soldAt). }
+        recorded_time: { type: [string, "null"], format: date-time }
+        captured_time: { type: [string, "null"], format: date-time, description: When the lead was captured (receivedAt). }
+        soldAt: { type: [string, "null"], format: date-time }
+        receivedAt: { type: string, format: date-time }
+        assignedAt: { type: [string, "null"], format: date-time }
+        # Value
+        value_decimal: { type: [string, "null"], description: Decimal string, e.g. "1200.00". }
+        currency: { type: [string, "null"], examples: [USD] }
+        valueCents: { type: [integer, "null"] }
+        soldPremiumCents: { type: [integer, "null"] }
+        # Contact
+        name: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        state: { type: [string, "null"] }
+        packageId: { type: [string, "null"] }
+        # Attribution
+        source: { type: [string, "null"] }
+        campaignName: { type: [string, "null"] }
+        adsetId: { type: [string, "null"] }
+        creativeId: { type: [string, "null"] }
+        utmSource: { type: [string, "null"] }
+        utmMedium: { type: [string, "null"] }
+        utmCampaign: { type: [string, "null"] }
+        fbclid: { type: [string, "null"] }
+    LegacyConversionList:
+      type: object
+      required: [ok, count, conversions]
+      properties:
+        ok: { type: boolean }
+        count: { type: integer }
+        conversions: { type: array, items: { $ref: "#/components/schemas/Conversion" } }
+        next_cursor: { type: "null", description: Always null in legacy mode. }
+    SyncConversionList:
+      type: object
+      required: [ok, count, conversions, next_cursor, has_more, max_page_size]
+      properties:
+        ok: { type: boolean }
+        count: { type: integer }
+        conversions: { type: array, items: { $ref: "#/components/schemas/Conversion" } }
+        next_cursor:
+          type: [string, "null"]
+          description: Pass back as ?cursor= to fetch the next page. null when caught up.
+        has_more: { type: boolean }
+        max_page_size: { type: integer, examples: [1000] }
