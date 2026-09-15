@@ -8,11 +8,9 @@
 <!-- Vercel Web Analytics (starts collecting once enabled in the Vercel dashboard). -->
 <script defer src="/_vercel/insights/script.js"></script>
 <!-- ============================================================
-     ENHANCED WEALTH / IUL QUIZ — hosted on Vercel (Advertisely).
-     v2: headline-led (no VSL), Next/Back nav with auto-progress,
-     multiple-choice bubbles, dedicated thank-you page.
+     ENHANCED WEALTH / IUL QUIZ + VSL — hosted on Vercel (Advertisely).
      Posts leads straight into the Advertisely inbound endpoint.
-     (v1 preserved at /abca-quiz-v1.html)
+     To swap the VSL: replace the Vidalytics embed id below.
      ============================================================ -->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
@@ -36,14 +34,11 @@
   }
   .hazard{height:6px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,var(--navy) 18px 36px)}
 
-  /* ---- Hero headline (insight hook) ---- */
-  .hero{padding:26px 18px 14px;text-align:center;max-width:660px;margin:0 auto}
-  .hero-eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--orange);margin-bottom:12px}
-  .hero-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:31px;line-height:1.08;letter-spacing:.01em;text-transform:uppercase;color:var(--ink);margin-bottom:12px}
-  .hero-h span{color:var(--orange)}
-  .hero-sub{font-size:15px;color:var(--ink-dim);line-height:1.55;max-width:520px;margin:0 auto}
-  .hero-sub b{color:var(--ink);font-weight:600}
-  @media (max-width:620px){.hero{padding:20px 16px 8px}.hero-h{font-size:24px}.hero-sub{font-size:13.5px}}
+  /* ---- Compact instruction line (kept short so Q1 stays above the fold) ---- */
+  .howto{padding:10px 16px 8px;text-align:center}
+  .howto p{font-size:13.5px;color:var(--ink-dim);max-width:540px;margin:0 auto;line-height:1.4}
+  .howto p b{color:var(--ink);font-weight:600}
+  @media (max-width:620px){.howto{padding:8px 14px 7px}.howto p{font-size:12.5px}}
 
   .quiz-page{
     position:relative;
@@ -56,8 +51,19 @@
 
   .wrap{max-width:720px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-start}
 
+  /* ---- Video slot (flush to quiz) ---- */
+  .video{position:relative;width:100%;background:#0E141A;overflow:hidden}
+  .video > div[id^="vidalytics"]{display:block}
+  .video .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    background:repeating-linear-gradient(-45deg,rgba(255,107,26,0.05) 0 12px,transparent 12px 24px);color:var(--ink-dim)}
+  .video .ring{width:52px;height:52px;border-radius:50%;border:2px solid var(--orange);background:rgba(255,107,26,0.14);
+    display:flex;align-items:center;justify-content:center}
+  .video .ring svg{width:22px;height:22px;fill:var(--orange);margin-left:3px}
+  .video .ph b{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.05em;font-weight:600;font-size:14px;color:var(--ink)}
+  .video .ph small{font-size:11.5px}
+
   /* ---- Quiz shell ---- */
-  .quiz{background:var(--card);padding:20px 18px 22px;border-top:1px solid rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.04);margin-top:8px}
+  .quiz{background:var(--card);padding:18px 18px 20px;border-top:1px solid rgba(255,255,255,0.04)}
 
   /* progress */
   .prog{margin-bottom:20px}
@@ -87,16 +93,13 @@
     font-family:'Barlow',sans-serif;font-weight:600;font-size:15px;padding:15px 15px;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
     transition:border-color .15s,background .15s,transform .06s}
-  /* Trade grid: row layout so the selection bubble sits next to each option */
-  .opts.grid .opt{flex-direction:row;align-items:center;gap:10px;padding:14px 12px;font-size:14.5px}
+  .opts.grid .opt{flex-direction:column;align-items:flex-start;gap:8px;padding:15px 13px}
   .opt:hover{border-color:var(--steel);background:#20293380}
   .opt:active{transform:scale(.985)}
   .opt.sel{border-color:var(--orange);background:rgba(255,107,26,0.10)}
-  /* multiple-choice bubble */
-  .opt .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--steel);flex:none;transition:.15s;position:relative}
+  .opt .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--steel);flex:none;transition:.15s}
   .opt.sel .dot{border-color:var(--orange);background:var(--orange);box-shadow:inset 0 0 0 3px var(--card-2)}
-  .opt .ic{font-size:19px;line-height:1;flex:none}
-  .opts.grid .opt span:last-child{flex:1}
+  .opts.grid .opt .ic{font-size:20px;line-height:1}
 
   /* number input */
   .num-field{position:relative;margin-bottom:6px}
@@ -104,7 +107,7 @@
     font-family:'Oswald',sans-serif;font-weight:600;font-size:30px;text-align:center;padding:18px 14px;letter-spacing:.04em;outline:none;transition:border-color .15s}
   .num-field input:focus{border-color:var(--orange)}
   .num-field input.err{border-color:#E5484D}
-  .field-note{font-size:12.5px;color:var(--ink-dim);min-height:17px;margin-bottom:2px;transition:color .15s}
+  .field-note{font-size:12.5px;color:var(--ink-dim);min-height:17px;margin-bottom:14px;transition:color .15s}
   .field-note.err{color:#F2686C}
 
   /* select (state) */
@@ -134,8 +137,8 @@
   .consent-box{border:1px solid var(--line);border-radius:8px;padding:12px 13px;background:rgba(0,0,0,0.18);transition:border-color .15s}
   .consent-box.err{border-color:#E5484D}
 
-  /* CTA + nav row (Go back / Next) */
-  .cta{width:100%;border:none;cursor:pointer;border-radius:10px;
+  /* CTA */
+  .cta{width:100%;margin-top:16px;border:none;cursor:pointer;border-radius:10px;
     background:linear-gradient(180deg,var(--orange),var(--orange-press));color:#fff;
     font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;letter-spacing:.06em;text-transform:uppercase;
     padding:17px;display:flex;align-items:center;justify-content:center;gap:9px;transition:filter .15s,transform .06s;
@@ -146,36 +149,41 @@
   .cta[disabled]{filter:grayscale(.5) brightness(.7);cursor:not-allowed;box-shadow:none}
   .cta svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:2.4}
 
-  .nav{display:flex;gap:10px;align-items:stretch;margin-top:18px}
-  .nav .cta{flex:1}
-  .nav-back{flex:none;min-width:112px;background:var(--card-2);border:1.5px solid var(--line);color:var(--ink-dim);border-radius:10px;
-    font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;padding:0 16px;
-    display:flex;align-items:center;justify-content:center;gap:6px;
-    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:border-color .15s,color .15s}
-  .nav-back:hover{border-color:var(--steel);color:var(--ink)}
-  @media (max-width:400px){.nav-back{min-width:96px;font-size:13px;padding:0 12px}.cta{font-size:16px}}
+  .back{display:block;margin:13px auto 0;background:none;border:none;color:var(--ink-faint);cursor:pointer;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
+    font-family:'Barlow',sans-serif;font-size:13px;font-weight:500;padding:6px}
+  .back:hover{color:var(--ink-dim)}
 
   /* trust */
-  .trust{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px 22px;color:var(--ink-faint);
+  .trust{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px 4px;color:var(--ink-faint);
     font-size:12px}
   .trust svg{width:13px;height:13px;fill:var(--ink-faint)}
   .trust b{color:var(--ink-dim);font-weight:600}
 
-  /* ---- Thank-you page ---- */
-  .ty{text-align:center;padding:34px 6px 18px;animation:enter .4s ease;max-width:470px;margin:0 auto}
-  .ty-badge{width:74px;height:74px;border-radius:50%;margin:0 auto 18px;background:rgba(63,185,80,0.14);border:2px solid var(--good);display:flex;align-items:center;justify-content:center}
-  .ty-badge svg{width:36px;height:36px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  /* success */
+  .done-screen{text-align:center;padding:22px 8px 8px;animation:enter .4s ease}
+  .done-screen .badge{width:66px;height:66px;border-radius:50%;margin:0 auto 16px;background:rgba(63,185,80,0.14);
+    border:2px solid var(--good);display:flex;align-items:center;justify-content:center}
+  .done-screen .badge svg{width:32px;height:32px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .done-screen h2{font-family:'Oswald',sans-serif;font-weight:700;font-size:25px;text-transform:uppercase;margin-bottom:8px}
+  .done-screen p{font-size:14.5px;color:var(--ink-dim);line-height:1.5;max-width:340px;margin:0 auto}
+  .tag{display:inline-block;margin-top:14px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--amber);border:1px solid rgba(245,166,35,0.4);border-radius:20px;padding:5px 14px}
+
+  /* ---- In-place thank-you view (video keeps playing above) ---- */
+  .ty{text-align:center;padding:18px 4px 8px;animation:enter .4s ease}
+  .ty-badge{width:70px;height:70px;border-radius:50%;margin:0 auto 16px;background:rgba(63,185,80,0.14);border:2px solid var(--good);display:flex;align-items:center;justify-content:center}
+  .ty-badge svg{width:34px;height:34px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
   .ty-eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:8px}
-  .ty-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:27px;text-transform:uppercase;margin-bottom:10px}
-  .ty-lead{font-size:14.5px;color:var(--ink-dim);line-height:1.6;max-width:430px;margin:0 auto 20px}
+  .ty-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:24px;text-transform:uppercase;margin-bottom:10px}
+  .ty-lead{font-size:14px;color:var(--ink-dim);line-height:1.6;max-width:430px;margin:0 auto 18px}
   .ty-lead b{color:var(--ink)}
   .ty-next{text-align:left;max-width:430px;margin:0 auto}
   .ty-step{display:flex;gap:12px;align-items:flex-start;background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:9px;font-size:13px;color:var(--ink-dim);line-height:1.45}
   .ty-step b{color:var(--ink);font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px}
   .ty-n{flex:none;width:26px;height:26px;border-radius:50%;background:rgba(255,107,26,0.14);border:1px solid var(--orange);color:var(--orange);font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px}
-  .ty-foot{margin-top:20px;font-size:12.5px;color:var(--ink-faint);line-height:1.5}
 
-  @media (max-width:620px){.q{font-size:23px}.prog-labels span{font-size:8.5px}.ty-h{font-size:23px}.ty{padding:24px 4px 14px}}
+  @media (max-width:620px){.q{font-size:23px}.prog-labels span{font-size:8.5px}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto}}
 </style>
 </head>
@@ -185,11 +193,25 @@
   <div class="hazard"></div>
   <div class="wrap">
 
-    <!-- Hero headline — teases the insight, leads into the quiz -->
-    <div class="hero" id="hero">
-      <div class="hero-eyebrow">For the people who build America</div>
-      <h1 class="hero-h">How blue-collar workers are retiring early — <span>some before 50</span></h1>
-      <p class="hero-sub">Take the 60-second quiz to see the exact strategy tradesmen are using to build <b>tax-free retirement income</b> — and find out if you qualify.</p>
+    <!-- One compact line — keeps the first question above the fold on mobile -->
+    <div class="howto">
+      <p><b>Watch the video</b> &amp; answer the questions below to see if you qualify.</p>
+    </div>
+
+    <!-- video slot (your VSL goes here) -->
+    <div class="video">
+      <div id="vidalytics_embed_GWF9ID41019RoIuT" style="width: 100%; position:relative; padding-top: 64.98%;"></div>
+      <script type="text/javascript">
+      (function (v, i, d, a, l, y, t, c, s) {
+          y='_'+d.toLowerCase();c=d+'L';if(!v[d]){v[d]={};}if(!v[c]){v[c]={};}if(!v[y]){v[y]={};}var vl='Loader',vli=v[y][vl],vsl=v[c][vl + 'Script'],vlf=v[c][vl + 'Loaded'],ve='Embed';
+          if (!vsl){vsl=function(u,cb){
+              if(t){cb();return;}s=i.createElement("script");s.type="text/javascript";s.async=1;s.src=u;
+              if(s.readyState){s.onreadystatechange=function(){if(s.readyState==="loaded"||s.readyState=="complete"){s.onreadystatechange=null;vlf=1;cb();}};}else{s.onload=function(){vlf=1;cb();};}
+              i.getElementsByTagName("head")[0].appendChild(s);
+          };}
+          vsl(l+'loader.min.js',function(){if(!vli){var vlc=v[c][vl];vli=new vlc();}vli.loadScript(l+'player.min.js',function(){var vec=v[d][ve];t=new vec();t.run(a);});});
+      })(window, document, 'Vidalytics', 'vidalytics_embed_GWF9ID41019RoIuT', 'https://fast.vidalytics.com/embeds/HgwYK4oC/GWF9ID41019RoIuT/');
+      </script>
     </div>
 
     <!-- quiz -->
@@ -201,7 +223,7 @@
       <div id="stage"></div>
     </div>
 
-    <div class="trust" id="trust">
+    <div class="trust">
       <svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
       <span>Takes 60 seconds · <b>No obligation</b> · No pressure</span>
     </div>
@@ -210,7 +232,7 @@
 
 <script>
 /* ============================================================
-   ENHANCED WEALTH — Early Retirement Quiz (v2)
+   ENHANCED WEALTH — Early Retirement Quiz
    Posts leads to the Advertisely inbound endpoint (same-origin).
    ============================================================ */
 // Advertisely inbound webhook. Relative path = same origin when hosted on
@@ -319,7 +341,6 @@ const STEPS = [
 ];
 
 let step = 0;
-let renderToken = 0; // bumped each render; lets a pending tap-advance cancel itself if the step already changed
 const answers = {};
 const track = document.getElementById('track');
 const labels = document.getElementById('labels');
@@ -343,7 +364,6 @@ function paintProgress(){
 }
 
 function render(){
-  renderToken++;
   paintProgress();
   trackEvent("step", step + 1); // 1-based: which quiz step the visitor reached
   const s = STEPS[step];
@@ -353,11 +373,10 @@ function render(){
   if(s.sub) html += `<div class="q-sub">${s.sub}</div>`;
 
   if(s.type==="choice"){
-    html += `<div class="opts ${s.grid?'grid':''}">` + s.options.map((o)=>{
+    html += `<div class="opts ${s.grid?'grid':''}">` + s.options.map((o,i)=>{
       const sel = answers[s.key]===o.v ? 'sel':'';
-      // Every choice — including the trade grid — shows a multiple-choice bubble.
       const inner = s.grid
-        ? `<span class="dot"></span><span class="ic">${o.ic||''}</span><span>${o.v}</span>`
+        ? `<span class="ic">${o.ic||''}</span><span>${o.v}</span>`
         : `<span class="dot"></span><span>${o.v}</span>`;
       return `<button class="opt ${sel}" data-v="${o.v}">${inner}</button>`;
     }).join('') + `</div>`;
@@ -367,6 +386,7 @@ function render(){
     const val = answers[s.key]||"";
     html += `<div class="num-field"><input id="ageInput" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="00" value="${val}"></div>`;
     html += `<div class="field-note" id="ageNote">${s.note}</div>`;
+    html += `<button class="cta" id="next">Continue <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>`;
   }
 
   if(s.type==="select"){
@@ -376,7 +396,8 @@ function render(){
     html += `<div class="sel-field"><select id="selInput" required>
       <option value="" disabled ${val?'':'selected'}>${s.placeholder||'Select…'}</option>${opts}
     </select></div>`;
-    html += `<div class="field-note" id="selNote"></div>`;
+    html += `<div class="field-note" id="selNote">${s.sub?'':''}</div>`;
+    html += `<button class="cta" id="next">Continue <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>`;
   }
 
   if(s.type==="contact"){
@@ -388,47 +409,32 @@ function render(){
         <label class="consent"><input type="checkbox" id="c_consent">
           <span>By checking here, I agree that Enhanced Wealth may share the information I provide with participating licensed insurance agencies, agents, brokers, carriers, or other insurance providers that may offer products or services matching my request. I understand that these companies may contact me by phone, text message, and email regarding insurance products and related services, including, where permitted by law, using automated technology or an artificial/prerecorded voice. My consent is not required as a condition of purchasing any product or service. Message and data rates may apply.</span></label>
       </div>
-    </div>`;
+    </div>
+    <button class="cta" id="submit">Get my plan <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>`;
   }
 
-  // ---- Nav row: Go back (except first step) + Next / Get my plan ----
-  const backBtn = step > 0 ? `<button class="nav-back" id="back">← Go back</button>` : '';
-  const isContact = s.type === "contact";
-  const nextId = isContact ? 'submit' : 'next';
-  const nextLabel = isContact ? 'Get my plan' : 'Next';
-  html += `<div class="nav">${backBtn}<button class="cta nav-next" id="${nextId}">${nextLabel} <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>`;
+  if(step>0) html += `<button class="back" id="back">← Back</button>`;
 
   wrap.innerHTML = html;
   stage.replaceChildren(wrap);
   wireStep(s);
-  scrollToTop();
+  keepVideoInView();
 }
 
-function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
-
-// Move one step. render() bumps renderToken so a stale tap-auto-advance no-ops.
-function go(){ if(step < STEPS.length-1){ step++; render(); } }
-function goBack(){ if(step > 0){ step--; render(); } }
+function keepVideoInView(){ window.scrollTo({top:0,behavior:'smooth'}); }
 
 function wireStep(s){
-  const backEl = document.getElementById('back');
-  if(backEl) backEl.onclick = goBack;
+  if(step>0){ const b=document.getElementById('back'); if(b) b.onclick=()=>{ step--; render(); }; }
 
   if(s.type==="choice"){
-    const nextEl = document.getElementById('next');
     stage.querySelectorAll('.opt').forEach(btn=>{
       btn.onclick=()=>{
         answers[s.key]=btn.dataset.v;
         stage.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));
         btn.classList.add('sel');
-        // Auto-progress after a brief confirm — but cancel if the step already
-        // changed (e.g. the user hit Next first), so we never skip a step.
-        const tokenAtTap = renderToken;
-        setTimeout(()=>{ if(renderToken===tokenAtTap) go(); }, 320);
+        setTimeout(advance,180); // brief confirm, then advance
       };
     });
-    // Next also advances (once an option is chosen); auto-progress still runs.
-    if(nextEl) nextEl.onclick=()=>{ if(answers[s.key]) go(); };
   }
 
   if(s.type==="number"){
@@ -444,7 +450,7 @@ function wireStep(s){
         note.textContent=`Enter a valid age (${s.min}–${s.max})`;
         inp.focus(); return;
       }
-      answers[s.key]=String(n); go();
+      answers[s.key]=String(n); advance();
     };
     setTimeout(()=>inp.focus(),260);
   }
@@ -456,7 +462,7 @@ function wireStep(s){
     selEl.addEventListener('change',()=>{ selEl.classList.remove('err'); note.classList.remove('err'); note.textContent=''; });
     next.onclick=()=>{
       if(!selEl.value){ selEl.classList.add('err'); note.classList.add('err'); note.textContent='Please choose your state'; return; }
-      answers[s.key]=selEl.value; go();
+      answers[s.key]=selEl.value; advance();
     };
   }
 
@@ -489,6 +495,8 @@ function wireStep(s){
 }
 function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).textContent=t; }
 function clearMsg(el,id){ el.classList.remove('err'); document.getElementById(id).textContent=''; }
+
+function advance(){ if(step<STEPS.length-1){ step++; render(); } }
 
 /* ---- lead scoring (phone-close model: never hard-DQ borderline) ---- */
 function scoreLead(a){
@@ -559,20 +567,19 @@ function finish(){
   // Browser pixel event — deduped against any server CAPI event via eventID
   if(window.fbq){ try{ fbq('track', META_EVENT, { lead_tier:tier }, { eventID:eventId }); }catch(e){} }
 
-  // Send the lead into Advertisely (no page navigation).
+  // Send the lead into Advertisely. No page navigation happens, so the video
+  // above keeps playing uninterrupted.
   if(WEBHOOK_URL){
     try{ fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{}); }catch(e){}
   }
   console.log("LEAD PAYLOAD →", payload);
 
-  paintProgress(); [...track.children].forEach(sg=>sg.classList.add('done'));
+  // Swap ONLY the form area to the thank-you view — the video stays mounted.
+  paintProgress(); [...track.children].forEach(s=>s.classList.add('done'));
   showThankYou(firstName(answers.name));
 }
 
 function showThankYou(name){
-  // Turn the whole view into a dedicated thank-you page.
-  const hero = document.getElementById('hero'); if(hero) hero.style.display='none';
-  const trust = document.getElementById('trust'); if(trust) trust.style.display='none';
   const prog = document.querySelector('.prog'); if(prog) prog.style.display='none';
   const hi = name ? `You're all set, ${escapeHtml(name)}!` : "You're all set!";
   stage.innerHTML = `
@@ -580,16 +587,14 @@ function showThankYou(name){
       <div class="ty-badge"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div>
       <div class="ty-eyebrow">Application received</div>
       <h2 class="ty-h">${hi}</h2>
-      <p class="ty-lead">Thanks for completing the quiz. A <b>licensed specialist</b> will review your answers and
-        <b>reach out shortly</b> to walk you through your personalized early-retirement plan — no pressure, no obligation.</p>
+      <p class="ty-lead"><b>Keep watching the video above.</b> A licensed specialist will review your answers and
+        <b>contact you shortly</b> to walk you through your personalized IUL plan — no pressure, no obligation.</p>
       <div class="ty-next">
         <div class="ty-step"><span class="ty-n">1</span><span><b>We review your answers</b><br>Your responses go straight to a licensed specialist.</span></div>
         <div class="ty-step"><span class="ty-n">2</span><span><b>A specialist calls you</b><br>Often the same day — keep an eye on your phone and email.</span></div>
-        <div class="ty-step"><span class="ty-n">3</span><span><b>You get your plan</b><br>See exactly how blue-collar workers build tax-free retirement income.</span></div>
+        <div class="ty-step"><span class="ty-n">3</span><span><b>You get your plan</b><br>See exactly how an IUL builds tax-free retirement money for you.</span></div>
       </div>
-      <div class="ty-foot">Keep an eye on your phone — the call often comes from a local number.</div>
     </div>`;
-  scrollToTop();
 }
 function firstName(n){ return (n||"").trim().split(/\s+/)[0]||"friend"; }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
