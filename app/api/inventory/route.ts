@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     where: {
       assignedUserId: null,
       orderId: null,
+      trashedAt: null, // trashed (replaced/bad) leads are never sellable
       packageId: { in: IUL_POOL_IDS },
       ...(states.length ? { state: { in: states } } : {}),
       ...NOT_TEST_LEAD, // exclude fake/test leads from availability

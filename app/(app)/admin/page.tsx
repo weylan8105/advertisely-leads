@@ -31,6 +31,7 @@ import {
   X,
   CheckCheck,
   XCircle,
+  Trash2,
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
@@ -40,6 +41,7 @@ import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
+import { TrashQueue } from "@/components/admin/TrashQueue";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -293,6 +295,7 @@ export default function AdminPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="accounts">Client accounts</TabsTrigger>
+            <TabsTrigger value="trash">Trash</TabsTrigger>
             <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
           </TabsList>
 
@@ -605,6 +608,24 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent>
                 <AdminAccounts />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="trash">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4 text-rose-500" />
+                  Trash (recycle bin)
+                </CardTitle>
+                <CardDescription>
+                  Replaced and bad leads land here. They are never sold and are automatically
+                  deleted 30 days after being trashed. Restore one to return it to the pool.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TrashQueue />
               </CardContent>
             </Card>
           </TabsContent>

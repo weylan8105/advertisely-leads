@@ -160,6 +160,9 @@ model Lead {
   callAttempts    Int           @default(0)
   lastContactedAt DateTime?
   receivedAt      DateTime      @default(now())
+  // Recycle-bin: when set, the lead is trashed — excluded from all sellable
+  // inventory/fulfillment and hard-deleted by the 30-day auto-empty job.
+  trashedAt       DateTime?
 
   // Assignment + order
   assignedUserId String?
@@ -179,6 +182,7 @@ model Lead {
   @@index([state, packageId, status, assignedUserId])
   @@index([receivedAt])
   @@index([organizationId])
+  @@index([trashedAt])
 }
 
 enum LeadStatus {

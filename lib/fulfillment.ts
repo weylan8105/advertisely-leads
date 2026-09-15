@@ -44,6 +44,7 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       packageId: { in: leadPoolIdsFor(order.packageId) },
       assignedUserId: null,
       orderId: null,
+      trashedAt: null, // never deliver trashed (replaced/bad) leads
       ...(order.filterStates.length > 0
         ? { state: { in: order.filterStates } }
         : {}),

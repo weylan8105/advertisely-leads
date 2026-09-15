@@ -27,6 +27,7 @@ export async function availableForPackage(packageId: string, states: string[] = 
     where: {
       assignedUserId: null,
       orderId: null,
+      trashedAt: null, // trashed (replaced/bad) leads are never sellable
       packageId: { in: pools },
       ...(cleanStates.length ? { state: { in: cleanStates } } : {}),
       ...(receivedAt.gt || receivedAt.lte ? { receivedAt } : {}),
