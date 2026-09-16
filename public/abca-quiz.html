@@ -193,7 +193,19 @@
   .sales-cta svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2.4}
   .sales-note{font-size:11.5px;color:var(--ink-faint);line-height:1.55;text-align:center;max-width:540px;margin:30px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,0.06)}
 
-  @media (max-width:620px){.q{font-size:23px}.ty-h{font-size:23px}.ty{padding:24px 4px 14px}.seg-h{font-size:22px}.seg-p{font-size:14.5px}}
+  /* testimonials */
+  .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:4px 0}
+  .tcard{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left;display:flex;flex-direction:column}
+  .tcard .stars{color:var(--amber);font-size:13px;letter-spacing:2px;margin-bottom:9px}
+  .tcard .tq{font-size:13.5px;color:var(--ink-dim);line-height:1.6;margin-bottom:13px;flex:1}
+  .tcard .tm{display:flex;align-items:center;gap:11px}
+  .tcard .tav{flex:none;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--amber));color:#fff;font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .tcard .tn{font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);text-transform:uppercase;letter-spacing:.02em}
+  .tcard .tr{font-size:12px;color:var(--ink-faint)}
+  .ty-tst{margin-top:26px;text-align:left}
+  .ty-tst-h{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);text-align:center;margin-bottom:13px}
+
+  @media (max-width:620px){.q{font-size:23px}.ty-h{font-size:23px}.ty{padding:24px 4px 14px}.seg-h{font-size:22px}.seg-p{font-size:14.5px}.tgrid{grid-template-columns:1fr}}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto}}
 </style>
 </head>
@@ -226,7 +238,7 @@
       <section class="seg">
         <div class="seg-eyebrow">The strategy</div>
         <h2 class="seg-h">What is an IUL?</h2>
-        <p class="seg-p">An <b>Indexed Universal Life (IUL)</b> policy is permanent life insurance with a built-in savings engine. Part of what you put in <b>protects your family</b> if something happens to you — the rest <b>grows tax-free</b>, tied to the market's gains but shielded from its losses. It's how a lot of tradesmen build a retirement they can actually count on, without gambling their future on the stock market.</p>
+        <p class="seg-p">An <b>Indexed Universal Life (IUL)</b> policy is permanent life insurance with a built-in savings engine. Part of what you put in <b>protects your family</b> if something happens to you. The rest <b>grows tax-free</b>, tied to the market's gains but shielded from its losses. It's how a lot of tradesmen build a retirement they can actually count on, without gambling their future on the stock market.</p>
         <div class="sales-graphic">
           <svg viewBox="0 0 360 150" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
             <rect x="168" y="104" width="28" height="40" rx="4" fill="#1B222B" stroke="#2A3542"/>
@@ -251,11 +263,11 @@
           </div>
           <div class="bcard">
             <div class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
-            <div><h3>Protection for your family</h3><p>A permanent death benefit that pays out to the people who depend on you — so one bad day never leaves them behind.</p></div>
+            <div><h3>Protection for your family</h3><p>A permanent death benefit that pays out to the people who depend on you, so one bad day never leaves them behind.</p></div>
           </div>
           <div class="bcard">
             <div class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 5.5a5 5 0 0 0-7.5 0 5 5 0 0 0-7.5 6.5L12 20l7.5-8a5 5 0 0 0 0-6.5z"/></svg></div>
-            <div><h3>Living benefits</h3><p>Get seriously hurt or sick and can't work? You can access money from the policy while you're still alive — when you need it most.</p></div>
+            <div><h3>Living benefits</h3><p>Get seriously hurt or sick and can't work? You can access money from the policy while you're still alive, right when you need it most.</p></div>
           </div>
         </div>
         <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
@@ -264,16 +276,23 @@
       <section class="seg">
         <div class="seg-eyebrow">Why tradesmen</div>
         <h2 class="seg-h">Built for people who work with their hands</h2>
-        <p class="seg-p">You already know how to build things that last. This is the same idea for your money — steady, protected, and yours. No market roller-coaster, no losing it in a downturn, and a plan that's still standing when you're ready to slow down.</p>
+        <p class="seg-p">You already know how to build things that last. This is the same idea for your money. Steady, protected, and yours. No market roller-coaster, no losing it in a downturn, and a plan that's still standing when you're ready to slow down.</p>
         <div class="how-list">
-          <div class="hstep"><div class="hn">1</div><div><b>Take the 60-second quiz</b> above — a few quick questions, no pressure.</div></div>
+          <div class="hstep"><div class="hn">1</div><div><b>Take the 60-second quiz</b> above. Just a few quick questions, no pressure.</div></div>
           <div class="hstep"><div class="hn">2</div><div><b>Talk to a licensed specialist</b> who works with blue-collar families every day.</div></div>
           <div class="hstep"><div class="hn">3</div><div><b>Get your personalized plan</b> and see the real numbers for your situation.</div></div>
         </div>
         <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       </section>
 
-      <p class="sales-note">An IUL is a permanent life insurance policy. Coverage amounts, cash-value growth, and living benefits depend on the specific policy and carrier and on qualifying — a licensed specialist will walk you through the exact details for your situation. This is not tax or investment advice.</p>
+      <section class="seg">
+        <div class="seg-eyebrow">Real tradesmen</div>
+        <h2 class="seg-h">What tradesmen are saying</h2>
+        <div class="tgrid" id="tgrid"></div>
+        <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </section>
+
+      <p class="sales-note">An IUL is a permanent life insurance policy. Coverage amounts, cash value growth, and living benefits depend on the specific policy and carrier and on qualifying. A licensed specialist will walk you through the exact details for your situation. This is not tax or investment advice.</p>
     </div>
   </div>
   </div><!-- /.quiz-page -->
@@ -377,7 +396,7 @@ const STEPS = [
     sub:"We match you with a licensed specialist in your state.",
     type:"select", placeholder:"Select your state", options:US_STATES },
   { key:"income", label:"Income", eyebrow:"About you", q:"What is your gross monthly income?",
-    sub:"Before taxes — a rough number is fine.", type:"choice", options:[
+    sub:"Before taxes. A rough number is fine.", type:"choice", options:[
       {v:"Under $3,000"},{v:"$3,000 – $5,000"},{v:"$5,000 – $7,500"},{v:"$7,500 – $10,000"},{v:"$10,000+"}
     ]},
   { key:"budget", label:"Budget", eyebrow:"The plan", q:"How much could you comfortably put toward an IUL each month?",
@@ -385,7 +404,7 @@ const STEPS = [
       {v:"$300 – $500"},{v:"$500 – $1,000"},{v:"$1,000 – $2,000"},{v:"$2,000 – $3,500"},{v:"$3,500+"}
     ]},
   { key:"contact", label:"Contact", eyebrow:"Last step", q:"Where do we send your plan?",
-    sub:"A licensed specialist will walk you through it — no pressure.", type:"contact" }
+    sub:"A licensed specialist will walk you through it. No pressure.", type:"contact" }
 ];
 
 let step = 0;
@@ -630,20 +649,51 @@ function showThankYou(name){
       <div class="ty-eyebrow">Application received</div>
       <h2 class="ty-h">${hi}</h2>
       <p class="ty-lead">Thanks for completing the quiz. A <b>licensed specialist</b> will review your answers and
-        <b>reach out shortly</b> to walk you through your personalized early-retirement plan — no pressure, no obligation.</p>
+        <b>reach out shortly</b> to walk you through your personalized early-retirement plan. No pressure, no obligation.</p>
       <div class="ty-next">
         <div class="ty-step"><span class="ty-n">1</span><span><b>We review your answers</b><br>Your responses go straight to a licensed specialist.</span></div>
-        <div class="ty-step"><span class="ty-n">2</span><span><b>A specialist calls you</b><br>Often the same day — keep an eye on your phone and email.</span></div>
+        <div class="ty-step"><span class="ty-n">2</span><span><b>A specialist calls you</b><br>Often the same day, so keep an eye on your phone and email.</span></div>
         <div class="ty-step"><span class="ty-n">3</span><span><b>You get your plan</b><br>See exactly how blue-collar workers build tax-free retirement income.</span></div>
       </div>
-      <div class="ty-foot">Keep an eye on your phone — the call often comes from a local number.</div>
+      <div class="ty-tst">
+        <div class="ty-tst-h">Hear from other tradesmen</div>
+        <div class="tgrid">${testimonialsHTML(TESTIMONIALS.slice(0,3))}</div>
+      </div>
+      <div class="ty-foot">Keep an eye on your phone. The call often comes from a local number.</div>
     </div>`;
   scrollToTop();
 }
 function firstName(n){ return (n||"").trim().split(/\s+/)[0]||"friend"; }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* ---- Testimonials (real, client-provided) ---- */
+const TESTIMONIALS = [
+  { name:"Marcus T.", initials:"MT", trade:"Electrician", state:"Texas",
+    quote:"I spend every day working to provide for my wife and kids, but I never really thought about what would happen to them financially if something happened to me. Getting my IUL set up gave me a different level of peace of mind. Now I have protection in place for my family while also building cash value that I may be able to access later in life. I like knowing the money I'm putting away is doing more than just sitting there." },
+  { name:"David R.", initials:"DR", trade:"HVAC Technician", state:"Florida",
+    quote:"My income depends on me being able to get up and work every day. That was the biggest thing that hit me. I wanted something that could protect my family while also helping me prepare for my own future. My agent walked me through everything and designed an IUL around what I could comfortably afford. Now I have life insurance protection and a long-term strategy designed to build cash value that I can potentially access tax-advantaged in retirement." },
+  { name:"Anthony M.", initials:"AM", trade:"Welder", state:"Ohio",
+    quote:"I always thought life insurance was just something that paid out when you died. I had no idea certain permanent policies could also build cash value while you're alive. Once it was explained to me, it made a lot more sense. I'm protecting my wife and children today, but I'm also putting money toward something I can potentially use later in life. Having both goals working together was what sold me on setting up a plan." },
+  { name:"Chris B.", initials:"CB", trade:"Truck Driver", state:"Georgia",
+    quote:"As a truck driver, I'm gone a lot, and my family depends heavily on my income. I wanted to know that if something happened to me, my wife wouldn't immediately have to worry about how she was going to pay the mortgage and take care of the kids. The process was straightforward, and we built the coverage around my budget. The biggest result for me is peace of mind. Family protection now, and a cash value strategy for later." },
+  { name:"Michael J.", initials:"MJ", trade:"Construction Foreman", state:"North Carolina",
+    quote:"I've worked construction most of my adult life, and retirement always felt like something I would figure out later. I realized that wasn't much of a plan. What interested me about an IUL was being able to protect my family while building cash value for the future at the same time. Now I actually have a strategy in place instead of just hoping my 401(k) and Social Security will be enough when I'm ready to stop working." },
+  { name:"Brandon S.", initials:"BS", trade:"Plumber", state:"Arizona",
+    quote:"The biggest thing for me was protecting my paycheck and the people who depend on it. If I'm not here, I still want my family to have financial protection. But I also didn't want to ignore myself and spend the next 30 years working without another retirement strategy. Setting up my IUL gave me both. Life insurance protection for my family, and a policy designed to accumulate cash value that I may be able to access later, potentially on a tax-advantaged basis if it's structured and maintained properly." },
+  { name:"Tyler H.", initials:"TH", trade:"Journeyman Lineman", state:"Tennessee",
+    quote:"Being a lineman, I know every time I go to work there's a level of risk that comes with the job. I've got a wife and two kids depending on my income, so my biggest concern was making sure they'd be financially protected if something ever happened to me. What I liked about the IUL was that it wasn't only about protecting them. It gave me something for myself too. I'm able to protect my family and income today while building cash value for the future that I may be able to access tax-advantaged in retirement. I work hard for my money, so knowing I finally have a plan that's working toward both goals gives me a lot of peace of mind." }
+];
+function testimonialCard(t){
+  return `<div class="tcard"><div class="stars">★★★★★</div><p class="tq">${escapeHtml(t.quote)}</p>`+
+    `<div class="tm"><div class="tav">${escapeHtml(t.initials)}</div><div><div class="tn">${escapeHtml(t.name)}</div><div class="tr">${escapeHtml(t.trade)} · ${escapeHtml(t.state)}</div></div></div></div>`;
+}
+function testimonialsHTML(list){ return list.map(testimonialCard).join(''); }
+
 render();
+
+// Populate the sales-section testimonials grid.
+const tgridEl = document.getElementById('tgrid');
+if(tgridEl) tgridEl.innerHTML = testimonialsHTML(TESTIMONIALS);
 
 // Sales-letter CTAs scroll the visitor back up to the lead form.
 document.querySelectorAll('.sales-cta[data-scroll]').forEach(b=>{
