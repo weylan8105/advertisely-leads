@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-KSJ2RKGM');</script>
+<!-- End Google Tag Manager -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex" />
 <title>Blue-Collar Early Retirement Quiz</title>
@@ -210,6 +217,10 @@
 </style>
 </head>
 <body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KSJ2RKGM"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
 
   <div class="quiz-page">
   <div class="hazard"></div>
@@ -634,7 +645,12 @@ function finish(){
   }
   console.log("LEAD PAYLOAD →", payload);
 
-  showThankYou(firstName(answers.name));
+  // Redirect to the dedicated thank-you page. The first name is stashed in
+  // sessionStorage (same-origin, client-side only — never in the URL) so the
+  // thank-you page can greet them by name. The webhook fetch uses keepalive and
+  // the pixel/beacon events survive navigation; a short delay lets them fire.
+  try{ sessionStorage.setItem('tyName', firstName(answers.name)); }catch(e){}
+  setTimeout(function(){ window.location.href = '/thank-you.html'; }, 400);
 }
 
 function showThankYou(name){
