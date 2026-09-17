@@ -35,7 +35,8 @@ const prisma = new PrismaClient();
 try {
   const user = await prisma.user.findFirst({ where:{ email:{ equals:email, mode:"insensitive" } } });
   if(!user) throw new Error(`No user for ${email}`);
-  const order = await prisma.order.findFirst({ where:{ userId:user.id, status:"DELIVERED" }, orderBy:{ fulfilledAt:"desc" } });
+  // Most recent order that has leads on it (DELIVERED or partially DELIVERING).
+  const order = await prisma.order.findFirst({ where:{ userId:user.id, leads:{ some:{ trashedAt:null } } }, orderBy:{ createdAt:"desc" } });
   if(!order) throw new Error(`No delivered order for ${email}`);
   const leads = await prisma.lead.findMany({ where:{ orderId:order.id }, orderBy:{ receivedAt:"desc" } });
   const first = user.name?.split(" ")[0] || "there";
