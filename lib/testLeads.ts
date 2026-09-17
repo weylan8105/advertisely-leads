@@ -7,14 +7,36 @@ import type { Prisma } from "@prisma/client";
  *
  * Extend these lists if new test identities show up.
  */
-export const TEST_NAME_PATTERNS = ["ryan hernandez", "weylan walker"];
+export const TEST_NAME_PATTERNS = [
+  "ryan hernandez",
+  "weylan walker",
+  "stephen donaghey",
+  "stephen donaghy",
+  "test", // catches "test", "test test", "Jade Testing", etc. (Ryan's Sep 17 standing rule)
+];
 export const TEST_EMAIL_PATTERNS = [
   "ryanrush129",
   "weylanwalker",
   "weylanw@",
   "@example.com",
-  "test@advertisely",
+  "test", // broad: test@gmail, Test44@…, ghljadetesting@…
+  "@men.com",
+  "halloffametesting",
 ];
+
+/**
+ * True if a lead's name/email looks like an internal/test identity. Used at
+ * intake to trash test leads on arrival (Ryan's Sep 17 standing rule) in
+ * addition to the sellable-inventory exclusion above.
+ */
+export function isTestLead(name?: string | null, email?: string | null): boolean {
+  const n = (name ?? "").toLowerCase();
+  const e = (email ?? "").toLowerCase();
+  return (
+    TEST_NAME_PATTERNS.some((p) => n.includes(p)) ||
+    TEST_EMAIL_PATTERNS.some((p) => e.includes(p))
+  );
+}
 
 /** Prisma filter that MATCHES a fake/test lead (by name or email). */
 export const TEST_LEAD_WHERE: Prisma.LeadWhereInput = {

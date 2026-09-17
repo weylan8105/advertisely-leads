@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
+import { isTestLead } from "@/lib/testLeads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -162,6 +163,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-trash obvious test/fake identities on intake so they never enter the
+    // sellable pool or a dashboard (Ryan's Sep 17 standing rule).
+    const test = isTestLead(fullName, email);
+
     const created = await prisma.lead.create({
       data: {
         ghlContactId: ghlContactId ?? undefined,
@@ -184,19 +189,24 @@ export async function POST(req: NextRequest) {
         consentIp,
         trustedFormUrl,
         rawFormData: flat,
+        ...(test ? { trashedAt: new Date(), disposition: "Test/fake identity — auto-trashed on intake" } : {}),
         activity: {
           create: {
             type: "LEAD_RECEIVED",
-            body: `Lead received from GHL form "${sourceLabel}".`,
+            body: test
+              ? `Test/fake lead from GHL form "${sourceLabel}" — auto-trashed on intake.`
+              : `Lead received from GHL form "${sourceLabel}".`,
           },
         },
       },
     });
 
-    // If a matching order is already waiting, assign immediately.
-    await tryFulfillForNewLead(created.id).catch((e) =>
-      console.warn("Fulfillment after GHL intake failed:", e),
-    );
+    // Never fulfill a test lead. Otherwise, if a matching order is waiting, assign now.
+    if (!test) {
+      await tryFulfillForNewLead(created.id).catch((e) =>
+        console.warn("Fulfillment after GHL intake failed:", e),
+      );
+    }
 
     return NextResponse.json({ ok: true, leadId: created.id, created: true });
   } catch (err) {
