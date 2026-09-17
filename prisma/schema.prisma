@@ -160,6 +160,8 @@ model Lead {
   callAttempts    Int           @default(0)
   lastContactedAt DateTime?
   receivedAt      DateTime      @default(now())
+  // Auto-bumped on every write — powers external incremental sync (updated_since).
+  updatedAt       DateTime      @updatedAt @default(now())
   // Recycle-bin: when set, the lead is trashed — excluded from all sellable
   // inventory/fulfillment and hard-deleted by the 30-day auto-empty job.
   trashedAt       DateTime?
@@ -183,6 +185,7 @@ model Lead {
   @@index([receivedAt])
   @@index([organizationId])
   @@index([trashedAt])
+  @@index([updatedAt])
 }
 
 enum LeadStatus {

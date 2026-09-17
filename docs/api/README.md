@@ -17,6 +17,51 @@ conversions across the whole platform and (write path) report conversions back.
 > reports conversions for every lead the platform generates, regardless of which
 > buyer worked it. There is no per-tenant filter on this endpoint.
 
+## Read leads (external sync)
+
+`GET /api/external/leads` — read-only lead feed for external analytics/sync
+(SignalDesk). Same API-key auth as conversions; scope **`leads:read`**.
+
+- **Cross-pipeline** by design (single-owner platform). No `account_id` is
+  accepted from the request, so a caller can never pull a scope the key is not
+  entitled to. Trashed (recycle-bin) and internal test leads are excluded.
+- **Incremental sync:** ordered by `(updated_at, id)` ascending. `updated_at` is
+  auto-bumped on every write, so no modification is skipped. Start with
+  `updated_since`, then follow `next_cursor`. **Key rows by `id`** (idempotent
+  upsert) — a row reappears when it changes.
+
+```bash
+# First pull from a point in time
+curl -s "$ADVERTISELY_API_BASE_URL/api/external/leads?limit=100&updated_since=2026-09-01T00:00:00.000Z" \
+  -H "Authorization: Bearer $ADVERTISELY_API_KEY"
+# Continue
+curl -s "$ADVERTISELY_API_BASE_URL/api/external/leads?limit=100&cursor=$ADVERTISELY_CURSOR" \
+  -H "Authorization: Bearer $ADVERTISELY_API_KEY"
+```
+
+Response: `{ ok, leads: [...], count, next_cursor, has_more, max_page_size }`.
+Each lead returns the full documented field set (nulls rather than omissions):
+`id, account_id, organization_id, first_name, last_name, full_name, email, phone,
+status, pipeline_id, pipeline_name, stage_id, stage_name, source, campaign_id,
+campaign_name, ad_set_id, ad_set_name, ad_id, ad_name, form_id, landing_page_url,
+utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid,
+assigned_user_id, assigned_user_name, conversion_status, conversion_date,
+monetary_value, currency, created_at, updated_at`.
+
+- **Deletion:** trashed/voided leads drop out of the feed (no tombstone yet). If
+  a deletion feed is needed, it must be added deliberately.
+
+## Conversions — capabilities
+
+`GET /api/conversions` (scope `conversions:read`) supports: **pagination**
+(opaque cursor via `?mode=sync`/`?cursor=`), **`updated_since`** incremental
+filtering, a stable **`lead_id`** linkage (+ `conversion_id`/`event_id`),
+**event type** (`event_type`) and **status**, **event/recorded time**
+(`event_time`, RFC3339), **monetary value** (`value_decimal`) + **currency**
+(`USD`), and **campaign/ad-set/ad** attribution (`campaignName`, `adsetId`,
+`creativeId`, plus `utm*` and `fbclid`). Historical retention is full (no purge).
+Webhooks: **not supported.**
+
 ## Read conversions
 
 ### Incremental sync (recommended)
