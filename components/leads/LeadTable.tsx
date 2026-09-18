@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -39,6 +39,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
@@ -65,6 +67,16 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Downline agents you can hand leads to (only owners/admins can reassign).
+  const [members, setMembers] = useState<{ userId: string; name: string | null; email: string }[]>([]);
+  const [canAssign, setCanAssign] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) { setMembers(d.members ?? []); setCanAssign(!!d.canManage); } })
+      .catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -129,6 +141,23 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
     const r = await submitReplacement(leadId, reason.trim());
     if (r.ok) addToast("success", `Replacement request submitted for ${name}. Our team will review within 72 hours.`);
     else addToast("error", r.error || "Could not submit the replacement request.");
+  }
+
+  // Manually reassign a lead to a downline agent (or unassign).
+  async function assignLead(leadId: string, leadName: string, userId: string | null, agentName: string) {
+    try {
+      const res = await fetch(`/api/leads/${leadId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { addToast("error", data.error || "Could not reassign the lead."); return; }
+      addToast("success", userId ? `${leadName} reassigned to ${agentName}.` : `${leadName} unassigned.`);
+      setTimeout(() => window.location.reload(), 800);
+    } catch {
+      addToast("error", "Failed to reassign the lead.");
+    }
   }
 
   async function requestReplacementBulk() {
@@ -372,6 +401,24 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                         <DropdownMenuItem onClick={() => requestReplacementOne(lead.id, lead.name)}>
                           Request replacement
                         </DropdownMenuItem>
+                        {canAssign && members.length > 0 && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Assign to agent</DropdownMenuLabel>
+                            {members.map((m) => (
+                              <DropdownMenuItem
+                                key={m.userId}
+                                disabled={lead.assignedAgent != null && lead.assignedAgent === (m.name ?? m.email)}
+                                onClick={() => assignLead(lead.id, lead.name, m.userId, m.name ?? m.email)}
+                              >
+                                {m.name ?? m.email}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuItem onClick={() => assignLead(lead.id, lead.name, null, "")}>
+                              Unassign
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
