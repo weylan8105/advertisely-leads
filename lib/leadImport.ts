@@ -56,6 +56,19 @@ function moneyLow(s: string): number | null {
   const m = (s ?? "").replace(/,/g, "").match(/\d+/g);
   return m ? parseInt(m[0], 10) : null;
 }
+/**
+ * Derive an integer age from an answer that may be an age RANGE ("40–49" /
+ * "40-49", "50+", "18-29") or a plain number. Uses the lower bound (first run
+ * of digits) — deterministic, never overstates, and the exact range is always
+ * preserved in rawFormData. Returns null for empty/garbage/out-of-range values.
+ */
+export function ageFromAnswer(v: string | null | undefined): number | null {
+  if (!v) return null;
+  const m = String(v).match(/\d{1,3}/);
+  if (!m) return null;
+  const n = parseInt(m[0], 10);
+  return Number.isFinite(n) && n >= 13 && n <= 120 ? n : null;
+}
 function toDate(s: string): Date {
   const d = s ? new Date(s) : null;
   return d && !isNaN(d.getTime()) ? d : new Date();
@@ -67,6 +80,7 @@ export interface MappedLead {
   phone: string;
   email: string;
   state: string;
+  age: number | null;
   income: number | null;
   occupation: string | null;
   intentReason: string | null;
@@ -127,6 +141,7 @@ export function mapCsvToLeads(rows: string[][]): MapResult {
       phone: get(r, iPhone),
       email: get(r, iEmail).toLowerCase(),
       state: st.code,
+      age: ageFromAnswer(get(r, iAgeRange)),
       income: moneyLow(get(r, iIncome)),
       occupation: humanize(get(r, iTrade)) || null,
       intentReason: get(r, iTimeline) ? `Retirement timeline: ${humanize(get(r, iTimeline))}` : null,

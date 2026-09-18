@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
   for (const m of leads) {
     const base = {
       name: m.name, phone: m.phone, email: m.email, state: m.state,
-      income: m.income, occupation: m.occupation, intentReason: m.intentReason,
+      age: m.age, income: m.income, occupation: m.occupation, intentReason: m.intentReason,
       packageId, source, campaignName,
       consentMethod: "TCPA_WEB_FORM" as const, consentTime: m.consentTime, receivedAt: m.receivedAt,
       rawFormData: m.rawFormData as any, status: "NEW" as const,

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { normalizeState } from "./leadImport";
+import { normalizeState, ageFromAnswer } from "./leadImport";
 
 const META_GRAPH_API = "https://graph.facebook.com/v20.0";
 
@@ -237,12 +237,24 @@ export function mapLeadFields(
   for (const [metaKey, ourField] of Object.entries(fieldMapping)) {
     const v = flat[metaKey.toLowerCase().trim()];
     if (!v) continue;
-    if (ourField === "age") standardized.age = parseInt(v, 10) || undefined!;
+    if (ourField === "age") { const a = ageFromAnswer(v); if (a != null) standardized.age = a; }
     else if (ourField === "income")
       standardized.income = parseInt(v.replace(/[^0-9]/g, ""), 10) || undefined!;
     // Many IUL forms ask state as a custom question — normalize it too.
     else if (ourField === "state") standardized.state = normalizeState(v).code;
     else standardized[ourField] = v;
+  }
+
+  // Fallback: if no field was explicitly mapped to age, derive it from any
+  // age-like question (e.g. an "age range" the form's mapping didn't route to
+  // age). This is why leads were coming in with a null age.
+  if (standardized.age == null) {
+    for (const [k, val] of Object.entries(flat)) {
+      if (/age/i.test(k)) {
+        const a = ageFromAnswer(val);
+        if (a != null) { standardized.age = a; break; }
+      }
+    }
   }
 
   return {
