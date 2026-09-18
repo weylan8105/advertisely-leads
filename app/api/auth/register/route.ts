@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     typeof data.email === "string" ? data.email.toLowerCase().trim() : "";
   const password = typeof data.password === "string" ? data.password : "";
   const agency = typeof data.agency === "string" ? data.agency.trim() : "";
+  const inviteToken = typeof data.inviteToken === "string" ? data.inviteToken.trim() : "";
 
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json(
@@ -48,14 +49,40 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await hashPassword(password);
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       email,
       name: name || null,
       agency: agency || null,
       passwordHash,
     },
+    select: { id: true },
   });
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  // If this signup came from a valid downline invite for THIS email, join the
+  // new agent to the inviter's organization (their upline) immediately, so
+  // "invite an agent → they create an account in your downline" works in one step.
+  let joinedTeam = false;
+  if (inviteToken) {
+    const invite = await prisma.invitation.findUnique({ where: { token: inviteToken } });
+    if (
+      invite &&
+      invite.status === "PENDING" &&
+      invite.expiresAt > new Date() &&
+      invite.email.toLowerCase() === email
+    ) {
+      await prisma.$transaction([
+        prisma.membership.upsert({
+          where: { organizationId_userId: { organizationId: invite.organizationId, userId: user.id } },
+          update: {},
+          create: { organizationId: invite.organizationId, userId: user.id, role: invite.role, inRotation: true },
+        }),
+        prisma.invitation.update({ where: { id: invite.id }, data: { status: "ACCEPTED", acceptedAt: new Date() } }),
+        prisma.user.update({ where: { id: user.id }, data: { defaultOrganizationId: invite.organizationId } }),
+      ]);
+      joinedTeam = true;
+    }
+  }
+
+  return NextResponse.json({ ok: true, joinedTeam }, { status: 201 });
 }

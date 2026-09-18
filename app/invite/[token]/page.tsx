@@ -120,9 +120,14 @@ export default function InvitePage({ params }: { params: { token: string } }) {
                 {authStatus === "loading" ? (
                   <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                 ) : !session ? (
-                  <Link href={`/login?callbackUrl=/invite/${token}`}>
-                    <Button className="w-full">Sign in to accept</Button>
-                  </Link>
+                  <div className="space-y-2">
+                    <Link href={`/signup?invite=${token}`}>
+                      <Button className="w-full">Create your account to join</Button>
+                    </Link>
+                    <Link href={`/login?callbackUrl=/invite/${token}`}>
+                      <Button variant="outline" className="w-full">I already have an account</Button>
+                    </Link>
+                  </div>
                 ) : emailMatches ? (
                   <Button className="w-full" onClick={accept} disabled={accepting}>
                     {accepting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}

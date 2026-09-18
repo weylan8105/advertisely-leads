@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -30,6 +30,25 @@ export default function SignupPage() {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState("");
+  const [inviteOrg, setInviteOrg] = useState<string | null>(null);
+
+  // If the signup link carries a downline invite (?invite=<token>), fetch its
+  // details, lock the email to the invited address, and auto-join on submit.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("invite");
+    if (!t) return;
+    fetch(`/api/invite/${t}`)
+      .then((r) => r.json())
+      .then((b) => {
+        if (b && b.valid) {
+          setInviteToken(t);
+          setInviteOrg(b.orgName ?? null);
+          if (b.email) setEmail(b.email);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   function handleGoogleSignup() {
     // Persist agency name so it can be attached to the profile after OAuth.
@@ -61,7 +80,7 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, agency: agencyName }),
+        body: JSON.stringify({ name, email, password, agency: agencyName, inviteToken }),
       });
 
       if (!res.ok) {
@@ -120,6 +139,13 @@ export default function SignupPage() {
           You'll be browsing the marketplace in under 60 seconds.
         </p>
 
+        {inviteOrg && (
+          <div className="mt-4 rounded-md border border-brand-red/30 bg-brand-red/[0.06] px-3 py-2.5 text-sm">
+            You've been invited to join <span className="font-semibold">{inviteOrg}</span>'s downline. Create your
+            account below and you'll be added to their team automatically.
+          </div>
+        )}
+
         {/* Google sign-up */}
         <div className="mt-6">
           <GoogleSignInButton label="Sign up with Google" />
@@ -163,6 +189,7 @@ export default function SignupPage() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
               required
+              readOnly={!!inviteToken}
             />
           </div>
 
