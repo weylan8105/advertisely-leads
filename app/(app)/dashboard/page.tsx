@@ -188,7 +188,7 @@ export default function DashboardPage() {
           icon={<PhoneCall className="h-4 w-4" />}
         />
         <DashboardStatCard
-          label="Appointments"
+          label="Presentations"
           value={0}
           delta={0}
           hint="last 7 days"
@@ -213,7 +213,7 @@ export default function DashboardPage() {
             <div>
               <CardTitle>Lead performance</CardTitle>
               <CardDescription>
-                Received, contacted, and appointments set this week
+                Received, contacted, and presentations set this week
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm">
@@ -300,7 +300,7 @@ export default function DashboardPage() {
             {[
               ["New", 0, "bg-brand-red/20"],
               ["Contacted", 0, "bg-sky-500/20"],
-              ["Appointment Set", 0, "bg-violet-500/20"],
+              ["Presentation Set", 0, "bg-violet-500/20"],
               ["Closed", 0, "bg-emerald-500/20"],
             ].map(([label, count, color]) => (
               <div key={label as string}>
