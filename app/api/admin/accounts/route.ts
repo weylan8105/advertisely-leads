@@ -33,7 +33,7 @@ export async function GET() {
     }),
     prisma.order.groupBy({
       by: ["userId"],
-      _sum: { totalCents: true },
+      _sum: { totalCents: true, quantity: true, fulfilledCount: true },
       _max: { createdAt: true },
     }),
     prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true } }),
@@ -54,9 +54,13 @@ export async function GET() {
     apByUser[u] = (apByUser[u] ?? 0) + (s.soldPremiumCents ?? 0);
   }
   const spendByUser: Record<string, number> = {};
+  const orderedByUser: Record<string, number> = {};
+  const fulfilledByUser: Record<string, number> = {};
   const lastOrderByUser: Record<string, Date | null> = {};
   for (const o of orderAgg) {
     spendByUser[o.userId] = o._sum.totalCents ?? 0;
+    orderedByUser[o.userId] = o._sum.quantity ?? 0;
+    fulfilledByUser[o.userId] = o._sum.fulfilledCount ?? 0;
     lastOrderByUser[o.userId] = o._max.createdAt ?? null;
   }
   const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
@@ -80,10 +84,17 @@ export async function GET() {
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
+        // Order fulfillment progress across all this client's orders.
+        orderedQty: orderedByUser[id] ?? 0,
+        fulfilledQty: fulfilledByUser[id] ?? 0,
+        orderProgressPct:
+          (orderedByUser[id] ?? 0) > 0
+            ? Math.min(100, Math.round(((fulfilledByUser[id] ?? 0) / (orderedByUser[id] as number)) * 100))
+            : 0,
       };
     })
-    // Only real client accounts (have leads or have spent) — skip empty users.
-    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0))
+    // Only real client accounts (have leads, spent, or placed an order).
+    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0))
     .sort((a, b) => b.delivered - a.delivered);
 
   return NextResponse.json({
