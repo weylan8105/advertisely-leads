@@ -91,7 +91,7 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
       ["Phone", lead.phone],
       ["Email", lead.email],
       ["State", lead.state],
-      ["Age", lead.age ? String(lead.age) : ""],
+      ["Age", lead.ageRange || (lead.age ? String(lead.age) : "")],
       ["Income", lead.income ? formatCurrency(lead.income) : ""],
       ["Occupation", lead.occupation],
       ["Lead type", lead.leadTypeLabel],

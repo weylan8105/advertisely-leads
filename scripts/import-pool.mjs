@@ -30,6 +30,8 @@ const VALID=new Set(Object.values(STATES));
 function normState(s){s=(s||"").trim();if(!s)return{code:"",unknown:false};if(VALID.has(s.toUpperCase()))return{code:s.toUpperCase(),unknown:false};if(STATES[s.toLowerCase()])return{code:STATES[s.toLowerCase()],unknown:false};return{code:s,unknown:true};}
 function humanize(s){return (s||"").replace(/_/g," ").replace(/\s*\/\s*/g," / ").replace(/\b\w/g,m=>m.toUpperCase()).trim();}
 function moneyLow(s){const m=(s||"").replace(/,/g,"").match(/\d+/g);return m?parseInt(m[0],10):null;}
+// Age from a range/number answer — lower bound (the true range is kept in rawFormData.ageRange).
+function ageLow(s){const m=String(s||"").match(/\d{1,3}/);if(!m)return null;const n=parseInt(m[0],10);return n>=13&&n<=120?n:null;}
 function digits(s){return (s||"").replace(/\D/g,"");}
 function last10(s){const d=digits(s);return d.slice(-10);}
 function cleanPhone(s){return (s||"").replace(/^p:/i,"").trim();}
@@ -69,6 +71,7 @@ for(const r of raw){
     externalId:G(r,COL.id)||null,
     name:G(r,COL.name), email, phone, p10,
     state:st.code,
+    age:ageLow(G(r,COL.age)),
     income:moneyLow(G(r,COL.income)),
     occupation:humanize(G(r,COL.trade))||null,
     intentReason:G(r,COL.retire)?`Retirement timeline: ${humanize(G(r,COL.retire))}`:null,
@@ -110,7 +113,7 @@ try {
 
   let created=0;
   for(const m of fresh){
-    const data={ name:m.name, phone:m.phone, email:m.email, state:m.state, income:m.income, occupation:m.occupation, intentReason:m.intentReason, packageId:m.packageId, source:m.source, campaignName:m.campaignName, adsetId:m.adsetId, creativeId:m.creativeId, consentMethod:"TCPA_WEB_FORM", consentTime:m.consentTime, receivedAt:m.receivedAt, rawFormData:m.rawFormData, status:"NEW", assignedUserId:null, orderId:null };
+    const data={ name:m.name, phone:m.phone, email:m.email, state:m.state, age:m.age, income:m.income, occupation:m.occupation, intentReason:m.intentReason, packageId:m.packageId, source:m.source, campaignName:m.campaignName, adsetId:m.adsetId, creativeId:m.creativeId, consentMethod:"TCPA_WEB_FORM", consentTime:m.consentTime, receivedAt:m.receivedAt, rawFormData:m.rawFormData, status:"NEW", assignedUserId:null, orderId:null };
     if(m.externalId){ await prisma.lead.upsert({ where:{externalId:m.externalId}, update:{}, create:{ externalId:m.externalId, ...data } }); }
     else { await prisma.lead.create({ data }); }
     created++;

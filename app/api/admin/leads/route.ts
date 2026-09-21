@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { leadPackages } from "@/data/packages";
+import { ageRangeFromRaw } from "@/lib/age";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -119,6 +120,7 @@ export async function GET(req: NextRequest) {
     email: l.email,
     state: l.state,
     age: l.age,
+    ageRange: ageRangeFromRaw(l.rawFormData),
     occupation: l.occupation,
     income: l.income,
     packageId: l.packageId,

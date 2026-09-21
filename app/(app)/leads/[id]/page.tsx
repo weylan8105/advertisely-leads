@@ -205,7 +205,7 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
               <ContactField icon={Mail} label="Email" value={lead.email} href={mailHref} />
               <ContactField icon={MapPin} label="State" value={lead.state} />
               <ContactField icon={Briefcase} label="Occupation" value={lead.occupation} />
-              <ContactField icon={Calendar} label="Age" value={`${lead.age}`} />
+              <ContactField icon={Calendar} label="Age" value={lead.ageRange || `${lead.age}`} />
               <ContactField
                 icon={Calendar}
                 label="Self-reported income"
@@ -388,7 +388,7 @@ function LeadDetailContent({ lead }: { lead: (typeof mockLeads)[number] }) {
                       <FormResponseRow label="Phone number" value={lead.phone} />
                       <FormResponseRow label="Email" value={lead.email} />
                       <FormResponseRow label="State" value={lead.state} />
-                      <FormResponseRow label="Age" value={`${lead.age}`} />
+                      <FormResponseRow label="Age" value={lead.ageRange || `${lead.age}`} />
                       <FormResponseRow
                         label="Self-reported income"
                         value={formatCurrency(lead.income)}

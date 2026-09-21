@@ -17,7 +17,7 @@ import { formatDate, cn } from "@/lib/utils";
 
 interface AdminLead {
   id: string; name: string; phone: string; email: string; state: string;
-  age: number | null; occupation: string | null; income: number | null; packageName: string;
+  age: number | null; ageRange?: string | null; occupation: string | null; income: number | null; packageName: string;
   status: string; source: string; campaignName: string | null; receivedAt: string;
   assignedTo: { name: string | null; email: string } | null;
 }
@@ -327,7 +327,7 @@ export function AdminAllLeads({
                   </TableCell>
                   <TableCell><Badge variant="muted">{l.state || "—"}</Badge></TableCell>
                   <TableCell className="hidden md:table-cell text-sm">{l.occupation ?? "—"}</TableCell>
-                  <TableCell className="hidden lg:table-cell text-sm">{l.age ?? "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell text-sm">{l.ageRange || l.age || "—"}</TableCell>
                   <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{l.campaignName ?? "—"}</TableCell>
                   <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">{l.source}</TableCell>
                   <TableCell className="text-sm">
