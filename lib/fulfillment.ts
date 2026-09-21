@@ -5,6 +5,7 @@ import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
 import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
+import { coveredStates, assignLeadToHouse } from "@/lib/house";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -78,10 +79,12 @@ export async function fulfillOrder(orderId: string): Promise<number> {
   let mode: "MANUAL" | "ROUND_ROBIN" = "MANUAL";
   let rotation: string[] = [];
   let rrCursor = 0;
+  let orgOwnerId: string | null = null;
   if (orgId) {
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
       select: {
+        ownerId: true,
         distributionMode: true,
         rrCursor: true,
         memberships: {
@@ -92,12 +95,19 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       },
     });
     if (org) {
+      orgOwnerId = org.ownerId;
       mode = org.distributionMode;
       rrCursor = org.rrCursor;
       rotation = org.memberships.map((m) => m.userId);
     }
   }
-  const useRR = mode === "ROUND_ROBIN" && rotation.length > 0;
+  // Round-robin distributes the ORG OWNER's purchases across the team. A member
+  // who buys their own leads (they belong to a team but aren't the owner) must
+  // receive their entire order — never have it split to the agency. Without this
+  // guard, an agent's personal order was round-robined to the team owner (Luke's
+  // paid leads were leaking to Wylie).
+  const useRR =
+    mode === "ROUND_ROBIN" && rotation.length > 0 && order.userId === orgOwnerId;
 
   // leadId → assigned userId
   const assigneeOf = new Map<string, string>();
@@ -273,6 +283,23 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
 
   for (const order of pendingOrders) {
     const assigned = await fulfillOrder(order.id);
-    if (assigned > 0) break; // This lead got placed
+    if (assigned > 0) {
+      // fulfillOrder assigns `remaining` matching leads, not necessarily THIS
+      // one — confirm this lead actually landed before we stop.
+      const check = await prisma.lead.findUnique({
+        where: { id: leadId },
+        select: { assignedUserId: true },
+      });
+      if (check?.assignedUserId) return;
+    }
+  }
+
+  // House catch-all: no open order covers this lead's state, so it would sit
+  // unassigned in the pool. Route it to the house CRM (Ryan) so his team works
+  // it while it's fresh, instead of letting it age out. States with an open
+  // order are left alone (their inventory serves those orders + the aged store).
+  const { states: covered, anyStateOrder } = await coveredStates();
+  if (!anyStateOrder && lead.state && !covered.has(lead.state)) {
+    await assignLeadToHouse(leadId, `no active order covers ${lead.state}`);
   }
 }
