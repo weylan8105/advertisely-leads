@@ -28,6 +28,11 @@ export async function fulfillOrder(orderId: string): Promise<number> {
   const remaining = order.quantity - order.fulfilledCount;
   if (remaining <= 0) return 0;
 
+  // State is REQUIRED. An order with no states configured must NEVER vacuum up
+  // every state — a client only ever receives leads in states they ordered.
+  // Deliver nothing until the order has states set (misconfiguration guard).
+  if (order.filterStates.length === 0) return 0;
+
   // Aged buckets carry an age window (days) relative to receivedAt. Translate
   // it into a receivedAt range; null bounds are left open.
   const dayMs = 86_400_000;
@@ -46,9 +51,9 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       assignedUserId: null,
       orderId: null,
       trashedAt: null, // never deliver trashed (replaced/bad) leads
-      ...(order.filterStates.length > 0
-        ? { state: { in: order.filterStates } }
-        : {}),
+      // Hard state match — an order only ever draws leads in its own states
+      // (guaranteed non-empty by the guard above).
+      state: { in: order.filterStates },
       ...(order.filterIncomeMin
         ? { income: { gte: order.filterIncomeMin } }
         : {}),
