@@ -16,6 +16,8 @@ interface Body {
   source?: string;
   campaignName?: string;
   commit?: boolean;
+  /** Deliberately allow importing leads outside the order's states (rare override). */
+  allowOffState?: boolean;
 }
 
 /**
@@ -86,6 +88,22 @@ export async function POST(req: NextRequest) {
       ? Array.from(new Set(leads.map((l) => l.state).filter((s) => s && !order.filterStates.includes(s))))
       : [];
 
+  // STATE ENFORCEMENT: a client must never receive a lead in a state they did
+  // not order. Unless explicitly overridden, only import leads whose state is in
+  // the order's states, and refuse an order that has no states configured.
+  const allowOffState = body.allowOffState === true;
+  if (order.filterStates.length === 0 && !allowOffState) {
+    return NextResponse.json(
+      { error: "This order has no states configured — refusing to import (it would deliver every state). Set the order's states first, or pass allowOffState:true to override." },
+      { status: 422 },
+    );
+  }
+  const deliverable =
+    order.filterStates.length > 0 && !allowOffState
+      ? leads.filter((l) => order.filterStates.includes(l.state))
+      : leads;
+  const skippedOffState = leads.length - deliverable.length;
+
   // Dry run: report without writing.
   if (!commit) {
     return NextResponse.json({
@@ -97,14 +115,22 @@ export async function POST(req: NextRequest) {
       offStateWarning: offStates.length
         ? `${offStates.length} state(s) not in this order: ${offStates.join(", ")}`
         : null,
+      willSkipOffState: skippedOffState,
+      willImport: deliverable.length,
       unknownStates: unknownStateRows.length,
       sample: leads.slice(0, 3).map((l) => ({ name: l.name, state: l.state, email: l.email })),
     });
   }
 
-  // Commit: upsert leads assigned to this user + order.
+  // Commit: upsert leads assigned to this user + order — in-state only.
+  if (deliverable.length === 0) {
+    return NextResponse.json(
+      { error: `No leads match this order's states (${order.filterStates.join(", ")}). ${skippedOffState} off-state lead(s) were skipped. Nothing imported.` },
+      { status: 422 },
+    );
+  }
   let created = 0, updated = 0;
-  for (const m of leads) {
+  for (const m of deliverable) {
     const base = {
       name: m.name, phone: m.phone, email: m.email, state: m.state,
       age: m.age, income: m.income, occupation: m.occupation, intentReason: m.intentReason,
@@ -151,7 +177,7 @@ export async function POST(req: NextRequest) {
         leadCount: created + updated,
         packageName: pkgName,
         orderId: order.id,
-        leads: leads.slice(0, 50).map((l) => ({
+        leads: deliverable.slice(0, 50).map((l) => ({
           name: l.name,
           phone: l.phone,
           email: l.email,
@@ -173,10 +199,13 @@ export async function POST(req: NextRequest) {
     client: { name: user.name, email: user.email },
     package: pkgName,
     created, updated,
+    skippedOffState,
     assignedTotal: assignedCount,
     orderQuantity: order.quantity,
     orderStatus: delivered ? "DELIVERED" : "DELIVERING",
     warnings,
-    offStateWarning: offStates.length ? `${offStates.length} state(s) outside the order: ${offStates.join(", ")}` : null,
+    offStateWarning: skippedOffState
+      ? `${skippedOffState} lead(s) skipped — outside the order's states (${offStates.join(", ")}).`
+      : null,
   });
 }
