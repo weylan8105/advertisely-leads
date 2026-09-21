@@ -75,8 +75,25 @@ export async function fulfillReplacement(
   const orderId = bad.orderId ?? null;
   const poolIds = leadPoolIdsFor(bad.packageId);
 
-  // Pick the freshest equal-or-better lead: same pool, same state, unassigned,
-  // not a test lead, not the bad lead itself.
+  // Match the age window of the order being replaced (fall back to the package)
+  // so a Real-Time buyer's replacement is also fresh — never an aged lead.
+  const replAtFilter: { gt?: Date; lte?: Date } = {};
+  if (orderId) {
+    const ord = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { filterAgeMinDays: true, filterAgeMaxDays: true, packageId: true },
+    });
+    const pk = findPackage(ord?.packageId ?? bad.packageId);
+    const maxD = ord?.filterAgeMaxDays ?? pk?.ageMaxDays ?? null;
+    const minD = ord?.filterAgeMinDays ?? pk?.ageMinDays ?? null;
+    const dayMs = 86_400_000;
+    const nowMs = Date.now();
+    if (maxD != null) replAtFilter.gt = new Date(nowMs - maxD * dayMs);
+    if (minD != null) replAtFilter.lte = new Date(nowMs - minD * dayMs);
+  }
+
+  // Pick the freshest equal-or-better lead: same pool, same state, in the order's
+  // age window, unassigned, not a test lead, not the bad lead itself.
   const replacement = await prisma.lead.findFirst({
     where: {
       packageId: { in: poolIds },
@@ -85,6 +102,7 @@ export async function fulfillReplacement(
       orderId: null,
       trashedAt: null,
       id: { not: bad.id },
+      ...(replAtFilter.gt || replAtFilter.lte ? { receivedAt: replAtFilter } : {}),
       ...NOT_TEST_LEAD,
     },
     orderBy: { receivedAt: "desc" },
