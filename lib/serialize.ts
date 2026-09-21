@@ -4,6 +4,7 @@
 
 import type { Lead, LeadStatus, LeadPackageId } from "@/types";
 import { leadPackages } from "@/data/packages";
+import { ageRangeFromRaw } from "./age";
 
 const STATUS_LABEL: Record<string, LeadStatus> = {
   NEW: "New",
@@ -37,6 +38,9 @@ export function serializeLead(l: any): Lead {
     email: l.email,
     state: l.state,
     age: l.age ?? 0,
+    // The age-range string (e.g. "40–49") when the form asked a range; agents
+    // see this in the Age field instead of a blank/derived number.
+    ageRange: ageRangeFromRaw(l.rawFormData) ?? undefined,
     income: l.income ?? 0,
     occupation: l.occupation ?? "",
     leadType: (l.packageId as LeadPackageId) ?? "blue-collar-iul",
