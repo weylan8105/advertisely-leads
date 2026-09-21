@@ -145,7 +145,7 @@ export function AdminAccounts() {
         </table>
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        Order progress = leads delivered ÷ leads ordered (across all their orders) · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
+        Order progress = leads delivered ÷ leads ordered on their latest order · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
         Click <span className="font-medium">View CRM</span> to see any account&apos;s full pipeline.
       </p>
 
