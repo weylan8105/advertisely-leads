@@ -39,9 +39,15 @@ export async function fulfillOrder(orderId: string): Promise<number> {
   const nowMs = Date.now();
   // ageMaxDays is the exclusive upper edge (shared with the next bucket's
   // ageMinDays) → gt, so adjacent buckets tile with no gap or overlap.
+  // Age bounds come from the order; if an order was never stamped, fall back to
+  // the package's own age window so a tiered product (e.g. Real-Time = 0–2 days)
+  // can NEVER deliver out-of-window leads even on an unstamped order.
+  const pkgForAge = findPackage(order.packageId);
+  const ageMaxDays = order.filterAgeMaxDays ?? pkgForAge?.ageMaxDays ?? null;
+  const ageMinDays = order.filterAgeMinDays ?? pkgForAge?.ageMinDays ?? null;
   const receivedAtFilter: { gt?: Date; lte?: Date } = {};
-  if (order.filterAgeMaxDays != null) receivedAtFilter.gt = new Date(nowMs - order.filterAgeMaxDays * dayMs);
-  if (order.filterAgeMinDays != null) receivedAtFilter.lte = new Date(nowMs - order.filterAgeMinDays * dayMs);
+  if (ageMaxDays != null) receivedAtFilter.gt = new Date(nowMs - ageMaxDays * dayMs);
+  if (ageMinDays != null) receivedAtFilter.lte = new Date(nowMs - ageMinDays * dayMs);
 
   // Find unassigned leads from this order's underlying lead pool, matching its
   // state + income + age filters. Buckets resolve to their pool (e.g. aged-iul).

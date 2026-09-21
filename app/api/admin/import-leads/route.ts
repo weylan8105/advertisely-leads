@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { parseCsv, mapCsvToLeads } from "@/lib/leadImport";
-import { leadPackages } from "@/data/packages";
+import { leadPackages, findPackage } from "@/data/packages";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -18,6 +18,8 @@ interface Body {
   commit?: boolean;
   /** Deliberately allow importing leads outside the order's states (rare override). */
   allowOffState?: boolean;
+  /** Deliberately allow importing leads outside the order's age window (rare override). */
+  allowAged?: boolean;
 }
 
 /**
@@ -98,11 +100,31 @@ export async function POST(req: NextRequest) {
       { status: 422 },
     );
   }
-  const deliverable =
+  const inStateLeads =
     order.filterStates.length > 0 && !allowOffState
       ? leads.filter((l) => order.filterStates.includes(l.state))
       : leads;
-  const skippedOffState = leads.length - deliverable.length;
+  const skippedOffState = leads.length - inStateLeads.length;
+
+  // AGE ENFORCEMENT: a Real-Time (fresh) buyer must never be imported an aged
+  // lead. Enforce the order's age window (falling back to the package's window,
+  // e.g. Real-Time = 0–2 days). Unless overridden, skip out-of-window leads.
+  const agePkg = findPackage(order.packageId);
+  const ageMaxDays = order.filterAgeMaxDays ?? agePkg?.ageMaxDays ?? null;
+  const ageMinDays = order.filterAgeMinDays ?? agePkg?.ageMinDays ?? null;
+  const allowAged = body.allowAged === true;
+  const ageDaysOf = (l: { receivedAt?: Date | null }) =>
+    l.receivedAt ? (Date.now() - new Date(l.receivedAt).getTime()) / 86_400_000 : null;
+  const inWindow = (l: { receivedAt?: Date | null }) => {
+    if (allowAged) return true;
+    const d = ageDaysOf(l);
+    if (d == null) return true; // unknown age → don't block
+    if (ageMaxDays != null && d > ageMaxDays) return false;
+    if (ageMinDays != null && d < ageMinDays) return false;
+    return true;
+  };
+  const deliverable = inStateLeads.filter(inWindow);
+  const skippedAged = inStateLeads.length - deliverable.length;
 
   // Dry run: report without writing.
   if (!commit) {
@@ -116,16 +138,22 @@ export async function POST(req: NextRequest) {
         ? `${offStates.length} state(s) not in this order: ${offStates.join(", ")}`
         : null,
       willSkipOffState: skippedOffState,
+      willSkipAged: skippedAged,
+      ageWindow: ageMaxDays != null || ageMinDays != null ? { minDays: ageMinDays, maxDays: ageMaxDays } : null,
       willImport: deliverable.length,
       unknownStates: unknownStateRows.length,
       sample: leads.slice(0, 3).map((l) => ({ name: l.name, state: l.state, email: l.email })),
     });
   }
 
-  // Commit: upsert leads assigned to this user + order — in-state only.
+  // Commit: upsert leads assigned to this user + order — in-state AND in-window only.
   if (deliverable.length === 0) {
     return NextResponse.json(
-      { error: `No leads match this order's states (${order.filterStates.join(", ")}). ${skippedOffState} off-state lead(s) were skipped. Nothing imported.` },
+      {
+        error: `No leads match this order's criteria (states ${order.filterStates.join(", ")}${
+          ageMaxDays != null ? `, age ≤ ${ageMaxDays}d` : ""
+        }). Skipped ${skippedOffState} off-state and ${skippedAged} out-of-age-window lead(s). Nothing imported.`,
+      },
       { status: 422 },
     );
   }
@@ -200,12 +228,16 @@ export async function POST(req: NextRequest) {
     package: pkgName,
     created, updated,
     skippedOffState,
+    skippedAged,
     assignedTotal: assignedCount,
     orderQuantity: order.quantity,
     orderStatus: delivered ? "DELIVERED" : "DELIVERING",
     warnings,
     offStateWarning: skippedOffState
       ? `${skippedOffState} lead(s) skipped — outside the order's states (${offStates.join(", ")}).`
+      : null,
+    agedWarning: skippedAged
+      ? `${skippedAged} lead(s) skipped — outside the order's age window${ageMaxDays != null ? ` (≤ ${ageMaxDays}d)` : ""}.`
       : null,
   });
 }
