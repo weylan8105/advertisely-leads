@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
-  RefreshCw,
+  Users,
   MoreHorizontal,
   Search,
   Phone,
@@ -160,16 +160,26 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
     }
   }
 
-  async function requestReplacementBulk() {
+  // Bulk (re)assign every selected lead to a downline agent, or unassign them
+  // all, in one request. Replacements are intentionally one-at-a-time only.
+  async function assignBulk(userId: string | null, agentName: string) {
     if (selected.size === 0) return;
-    const reason = window.prompt(`What's wrong with these ${selected.size} lead${selected.size === 1 ? "" : "s"}? (e.g., disconnected number, wrong info)`);
-    if (reason === null) return;
-    const results = await Promise.all(selectedIds.map((id) => submitReplacement(id, reason.trim())));
-    const ok = results.filter((r) => r.ok).length;
-    const fail = results.length - ok;
-    if (ok) addToast("success", `Replacement request submitted for ${ok} lead${ok === 1 ? "" : "s"}. Our team will review within 72 hours.`);
-    if (fail) addToast("error", `${fail} couldn't be submitted (a request may already be pending).`);
-    setSelected(new Set());
+    try {
+      const res = await fetch("/api/leads/assign-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: selectedIds, userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { addToast("error", data.error || "Could not reassign the selected leads."); return; }
+      const n = data.count ?? selectedIds.length;
+      addToast("success", userId ? `${n} lead${n === 1 ? "" : "s"} reassigned to ${agentName}.` : `${n} lead${n === 1 ? "" : "s"} unassigned.`);
+      if (data.skipped) addToast("error", `${data.skipped} skipped (not in your organization).`);
+      setSelected(new Set());
+      setTimeout(() => window.location.reload(), 800);
+    } catch {
+      addToast("error", "Failed to reassign the selected leads.");
+    }
   }
 
   return (
@@ -248,15 +258,34 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
             </Select>
           </div>
           <div className="flex gap-2">
-            {selected.size > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={requestReplacementBulk}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Request replacement ({selected.size})
-              </Button>
+            {selected.size > 0 && canAssign && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Users className="h-4 w-4" />
+                    Assign ({selected.size})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {members.length > 0 && (
+                    <>
+                      <DropdownMenuLabel>Assign {selected.size} to agent</DropdownMenuLabel>
+                      {members.map((m) => (
+                        <DropdownMenuItem
+                          key={m.userId}
+                          onClick={() => assignBulk(m.userId, m.name ?? m.email)}
+                        >
+                          {m.name ?? m.email}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={() => assignBulk(null, "")}>
+                    Unassign
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             <ExportButton
               leadIds={selectedIds}
