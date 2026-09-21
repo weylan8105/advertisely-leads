@@ -21,7 +21,7 @@ export async function GET() {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const [leadGroups, soldLeads, orderAgg, users] = await Promise.all([
+  const [leadGroups, soldLeads, orderAgg, latestOrders, users] = await Promise.all([
     prisma.lead.groupBy({
       by: ["assignedUserId", "pipelineStage"],
       where: { assignedUserId: { not: null } },
@@ -31,10 +31,17 @@ export async function GET() {
       where: { assignedUserId: { not: null }, pipelineStage: "issued-paid" },
       select: { assignedUserId: true, soldPremiumCents: true },
     }),
+    // Total spend + most-recent order date (aggregated across all their orders).
     prisma.order.groupBy({
       by: ["userId"],
-      _sum: { totalCents: true, quantity: true, fulfilledCount: true },
+      _sum: { totalCents: true },
       _max: { createdAt: true },
+    }),
+    // Every order, newest first — used to pull each client's LATEST order for the
+    // progress bar (progress reflects only the most recent order, not a sum).
+    prisma.order.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { userId: true, quantity: true, fulfilledCount: true },
     }),
     prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true } }),
   ]);
@@ -54,14 +61,15 @@ export async function GET() {
     apByUser[u] = (apByUser[u] ?? 0) + (s.soldPremiumCents ?? 0);
   }
   const spendByUser: Record<string, number> = {};
-  const orderedByUser: Record<string, number> = {};
-  const fulfilledByUser: Record<string, number> = {};
   const lastOrderByUser: Record<string, Date | null> = {};
   for (const o of orderAgg) {
     spendByUser[o.userId] = o._sum.totalCents ?? 0;
-    orderedByUser[o.userId] = o._sum.quantity ?? 0;
-    fulfilledByUser[o.userId] = o._sum.fulfilledCount ?? 0;
     lastOrderByUser[o.userId] = o._max.createdAt ?? null;
+  }
+  // Latest order per user (latestOrders is newest-first, so first seen wins).
+  const latestOrderByUser: Record<string, { quantity: number; fulfilledCount: number }> = {};
+  for (const o of latestOrders) {
+    if (!(o.userId in latestOrderByUser)) latestOrderByUser[o.userId] = { quantity: o.quantity, fulfilledCount: o.fulfilledCount };
   }
   const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
 
@@ -84,12 +92,13 @@ export async function GET() {
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
-        // Order fulfillment progress across all this client's orders.
-        orderedQty: orderedByUser[id] ?? 0,
-        fulfilledQty: fulfilledByUser[id] ?? 0,
+        // Progress on this client's LATEST order only (never a sum across orders,
+        // and never above the order quantity — so it can't read "30/25").
+        orderedQty: latestOrderByUser[id]?.quantity ?? 0,
+        fulfilledQty: Math.min(latestOrderByUser[id]?.fulfilledCount ?? 0, latestOrderByUser[id]?.quantity ?? 0),
         orderProgressPct:
-          (orderedByUser[id] ?? 0) > 0
-            ? Math.min(100, Math.round(((fulfilledByUser[id] ?? 0) / (orderedByUser[id] as number)) * 100))
+          (latestOrderByUser[id]?.quantity ?? 0) > 0
+            ? Math.min(100, Math.round((Math.min(latestOrderByUser[id]!.fulfilledCount, latestOrderByUser[id]!.quantity) / latestOrderByUser[id]!.quantity) * 100))
             : 0,
       };
     })
