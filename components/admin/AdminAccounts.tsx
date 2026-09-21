@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, X, ArrowRight, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Lead } from "@/types";
@@ -21,6 +22,9 @@ interface Account {
   leadSpendCents: number;
   lastOrderAt: string | null;
   conversionPct: number;
+  orderedQty: number;
+  fulfilledQty: number;
+  orderProgressPct: number;
 }
 
 const money = (c: number) => formatCurrency(Math.round(c) / 100);
@@ -56,10 +60,11 @@ export function AdminAccounts() {
   return (
     <>
       <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full text-sm min-w-[820px]">
+        <table className="w-full text-sm min-w-[960px]">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-muted-foreground border-b border-slate-200">
               <th className="text-left py-2 font-medium">Account</th>
+              <th className="text-left py-2 font-medium">Order progress</th>
               <th className="text-right py-2 font-medium">Delivered</th>
               <th className="text-right py-2 font-medium">Working</th>
               <th className="text-right py-2 font-medium">Quoted</th>
@@ -82,6 +87,28 @@ export function AdminAccounts() {
                       {a.role === "ADMIN" && <Badge variant="muted" className="text-[9px]">Admin</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground">{a.email}{a.agency ? ` · ${a.agency}` : ""}</div>
+                  </td>
+                  <td className="py-2.5">
+                    {a.orderedQty > 0 ? (
+                      <div className="w-32">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="tabular-nums font-medium text-foreground">
+                            {a.fulfilledQty}/{a.orderedQty}
+                          </span>
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              a.orderProgressPct >= 100 ? "text-emerald-600 font-medium" : "text-muted-foreground",
+                            )}
+                          >
+                            {a.orderProgressPct >= 100 ? "Complete" : `${a.orderProgressPct}%`}
+                          </span>
+                        </div>
+                        <Progress value={a.orderProgressPct} className="h-1.5" />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="py-2.5 text-right tabular-nums">{a.delivered}</td>
                   <td className="py-2.5 text-right tabular-nums text-muted-foreground">{m.working}</td>
@@ -109,7 +136,7 @@ export function AdminAccounts() {
             })}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center text-sm text-muted-foreground py-10">
+                <td colSpan={10} className="text-center text-sm text-muted-foreground py-10">
                   No client accounts with leads or orders yet.
                 </td>
               </tr>
@@ -118,7 +145,7 @@ export function AdminAccounts() {
         </table>
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
+        Order progress = leads delivered ÷ leads ordered (across all their orders) · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
         Click <span className="font-medium">View CRM</span> to see any account&apos;s full pipeline.
       </p>
 
