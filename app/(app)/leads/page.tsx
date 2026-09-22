@@ -24,6 +24,17 @@ export default function LeadsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [canManage, setCanManage] = useState(false);
   const [viewing, setViewing] = useState<string>("me");
+  // Each order that delivers to me (my own + any routed to me), shown separately.
+  const [myOrders, setMyOrders] = useState<
+    { id: string; quantity: number; fulfilledCount: number; routedToMe?: boolean; fromName?: string | null }[]
+  >([]);
+
+  useEffect(() => {
+    fetch("/api/orders")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.orders)) setMyOrders(d.orders); })
+      .catch(() => {});
+  }, []);
 
   // Load the team roster once (owners/admins only get members back).
   useEffect(() => {
@@ -127,6 +138,44 @@ export default function LeadsPage() {
           </>
         }
       />
+
+      {viewing === "me" && myOrders.length > 0 && (
+        <Card className="p-4 mb-4">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3">Your lead orders</div>
+          <div className="space-y-3">
+            {myOrders.map((o) => {
+              const pct = o.quantity > 0 ? Math.min(100, Math.round((o.fulfilledCount / o.quantity) * 100)) : 0;
+              const remaining = Math.max(0, o.quantity - o.fulfilledCount);
+              return (
+                <div key={o.id} className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <div className="w-40 shrink-0 text-sm font-medium">
+                    {o.routedToMe ? (
+                      <>Routed to you{o.fromName ? ` · from ${o.fromName}` : ""}</>
+                    ) : (
+                      "Your order"
+                    )}
+                  </div>
+                  <div className="tabular-nums text-sm font-semibold w-20 shrink-0">
+                    {o.fulfilledCount}
+                    <span className="text-muted-foreground font-normal"> / {o.quantity}</span>
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-brand-red to-brand-redDark transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground w-24 shrink-0 text-right">
+                    {remaining} to come
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {error && (
         <Card className="p-5 mb-4 border-destructive/40">

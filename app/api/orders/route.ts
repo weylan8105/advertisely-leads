@@ -122,19 +122,37 @@ export async function GET(req: NextRequest) {
   if (!session?.user || !(session.user as any).id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const myId = (session.user as any).id as string;
+  // A downline agent sees orders they bought AND orders an upline routed to them.
   const orders = await prisma.order.findMany({
-    where: { userId: (session.user as any).id },
+    where: { OR: [{ userId: myId }, { deliverToUserId: myId }] },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
   // Report a LIVE delivered count (non-trashed leads actually on each order),
   // capped at the order quantity, so progress can never drift or exceed 100%.
   const live = await deliveredCounts(orders.map((o) => o.id));
+  // Resolve the buyer (upline) name for any order routed to me.
+  const routedBuyerIds = [...new Set(orders.filter((o) => o.userId !== myId).map((o) => o.userId))];
+  const buyers = routedBuyerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: routedBuyerIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const buyerName: Record<string, string> = {};
+  for (const b of buyers) buyerName[b.id] = b.name ?? b.email ?? "upline";
   const withLive = orders.map((o) => ({
     ...o,
     fulfilledCount: Math.min(live[o.id] ?? 0, o.quantity),
+    routedToMe: o.userId !== myId && o.deliverToUserId === myId,
+    fromName: o.userId !== myId ? buyerName[o.userId] ?? null : null,
   }));
-  return NextResponse.json({ orders: withLive });
+  // Summary across every order that delivers to me (my own + routed to me), so
+  // an agent can see "X of <total> delivered, Y remaining" at a glance.
+  const ordered = withLive.reduce((s, o) => s + o.quantity, 0);
+  const delivered = withLive.reduce((s, o) => s + o.fulfilledCount, 0);
+  return NextResponse.json({
+    orders: withLive,
+    summary: { ordered, delivered, remaining: Math.max(0, ordered - delivered) },
+  });
 }
 
 /**
