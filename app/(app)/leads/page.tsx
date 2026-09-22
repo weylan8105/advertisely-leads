@@ -1,25 +1,48 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PlusCircle, Rows3, KanbanSquare, Loader2 } from "lucide-react";
+import { PlusCircle, Rows3, KanbanSquare, Loader2, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/types";
+
+interface TeamMember { userId: string; name: string | null; email: string; isSelf?: boolean }
 
 export default function LeadsPage() {
   const [view, setView] = useState<"list" | "kanban">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Team owners can switch between their own leads and a read-only view of a
+  // downline agent's leads. "me" = my own leads (the default for everyone).
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [canManage, setCanManage] = useState(false);
+  const [viewing, setViewing] = useState<string>("me");
 
+  // Load the team roster once (owners/admins only get members back).
+  useEffect(() => {
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setCanManage(!!d.canManage);
+        setMembers((d.members ?? []).map((m: any) => ({ userId: m.userId, name: m.name, email: m.email, isSelf: m.isSelf })));
+      })
+      .catch(() => {});
+  }, []);
+
+  // (Re)load leads for the current view — mine by default, or a downline agent.
   useEffect(() => {
     let active = true;
-    fetch("/api/leads")
+    setLoading(true);
+    const url = viewing && viewing !== "me" ? `/api/leads?agent=${encodeURIComponent(viewing)}` : "/api/leads";
+    fetch(url)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((data) => {
         if (active) setLeads(data.leads ?? []);
@@ -33,7 +56,11 @@ export default function LeadsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [viewing]);
+
+  // Downline agents (everyone on the team except me).
+  const downline = members.filter((m) => !m.isSelf);
+  const viewingAgent = downline.find((m) => m.userId === viewing);
 
   const buckets = {
     all: leads,
@@ -51,6 +78,22 @@ export default function LeadsPage() {
         description="Manage every IUL lead you've purchased — statuses, tasks, notes, dispositions, and consent records all in one place."
         actions={
           <>
+            {canManage && downline.length > 0 && (
+              <Select value={viewing} onValueChange={setViewing}>
+                <SelectTrigger className="w-[190px] h-9">
+                  <Users className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                  <SelectValue placeholder="My leads" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="me">My leads</SelectItem>
+                  {downline.map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>
+                      {m.name ?? m.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="inline-flex rounded-md border border-slate-300 overflow-hidden">
               <button
                 onClick={() => setView("kanban")}
@@ -89,6 +132,18 @@ export default function LeadsPage() {
         <Card className="p-5 mb-4 border-destructive/40">
           <p className="text-sm text-destructive">Couldn’t load leads: {error}</p>
         </Card>
+      )}
+
+      {viewingAgent && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-brand-red/20 bg-brand-red/[0.04] px-4 py-2.5 text-sm">
+          <Users className="h-4 w-4 text-brand-red" />
+          <span>
+            Viewing <strong>{viewingAgent.name ?? viewingAgent.email}</strong>&apos;s leads (team overview).
+          </span>
+          <button onClick={() => setViewing("me")} className="ml-auto text-xs font-medium text-brand-red hover:underline">
+            Back to my leads
+          </button>
+        </div>
       )}
 
       {loading ? (

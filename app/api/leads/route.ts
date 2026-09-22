@@ -55,17 +55,19 @@ export async function GET(req: NextRequest) {
     }
     where.assignedUserId = target.id;
   } else {
-    // Team scoping: owners/admins see the whole org; agents see only their own.
+    // Each person's CRM shows only THEIR OWN assigned leads — a lead lives in
+    // exactly one agent's list, so an upline and a downline agent never both see
+    // the same lead. An owner/admin can view a specific downline agent's leads
+    // with ?agent=<id> (a read-only team overview), or the whole org with
+    // ?scope=org (used by team-overview tooling), but the default is always mine.
     const ctx = await ensureOrgContext(myId);
-    if (ctx && canManageTeam(ctx.role)) {
-      if (agentParam) {
-        where.organizationId = ctx.organizationId;
-        where.assignedUserId = agentParam;
-      } else {
-        // Whole org PLUS any lead assigned directly to them — so leads that were
-        // assigned without an org stamp still show up for their owner.
-        where.OR = [{ organizationId: ctx.organizationId }, { assignedUserId: myId }];
-      }
+    const scopeParam = searchParams.get("scope");
+    const canManage = !!ctx && canManageTeam(ctx.role);
+    if (canManage && agentParam) {
+      where.organizationId = ctx!.organizationId;
+      where.assignedUserId = agentParam;
+    } else if (canManage && scopeParam === "org") {
+      where.OR = [{ organizationId: ctx!.organizationId }, { assignedUserId: myId }];
     } else {
       where.assignedUserId = myId;
     }
