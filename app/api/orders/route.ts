@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
+import { deliveredCounts } from "@/lib/orderProgress";
 import { leadPackages } from "@/data/packages";
 import {
   isSheetsConfigured,
@@ -105,7 +106,14 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
     take: 50,
   });
-  return NextResponse.json({ orders });
+  // Report a LIVE delivered count (non-trashed leads actually on each order),
+  // capped at the order quantity, so progress can never drift or exceed 100%.
+  const live = await deliveredCounts(orders.map((o) => o.id));
+  const withLive = orders.map((o) => ({
+    ...o,
+    fulfilledCount: Math.min(live[o.id] ?? 0, o.quantity),
+  }));
+  return NextResponse.json({ orders: withLive });
 }
 
 /**

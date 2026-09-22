@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { deliveredCounts } from "@/lib/orderProgress";
 import { PIPELINE_STAGES } from "@/data/pipeline";
 
 export const runtime = "nodejs";
@@ -41,7 +42,7 @@ export async function GET() {
     // progress bar (progress reflects only the most recent order, not a sum).
     prisma.order.findMany({
       orderBy: { createdAt: "desc" },
-      select: { userId: true, quantity: true, fulfilledCount: true },
+      select: { id: true, userId: true, quantity: true },
     }),
     prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true } }),
   ]);
@@ -67,10 +68,13 @@ export async function GET() {
     lastOrderByUser[o.userId] = o._max.createdAt ?? null;
   }
   // Latest order per user (latestOrders is newest-first, so first seen wins).
-  const latestOrderByUser: Record<string, { quantity: number; fulfilledCount: number }> = {};
+  const latestOrderByUser: Record<string, { id: string; quantity: number }> = {};
   for (const o of latestOrders) {
-    if (!(o.userId in latestOrderByUser)) latestOrderByUser[o.userId] = { quantity: o.quantity, fulfilledCount: o.fulfilledCount };
+    if (!(o.userId in latestOrderByUser)) latestOrderByUser[o.userId] = { id: o.id, quantity: o.quantity };
   }
+  // LIVE delivered count for each latest order (non-trashed leads on it) — so the
+  // progress bar reflects reality and never drifts from the stored counter.
+  const liveByOrder = await deliveredCounts(Object.values(latestOrderByUser).map((o) => o.id));
   const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
 
   const ids = new Set<string>([...Object.keys(byUser), ...Object.keys(spendByUser)]);
@@ -92,13 +96,23 @@ export async function GET() {
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
-        // Progress on this client's LATEST order only (never a sum across orders,
-        // and never above the order quantity — so it can't read "30/25").
+        // Progress on this client's LATEST order only, from a LIVE lead count
+        // (never a sum across orders, never above quantity — can't read "30/25").
         orderedQty: latestOrderByUser[id]?.quantity ?? 0,
-        fulfilledQty: Math.min(latestOrderByUser[id]?.fulfilledCount ?? 0, latestOrderByUser[id]?.quantity ?? 0),
+        fulfilledQty: Math.min(
+          latestOrderByUser[id] ? (liveByOrder[latestOrderByUser[id].id] ?? 0) : 0,
+          latestOrderByUser[id]?.quantity ?? 0,
+        ),
         orderProgressPct:
           (latestOrderByUser[id]?.quantity ?? 0) > 0
-            ? Math.min(100, Math.round((Math.min(latestOrderByUser[id]!.fulfilledCount, latestOrderByUser[id]!.quantity) / latestOrderByUser[id]!.quantity) * 100))
+            ? Math.min(
+                100,
+                Math.round(
+                  (Math.min(liveByOrder[latestOrderByUser[id]!.id] ?? 0, latestOrderByUser[id]!.quantity) /
+                    latestOrderByUser[id]!.quantity) *
+                    100,
+                ),
+              )
             : 0,
       };
     })
