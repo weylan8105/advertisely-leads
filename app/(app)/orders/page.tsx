@@ -12,6 +12,8 @@ import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Package, Truck, DollarSign, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Users } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,8 +33,11 @@ interface DbOrder {
   fulfilledCount: number;
   filterStates: string[];
   sheetOverrideId?: string | null;
+  deliverToUserId?: string | null;
   createdAt: string;
 }
+
+interface TeamMember { userId: string; name: string | null; email: string; isSelf?: boolean }
 
 function statusVariant(status: string) {
   switch (status) {
@@ -70,6 +75,53 @@ export default function OrdersPage() {
   const [sheetInput, setSheetInput] = useState("");
   const [savingSheet, setSavingSheet] = useState(false);
   const [sheetMsg, setSheetMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  // Team routing: owners can deliver an order to a downline agent.
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [canManage, setCanManage] = useState(false);
+  const [routingId, setRoutingId] = useState<string | null>(null);
+  const [routeMsg, setRouteMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setCanManage(!!d.canManage);
+        setMembers((d.members ?? []).map((m: any) => ({ userId: m.userId, name: m.name, email: m.email, isSelf: m.isSelf })));
+      })
+      .catch(() => {});
+  }, []);
+
+  async function routeOrder(order: DbOrder, value: string) {
+    const userId = value === "me" ? null : value;
+    setRoutingId(order.id);
+    setRouteMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/route-to`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRouteMsg(data.error || "Couldn't route the order.");
+        return;
+      }
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, deliverToUserId: userId } : o)));
+      const nm = value === "me" ? "you" : (members.find((m) => m.userId === value)?.name ?? "the agent");
+      setRouteMsg(
+        userId
+          ? `Order now delivers to ${nm}${data.movedExisting ? ` — ${data.movedExisting} existing lead${data.movedExisting === 1 ? "" : "s"} moved${data.emailed ? " and emailed" : ""}` : ""}.`
+          : "Routing cleared — this order now delivers to you.",
+      );
+    } catch {
+      setRouteMsg("Something went wrong routing the order.");
+    } finally {
+      setRoutingId(null);
+    }
+  }
+
+  const downline = members.filter((m) => !m.isSelf);
 
   function openSheetEditor(order: DbOrder) {
     setEditingId(order.id);
@@ -234,6 +286,28 @@ export default function OrdersPage() {
                             {order.fulfilledCount}/{order.quantity}
                           </span>
                         </div>
+                        {canManage && downline.length > 0 && (
+                          <div className="mt-1.5 flex items-center gap-1">
+                            <Users className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <Select
+                              value={order.deliverToUserId ?? "me"}
+                              onValueChange={(v) => routeOrder(order, v)}
+                            >
+                              <SelectTrigger className="h-6 text-[11px] w-[150px] px-2">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="me">Deliver to me</SelectItem>
+                                {downline.map((m) => (
+                                  <SelectItem key={m.userId} value={m.userId}>
+                                    To {m.name ?? m.email}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {routingId === order.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusVariant(order.status) as any}>
@@ -321,6 +395,15 @@ export default function OrdersPage() {
           </div>
         )}
       </Card>
+
+      {routeMsg && (
+        <div
+          className="fixed bottom-4 right-4 z-50 max-w-sm cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-lg"
+          onClick={() => setRouteMsg(null)}
+        >
+          {routeMsg}
+        </div>
+      )}
     </div>
   );
 }

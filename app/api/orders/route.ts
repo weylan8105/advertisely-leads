@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
 import { deliveredCounts } from "@/lib/orderProgress";
+import { ensureOrgContext } from "@/lib/org";
 import { leadPackages } from "@/data/packages";
 import {
   isSheetsConfigured,
@@ -22,6 +23,8 @@ interface CreateOrderBody {
   quantity: number;
   filterStates?: string[];
   filterIncomeMin?: number;
+  // Optional: deliver this order's leads to a downline agent on the buyer's team.
+  deliverToUserId?: string | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -66,6 +69,23 @@ export async function POST(req: NextRequest) {
 
   const totalCents = Math.round(body.quantity * pkg.pricePerLead * 100);
 
+  // Optional: deliver this order to a downline agent. Only valid if the chosen
+  // agent is a member of the buyer's team.
+  let deliverToUserId: string | null = null;
+  if (body.deliverToUserId) {
+    const ctx = await ensureOrgContext((session.user as any).id);
+    const member = ctx?.organizationId
+      ? await prisma.membership.findUnique({
+          where: { organizationId_userId: { organizationId: ctx.organizationId, userId: body.deliverToUserId } },
+          select: { id: true },
+        })
+      : null;
+    if (!member) {
+      return NextResponse.json({ error: "That agent isn't on your team." }, { status: 400 });
+    }
+    deliverToUserId = body.deliverToUserId;
+  }
+
   const order = await prisma.order.create({
     data: {
       userId: (session.user as any).id,
@@ -75,6 +95,7 @@ export async function POST(req: NextRequest) {
       totalCents,
       filterStates: body.filterStates ?? [],
       filterIncomeMin: body.filterIncomeMin,
+      deliverToUserId,
       status: "PROCESSING",
     },
   });

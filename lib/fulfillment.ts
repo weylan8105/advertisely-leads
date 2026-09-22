@@ -121,13 +121,17 @@ export async function fulfillOrder(orderId: string): Promise<number> {
   // receive their entire order — never have it split to the agency. Without this
   // guard, an agent's personal order was round-robined to the team owner (Luke's
   // paid leads were leaking to Wylie).
+  // An order routed to a specific downline agent (deliverToUserId) always goes
+  // entirely to that agent — never round-robined or split.
+  const routedTo = order.deliverToUserId ?? null;
   const useRR =
-    mode === "ROUND_ROBIN" && rotation.length > 0 && order.userId === orgOwnerId;
+    !routedTo && mode === "ROUND_ROBIN" && rotation.length > 0 && order.userId === orgOwnerId;
 
-  // leadId → assigned userId
+  // leadId → assigned userId. Default recipient is the routed agent, else the buyer.
+  const defaultRecipient = routedTo ?? order.userId;
   const assigneeOf = new Map<string, string>();
   candidates.forEach((l, i) => {
-    assigneeOf.set(l.id, useRR ? rotation[(rrCursor + i) % rotation.length] : order.userId);
+    assigneeOf.set(l.id, useRR ? rotation[(rrCursor + i) % rotation.length] : defaultRecipient);
   });
   // Group ids by assignee for batched updates.
   const idsByAssignee = new Map<string, string[]>();
@@ -188,21 +192,32 @@ export async function fulfillOrder(orderId: string): Promise<number> {
     });
   });
 
-  // Send email notification to the agent
+  // Email EACH recipient exactly the leads that went to THEM — so every
+  // notification matches what's actually in that person's CRM (never a
+  // teammate's leads, and the routed agent — not the buyer — is the one told).
   if (candidates.length > 0 && isEmailConfigured) {
     try {
-      const user = await prisma?.user.findUnique({
-        where: { id: order.userId },
-        select: { email: true, name: true },
-      });
-      if (user?.email) {
+      const byRecipient = new Map<string, typeof candidates>();
+      for (const l of candidates) {
+        const who = assigneeOf.get(l.id) ?? defaultRecipient;
+        const arr = byRecipient.get(who) ?? [];
+        arr.push(l);
+        byRecipient.set(who, arr);
+      }
+      const pkgName = findPackage(order.packageId)?.name ?? order.packageId;
+      for (const [recipientId, theirLeads] of byRecipient) {
+        const user = await prisma!.user.findUnique({
+          where: { id: recipientId },
+          select: { email: true, name: true },
+        });
+        if (!user?.email) continue;
         await sendLeadDeliveryEmail({
           agentEmail: user.email,
           agentName: user.name ?? "Agent",
-          leadCount: candidates.length,
-          packageName: findPackage(order.packageId)?.name ?? order.packageId,
+          leadCount: theirLeads.length,
+          packageName: pkgName,
           orderId: order.id,
-          leads: candidates.map((l) => ({
+          leads: theirLeads.map((l) => ({
             name: l.name,
             phone: l.phone,
             email: l.email,
