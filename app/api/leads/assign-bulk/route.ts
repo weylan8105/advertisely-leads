@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { activeOrdersFor, leadMatchesOrders } from "@/lib/leadMatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const isPlatformAdmin = (session?.user as any)?.role === "ADMIN";
   if (!callerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { leadIds?: unknown; userId?: string | null };
+  const body = (await req.json().catch(() => ({}))) as { leadIds?: unknown; userId?: string | null; force?: boolean };
   const leadIds = Array.isArray(body.leadIds)
     ? Array.from(new Set(body.leadIds.filter((x): x is string => typeof x === "string" && !!x)))
     : [];
@@ -76,18 +77,35 @@ export async function POST(req: NextRequest) {
   // Load the requested leads and keep only the ones this caller may move.
   const leads = await prisma.lead.findMany({
     where: { id: { in: leadIds } },
-    select: { id: true, organizationId: true },
+    select: { id: true, organizationId: true, state: true, receivedAt: true },
   });
   const allowed = isPlatformAdmin
     ? leads
     : leads.filter((l) => !!l.organizationId && l.organizationId === ctx!.organizationId);
-  const allowedIds = allowed.map((l) => l.id);
-  const skipped = leadIds.length - allowedIds.length;
+  const skippedNotYours = leadIds.length - allowed.length;
+
+  // Never hand a client (someone with an active order) an off-state or aged
+  // lead. When assigning to such a user, drop leads that don't match their
+  // order — unless force:true. Unassigning (targetUserId null) skips this.
+  let deliverable = allowed;
+  let skippedMismatch = 0;
+  if (targetUserId && !body.force) {
+    const orders = await activeOrdersFor(targetUserId);
+    if (orders.length > 0) {
+      deliverable = allowed.filter((l) => leadMatchesOrders(l, orders).ok);
+      skippedMismatch = allowed.length - deliverable.length;
+    }
+  }
+  const allowedIds = deliverable.map((l) => l.id);
+  const skipped = skippedNotYours + skippedMismatch;
 
   if (allowedIds.length === 0) {
     return NextResponse.json(
-      { error: "None of the selected leads are in your organization.", skipped },
-      { status: 403 },
+      {
+        error: `No leads could be assigned — ${skippedNotYours} not in your organization, ${skippedMismatch} outside the recipient's order states/age window. Pass force:true to override.`,
+        skipped,
+      },
+      { status: 422 },
     );
   }
 
@@ -117,5 +135,7 @@ export async function POST(req: NextRequest) {
     assignedAgentName: targetName,
     count: result[0].count,
     skipped,
+    skippedNotYours,
+    skippedMismatch,
   });
 }
