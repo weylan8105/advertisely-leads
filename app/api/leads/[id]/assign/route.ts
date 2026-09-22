@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { leadMatchesActiveOrder } from "@/lib/leadMatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const isPlatformAdmin = (session?.user as any)?.role === "ADMIN";
   if (!callerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { userId?: string | null };
+  const body = (await req.json().catch(() => ({}))) as { userId?: string | null; force?: boolean };
   const targetUserId =
     body.userId === null ? null : typeof body.userId === "string" && body.userId ? body.userId : undefined;
   if (targetUserId === undefined) {
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, organizationId: true, assignedUserId: true, name: true },
+    select: { id: true, organizationId: true, assignedUserId: true, name: true, state: true, receivedAt: true, packageId: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
@@ -65,6 +66,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     const u = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
     targetName = u?.name ?? null;
+
+    // Never hand a client (someone with an active order) a lead outside their
+    // order's states/age window. Blocks off-state and aged manual assignments;
+    // pass force:true to override deliberately.
+    if (!body.force) {
+      const match = await leadMatchesActiveOrder(targetUserId, lead);
+      if (!match.ok) {
+        return NextResponse.json(
+          { error: `Can't assign this lead to ${targetName ?? "that agent"} — ${match.reason}. Pass force:true to override.` },
+          { status: 422 },
+        );
+      }
+    }
   }
 
   await prisma.$transaction([
