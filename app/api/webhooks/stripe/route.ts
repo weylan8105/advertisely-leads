@@ -83,6 +83,9 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   }
 
   const filterStates = md.filterStates ? md.filterStates.split(",").filter(Boolean) : [];
+  // Optional team delivery target chosen at checkout (validated when the intent
+  // was created). Empty string = deliver to the buyer.
+  const deliverToUserId = md.deliverToUserId && md.deliverToUserId.length > 0 ? md.deliverToUserId : null;
 
   // Cart line items. New checkouts send `items` (JSON [{p,q}]); fall back to the
   // legacy single-item metadata for any older intents.
@@ -127,6 +130,7 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
         filterStates,
         filterAgeMinDays: pkg.ageMinDays,
         filterAgeMaxDays: pkg.ageMaxDays,
+        deliverToUserId,
         status: "PROCESSING",
         stripePaymentIntentId: intent.id,
       },
