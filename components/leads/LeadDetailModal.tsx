@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check } from "lucide-react";
-import type { Lead } from "@/types";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote } from "lucide-react";
+import type { Lead, LeadNote } from "@/types";
 import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -105,6 +105,36 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
     const hit = Object.entries(raw).find(([k]) => k.toLowerCase() === "consent_language");
     return hit ? prettyVal(hit[1]) : "";
   })();
+
+  // Agent notes on this lead.
+  const [notes, setNotes] = useState<LeadNote[]>(lead.notes ?? []);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteErr, setNoteErr] = useState("");
+  async function addNote() {
+    const text = noteDraft.trim();
+    if (!text) return;
+    setNoteSaving(true);
+    setNoteErr("");
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok && data.note) {
+        setNotes((prev) => [data.note as LeadNote, ...prev]);
+        setNoteDraft("");
+      } else {
+        setNoteErr(data.error || "Could not save the note.");
+      }
+    } catch {
+      setNoteErr("Could not save the note.");
+    } finally {
+      setNoteSaving(false);
+    }
+  }
 
   // Lead replacement request (files to the admin Replacement queue).
   const [rep, setRep] = useState<"idle" | "loading" | "done">("idle");
@@ -213,6 +243,48 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Agent notes — add and review notes on this lead. */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <StickyNote className="h-3.5 w-3.5" /> Notes
+            </div>
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") addNote();
+                }}
+                placeholder="Add a note about this lead…"
+                rows={2}
+                className="w-full resize-y rounded-lg border border-slate-200 p-2.5 text-sm focus:border-brand-red focus:outline-none focus:ring-1 focus:ring-brand-red"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-rose-600">{noteErr}</span>
+                <button
+                  onClick={addNote}
+                  disabled={noteSaving || !noteDraft.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-brand-red px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-redDark disabled:opacity-50"
+                >
+                  {noteSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <StickyNote className="h-3.5 w-3.5" />}
+                  Add note
+                </button>
+              </div>
+            </div>
+            {notes.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {notes.map((n) => (
+                  <li key={n.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-sm whitespace-pre-wrap break-words">{n.body}</p>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {n.author}{n.at ? ` · ${new Date(n.at).toLocaleString()}` : ""}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Free-text intent only for non-quiz leads (quiz interest is shown above). */}
