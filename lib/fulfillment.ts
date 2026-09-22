@@ -20,12 +20,16 @@ export async function fulfillOrder(orderId: string): Promise<number> {
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { leads: { select: { id: true } } },
+    include: { leads: { where: { trashedAt: null }, select: { id: true } } },
   });
   if (!order) return 0;
   if (order.status === "DELIVERED" || order.status === "REFUNDED") return 0;
 
-  const remaining = order.quantity - order.fulfilledCount;
+  // Remaining is based on the LIVE count of non-trashed leads actually on the
+  // order — not the stored fulfilledCount — so delivery self-heals from any
+  // drift (e.g. a lead removed/trashed after the counter was set).
+  const liveDelivered = order.leads.length;
+  const remaining = order.quantity - liveDelivered;
   if (remaining <= 0) return 0;
 
   // State is REQUIRED. An order with no states configured must NEVER vacuum up
@@ -156,7 +160,8 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       });
     }
 
-    const newFulfilled = order.fulfilledCount + candidates.length;
+    // Re-sync the stored counter to the live count + what we just delivered.
+    const newFulfilled = liveDelivered + candidates.length;
     await tx.order.update({
       where: { id: order.id },
       data: {
