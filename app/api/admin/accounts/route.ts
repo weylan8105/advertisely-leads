@@ -44,7 +44,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       select: { id: true, userId: true, quantity: true },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true } }),
   ]);
 
   const byUser: Record<string, { delivered: number; byStage: Record<string, number> }> = {};
@@ -87,6 +87,7 @@ export async function GET() {
         userId: id,
         name: u.name ?? null,
         email: u.email ?? null,
+        phone: u.phone ?? null,
         role: u.role ?? "AGENT",
         agency: u.agency ?? null,
         delivered: d.delivered,

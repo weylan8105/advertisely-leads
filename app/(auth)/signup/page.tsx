@@ -25,6 +25,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [agencyName, setAgencyName] = useState("");
   const [agreed, setAgreed] = useState(false);
@@ -66,6 +67,10 @@ export default function SignupPage() {
       setError("Please enter your email and a password.");
       return;
     }
+    if (phone.replace(/\D/g, "").length < 10) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -80,7 +85,7 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, agency: agencyName, inviteToken }),
+        body: JSON.stringify({ name, email, phone, password, agency: agencyName, inviteToken }),
       });
 
       if (!res.ok) {
@@ -190,6 +195,20 @@ export default function SignupPage() {
               autoComplete="email"
               required
               readOnly={!!inviteToken}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="phone">Phone number</Label>
+            <Input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              placeholder="(555) 123-4567"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              required
             />
           </div>
 

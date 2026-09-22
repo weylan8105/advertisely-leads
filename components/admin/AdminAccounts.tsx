@@ -13,6 +13,7 @@ interface Account {
   userId: string;
   name: string | null;
   email: string;
+  phone: string | null;
   role: string;
   agency: string | null;
   delivered: number;
@@ -87,6 +88,15 @@ export function AdminAccounts() {
                       {a.role === "ADMIN" && <Badge variant="muted" className="text-[9px]">Admin</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground">{a.email}{a.agency ? ` · ${a.agency}` : ""}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.phone ? (
+                        <a href={`tel:${a.phone.replace(/[^\d+]/g, "")}`} className="hover:text-foreground hover:underline">
+                          {a.phone}
+                        </a>
+                      ) : (
+                        <span className="italic text-slate-400">No phone on file</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5">
                     {a.orderedQty > 0 ? (

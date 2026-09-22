@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     typeof data.email === "string" ? data.email.toLowerCase().trim() : "";
   const password = typeof data.password === "string" ? data.password : "";
   const agency = typeof data.agency === "string" ? data.agency.trim() : "";
+  const phone = typeof data.phone === "string" ? data.phone.trim() : "";
   const inviteToken = typeof data.inviteToken === "string" ? data.inviteToken.trim() : "";
 
   if (!EMAIL_RE.test(email)) {
@@ -36,6 +37,12 @@ export async function POST(req: Request) {
   if (password.length < 8) {
     return NextResponse.json(
       { error: "Password must be at least 8 characters." },
+      { status: 400 },
+    );
+  }
+  if (phone.replace(/\D/g, "").length < 10) {
+    return NextResponse.json(
+      { error: "Enter a valid phone number (at least 10 digits)." },
       { status: 400 },
     );
   }
@@ -54,6 +61,7 @@ export async function POST(req: Request) {
       email,
       name: name || null,
       agency: agency || null,
+      phone: phone || null,
       passwordHash,
     },
     select: { id: true },

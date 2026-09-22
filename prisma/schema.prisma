@@ -21,6 +21,7 @@ model User {
   // Set for email/password accounts; null for OAuth-only (e.g. Google) users.
   passwordHash  String?
   agency        String?
+  phone         String?
   role          UserRole  @default(AGENT)
   state         String?
   createdAt     DateTime  @default(now())

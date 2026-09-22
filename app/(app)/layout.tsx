@@ -1,5 +1,6 @@
 import { SidebarNav } from "@/components/layout/SidebarNav";
 import { DashboardTopbar } from "@/components/layout/DashboardTopbar";
+import { PhonePrompt } from "@/components/account/PhonePrompt";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <DashboardTopbar />
         <main className="flex-1 px-6 md:px-8 py-8">{children}</main>
       </div>
+      <PhonePrompt />
     </div>
   );
 }
