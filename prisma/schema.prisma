@@ -279,6 +279,9 @@ model Order {
   // Optional per-order Google Sheet. When set, this order's leads sync here
   // instead of the customer's default connected sheet.
   sheetOverrideId       String?
+  // When set, this order's leads are delivered to this downline agent instead of
+  // the buyer (upline). Set at checkout or by routing an order to a team agent.
+  deliverToUserId       String?
   stripePaymentIntentId String?
   createdAt             DateTime      @default(now())
   fulfilledAt           DateTime?

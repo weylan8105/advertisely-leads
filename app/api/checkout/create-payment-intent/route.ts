@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { leadPackages } from "@/data/packages";
-import { isDatabaseConfigured } from "@/lib/prisma";
+import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { ensureOrgContext } from "@/lib/org";
 import { availableForPackage, GENERATED_TO_ORDER } from "@/lib/inventory";
 
 export const runtime = "nodejs";
@@ -17,6 +18,8 @@ interface CreateIntentBody {
   // Multi-item cart checkout.
   items?: CartLine[];
   filterStates?: string[];
+  // Optional: deliver these leads to a downline agent on the buyer's team.
+  deliverToUserId?: string | null;
   // Legacy single-item fields (still accepted).
   packageId?: string;
   quantity?: number;
@@ -123,6 +126,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Optional: deliver to a downline agent — validate they're on the buyer's team.
+  let deliverToUserId = "";
+  if (body.deliverToUserId && prisma) {
+    const ctx = await ensureOrgContext((session.user as any).id);
+    const member = ctx?.organizationId
+      ? await prisma.membership.findUnique({
+          where: { organizationId_userId: { organizationId: ctx.organizationId, userId: body.deliverToUserId } },
+          select: { id: true },
+        })
+      : null;
+    if (!member) {
+      return NextResponse.json({ error: "That agent isn't on your team." }, { status: 400 });
+    }
+    deliverToUserId = body.deliverToUserId;
+  }
+
   const totalLeads = validated.reduce((s, v) => s + v.quantity, 0);
   const description =
     validated.length === 1
@@ -140,6 +159,7 @@ export async function POST(req: NextRequest) {
       userEmail: session.user.email ?? "",
       items: itemsMeta,
       filterStates: (body.filterStates ?? []).join(","),
+      deliverToUserId,
     },
   });
 

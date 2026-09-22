@@ -20,6 +20,7 @@ const stripePromise = stripePublishableKey
 interface StripePaymentFormProps {
   items: { packageId: string; quantity: number }[];
   filterStates?: string[];
+  deliverToUserId?: string | null;
   onSuccess: () => void;
 }
 
@@ -28,6 +29,7 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
   const [error, setError] = useState<string | null>(null);
   const itemsKey = JSON.stringify(props.items);
   const statesKey = (props.filterStates ?? []).join(",");
+  const deliverKey = props.deliverToUserId ?? "";
 
   useEffect(() => {
     if (!stripePromise) {
@@ -41,7 +43,7 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
     fetch("/api/checkout/create-payment-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: props.items, filterStates: props.filterStates }),
+      body: JSON.stringify({ items: props.items, filterStates: props.filterStates, deliverToUserId: props.deliverToUserId ?? null }),
     })
       .then(async (r) => {
         if (!r.ok) {
@@ -53,7 +55,7 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
       .then((data) => setClientSecret(data.clientSecret))
       .catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsKey, statesKey]);
+  }, [itemsKey, statesKey, deliverKey]);
 
   if (error) {
     return (

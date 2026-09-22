@@ -43,6 +43,21 @@ export function CheckoutFlow({ initialPackageId }: { initialPackageId?: LeadPack
   const isAuthed = status === "authenticated" || justAuthed;
   const [step, setStep] = useState(1);
   const [selectedStates, setSelectedStates] = useState<string[]>(ACTIVE_STATES.map((s) => s.code));
+  // Team delivery: an owner can send this purchase to a downline agent.
+  const [downline, setDownline] = useState<{ userId: string; name: string | null; email: string }[]>([]);
+  const [deliverToUserId, setDeliverToUserId] = useState<string>("me");
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !d.canManage) return;
+        setDownline((d.members ?? []).filter((m: any) => !m.isSelf).map((m: any) => ({ userId: m.userId, name: m.name, email: m.email })));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed]);
 
   // Seed the cart from a ?pkg= link (legacy "Order leads" buttons) exactly once.
   const seeded = useRef(false);
@@ -190,10 +205,27 @@ export function CheckoutFlow({ initialPackageId }: { initialPackageId?: LeadPack
                 <h2 className="text-xl font-semibold">Payment</h2>
                 <p className="text-sm text-muted-foreground mt-1">Securely processed via Stripe. Card, Apple Pay, Google Pay, and ACH supported.</p>
               </div>
+              {isAuthed && downline.length > 0 && (
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <label className="text-sm font-medium">Deliver these leads to</label>
+                  <p className="text-xs text-muted-foreground mb-2">Send this purchase straight to a downline agent on your team.</p>
+                  <select
+                    value={deliverToUserId}
+                    onChange={(e) => setDeliverToUserId(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  >
+                    <option value="me">My own CRM</option>
+                    {downline.map((m) => (
+                      <option key={m.userId} value={m.userId}>{m.name ?? m.email}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {isAuthed ? (
                 <StripePaymentForm
                   items={paymentItems}
                   filterStates={selectedStates}
+                  deliverToUserId={deliverToUserId === "me" ? null : deliverToUserId}
                   onSuccess={() => {
                     clear();
                     setStep(3);
