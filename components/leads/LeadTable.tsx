@@ -143,6 +143,25 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
     else addToast("error", r.error || "Could not submit the replacement request.");
   }
 
+  async function addNoteOne(leadId: string, name: string) {
+    const body = window.prompt(`Add a note for ${name}:`);
+    if (body === null) return;
+    const text = body.trim();
+    if (!text) return;
+    try {
+      const res = await fetch(`/api/leads/${leadId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) addToast("success", `Note added to ${name}.`);
+      else addToast("error", data.error || "Could not add the note.");
+    } catch {
+      addToast("error", "Could not add the note.");
+    }
+  }
+
   // Manually reassign a lead to a downline agent (or unassign).
   async function assignLead(leadId: string, leadName: string, userId: string | null, agentName: string) {
     try {
@@ -405,7 +424,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                         <DropdownMenuItem>Log call disposition</DropdownMenuItem>
                         <DropdownMenuItem>Add task / reminder</DropdownMenuItem>
                         <DropdownMenuItem>Change status</DropdownMenuItem>
-                        <DropdownMenuItem>Add note</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => addNoteOne(lead.id, lead.name)}>Add note</DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={async () => {
                             try {
