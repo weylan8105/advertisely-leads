@@ -5,7 +5,7 @@ import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
 import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
-import { coveredStates, assignLeadToHouse } from "@/lib/house";
+import { assignLeadToHouse } from "@/lib/house";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -325,12 +325,9 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     }
   }
 
-  // House catch-all: no open order covers this lead's state, so it would sit
-  // unassigned in the pool. Route it to the house CRM (Ryan) so his team works
-  // it while it's fresh, instead of letting it age out. States with an open
-  // order are left alone (their inventory serves those orders + the aged store).
-  const { states: covered, anyStateOrder } = await coveredStates();
-  if (!anyStateOrder && lead.state && !covered.has(lead.state)) {
-    await assignLeadToHouse(leadId, `no active order covers ${lead.state}`);
-  }
+  // House catch-all: no OPEN ORDER claimed this lead (wrong state, order full, or
+  // age mismatch), so it would otherwise sit orphaned in the pool. Route it to
+  // the house CRM (Ryan) so every new lead is worked, never left unassigned.
+  // assignLeadToHouse is fresh-only, so aged leads still stay out of Ryan's CRM.
+  await assignLeadToHouse(leadId, "not claimed by any open order");
 }
