@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock } from "lucide-react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check } from "lucide-react";
 import { PIPELINE_STAGES, STAGE_IDS, DEFAULT_STAGE } from "@/data/pipeline";
 import { localTimeForState } from "@/data/states";
 import { cn } from "@/lib/utils";
@@ -59,6 +59,18 @@ export function PipelineBoard({
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [callbackLead, setCallbackLead] = useState<Lead | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Copy a phone/email to the clipboard from a card, with a brief ✓ confirmation.
+  async function copyField(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1200);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
 
   // Tick every 30s so countdowns + local times stay fresh and cards flash when due.
   useEffect(() => {
@@ -192,8 +204,41 @@ export function PipelineBoard({
                               </button>
                             </div>
 
-                            <div className="mt-0.5 text-[11px] text-muted-foreground inline-flex items-center gap-1">
-                              <Phone className="h-2.5 w-2.5" /> {lead.phone}
+                            <div className="mt-1 flex flex-col gap-0.5 items-start">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyField(lead.phone, `${lead.id}-phone`);
+                                }}
+                                title="Click to copy number"
+                                className="group/c inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-red max-w-full"
+                              >
+                                <Phone className="h-2.5 w-2.5 shrink-0" />
+                                <span className="font-mono truncate">{lead.phone}</span>
+                                {copiedKey === `${lead.id}-phone` ? (
+                                  <Check className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                                ) : (
+                                  <Copy className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/c:opacity-60 transition-opacity" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyField(lead.email, `${lead.id}-email`);
+                                }}
+                                title="Click to copy email"
+                                className="group/c inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-red max-w-full"
+                              >
+                                <Mail className="h-2.5 w-2.5 shrink-0" />
+                                <span className="truncate">{lead.email}</span>
+                                {copiedKey === `${lead.id}-email` ? (
+                                  <Check className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                                ) : (
+                                  <Copy className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/c:opacity-60 transition-opacity" />
+                                )}
+                              </button>
                             </div>
 
                             <div className="mt-1.5 flex flex-wrap gap-1">

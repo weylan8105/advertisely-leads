@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
+  Copy,
+  Plus,
 } from "lucide-react";
 import {
   Table,
@@ -25,7 +27,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "./StatusBadge";
 import { ExportButton } from "./ExportButton";
 import {
@@ -44,7 +45,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
-import { formatDate } from "@/lib/utils";
 import { leadStatuses } from "@/data/leads";
 import { AVAILABLE_STATES, US_STATES } from "@/data/states";
 
@@ -117,6 +117,23 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
 
   function dismissToast(id: number) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  // Click-to-copy for phone / email cells (Google-Sheets-style quick copy).
+  async function copyText(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast("success", `${label} copied`);
+    } catch {
+      addToast("error", `Couldn't copy ${label.toLowerCase()}`);
+    }
+  }
+
+  // Most recent note body for the Notes column (leads carry notes newest-last).
+  function latestNote(lead: Lead): string | null {
+    const n = lead.notes;
+    if (!n || n.length === 0) return null;
+    return n[n.length - 1]?.body ?? null;
   }
 
   const selectedIds = Array.from(selected);
@@ -316,74 +333,91 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <Table>
+      <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto scrollbar-thin">
+        <Table className="min-w-[880px] [&_td]:border-r [&_td]:border-slate-100 [&_th]:border-r [&_th]:border-slate-200 [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-slate-50">
               {showBulk && (
-                <TableHead className="w-10">
+                <TableHead className="w-10 sticky left-0 bg-slate-50 z-10">
                   <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                 </TableHead>
               )}
-              <TableHead>Lead</TableHead>
-              <TableHead className="hidden lg:table-cell">Tags</TableHead>
-              <TableHead className="hidden md:table-cell">State</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden xl:table-cell">Source</TableHead>
-              <TableHead className="hidden md:table-cell">Received</TableHead>
-              <TableHead className="hidden xl:table-cell">Agent</TableHead>
-              <TableHead className="text-right">Quick actions</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide">Name</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide">Phone</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide">Email</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide w-14">State</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide">Status</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide">Notes</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide text-right text-muted-foreground/70">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((lead) => (
-              <TableRow key={lead.id}>
+              <TableRow key={lead.id} className="hover:bg-slate-50/70">
                 {showBulk && (
-                  <TableCell>
+                  <TableCell className="sticky left-0 bg-white z-10">
                     <Checkbox
                       checked={selected.has(lead.id)}
                       onCheckedChange={() => toggle(lead.id)}
                     />
                   </TableCell>
                 )}
-                <TableCell>
-                  <Link href={`/leads/${lead.id}`} className="block group">
-                    <div className="font-medium leading-tight group-hover:text-brand-red transition-colors">
-                      {lead.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {lead.phone} · {lead.email}
-                    </div>
+                <TableCell className="py-1.5">
+                  <Link
+                    href={`/leads/${lead.id}`}
+                    className="font-medium leading-tight hover:text-brand-red transition-colors"
+                  >
+                    {lead.name}
                   </Link>
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  <div className="flex flex-wrap gap-1 max-w-[220px]">
-                    {(lead.tags ?? []).slice(0, 2).map((t) => (
-                      <Badge key={t} variant="muted" className="text-[10px]">
-                        {t}
-                      </Badge>
-                    ))}
-                    {(lead.tags?.length ?? 0) > 2 && (
-                      <Badge variant="muted" className="text-[10px]">
-                        +{(lead.tags?.length ?? 0) - 2}
-                      </Badge>
-                    )}
-                  </div>
+                {/* Phone — click to copy */}
+                <TableCell className="py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => copyText(lead.phone, "Phone")}
+                    title="Click to copy number"
+                    className="group inline-flex items-center gap-1.5 font-mono text-xs text-slate-700 hover:text-brand-red"
+                  >
+                    <span>{lead.phone}</span>
+                    <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                  </button>
                 </TableCell>
-                <TableCell className="hidden md:table-cell">{lead.state}</TableCell>
-                <TableCell>
+                {/* Email — click to copy */}
+                <TableCell className="py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => copyText(lead.email, "Email")}
+                    title="Click to copy email"
+                    className="group inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-brand-red max-w-[240px]"
+                  >
+                    <span className="truncate">{lead.email}</span>
+                    <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
+                  </button>
+                </TableCell>
+                <TableCell className="py-1.5 text-sm">{lead.state}</TableCell>
+                <TableCell className="py-1.5">
                   <StatusBadge status={lead.status} />
                 </TableCell>
-                <TableCell className="hidden xl:table-cell text-xs text-muted-foreground max-w-[180px] truncate">
-                  {lead.source}
+                {/* Notes — latest note, click to add another */}
+                <TableCell className="py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => addNoteOne(lead.id, lead.name)}
+                    title="Add a note"
+                    className="group inline-flex items-center gap-1 text-left text-xs max-w-[240px] text-slate-600 hover:text-brand-red"
+                  >
+                    {latestNote(lead) ? (
+                      <span className="truncate">{latestNote(lead)}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-muted-foreground/60">
+                        <Plus className="h-3 w-3" /> Note
+                      </span>
+                    )}
+                  </button>
                 </TableCell>
-                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                  {formatDate(lead.receivedAt)}
-                </TableCell>
-                <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
-                  {lead.assignedAgent ?? "—"}
-                </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right py-1.5">
                   <div className="inline-flex items-center gap-1">
                     <a
                       href={`tel:${lead.phone.replace(/\D/g, "")}`}
@@ -475,7 +509,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-12">
+                <TableCell colSpan={showBulk ? 8 : 7} className="text-center text-sm text-muted-foreground py-12">
                   No leads match your filters.
                 </TableCell>
               </TableRow>
