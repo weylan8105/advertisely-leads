@@ -84,8 +84,9 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
 
   const filterStates = md.filterStates ? md.filterStates.split(",").filter(Boolean) : [];
   // Optional team delivery target chosen at checkout (validated when the intent
-  // was created). Empty string = deliver to the buyer.
-  const deliverToUserId = md.deliverToUserId && md.deliverToUserId.length > 0 ? md.deliverToUserId : null;
+  // was created). Empty string = deliver to the buyer. Re-validated against the
+  // buyer's org below before it's stamped on any order.
+  let deliverToUserId = md.deliverToUserId && md.deliverToUserId.length > 0 ? md.deliverToUserId : null;
 
   // Cart line items. New checkouts send `items` (JSON [{p,q}]); fall back to the
   // legacy single-item metadata for any older intents.
@@ -112,6 +113,28 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   let totalQty = 0;
   // Stamp the buyer's org on every order up front so leads always inherit it.
   const buyerOrgId = (await ensureOrgContext(md.userId))?.organizationId ?? undefined;
+
+  // Defense in depth: re-validate the delivery target at fulfillment time. It
+  // must (still) be a member of the BUYER's own org, or we deliver to the buyer.
+  // This guarantees one team can never direct leads into another team, even if
+  // the target left the org between checkout and payment.
+  if (deliverToUserId) {
+    const member = buyerOrgId
+      ? await prisma.membership.findUnique({
+          where: { organizationId_userId: { organizationId: buyerOrgId, userId: deliverToUserId } },
+          select: { id: true },
+        })
+      : null;
+    if (!member) {
+      console.warn(
+        "Stripe webhook: deliverTo target not in buyer's org — delivering to buyer instead",
+        intent.id,
+        deliverToUserId,
+      );
+      deliverToUserId = null;
+    }
+  }
+
   for (const line of lines) {
     const pkg = findPackage(line.packageId);
     if (!pkg) {

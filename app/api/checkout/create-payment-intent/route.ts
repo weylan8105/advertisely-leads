@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { leadPackages } from "@/data/packages";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { ensureOrgContext } from "@/lib/org";
+import { ensureOrgContext, canManageTeam } from "@/lib/org";
 import { availableForPackage, GENERATED_TO_ORDER } from "@/lib/inventory";
 
 export const runtime = "nodejs";
@@ -126,16 +126,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Optional: deliver to a downline agent — validate they're on the buyer's team.
+  // Optional: deliver to a downline agent. Directing an order to someone else is
+  // a team-management action, so require the buyer to be an OWNER/ADMIN, and the
+  // target must be a member of THEIR OWN team — one team can never direct leads
+  // into another team.
   let deliverToUserId = "";
   if (body.deliverToUserId && prisma) {
     const ctx = await ensureOrgContext((session.user as any).id);
-    const member = ctx?.organizationId
-      ? await prisma.membership.findUnique({
-          where: { organizationId_userId: { organizationId: ctx.organizationId, userId: body.deliverToUserId } },
-          select: { id: true },
-        })
-      : null;
+    if (!ctx || !canManageTeam(ctx.role)) {
+      return NextResponse.json(
+        { error: "Only a team owner or admin can order for a downline agent." },
+        { status: 403 },
+      );
+    }
+    const member = await prisma.membership.findUnique({
+      where: { organizationId_userId: { organizationId: ctx.organizationId, userId: body.deliverToUserId } },
+      select: { id: true },
+    });
     if (!member) {
       return NextResponse.json({ error: "That agent isn't on your team." }, { status: 400 });
     }
