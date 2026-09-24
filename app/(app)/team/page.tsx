@@ -12,13 +12,34 @@ import {
   Copy,
   Check,
   ShieldCheck,
+  ShoppingCart,
+  PackageCheck,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+
+const PKG_LABELS: Record<string, string> = {
+  "blue-collar-iul": "Blue-Collar IUL",
+  "trucker-leads": "Trucker IUL",
+};
+const pkgLabel = (id: string) => PKG_LABELS[id] ?? id;
+
+interface DownlineOrder {
+  id: string;
+  packageId: string;
+  quantity: number;
+  fulfilledCount: number;
+  status: string;
+  createdAt: string;
+  agentName: string | null;
+  buyerName: string | null;
+  buyerIsSelf: boolean;
+}
 
 interface Member {
   membershipId: string;
@@ -53,6 +74,7 @@ const roleBadge: Record<string, "success" | "muted"> = {
 
 export default function TeamPage() {
   const [data, setData] = useState<TeamData | null>(null);
+  const [downlineOrders, setDownlineOrders] = useState<DownlineOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -68,6 +90,13 @@ export default function TeamPage() {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
       setData(await res.json());
       setError(null);
+      // Orders placed for the downline (owner/admin view; [] for agents).
+      try {
+        const ordersRes = await fetch("/api/team/orders");
+        if (ordersRes.ok) setDownlineOrders((await ordersRes.json()).orders ?? []);
+      } catch {
+        /* non-fatal */
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -292,6 +321,14 @@ export default function TeamPage() {
                 {m.inRotation ? "In rotation" : "Paused"}
               </button>
 
+              {canManage && !m.isSelf && (
+                <a href={`/checkout?for=${m.userId}`} title={`Order leads for ${m.name ?? m.email}`}>
+                  <Button size="sm" variant="outline">
+                    <ShoppingCart className="h-3.5 w-3.5" /> Order leads
+                  </Button>
+                </a>
+              )}
+
               {canManage && m.role !== "OWNER" && (
                 <div className="flex items-center gap-1">
                   {m.role === "AGENT" ? (
@@ -312,6 +349,56 @@ export default function TeamPage() {
           ))}
         </div>
       </Card>
+
+      {/* Orders placed for the downline (owners/admins only) */}
+      {canManage && downlineOrders.length > 0 && (
+        <Card className="p-6">
+          <h2 className="font-semibold tracking-tight flex items-center gap-2 mb-1">
+            <PackageCheck className="h-4 w-4" /> Orders placed for your downline
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Leads you bought for your agents deliver straight to their pipelines. Track delivery here.
+          </p>
+          <div className="space-y-2">
+            {downlineOrders.map((o) => {
+              const pct = o.quantity > 0 ? Math.round((o.fulfilledCount / o.quantity) * 100) : 0;
+              return (
+                <div
+                  key={o.id}
+                  className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 flex-wrap"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate">
+                      {o.agentName ?? "Agent"}
+                      <span className="text-muted-foreground font-normal"> · {pkgLabel(o.packageId)}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {o.quantity} leads
+                      {!o.buyerIsSelf && o.buyerName ? ` · placed by ${o.buyerName}` : ""}
+                    </div>
+                  </div>
+                  <div className="w-40">
+                    <div className="flex items-center justify-between text-[11px] mb-1">
+                      <span className="tabular-nums font-medium">
+                        {o.fulfilledCount}/{o.quantity}
+                      </span>
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          pct >= 100 ? "text-emerald-600 font-medium" : "text-muted-foreground",
+                        )}
+                      >
+                        {pct >= 100 ? "Complete" : `${pct}%`}
+                      </span>
+                    </div>
+                    <Progress value={pct} className="h-1.5" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Invite + pending (owners/admins only) */}
       {canManage && (

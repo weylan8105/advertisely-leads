@@ -35,7 +35,13 @@ const steps = [
   { id: 3, label: "Confirmation" },
 ];
 
-export function CheckoutFlow({ initialPackageId }: { initialPackageId?: LeadPackageId }) {
+export function CheckoutFlow({
+  initialPackageId,
+  initialDeliverToUserId,
+}: {
+  initialPackageId?: LeadPackageId;
+  initialDeliverToUserId?: string;
+}) {
   const { status } = useSession();
   const { items, hydrated, addItem, setQuantity, removeItem, subtotalCents, count, clear } = useCart();
 
@@ -53,7 +59,13 @@ export function CheckoutFlow({ initialPackageId }: { initialPackageId?: LeadPack
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d || !d.canManage) return;
-        setDownline((d.members ?? []).filter((m: any) => !m.isSelf).map((m: any) => ({ userId: m.userId, name: m.name, email: m.email })));
+        const members = (d.members ?? []).filter((m: any) => !m.isSelf).map((m: any) => ({ userId: m.userId, name: m.name, email: m.email }));
+        setDownline(members);
+        // Preselect a downline agent when arriving from a "Order leads for this
+        // agent" link (?for=<userId>), but only if they're a real team member.
+        if (initialDeliverToUserId && members.some((m: { userId: string }) => m.userId === initialDeliverToUserId)) {
+          setDeliverToUserId(initialDeliverToUserId);
+        }
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps

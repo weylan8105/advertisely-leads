@@ -6,12 +6,13 @@ import type { LeadPackageId } from "@/types";
 import { leadPackages } from "@/data/packages";
 
 interface CheckoutPageProps {
-  searchParams?: { pkg?: string };
+  searchParams?: { pkg?: string; for?: string };
 }
 
 export default function CheckoutPage({ searchParams }: CheckoutPageProps) {
   const requested = searchParams?.pkg;
   const initial = leadPackages.find((p) => p.id === requested)?.id as LeadPackageId | undefined;
+  const initialDeliverToUserId = searchParams?.for;
 
   return (
     <div className="min-h-screen bg-white">
@@ -30,7 +31,7 @@ export default function CheckoutPage({ searchParams }: CheckoutPageProps) {
         </div>
       </header>
       <main className="container py-10">
-        <CheckoutFlow initialPackageId={initial} />
+        <CheckoutFlow initialPackageId={initial} initialDeliverToUserId={initialDeliverToUserId} />
       </main>
     </div>
   );

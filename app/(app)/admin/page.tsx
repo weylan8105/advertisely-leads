@@ -39,6 +39,7 @@ import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButto
 import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
 import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
+import { AdminDownlineOrders } from "@/components/admin/AdminDownlineOrders";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
@@ -295,6 +296,7 @@ export default function AdminPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="accounts">Client accounts</TabsTrigger>
+            <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
             <TabsTrigger value="trash">Trash</TabsTrigger>
             <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
           </TabsList>
@@ -608,6 +610,21 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent>
                 <AdminAccounts />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="downline-orders">
+            <Card>
+              <CardHeader>
+                <CardTitle>Orders placed for a downline</CardTitle>
+                <CardDescription>
+                  Orders one account placed for a downline agent, platform-wide. The leads deliver to the
+                  downline agent&apos;s pipeline, not the buyer&apos;s.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminDownlineOrders />
               </CardContent>
             </Card>
           </TabsContent>
