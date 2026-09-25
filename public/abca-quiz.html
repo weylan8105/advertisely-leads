@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -9,20 +10,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-KSJ2RKGM');</script>
 <!-- End Google Tag Manager -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="robots" content="noindex" />
-<title>Blue-Collar Early Retirement Quiz</title>
-<!-- Vercel Web Analytics (starts collecting once enabled in the Vercel dashboard). -->
-<script defer src="/_vercel/insights/script.js"></script>
-<!-- ============================================================
-     ENHANCED WEALTH / IUL QUIZ — hosted on Vercel (Advertisely).
-     v2: headline-led (no VSL), Next/Back nav with auto-progress,
-     multiple-choice bubbles, dedicated thank-you page.
-     Posts leads straight into the Advertisely inbound endpoint.
-     (v1 preserved at /abca-quiz-v1.html)
-     ============================================================ -->
+<title>IUL Insurance for Skilled Trades | American Blue Collar Advantage</title>
+<meta name="description" content="Indexed universal life insurance built for the tradespeople who build America — protect your family, get a safety net if illness strikes, and build tax-advantaged cash value.">
+<!--
+  Landing page v3 — rebuilt to a clean, low-friction, ZIP-first flow.
+  Branding: American Blue Collar Advantage (navy + orange). All lead capture,
+  funnel tracking, Meta pixel/attribution and the thank-you redirect are
+  preserved from the prior version.
+  HERO PHOTO: drop your own licensed worker image in by setting --hero-photo
+  on :root below (e.g. --hero-photo:url('/hero-worker.jpg')). A branded
+  gradient shows until then.
+-->
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
 
   :root{
     --navy:#0F1419; --navy-2:#161C24; --card:#141A21; --card-2:#1B222B;
@@ -30,190 +30,173 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     --orange:#FF6B1A; --orange-press:#E85D10; --amber:#F5A623;
     --ink:#EDF0F3; --ink-dim:#95A1AE; --ink-faint:#5E6B78;
     --good:#3FB950;
+    --light:#F4F5F6; --light-2:#EAECEE; --dark-ink:#0F1419; --dark-ink-2:#3A4652;
+    --hero-photo:none;
   }
   *{margin:0;padding:0;box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{
-    font-family:'Barlow',-apple-system,sans-serif;
-    background:
-      radial-gradient(900px 420px at 50% -10%, rgba(255,107,26,0.10), transparent 60%),
-      var(--navy);
-    color:var(--ink); -webkit-font-smoothing:antialiased;
-    min-height:100vh; overflow-x:hidden;
-  }
+  body{font-family:'Barlow',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--navy);color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
+  h1,h2,h3,.oswald{font-family:'Oswald',sans-serif}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  .hl{background:var(--orange);color:#fff;padding:.02em .28em;border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:.02em;border:none;border-radius:10px;cursor:pointer;font-size:16px;padding:14px 22px;background:linear-gradient(180deg,var(--orange),var(--orange-press));color:#fff;transition:transform .08s ease,filter .15s ease}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:active{transform:translateY(1px)}
+  .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .btn-dark{background:var(--navy);color:#fff}
+
+  /* ---- Header ---- */
+  header{position:sticky;top:0;z-index:40;background:rgba(15,20,25,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .hd{height:66px;display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .mark{width:38px;height:38px;flex:none}
+  .brand .wm{line-height:1.02}
+  .brand .wm .l1{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;color:var(--ink)}
+  .brand .wm .l2{font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;letter-spacing:.01em;color:var(--orange);margin-top:-2px}
+  .hd nav{display:flex;align-items:center;gap:26px}
+  .hd nav a.lnk{font-weight:600;font-size:14px;color:var(--ink-dim)}
+  .hd nav a.lnk:hover{color:var(--ink)}
+  .hd .btn{padding:10px 16px;font-size:14px}
+  @media(max-width:720px){ .hd nav a.lnk{display:none} }
+
+  /* ---- Hero ---- */
+  .hero{position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;background:var(--hero-photo) center/cover no-repeat;opacity:.5}
+  .hero::after{content:"";position:absolute;inset:0;background:
+    radial-gradient(1000px 500px at 78% 30%, rgba(255,107,26,.12), transparent 60%),
+    linear-gradient(100deg, var(--navy) 42%, rgba(15,20,25,.72) 68%, rgba(15,20,25,.55) 100%)}
+  .hero-in{position:relative;z-index:2;padding:64px 0 72px}
+  .hero-card{max-width:620px}
+  .eyebrow{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:.18em;font-size:12.5px;color:var(--ink-dim);text-transform:uppercase}
+  .hero h1{font-weight:700;font-size:clamp(38px,6.2vw,62px);line-height:1.02;margin:14px 0 0;letter-spacing:.005em}
+  .hero .sub{margin-top:18px;color:#D5DBE1;font-size:clamp(15.5px,2.2vw,18px);line-height:1.6;max-width:560px}
+  .hero .sub b{color:#fff;font-weight:700}
+  .quotebox{margin-top:26px;background:rgba(20,26,33,.86);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:520px;box-shadow:0 24px 60px -30px rgba(0,0,0,.8)}
+  .quotebox .qlab{font-weight:600;font-size:13.5px;color:var(--ink-dim);margin-bottom:10px}
+  .zip-row{display:flex;gap:10px}
+  .zip-row input{flex:1;min-width:0;height:52px;border-radius:10px;border:1px solid var(--steel);background:#0E141A;color:var(--ink);font-size:16px;padding:0 16px;font-family:'Barlow',sans-serif}
+  .zip-row input::placeholder{color:var(--ink-faint)}
+  .zip-row input:focus{outline:none;border-color:var(--orange)}
+  .zip-row .btn{height:52px;white-space:nowrap}
+  .zip-err{min-height:16px;font-size:12.5px;color:#F2686C;margin-top:6px}
+  .trust{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 22px}
+  .trust span{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-dim);font-weight:500}
+  .trust svg{width:14px;height:14px;fill:none;stroke:var(--good);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+
   .hazard{height:6px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,var(--navy) 18px 36px)}
 
-  /* ---- Hero headline (insight hook) ---- */
-  .hero{padding:26px 18px 14px;text-align:center;max-width:660px;margin:0 auto}
-  .hero-eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--orange);margin-bottom:12px}
-  .hero-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:36px;line-height:1.05;letter-spacing:.01em;text-transform:uppercase;color:var(--ink);margin-bottom:11px}
-  .hero-h span{color:var(--orange)}
-  .hero-sub{font-size:13.5px;color:var(--ink-dim);line-height:1.5;max-width:490px;margin:0 auto}
-  .hero-sub b{color:var(--ink);font-weight:600}
-  @media (max-width:620px){.hero{padding:20px 16px 8px}.hero-h{font-size:29px}.hero-sub{font-size:12px}}
+  /* ---- Testimonials (dark) ---- */
+  .tst-sec{background:var(--navy);padding:56px 0}
+  .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){ .tgrid{grid-template-columns:1fr} }
+  .tcard{background:var(--card-2);border:1px solid var(--line);border-top:3px solid var(--orange);border-radius:14px;padding:22px}
+  .stars{color:var(--amber);letter-spacing:2px;font-size:15px}
+  .tcard .q{margin-top:12px;color:#D9DEE4;font-size:15px;line-height:1.6;font-style:italic}
+  .tcard .who{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .tcard .av{width:40px;height:40px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--orange),var(--amber));font-size:15px}
+  .tcard .nm{font-weight:700;font-size:14.5px}
+  .tcard .rl{font-size:12.5px;color:var(--ink-dim)}
+  .disc{margin-top:22px;text-align:center;font-size:11.5px;color:var(--ink-faint);line-height:1.6;max-width:820px;margin-left:auto;margin-right:auto}
 
-  .quiz-page{
-    position:relative;
-    width:100%; max-width:100%;
-    background:
-      radial-gradient(900px 420px at 50% -10%, rgba(255,107,26,0.10), transparent 60%),
-      var(--navy);
-    overflow-x:hidden;
-  }
+  /* ---- What you get (light) ---- */
+  .light-sec{background:var(--light);color:var(--dark-ink)}
+  .wyg{padding:66px 0 60px;text-align:center}
+  .wyg .eyebrow{color:var(--orange)}
+  .wyg h2{font-weight:700;font-size:clamp(28px,4.4vw,42px);color:var(--dark-ink);margin-top:8px;line-height:1.08}
+  .wyg .intro{max-width:660px;margin:16px auto 0;color:var(--dark-ink-2);font-size:16px;line-height:1.65}
+  .bgrid{margin-top:40px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;text-align:left}
+  @media(max-width:860px){ .bgrid{grid-template-columns:1fr} }
+  .bcard{background:#fff;border:1px solid var(--light-2);border-radius:16px;padding:26px;box-shadow:0 10px 30px -22px rgba(15,20,25,.4)}
+  .bic{width:48px;height:48px;border-radius:12px;background:var(--navy);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .bic svg{width:24px;height:24px;fill:none;stroke:var(--orange);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .bcard h3{font-weight:700;font-size:19px;color:var(--dark-ink);letter-spacing:.005em}
+  .bcard p{margin-top:9px;color:var(--dark-ink-2);font-size:14.5px;line-height:1.62}
+  .bcard p b{color:var(--dark-ink);font-weight:700}
 
-  .wrap{max-width:720px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-start}
+  /* ---- FAQ (light) ---- */
+  .faq{padding:20px 0 70px;text-align:center}
+  .faq .eyebrow{color:var(--orange)}
+  .faq h2{font-weight:700;font-size:clamp(26px,4vw,38px);color:var(--dark-ink);margin-top:8px}
+  .faq-list{max-width:760px;margin:30px auto 0;text-align:left;display:flex;flex-direction:column;gap:12px}
+  details.fq{background:#fff;border:1px solid var(--light-2);border-radius:12px;overflow:hidden}
+  details.fq summary{list-style:none;cursor:pointer;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:600;font-size:16px;color:var(--dark-ink)}
+  details.fq summary::-webkit-details-marker{display:none}
+  details.fq summary .pm{color:var(--orange);font-size:22px;font-weight:400;line-height:1;flex:none;transition:transform .2s}
+  details.fq[open] summary .pm{transform:rotate(45deg)}
+  details.fq .ans{padding:0 20px 18px;color:var(--dark-ink-2);font-size:14.5px;line-height:1.65}
 
-  /* ---- Quiz shell ---- */
-  .quiz{background:var(--card);padding:22px 18px 22px;border-top:1px solid rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.04);margin-top:8px}
+  /* ---- Final CTA (orange) ---- */
+  .final{background:linear-gradient(180deg,var(--orange),var(--orange-press));text-align:center;padding:60px 0}
+  .final h2{font-weight:700;color:#fff;font-size:clamp(30px,5vw,46px)}
+  .final p{color:#FFE9DC;margin-top:8px;font-size:16px}
+  .final .btn{margin-top:22px;background:var(--navy);color:#fff;font-size:17px;padding:16px 30px}
 
-  /* step */
-  .step{animation:enter .34s cubic-bezier(.2,.7,.2,1)}
-  @keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  .eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:8px}
-  .q{font-family:'Oswald',sans-serif;font-weight:700;font-size:26px;line-height:1.12;letter-spacing:.01em;text-transform:uppercase;margin-bottom:4px}
-  .q-sub{font-size:13.5px;color:var(--ink-dim);margin-bottom:18px}
+  /* ---- Footer ---- */
+  footer{background:var(--navy);border-top:1px solid var(--line);padding:34px 0 40px;color:var(--ink-faint);font-size:12.5px;line-height:1.7}
+  footer .frow{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;justify-content:space-between}
+  footer a{color:var(--ink-dim)}
+  footer a:hover{color:var(--ink)}
+  footer .discl{margin-top:16px;max-width:100%}
 
-  /* options */
-  .opts{display:flex;flex-direction:column;gap:9px}
-  .opts.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-  .opt{display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
-    background:var(--card-2);border:1.5px solid var(--line);border-radius:9px;color:var(--ink);
-    font-family:'Barlow',sans-serif;font-weight:600;font-size:15px;padding:15px 15px;
-    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
-    transition:border-color .15s,background .15s,transform .06s}
-  /* Trade grid: row layout so the selection bubble sits next to each option */
-  .opts.grid .opt{flex-direction:row;align-items:center;gap:10px;padding:14px 12px;font-size:14.5px}
+  /* ---- Quiz overlay ---- */
+  .quiz{position:fixed;inset:0;z-index:60;background:var(--navy);overflow-y:auto;display:none}
+  .quiz.on{display:block}
+  .qhead{position:sticky;top:0;background:rgba(15,20,25,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:2}
+  .qhead-in{height:60px;display:flex;align-items:center;justify-content:center;position:relative}
+  .qclose{position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ink-dim);cursor:pointer;width:36px;height:36px;display:grid;place-items:center;border-radius:8px}
+  .qclose:hover{color:var(--ink);background:#20293380}
+  .qclose svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+  .qbody{max-width:680px;margin:0 auto;padding:34px 20px 60px;text-align:center}
+  .qbody .qh{font-weight:700;font-size:clamp(24px,4.4vw,34px);line-height:1.12}
+  .qbody .qh .hl2{color:var(--orange)}
+  .qbody .qnote{color:var(--ink-dim);margin-top:10px;font-size:14.5px}
+  .prog{height:6px;background:var(--card-2);border-radius:99px;margin:26px 0 6px;overflow:hidden}
+  .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--orange),var(--amber));border-radius:99px;transition:width .35s ease}
+  .qstep{margin-top:30px}
+  .qstep .qq{font-family:'Oswald',sans-serif;font-weight:600;font-size:22px}
+  .qstep .qsub{color:var(--ink-dim);font-size:14px;margin-top:6px}
+  .opts{margin-top:22px;display:flex;flex-direction:column;gap:10px;text-align:left}
+  .opts.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:520px){ .opts.grid{grid-template-columns:1fr} }
+  .opt{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 16px;cursor:pointer;font-size:15.5px;font-weight:500;transition:border-color .12s,background .12s;color:var(--ink)}
   .opt:hover{border-color:var(--steel);background:#20293380}
-  .opt:active{transform:scale(.985)}
-  .opt.sel{border-color:var(--orange);background:rgba(255,107,26,0.10)}
-  /* multiple-choice bubble */
-  .opt .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--steel);flex:none;transition:.15s;position:relative}
-  .opt.sel .dot{border-color:var(--orange);background:var(--orange);box-shadow:inset 0 0 0 3px var(--card-2)}
-  .opt .ic{font-size:19px;line-height:1;flex:none}
-  .opts.grid .opt span:last-child{flex:1}
+  .opt.sel{border-color:var(--orange);background:rgba(255,107,26,.08)}
+  .opt .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--steel);flex:none;position:relative}
+  .opt.sel .dot{border-color:var(--orange)}
+  .opt.sel .dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--orange)}
+  .qinput{width:100%;height:54px;border-radius:12px;border:1px solid var(--steel);background:#0E141A;color:var(--ink);font-size:16px;padding:0 16px;font-family:'Barlow',sans-serif;margin-top:20px}
+  .qinput:focus{outline:none;border-color:var(--orange)}
+  .qinput.err{border-color:#E5484D}
+  .fieldmsg{min-height:16px;font-size:12.5px;color:#F2686C;text-align:left;margin-top:5px}
+  .cfields{margin-top:18px;display:flex;flex-direction:column;gap:2px;text-align:left}
+  .cfields label{font-size:13px;color:var(--ink-dim);font-weight:600;margin:8px 0 5px}
+  .cfields .qinput,.cfields select{margin-top:0}
+  select.qinput{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2395A1AE' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center}
+  .consent{margin-top:16px;display:flex;gap:12px;align-items:flex-start;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .consent.err{border-color:#E5484D}
+  .consent input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:var(--orange)}
+  .consent .ct{font-size:11.5px;color:var(--ink-dim);line-height:1.55}
+  .consent .ct a{color:var(--orange)}
+  .qnav{margin-top:24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .qback{background:none;border:1px solid var(--line);color:var(--ink-dim);border-radius:10px;padding:12px 20px;font-family:'Oswald',sans-serif;font-weight:600;cursor:pointer;font-size:14px}
+  .qback:hover{color:var(--ink);border-color:var(--steel)}
+  .qcont{flex:1}
+  .qassure{margin-top:16px;font-size:12.5px;color:var(--ink-faint);display:inline-flex;align-items:center;gap:7px;justify-content:center}
+  .qassure svg{width:13px;height:13px;fill:none;stroke:var(--good);stroke-width:2.4}
+  .avail{margin:8px auto 0;max-width:520px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:#8FE29B;border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px;justify-content:center}
+  .avail svg{width:15px;height:15px;fill:none;stroke:var(--good);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .qtst{margin-top:40px;display:grid;grid-template-columns:1fr;gap:12px;text-align:left}
+  .qtst .tcard{background:var(--card-2)}
+  .qcompliance{margin-top:20px;font-size:11px;color:var(--ink-faint);line-height:1.6;text-align:center}
 
-  /* number input */
-  .num-field{position:relative;margin-bottom:6px}
-  .num-field input{width:100%;background:var(--card-2);border:1.5px solid var(--line);border-radius:9px;color:var(--ink);
-    font-family:'Oswald',sans-serif;font-weight:600;font-size:30px;text-align:center;padding:18px 14px;letter-spacing:.04em;outline:none;transition:border-color .15s}
-  .num-field input:focus{border-color:var(--orange)}
-  .num-field input.err{border-color:#E5484D}
-  .field-note{font-size:12.5px;color:var(--ink-dim);min-height:17px;margin-bottom:2px;transition:color .15s}
-  .field-note.err{color:#F2686C}
-
-  /* select (state) */
-  .sel-field{position:relative;margin-bottom:6px}
-  .sel-field select{width:100%;background:var(--card-2);border:1.5px solid var(--line);border-radius:9px;color:var(--ink);
-    font-family:'Barlow',sans-serif;font-weight:600;font-size:16px;padding:15px 42px 15px 15px;outline:none;cursor:pointer;
-    appearance:none;-webkit-appearance:none;transition:border-color .15s}
-  .sel-field select:focus{border-color:var(--orange)}
-  .sel-field select.err{border-color:#E5484D}
-  .sel-field select:invalid{color:var(--ink-faint)}
-  .sel-field::after{content:"";position:absolute;right:16px;top:50%;width:9px;height:9px;border-right:2px solid var(--ink-dim);
-    border-bottom:2px solid var(--ink-dim);transform:translateY(-70%) rotate(45deg);pointer-events:none}
-  .sel-field select option{background:var(--card-2);color:var(--ink)}
-
-  /* contact */
-  .contact{display:flex;flex-direction:column;gap:11px}
-  .inp{display:flex;flex-direction:column;gap:5px}
-  .inp label{font-family:'Oswald',sans-serif;font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}
-  .inp input{background:var(--card-2);border:1.5px solid var(--line);border-radius:9px;color:var(--ink);
-    font-family:'Barlow',sans-serif;font-weight:500;font-size:16px;padding:13px 14px;outline:none;transition:border-color .15s}
-  .inp input:focus{border-color:var(--orange)}
-  .inp input.err{border-color:#E5484D}
-  .inp .msg{font-size:11.5px;color:#F2686C;min-height:14px}
-  .consent{display:flex;gap:10px;align-items:flex-start;margin-top:3px;cursor:pointer}
-  .consent input{margin-top:2px;width:17px;height:17px;accent-color:var(--orange);flex:none}
-  .consent span{font-size:11.5px;color:var(--ink-dim);line-height:1.5}
-  .consent-box{border:1px solid var(--line);border-radius:8px;padding:12px 13px;background:rgba(0,0,0,0.18);transition:border-color .15s}
-  .consent-box.err{border-color:#E5484D}
-
-  /* CTA + nav row (Go back / Next) */
-  .cta{width:100%;border:none;cursor:pointer;border-radius:10px;
-    background:linear-gradient(180deg,var(--orange),var(--orange-press));color:#fff;
-    font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;letter-spacing:.06em;text-transform:uppercase;
-    padding:17px;display:flex;align-items:center;justify-content:center;gap:9px;transition:filter .15s,transform .06s;
-    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
-    box-shadow:0 8px 22px rgba(255,107,26,0.28)}
-  .cta:hover{filter:brightness(1.06)}
-  .cta:active{transform:translateY(1px)}
-  .cta[disabled]{filter:grayscale(.5) brightness(.7);cursor:not-allowed;box-shadow:none}
-  .cta svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:2.4}
-
-  .nav{display:flex;gap:10px;align-items:stretch;margin-top:18px}
-  .nav .cta{flex:1}
-  .nav-back{flex:none;min-width:112px;background:var(--card-2);border:1.5px solid var(--line);color:var(--ink-dim);border-radius:10px;
-    font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;padding:0 16px;
-    display:flex;align-items:center;justify-content:center;gap:6px;
-    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:border-color .15s,color .15s}
-  .nav-back:hover{border-color:var(--steel);color:var(--ink)}
-  @media (max-width:400px){.nav-back{min-width:96px;font-size:13px;padding:0 12px}.cta{font-size:16px}}
-
-  /* trust */
-  .trust{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 12px 22px;color:var(--ink-faint);
-    font-size:12px}
-  .trust svg{width:13px;height:13px;fill:var(--ink-faint)}
-  .trust b{color:var(--ink-dim);font-weight:600}
-
-  /* ---- Thank-you page ---- */
-  .ty{text-align:center;padding:34px 6px 18px;animation:enter .4s ease;max-width:470px;margin:0 auto}
-  .ty-badge{width:74px;height:74px;border-radius:50%;margin:0 auto 18px;background:rgba(63,185,80,0.14);border:2px solid var(--good);display:flex;align-items:center;justify-content:center}
-  .ty-badge svg{width:36px;height:36px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-  .ty-eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);margin-bottom:8px}
-  .ty-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:27px;text-transform:uppercase;margin-bottom:10px}
-  .ty-lead{font-size:14.5px;color:var(--ink-dim);line-height:1.6;max-width:430px;margin:0 auto 20px}
-  .ty-lead b{color:var(--ink)}
-  .ty-next{text-align:left;max-width:430px;margin:0 auto}
-  .ty-step{display:flex;gap:12px;align-items:flex-start;background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:9px;font-size:13px;color:var(--ink-dim);line-height:1.45}
-  .ty-step b{color:var(--ink);font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px}
-  .ty-n{flex:none;width:26px;height:26px;border-radius:50%;background:rgba(255,107,26,0.14);border:1px solid var(--orange);color:var(--orange);font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px}
-  .ty-foot{margin-top:20px;font-size:12.5px;color:var(--ink-faint);line-height:1.5}
-
-  /* ---- Sales letter / IUL explainer (below the form) ---- */
-  .sales{max-width:640px;margin:0 auto;padding:6px 18px 40px}
-  .seg{padding:28px 0;border-top:1px solid rgba(255,255,255,0.06)}
-  .seg:first-child{border-top:none;padding-top:22px}
-  .seg-eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--orange);margin-bottom:8px;text-align:center}
-  .seg-h{font-family:'Oswald',sans-serif;font-weight:700;font-size:25px;line-height:1.12;text-transform:uppercase;color:var(--ink);margin-bottom:14px;text-align:center}
-  .seg-p{font-size:15px;color:var(--ink-dim);line-height:1.65;margin:0 auto 4px;max-width:540px;text-align:center}
-  .seg-p b{color:var(--ink);font-weight:600}
-  .sales-graphic{display:flex;justify-content:center;margin:14px 0 4px}
-  .sales-graphic svg{width:100%;max-width:340px;height:auto}
-  .benefit-cards{display:flex;flex-direction:column;gap:12px;margin:2px 0}
-  .bcard{display:flex;gap:14px;align-items:flex-start;background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left}
-  .bcard .bic{flex:none;width:46px;height:46px;border-radius:11px;background:rgba(255,107,26,0.12);border:1px solid rgba(255,107,26,0.35);display:flex;align-items:center;justify-content:center;color:var(--orange)}
-  .bcard .bic svg{width:24px;height:24px}
-  .bcard h3{font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;text-transform:uppercase;letter-spacing:.02em;color:var(--ink);margin-bottom:4px}
-  .bcard p{font-size:13.5px;color:var(--ink-dim);line-height:1.5}
-  .how-list{display:flex;flex-direction:column;gap:11px;max-width:520px;margin:4px auto;text-align:left}
-  .hstep{display:flex;gap:13px;align-items:flex-start}
-  .hstep .hn{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(255,107,26,0.14);border:1px solid var(--orange);color:var(--orange);font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
-  .hstep div{font-size:14px;color:var(--ink-dim);line-height:1.5;padding-top:3px}
-  .hstep b{color:var(--ink);font-weight:600}
-  .sales-cta{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;max-width:430px;margin:24px auto 0;border:none;cursor:pointer;border-radius:10px;
-    background:linear-gradient(180deg,var(--orange),var(--orange-press));color:#fff;
-    font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;padding:16px;
-    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
-    box-shadow:0 8px 22px rgba(255,107,26,0.26);transition:filter .15s,transform .06s}
-  .sales-cta:hover{filter:brightness(1.06)}
-  .sales-cta:active{transform:translateY(1px)}
-  .sales-cta svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2.4}
-  .sales-note{font-size:11.5px;color:var(--ink-faint);line-height:1.55;text-align:center;max-width:540px;margin:30px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,0.06)}
-
-  /* testimonials */
-  .tgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:4px 0}
-  .tcard{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left;display:flex;flex-direction:column}
-  .tcard .stars{color:var(--amber);font-size:13px;letter-spacing:2px;margin-bottom:9px}
-  .tcard .tq{font-size:13.5px;color:var(--ink-dim);line-height:1.6;margin-bottom:13px;flex:1}
-  .tcard .tm{display:flex;align-items:center;gap:11px}
-  .tcard .tav{flex:none;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--amber));color:#fff;font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
-  .tcard .tn{font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);text-transform:uppercase;letter-spacing:.02em}
-  .tcard .tr{font-size:12px;color:var(--ink-faint)}
-  .ty-tst{margin-top:26px;text-align:left}
-  .ty-tst-h{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);text-align:center;margin-bottom:13px}
-
-  @media (max-width:620px){.q{font-size:23px}.ty-h{font-size:23px}.ty{padding:24px 4px 14px}.seg-h{font-size:22px}.seg-p{font-size:14.5px}.tgrid{grid-template-columns:1fr}}
-  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto}}
+  /* ---- Thank-you ---- */
+  .ty{max-width:640px;margin:0 auto;padding:50px 20px 70px;text-align:center}
+  .ty-badge{width:64px;height:64px;border-radius:50%;background:rgba(63,185,80,.14);display:grid;place-items:center;margin:0 auto 18px}
+  .ty-badge svg{width:32px;height:32px;fill:none;stroke:var(--good);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .ty-eyebrow{color:var(--good);font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12.5px}
+  .ty h2{font-weight:700;font-size:clamp(28px,5vw,40px);margin-top:8px}
+  .ty p{color:var(--ink-dim);margin-top:14px;font-size:16px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -222,125 +205,179 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 
-  <div class="quiz-page">
+<!-- ============ LANDING ============ -->
+<div id="landing">
+  <header>
+    <div class="wrap hd">
+      <a class="brand" href="#">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="24" r="24" fill="#161C24"/>
+          <path d="M12 30c0-7 5.4-12 12-12s12 5 12 12" fill="none" stroke="#FF6B1A" stroke-width="3" stroke-linecap="round"/>
+          <path d="M9 30h30" stroke="#FF6B1A" stroke-width="3" stroke-linecap="round"/>
+          <path d="M24 18v-4" stroke="#F5A623" stroke-width="3" stroke-linecap="round"/>
+          <rect x="20.5" y="30" width="7" height="4" rx="1" fill="#F5A623"/>
+        </svg>
+        <span class="wm">
+          <span class="l1">AMERICAN BLUE COLLAR</span>
+          <span class="l2">Advantage</span>
+        </span>
+      </a>
+      <nav>
+        <a class="lnk" href="#why">Why IUL</a>
+        <a class="lnk" href="#faq">FAQs</a>
+        <button class="btn" type="button" onclick="startQuiz('')">Get My Free Quote</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero" id="hero">
+    <div class="wrap hero-in">
+      <div class="hero-card">
+        <div class="eyebrow">Indexed Universal Life Insurance</div>
+        <h1>Built for the People Who <span class="hl">Build America.</span></h1>
+        <p class="sub">One policy can help protect your family with up to <b>$1 million in coverage</b>, give you <b>access to funds</b> if a qualifying illness keeps you off the job, and build <b>tax-advantaged cash value</b> for the future.</p>
+
+        <div class="quotebox">
+          <div class="qlab">See what you qualify for in your state.</div>
+          <form class="zip-row" id="zipForm" onsubmit="return heroZip(event)">
+            <input id="zipInput" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="Enter ZIP code" aria-label="ZIP code">
+            <button class="btn" type="submit">Get My Free Quote <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </form>
+          <div class="zip-err" id="zipErr"></div>
+        </div>
+
+        <div class="trust">
+          <span><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Free · No Obligation</span>
+          <span><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Secure &amp; Confidential</span>
+          <span><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> Licensed Agents</span>
+          <span><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> A+ Rated Carriers</span>
+        </div>
+      </div>
+    </div>
+  </section>
   <div class="hazard"></div>
-  <div class="wrap">
 
-    <!-- Hero headline — sells all three benefits: retirement + family protection + living benefits -->
-    <div class="hero" id="hero">
-      <div class="hero-eyebrow">For the people who build America</div>
-      <h1 class="hero-h">How blue-collar workers are building <span>tax-free retirement</span> while protecting their family &amp; income</h1>
-      <p class="hero-sub">Take the 60-second quiz to see the strategy tradesmen use to build <b>tax-free retirement income</b>, create <b>permanent life insurance protection</b>, and access <b>living benefits</b> if the unexpected happens.</p>
+  <!-- Testimonials -->
+  <section class="tst-sec">
+    <div class="wrap">
+      <div class="tgrid" id="tgridTop"></div>
+      <p class="disc">Testimonials are from real clients, shared with their permission. Individual results and experiences vary and are not a guarantee of future results, coverage, or eligibility. Cash value growth is subject to policy terms and carrier performance.</p>
+    </div>
+  </section>
+
+  <!-- What you get -->
+  <section class="light-sec" id="why">
+    <div class="wrap wyg">
+      <div class="eyebrow">What You Get</div>
+      <h2>Why Contractors &amp; Skilled Trades Choose This</h2>
+      <p class="intro">Most trade work leaves you to build your own safety net — no pension waiting at the end, and nothing that keeps paying if a serious illness takes you off the job. Here's what an indexed universal life policy is designed to do about that.</p>
+      <div class="bgrid">
+        <div class="bcard">
+          <div class="bic"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></div>
+          <h3>Money If a Serious Illness Strikes</h3>
+          <p>A serious diagnosis pulls you off the job? Living benefit riders let you <b>access part of your death benefit early</b> after a qualifying condition — so money is coming in even when you can't work.</p>
+        </div>
+        <div class="bcard">
+          <div class="bic"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h3>Cash Value You Can Use Later</h3>
+          <p>Your money grows tax-deferred and <b>stays yours to use</b> — a kid's college, a work truck, your retirement. No waiting until 59½, no forced withdrawals down the line.</p>
+        </div>
+        <div class="bcard">
+          <div class="bic"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg></div>
+          <h3>Protected From Market Crashes</h3>
+          <p>When the market climbs, your cash value grows with it. When it crashes, <b>that loss doesn't come out of your policy</b> — so you're not digging back to even before you can grow again.</p>
+        </div>
+      </div>
     </div>
 
-    <!-- quiz (lead form) -->
-    <div class="quiz" id="leadForm">
-      <div id="stage"></div>
+    <!-- FAQ -->
+    <div class="wrap faq" id="faq">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions? Start Here.</h2>
+      <div class="faq-list">
+        <details class="fq"><summary>Can I qualify if I have a health condition? <span class="pm">+</span></summary><div class="ans">Often, yes. Many blue-collar workers with common health conditions still qualify — carriers weigh a lot of factors, not just one. A licensed agent reviews your situation and matches you to carriers most likely to approve you. There's no cost or obligation to find out.</div></details>
+        <details class="fq"><summary>How much does an IUL policy cost? <span class="pm">+</span></summary><div class="ans">There's no set price — what you pay depends on your age, your health, how much coverage you want, and how the policy is structured. That's exactly what your free quote is for: a licensed agent designs an option around a budget that's comfortable for you.</div></details>
+        <details class="fq"><summary>Does this work if I'm self-employed, 1099, or W-2? <span class="pm">+</span></summary><div class="ans">Yes. It doesn't matter whether you run your own crew, drive 1099, or clock in W-2. An IUL is an individual policy you own — it isn't tied to an employer, so it stays with you no matter where or how you work.</div></details>
+        <details class="fq"><summary>What happens after I submit my information? <span class="pm">+</span></summary><div class="ans">A licensed independent agent reaches out — usually within 24 hours — to go over your options. No pressure and no obligation to buy. If it's a fit, they'll help you get covered; if not, you'll still walk away knowing your options.</div></details>
+      </div>
     </div>
+  </section>
 
-    <div class="trust" id="trust">
-      <svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
-      <span>Takes 60 seconds · <b>No obligation</b> · No pressure</span>
+  <!-- Final CTA -->
+  <section class="final">
+    <div class="wrap">
+      <h2>Get Your Free Quote</h2>
+      <p>Free, no obligation, about a minute.</p>
+      <button class="btn" type="button" onclick="startQuiz('')">Get My Free Quote</button>
     </div>
+  </section>
 
-    <!-- ===== Sales letter / IUL explainer (below the form) ===== -->
-    <div class="sales" id="sales">
-
-      <section class="seg">
-        <div class="seg-eyebrow">The strategy</div>
-        <h2 class="seg-h">What is an IUL?</h2>
-        <p class="seg-p">An <b>Indexed Universal Life (IUL)</b> policy is permanent life insurance with a built-in savings engine. Part of what you put in <b>protects your family</b> if something happens to you. The rest <b>grows tax-free</b>, tied to the market's gains but shielded from its losses. It's how a lot of tradesmen build a retirement they can actually count on, without gambling their future on the stock market.</p>
-        <div class="sales-graphic">
-          <svg viewBox="0 0 360 150" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
-            <rect x="168" y="104" width="28" height="40" rx="4" fill="#1B222B" stroke="#2A3542"/>
-            <rect x="206" y="80" width="28" height="64" rx="4" fill="#1B222B" stroke="#2A3542"/>
-            <rect x="244" y="52" width="28" height="92" rx="4" fill="rgba(255,107,26,0.18)" stroke="#FF6B1A"/>
-            <rect x="282" y="26" width="28" height="118" rx="4" fill="rgba(255,107,26,0.32)" stroke="#FF6B1A"/>
-            <path d="M182 112 L220 88 L258 60 L322 32" stroke="#F5A623" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="322" cy="32" r="5" fill="#F5A623"/>
-            <path d="M74 24 L120 40 V80 C120 108 100 126 74 136 C48 126 28 108 28 80 V40 Z" fill="rgba(255,107,26,0.10)" stroke="#FF6B1A" stroke-width="2.5"/>
-            <path d="M58 78 L70 90 L92 62" stroke="#3FB950" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+  <footer>
+    <div class="wrap">
+      <div class="frow">
+        <div class="brand">
+          <span class="wm"><span class="l1">AMERICAN BLUE COLLAR</span><span class="l2">Advantage</span></span>
         </div>
-        <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      </section>
+        <div style="display:flex;gap:18px"><a href="#">Privacy Policy</a><a href="#">Terms of Service</a></div>
+      </div>
+      <p class="discl">Advertisement for insurance, presented by a licensed independent agent. American Blue Collar Advantage is not an insurance carrier. Coverage, benefits, premiums, and eligibility are determined solely by the carrier and are subject to underwriting. Living benefits are provided by riders that may have additional cost and are subject to eligibility and a qualifying event. Cash value growth is subject to policy terms and carrier performance. This is not tax or investment advice. No obligation to purchase.</p>
+      <p style="margin-top:12px">© <span id="yr"></span> American Blue Collar Advantage. All rights reserved.</p>
+    </div>
+  </footer>
+</div>
 
-      <section class="seg">
-        <h2 class="seg-h">Three things it does at once</h2>
-        <div class="benefit-cards">
-          <div class="bcard">
-            <div class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 9-9"/><path d="M17 7h4v4"/></svg></div>
-            <div><h3>Tax-free retirement income</h3><p>Your cash value grows tax-free, and it's built so you can pull income in retirement without handing a chunk to the IRS.</p></div>
-          </div>
-          <div class="bcard">
-            <div class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
-            <div><h3>Protection for your family</h3><p>A permanent death benefit that pays out to the people who depend on you, so one bad day never leaves them behind.</p></div>
-          </div>
-          <div class="bcard">
-            <div class="bic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 5.5a5 5 0 0 0-7.5 0 5 5 0 0 0-7.5 6.5L12 20l7.5-8a5 5 0 0 0 0-6.5z"/></svg></div>
-            <div><h3>Living benefits</h3><p>Get seriously hurt or sick and can't work? You can access money from the policy while you're still alive, right when you need it most.</p></div>
-          </div>
-        </div>
-        <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      </section>
-
-      <section class="seg">
-        <div class="seg-eyebrow">Why tradesmen</div>
-        <h2 class="seg-h">Built for people who work with their hands</h2>
-        <p class="seg-p">You already know how to build things that last. This is the same idea for your money. Steady, protected, and yours. No market roller-coaster, no losing it in a downturn, and a plan that's still standing when you're ready to slow down.</p>
-        <div class="how-list">
-          <div class="hstep"><div class="hn">1</div><div><b>Take the 60-second quiz</b> above. Just a few quick questions, no pressure.</div></div>
-          <div class="hstep"><div class="hn">2</div><div><b>Talk to a licensed specialist</b> who works with blue-collar families every day.</div></div>
-          <div class="hstep"><div class="hn">3</div><div><b>Get your personalized plan</b> and see the real numbers for your situation.</div></div>
-        </div>
-        <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      </section>
-
-      <section class="seg">
-        <div class="seg-eyebrow">Real tradesmen</div>
-        <h2 class="seg-h">What tradesmen are saying</h2>
-        <div class="tgrid" id="tgrid"></div>
-        <button class="sales-cta" data-scroll>Get my IUL now <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      </section>
-
-      <p class="sales-note">An IUL is a permanent life insurance policy. Coverage amounts, cash value growth, and living benefits depend on the specific policy and carrier and on qualifying. A licensed specialist will walk you through the exact details for your situation. This is not tax or investment advice.</p>
+<!-- ============ QUIZ OVERLAY ============ -->
+<div class="quiz" id="quiz" aria-hidden="true">
+  <div class="qhead">
+    <div class="wrap qhead-in">
+      <span class="brand">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="24" r="24" fill="#161C24"/>
+          <path d="M12 30c0-7 5.4-12 12-12s12 5 12 12" fill="none" stroke="#FF6B1A" stroke-width="3" stroke-linecap="round"/>
+          <path d="M9 30h30" stroke="#FF6B1A" stroke-width="3" stroke-linecap="round"/>
+          <path d="M24 18v-4" stroke="#F5A623" stroke-width="3" stroke-linecap="round"/>
+          <rect x="20.5" y="30" width="7" height="4" rx="1" fill="#F5A623"/>
+        </svg>
+        <span class="wm"><span class="l1">AMERICAN BLUE COLLAR</span><span class="l2">Advantage</span></span>
+      </span>
+      <button class="qclose" type="button" onclick="closeQuiz()" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
   </div>
-  </div><!-- /.quiz-page -->
+  <div class="qbody">
+    <div class="qh">See the coverage you qualify for and how much <span class="hl2">tax-advantaged cash value</span> you could build.</div>
+    <div class="qnote">Free · no obligation · about a minute</div>
+    <div class="avail" id="avail" style="display:none"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg> <span id="availTxt">Good news — coverage may be available in your area.</span></div>
+    <div class="prog"><i id="progBar" style="width:0%"></i></div>
+    <div class="qstep" id="qstep"></div>
+    <div class="qtst" id="qtst"></div>
+    <p class="qcompliance">Testimonials, where shown, are from real clients with their permission; individual results vary and are not a guarantee of future results or coverage. Advertisement for insurance presented by a licensed independent agent — not an insurance carrier. Coverage and eligibility are determined by the carrier.</p>
+  </div>
+</div>
 
 <script>
 /* ============================================================
-   ENHANCED WEALTH — Early Retirement Quiz (v2)
+   American Blue Collar Advantage — IUL quote funnel (v3)
    Posts leads to the Advertisely inbound endpoint (same-origin).
    ============================================================ */
-// Advertisely inbound webhook. Relative path = same origin when hosted on
-// advertisely.io; the endpoint also sends CORS headers so this page works
-// from any domain it's later served on. The key is a leads-write-only token.
 const WEBHOOK_URL = "/api/webhooks/inbound?key=adv_live_sk__G9rQOAZxsV_oFx0g3IdQmuMU1e9X2THv-dsy1eAX5w";
 
-/* ---- First-party funnel tracking (page view, step reach, completion) ----
-   Anonymous per-visit session id; no PII. Powers click-through + drop-off
-   reporting in the Advertisely admin console. ---------------------------- */
+/* ---- First-party funnel tracking (view / step / complete) ---- */
 const TRACK_URL = "/api/track";
 const sessionId = "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
 function trackEvent(type, step) {
   try {
     const fbclid = new URLSearchParams(location.search).get("fbclid") || "";
     const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz", fbclid });
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(TRACK_URL, new Blob([body], { type: "text/plain" }));
-    } else {
-      fetch(TRACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
-    }
+    if (navigator.sendBeacon) navigator.sendBeacon(TRACK_URL, new Blob([body], { type: "text/plain" }));
+    else fetch(TRACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
   } catch (e) {}
 }
 trackEvent("view");
 
-const META_PIXEL_ID = "717587103522110";   // Enhanced Wealth account pixel
-const META_EVENT    = "Lead";               // MUST match the event your ad set optimizes for
-let   leadIp = "";                          // captured for TCPA consent proof
-
-// Load the Meta pixel only if the funnel hasn't already (guarded, won't double-init)
+const META_PIXEL_ID = "717587103522110";
+const META_EVENT    = "Lead";
+let   leadIp = "";
 (function(){
   if(window.fbq) return;
   !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -348,373 +385,224 @@ let   leadIp = "";                          // captured for TCPA consent proof
   t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
   fbq('init', META_PIXEL_ID); fbq('track','PageView');
 })();
-
-// Best-effort public IP for consent proof (fails silently, never blocks submit)
 try{ fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ leadIp=d.ip||""; }).catch(()=>{}); }catch(e){}
 
-/* ---- Meta attribution capture (REQUIRED for the sold->Facebook loop) ---- */
+/* ---- Meta attribution capture ---- */
 const tracking = (function(){
-  function cookie(n){ const m=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)'); return m?m.pop():''; }
+  function cookie(n){ try{ const m=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)'); return m?m.pop():''; }catch(e){ return ''; } }
   const p = new URLSearchParams(location.search);
   const fbclid = p.get('fbclid') || '';
   let fbc = cookie('_fbc');
-  if(!fbc && fbclid) fbc = `fb.1.${Date.now()}.${fbclid}`; // synthesize if pixel hasn't set it yet
-  return {
-    fbclid,
-    fbc,
-    fbp: cookie('_fbp'),
-    utm_source: p.get('utm_source') || '',
-    utm_campaign: p.get('utm_campaign') || '',
-    utm_content: p.get('utm_content') || '',
-    landing_url: location.href
-  };
+  if(!fbc && fbclid) fbc = `fb.1.${Date.now()}.${fbclid}`;
+  return { fbclid, fbc, fbp: cookie('_fbp'),
+    utm_source: p.get('utm_source') || '', utm_campaign: p.get('utm_campaign') || '',
+    utm_content: p.get('utm_content') || '', landing_url: location.href };
 })();
 
 const CONSENT_TEXT = "By checking here, I agree that Enhanced Wealth may share the information I provide with participating licensed insurance agencies, agents, brokers, carriers, or other insurance providers that may offer products or services matching my request. I understand that these companies may contact me by phone, text message, and email regarding insurance products and related services, including, where permitted by law, using automated technology or an artificial/prerecorded voice. My consent is not required as a condition of purchasing any product or service. Message and data rates may apply.";
 
-const US_STATES = [
-  ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
-  ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["DC","District of Columbia"],
-  ["FL","Florida"],["GA","Georgia"],["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],
-  ["IN","Indiana"],["IA","Iowa"],["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],
-  ["ME","Maine"],["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],
-  ["MS","Mississippi"],["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],
-  ["NH","New Hampshire"],["NJ","New Jersey"],["NM","New Mexico"],["NY","New York"],
-  ["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],["OK","Oklahoma"],["OR","Oregon"],
-  ["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],["SD","South Dakota"],
-  ["TN","Tennessee"],["TX","Texas"],["UT","Utah"],["VT","Vermont"],["VA","Virginia"],
-  ["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"]
+/* ---- Real client testimonials ---- */
+const TESTIMONIALS = [
+  { name:"Marcus T.", initials:"MT", trade:"Electrician", state:"TX",
+    quote:"I spend every day working to provide for my wife and kids, but I never really thought about what would happen to them financially if something happened to me. Getting my IUL set up gave me a different level of peace of mind — protection for my family while also building cash value I may be able to access later." },
+  { name:"David R.", initials:"DR", trade:"HVAC Technician", state:"FL",
+    quote:"My income depends on me being able to get up and work every day. My agent walked me through everything and designed an IUL around what I could comfortably afford. Now I have life insurance protection and a long-term strategy designed to build cash value." },
+  { name:"Anthony M.", initials:"AM", trade:"Welder", state:"OH",
+    quote:"I always thought life insurance was just something that paid out when you died. I had no idea certain permanent policies could also build cash value while you're alive. I'm protecting my wife and children today, but also putting money toward something I can potentially use later." },
+  { name:"Chris B.", initials:"CB", trade:"Truck Driver", state:"GA",
+    quote:"As a truck driver, I'm gone a lot and my family depends heavily on my income. I wanted to know that if something happened to me, my wife wouldn't have to worry about the mortgage and the kids. We built the coverage around my budget. The biggest result for me is peace of mind." },
+  { name:"Michael J.", initials:"MJ", trade:"Construction Foreman", state:"NC",
+    quote:"I've worked construction most of my adult life, and retirement always felt like something I'd figure out later. What interested me about an IUL was protecting my family while building cash value for the future at the same time. Now I actually have a strategy in place." },
+  { name:"Brandon S.", initials:"BS", trade:"Plumber", state:"AZ",
+    quote:"The biggest thing for me was protecting my paycheck and the people who depend on it. But I also didn't want to spend the next 30 years working without a retirement strategy. Setting up my IUL gave me both — protection for my family and a policy designed to accumulate cash value." },
+  { name:"Tyler H.", initials:"TH", trade:"Journeyman Lineman", state:"TN",
+    quote:"Being a lineman, I know every time I go to work there's risk. I've got a wife and two kids depending on my income, so my biggest concern was making sure they'd be protected. What I liked about the IUL is it wasn't only about protecting them — it gave me something for myself too." }
 ];
+function testimonialsHTML(list){
+  return list.map(t=>`
+    <div class="tcard">
+      <div class="stars">★★★★★</div>
+      <div class="q">“${t.quote}”</div>
+      <div class="who">
+        <div class="av">${t.initials}</div>
+        <div><div class="nm">${t.name}</div><div class="rl">${t.trade} · ${t.state}</div></div>
+      </div>
+    </div>`).join("");
+}
+document.getElementById('tgridTop').innerHTML = testimonialsHTML(TESTIMONIALS.slice(0,2));
+document.getElementById('qtst').innerHTML = testimonialsHTML(TESTIMONIALS.slice(0,2));
+document.getElementById('yr').textContent = new Date().getFullYear();
+
+/* ---- Quiz definition ---- */
+const answers = {};
+const US_STATES = [["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["FL","Florida"],["GA","Georgia"],["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],["MS","Mississippi"],["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],["NJ","New Jersey"],["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],["UT","Utah"],["VT","Vermont"],["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"]];
 
 const STEPS = [
-  { key:"trade", label:"Trade", eyebrow:"Your work", q:"What trade do you work in?",
-    type:"choice", grid:true, options:[
-      {v:"Lineman",ic:"⚡"},{v:"Electrician",ic:"🔌"},{v:"Pipefitter / Plumber",ic:"🔧"},
-      {v:"Ironworker / Crane",ic:"🏗️"},{v:"Heavy Equipment Op",ic:"🚜"},{v:"HVAC",ic:"❄️"},
-      {v:"Welder",ic:"🔥"},{v:"Other trade",ic:"🛠️"}
-    ]},
-  { key:"iul_interest", label:"Interest", eyebrow:"What drew you in", q:"What about IUL caught your attention most?",
-    type:"choice", options:[
-      {v:"Permanent life insurance coverage"},
-      {v:"Living benefits"},
-      {v:"Tax-free cash value accumulation"},
-      {v:"All of the above"}
-    ]},
-  { key:"age", label:"Age", eyebrow:"About you", q:"What's your age?",
-    sub:"We use this to build an accurate early-retirement number.",
-    type:"number", min:18, max:65, note:"Enter your age (18–65)" },
-  { key:"state", label:"State", eyebrow:"About you", q:"What state do you live in?",
-    sub:"We match you with a licensed specialist in your state.",
-    type:"select", placeholder:"Select your state", options:US_STATES },
-  { key:"income", label:"Income", eyebrow:"About you", q:"What is your gross monthly income?",
-    sub:"Before taxes. A rough number is fine.", type:"choice", options:[
-      {v:"Under $3,000"},{v:"$3,000 – $5,000"},{v:"$5,000 – $7,500"},{v:"$7,500 – $10,000"},{v:"$10,000+"}
-    ]},
-  { key:"budget", label:"Budget", eyebrow:"The plan", q:"How much could you comfortably put toward an IUL each month?",
-    sub:"This funds your permanent coverage, living benefits, and tax-free, zero-market-risk cash growth. A rough number is fine.", type:"choice", options:[
-      {v:"$300 – $500"},{v:"$500 – $1,000"},{v:"$1,000 – $2,000"},{v:"$2,000 – $3,500"},{v:"$3,500+"}
-    ]},
-  { key:"contact", label:"Contact", eyebrow:"Last step", q:"Where do we send your plan?",
-    sub:"A licensed specialist will walk you through it. No pressure.", type:"contact" }
+  { key:"iul_interest", q:"What matters most to you in a policy?", sub:"There's no wrong answer — it just helps tailor what you're shown.",
+    opts:["Protecting my family if something happens to me","A safety net if a serious illness takes me off the job","Tax-advantaged retirement income later","Building cash value I can borrow from","All of the above"] },
+  { key:"coverage", q:"How much coverage are you looking for?", sub:"A ballpark is fine — your agent will fine-tune it.",
+    opts:["$100,000 – $250,000","$250,000 – $500,000","$500,000 – $750,000","$750,000 – $1,000,000"] },
+  { key:"trade", q:"What trade do you work in?", sub:"We match you with agents who know blue-collar policies.", grid:true,
+    opts:["Electrician","HVAC Technician","Plumber","Welder","Carpenter","Truck Driver","Lineman","Construction","Other Skilled Trade"] },
+  { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
+  { key:"contact", q:"Last step — where should we send your free quote?", contact:true }
 ];
+let step = 0, navLock = false, renderToken = 0;
 
-let step = 0;
-let renderToken = 0; // bumped each render; lets a pending tap-advance cancel itself if the step already changed
-const answers = {};
-const stage = document.getElementById('stage');
+function startQuiz(zip){
+  answers.zip = (zip||"").trim();
+  step = 0;
+  document.getElementById('landing').style.display='none';
+  const q = document.getElementById('quiz'); q.classList.add('on'); q.setAttribute('aria-hidden','false');
+  window.scrollTo(0,0);
+  const av = document.getElementById('avail');
+  if(answers.zip){ av.style.display='flex'; }
+  trackEvent("step",1);
+  render();
+}
+function closeQuiz(){
+  const q=document.getElementById('quiz'); q.classList.remove('on'); q.setAttribute('aria-hidden','true');
+  document.getElementById('landing').style.display='';
+}
+function heroZip(e){
+  e.preventDefault();
+  const v=document.getElementById('zipInput').value.replace(/\D/g,'');
+  const err=document.getElementById('zipErr');
+  if(v.length!==5){ err.textContent="Please enter a 5-digit ZIP code."; return false; }
+  err.textContent=""; startQuiz(v); return false;
+}
+function pct(){ return Math.round(((step)/(STEPS.length))*100); }
 
 function render(){
   renderToken++;
-  trackEvent("step", step + 1); // 1-based: which quiz step the visitor reached
+  navLock=false;
+  document.getElementById('progBar').style.width = Math.max(8, Math.round(((step+1)/(STEPS.length+1))*100)) + "%";
   const s = STEPS[step];
-  const wrap = document.createElement('div'); wrap.className='step';
+  const host = document.getElementById('qstep');
+  let html = `<div class="qq">${s.q}</div>` + (s.sub?`<div class="qsub">${s.sub}</div>`:"");
 
-  let html = `<div class="eyebrow">${s.eyebrow}</div><div class="q">${s.q}</div>`;
-  if(s.sub) html += `<div class="q-sub">${s.sub}</div>`;
-
-  if(s.type==="choice"){
-    html += `<div class="opts ${s.grid?'grid':''}">` + s.options.map((o)=>{
-      const sel = answers[s.key]===o.v ? 'sel':'';
-      // Every choice — including the trade grid — shows a multiple-choice bubble.
-      const inner = s.grid
-        ? `<span class="dot"></span><span class="ic">${o.ic||''}</span><span>${o.v}</span>`
-        : `<span class="dot"></span><span>${o.v}</span>`;
-      return `<button class="opt ${sel}" data-v="${o.v}">${inner}</button>`;
-    }).join('') + `</div>`;
-  }
-
-  if(s.type==="number"){
-    const val = answers[s.key]||"";
-    html += `<div class="num-field"><input id="ageInput" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="00" value="${val}"></div>`;
-    html += `<div class="field-note" id="ageNote">${s.note}</div>`;
-  }
-
-  if(s.type==="select"){
-    const val = answers[s.key]||"";
-    const opts = s.options.map(([code,name])=>
-      `<option value="${code}" ${val===code?'selected':''}>${name}</option>`).join('');
-    html += `<div class="sel-field"><select id="selInput" required>
-      <option value="" disabled ${val?'':'selected'}>${s.placeholder||'Select…'}</option>${opts}
-    </select></div>`;
-    html += `<div class="field-note" id="selNote"></div>`;
-  }
-
-  if(s.type==="contact"){
-    html += `<div class="contact">
-      <div class="inp"><label>Full name</label><input id="c_name" autocomplete="name" placeholder="First and last"><div class="msg" id="m_name"></div></div>
-      <div class="inp"><label>Phone</label><input id="c_phone" inputmode="tel" autocomplete="tel" placeholder="(555) 555-5555"><div class="msg" id="m_phone"></div></div>
-      <div class="inp"><label>Email</label><input id="c_email" inputmode="email" autocomplete="email" placeholder="you@email.com"><div class="msg" id="m_email"></div></div>
-      <div class="consent-box" id="consentBox">
-        <label class="consent"><input type="checkbox" id="c_consent">
-          <span>By checking here, I agree that Enhanced Wealth may share the information I provide with participating licensed insurance agencies, agents, brokers, carriers, or other insurance providers that may offer products or services matching my request. I understand that these companies may contact me by phone, text message, and email regarding insurance products and related services, including, where permitted by law, using automated technology or an artificial/prerecorded voice. My consent is not required as a condition of purchasing any product or service. Message and data rates may apply.</span></label>
+  if(s.opts){
+    html += `<div class="opts${s.grid?' grid':''}">` + s.opts.map((o,i)=>
+      `<button class="opt${answers[s.key]===o?' sel':''}" type="button" data-v="${o.replace(/"/g,'&quot;')}"><span class="dot"></span><span>${o}</span></button>`).join("") + `</div>`;
+    if(step>0) html += `<div class="qnav"><button class="qback" type="button" onclick="back()">Back</button></div>`;
+    host.innerHTML = html;
+    host.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>{
+      answers[s.key]=b.getAttribute('data-v');
+      host.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel')); b.classList.add('sel');
+      const tok=renderToken; setTimeout(()=>{ if(renderToken===tok) go(); },260);
+    }));
+  } else if(s.input==="number"){
+    html += `<input class="qinput" id="ageInput" inputmode="numeric" maxlength="3" placeholder="Your age" value="${answers.age||''}">
+      <div class="fieldmsg" id="ageMsg"></div>
+      <div class="qnav"><button class="qback" type="button" onclick="back()">Back</button>
+      <button class="btn qcont" type="button" onclick="submitAge()">Continue <svg viewBox='0 0 24 24'><path d='M5 12h14M13 6l6 6-6 6'/></svg></button></div>`;
+    host.innerHTML = html;
+    const ai=document.getElementById('ageInput'); ai.focus();
+    ai.addEventListener('keydown',e=>{ if(e.key==='Enter') submitAge(); });
+  } else if(s.contact){
+    html += `<div class="cfields">
+        <label>Full name</label><input class="qinput" id="cName" autocomplete="name" placeholder="First and last name"><div class="fieldmsg" id="mName"></div>
+        <label>Phone number (required)</label><input class="qinput" id="cPhone" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567"><div class="fieldmsg" id="mPhone"></div>
+        <label>Email address</label><input class="qinput" id="cEmail" type="email" autocomplete="email" placeholder="you@email.com"><div class="fieldmsg" id="mEmail"></div>
+        <label>Your state</label><select class="qinput" id="cState"><option value="">Select your state</option>${US_STATES.map(s=>`<option value="${s[0]}">${s[1]}</option>`).join("")}</select><div class="fieldmsg" id="mState"></div>
       </div>
-    </div>`;
+      <label class="consent" id="consentBox"><input type="checkbox" id="cConsent">
+        <span class="ct">Yes — send my free quote and have a licensed agent follow up with my personalized numbers. By checking this box I agree to be contacted by phone, text, or email (including automated messages, even if my number is on a Do-Not-Call registry). Consent isn't a condition of purchase. Msg &amp; data rates may apply. <a href="#">Privacy Policy</a> · <a href="#">Terms</a>.</span>
+      </label>
+      <div class="qnav"><button class="qback" type="button" onclick="back()">Back</button>
+        <button class="btn qcont" type="button" onclick="submitContact()">Get My Free Quote</button></div>
+      <div class="qassure"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"/></svg> Secure &amp; confidential · shared only with licensed agents</div>`;
+    host.innerHTML = html;
+    const pe=document.getElementById('cPhone');
+    const phoneTen=(v)=>{ let d=(v||"").replace(/\D/g,''); if(d.length===11&&d[0]==='1')d=d.slice(1); return d.slice(0,10); };
+    const fmtPhone=(d)=>{ if(d.length>6)return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`; if(d.length>3)return `(${d.slice(0,3)}) ${d.slice(3)}`; if(d.length>0)return `(${d}`; return ''; };
+    pe.addEventListener('input',()=>{ pe.value=fmtPhone(phoneTen(pe.value)); });
+    window._phoneTen=phoneTen; window._fmtPhone=fmtPhone;
+    if(answers.name) document.getElementById('cName').value=answers.name;
+    if(answers.state) document.getElementById('cState').value=answers.state;
   }
-
-  // ---- Nav row: Go back (except first step) + Next / Get my plan ----
-  const backBtn = step > 0 ? `<button class="nav-back" id="back">← Go back</button>` : '';
-  const isContact = s.type === "contact";
-  const nextId = isContact ? 'submit' : 'next';
-  const nextLabel = isContact ? 'Get my plan' : 'Next';
-  html += `<div class="nav">${backBtn}<button class="cta nav-next" id="${nextId}">${nextLabel} <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>`;
-
-  wrap.innerHTML = html;
-  stage.replaceChildren(wrap);
-  wireStep(s);
-  scrollToTop();
 }
-
-function scrollToTop(){ window.scrollTo({top:0,behavior:'smooth'}); }
-
-// Move one step. render() bumps renderToken so a stale tap-auto-advance no-ops.
-function go(){ if(step < STEPS.length-1){ step++; render(); } }
-function goBack(){ if(step > 0){ step--; render(); } }
-
-function wireStep(s){
-  const backEl = document.getElementById('back');
-  if(backEl) backEl.onclick = goBack;
-
-  if(s.type==="choice"){
-    const nextEl = document.getElementById('next');
-    stage.querySelectorAll('.opt').forEach(btn=>{
-      btn.onclick=()=>{
-        answers[s.key]=btn.dataset.v;
-        stage.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));
-        btn.classList.add('sel');
-        // Auto-progress after a brief confirm — but cancel if the step already
-        // changed (e.g. the user hit Next first), so we never skip a step.
-        const tokenAtTap = renderToken;
-        setTimeout(()=>{ if(renderToken===tokenAtTap) go(); }, 320);
-      };
-    });
-    // Next also advances (once an option is chosen); auto-progress still runs.
-    if(nextEl) nextEl.onclick=()=>{ if(answers[s.key]) go(); };
-  }
-
-  if(s.type==="number"){
-    const inp=document.getElementById('ageInput');
-    const note=document.getElementById('ageNote');
-    const next=document.getElementById('next');
-    inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/[^0-9]/g,''); note.classList.remove('err'); note.textContent=s.note; inp.classList.remove('err'); });
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') next.click(); });
-    next.onclick=()=>{
-      const n=parseInt(inp.value,10);
-      if(!inp.value || isNaN(n) || n<s.min || n>s.max){
-        inp.classList.add('err'); note.classList.add('err');
-        note.textContent=`Enter a valid age (${s.min}–${s.max})`;
-        inp.focus(); return;
-      }
-      answers[s.key]=String(n); go();
-    };
-    setTimeout(()=>inp.focus(),260);
-  }
-
-  if(s.type==="select"){
-    const selEl=document.getElementById('selInput');
-    const note=document.getElementById('selNote');
-    const next=document.getElementById('next');
-    selEl.addEventListener('change',()=>{ selEl.classList.remove('err'); note.classList.remove('err'); note.textContent=''; });
-    next.onclick=()=>{
-      if(!selEl.value){ selEl.classList.add('err'); note.classList.add('err'); note.textContent='Please choose your state'; return; }
-      answers[s.key]=selEl.value; go();
-    };
-  }
-
-  if(s.type==="contact"){
-    const submit=document.getElementById('submit');
-    const nameEl=document.getElementById('c_name'), phoneEl=document.getElementById('c_phone'),
-          emailEl=document.getElementById('c_email'), consentEl=document.getElementById('c_consent');
-    // Phone: normalize to 10 US digits, dropping a leading "1" country code so
-    // autofilled numbers like "+1 954-937-6333" aren't truncated into a wrong
-    // number. Reformat on input AND change (browser autofill may fire only change).
-    const phoneTen=(v)=>{ let d=(v||"").replace(/\D/g,''); if(d.length===11 && d[0]==='1') d=d.slice(1); return d.slice(0,10); };
-    const fmtPhone=(d)=>{ if(d.length>6) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`; if(d.length>3) return `(${d.slice(0,3)}) ${d.slice(3)}`; if(d.length>0) return `(${d}`; return ''; };
-    const reformatPhone=()=>{ phoneEl.value=fmtPhone(phoneTen(phoneEl.value)); clearMsg(phoneEl,'m_phone'); };
-    phoneEl.addEventListener('input', reformatPhone);
-    phoneEl.addEventListener('change', reformatPhone);
-    [nameEl,emailEl].forEach(el=>el.addEventListener('input',()=>clearMsg(el,el===nameEl?'m_name':'m_email')));
-    consentEl.addEventListener('change',()=>document.getElementById('consentBox').classList.remove('err'));
-    submit.onclick=()=>{
-      let ok=true;
-      if(nameEl.value.trim().length<2){ setMsg(nameEl,'m_name','Please enter your name'); ok=false; }
-      const phoneD=phoneTen(phoneEl.value);
-      if(phoneD.length!==10){ setMsg(phoneEl,'m_phone','Enter a 10-digit phone'); ok=false; }
-      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value)){ setMsg(emailEl,'m_email','Enter a valid email'); ok=false; }
-      if(!consentEl.checked){ ok=false; document.getElementById('consentBox').classList.add('err'); }
-      if(!ok) return;
-      answers.name=nameEl.value.trim(); answers.phone=fmtPhone(phoneD); answers.email=emailEl.value.trim();
-      finish();
-    };
-  }
+function go(){ if(navLock) return; if(step < STEPS.length-1){ navLock=true; step++; trackEvent("step",step+1); render(); } }
+function back(){ if(step>0){ step--; render(); } }
+function submitAge(){
+  const el=document.getElementById('ageInput'); const n=parseInt((el.value||'').replace(/\D/g,''),10);
+  if(!n || n<18 || n>85){ el.classList.add('err'); document.getElementById('ageMsg').textContent="Enter an age between 18 and 85."; return; }
+  answers.age=String(n); go();
 }
 function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).textContent=t; }
-function clearMsg(el,id){ el.classList.remove('err'); document.getElementById(id).textContent=''; }
+function submitContact(){
+  const nameEl=document.getElementById('cName'), phoneEl=document.getElementById('cPhone'),
+        emailEl=document.getElementById('cEmail'), stateEl=document.getElementById('cState'),
+        consentEl=document.getElementById('cConsent');
+  [nameEl,phoneEl,emailEl,stateEl].forEach(e=>e.classList.remove('err'));
+  ['mName','mPhone','mEmail','mState'].forEach(id=>document.getElementById(id).textContent='');
+  document.getElementById('consentBox').classList.remove('err');
+  let ok=true;
+  if(!nameEl.value.trim() || !nameEl.value.trim().includes(' ')){ setMsg(nameEl,'mName','Enter your first and last name'); ok=false; }
+  const pd=window._phoneTen(phoneEl.value);
+  if(pd.length!==10){ setMsg(phoneEl,'mPhone','Enter a 10-digit phone'); ok=false; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value)){ setMsg(emailEl,'mEmail','Enter a valid email'); ok=false; }
+  if(!stateEl.value){ setMsg(stateEl,'mState','Select your state'); ok=false; }
+  if(!consentEl.checked){ ok=false; document.getElementById('consentBox').classList.add('err'); }
+  if(!ok) return;
+  answers.name=nameEl.value.trim(); answers.phone=window._fmtPhone(pd); answers.email=emailEl.value.trim(); answers.state=stateEl.value;
+  finish();
+}
 
-/* ---- lead scoring (phone-close model: never hard-DQ borderline) ---- */
+/* ---- lead scoring (coverage/age based; never hard-DQ) ---- */
 function scoreLead(a){
-  const hotBudget = a.budget==="$1,000 – $2,000" || a.budget==="$2,000 – $3,500" || a.budget==="$3,500+";
-  const highIncome = a.income==="$7,500 – $10,000" || a.income==="$10,000+";
-  if(hotBudget || highIncome) return "HOT";
-  const lowBoth = a.income==="Under $3,000" && a.budget==="$300 – $500";
-  if(lowBoth) return "NURTURE";
+  if(a.coverage==="$500,000 – $750,000" || a.coverage==="$750,000 – $1,000,000") return "HOT";
+  if(a.iul_interest==="All of the above") return "HOT";
   return "WARM";
 }
+function firstName(n){ return (n||"").trim().split(/\s+/)[0]||"friend"; }
+function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function finish(){
   trackEvent("complete");
   const tier = scoreLead(answers);
-  const parts = (answers.name||"").trim().split(/\s+/);
-  const firstName_ = parts[0]||"";
-  const lastName_  = parts.slice(1).join(" ")||"";
-  const eventId = "ev_"+Date.now()+"_"+Math.random().toString(36).slice(2,10); // dedup key
-  const nowIso  = new Date().toISOString();
+  const parts=(answers.name||"").trim().split(/\s+/);
+  const firstName_=parts[0]||"", lastName_=parts.slice(1).join(" ")||"";
+  const eventId="ev_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
+  const nowIso=new Date().toISOString();
 
   const payload = {
-    // --- Standard contact ---
-    first_name: firstName_,
-    last_name:  lastName_,
-    full_name:  answers.name,
-    phone:      answers.phone,
-    email:      answers.email,
-    state:      answers.state,
-
-    // --- Quiz answers (full record, kept verbatim) ---
-    quiz_trade:                answers.trade,
-    quiz_iul_interest:         answers.iul_interest,
-    quiz_age:                  answers.age,
-    quiz_household_income:     answers.income,
-    quiz_monthly_contribution: answers.budget,
-    quiz_lead_tier:            tier,
-
-    // --- TCPA consent proof ---
-    consent_given:     "Yes",
-    consent_timestamp: nowIso,
-    consent_language:  CONSENT_TEXT,
-    consent_ip:        leadIp,
-
-    // --- Meta attribution + CAPI dedup ---
-    event_name:   META_EVENT,
-    event_id:     eventId,
-    fbc:          tracking.fbc,
-    fbp:          tracking.fbp,
-    fbclid:       tracking.fbclid,
-    utm_source:   tracking.utm_source,
-    utm_campaign: tracking.utm_campaign,
-    utm_content:  tracking.utm_content,
-    landing_url:  tracking.landing_url,
-
-    lead_source:  "early-retirement-quiz",
-    submitted_at: nowIso
+    first_name:firstName_, last_name:lastName_, full_name:answers.name,
+    phone:answers.phone, email:answers.email, state:answers.state, zip:answers.zip||"",
+    quiz_trade:answers.trade, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
+    quiz_coverage:answers.coverage, quiz_lead_tier:tier,
+    consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
+    event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp, fbclid:tracking.fbclid,
+    utm_source:tracking.utm_source, utm_campaign:tracking.utm_campaign, utm_content:tracking.utm_content,
+    landing_url:tracking.landing_url, lead_source:"early-retirement-quiz", submitted_at:nowIso
   };
+  payload.name=answers.name; payload.occupation=answers.trade; payload.age=answers.age;
+  payload.intent=answers.iul_interest; payload.source="early-retirement-quiz"; payload.external_id=eventId;
 
-  // --- Canonical fields mapped by the Advertisely inbound endpoint (additive;
-  //     everything above is preserved in the lead's raw form data) ---
-  payload.name        = answers.name;
-  payload.occupation  = answers.trade;
-  payload.age         = answers.age;
-  payload.intent      = answers.iul_interest;
-  payload.source      = "early-retirement-quiz";
-  payload.external_id = eventId;
+  if(window.fbq){ try{ fbq('track',META_EVENT,{lead_tier:tier},{eventID:eventId}); }catch(e){} }
+  if(WEBHOOK_URL){ try{ fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{}); }catch(e){} }
 
-  // Browser pixel event — deduped against any server CAPI event via eventID
-  if(window.fbq){ try{ fbq('track', META_EVENT, { lead_tier:tier }, { eventID:eventId }); }catch(e){} }
-
-  // Send the lead into Advertisely (no page navigation).
-  if(WEBHOOK_URL){
-    try{ fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{}); }catch(e){}
-  }
-  console.log("LEAD PAYLOAD →", payload);
-
-  // Redirect to the dedicated thank-you page. The first name is stashed in
-  // sessionStorage (same-origin, client-side only — never in the URL) so the
-  // thank-you page can greet them by name. The webhook fetch uses keepalive and
-  // the pixel/beacon events survive navigation; a short delay lets them fire.
   try{ sessionStorage.setItem('tyName', firstName(answers.name)); }catch(e){}
-  setTimeout(function(){ window.location.href = '/thank-you.html'; }, 400);
+  showThankYou(firstName(answers.name));
+  setTimeout(function(){ window.location.href='/thank-you.html'; }, 500);
 }
 
 function showThankYou(name){
-  // Turn the whole view into a dedicated thank-you page.
-  const hero = document.getElementById('hero'); if(hero) hero.style.display='none';
-  const trust = document.getElementById('trust'); if(trust) trust.style.display='none';
-  const sales = document.getElementById('sales'); if(sales) sales.style.display='none';
-  const hi = name ? `You're all set, ${escapeHtml(name)}!` : "You're all set!";
-  stage.innerHTML = `
+  document.getElementById('qtst').style.display='none';
+  document.querySelector('.qcompliance').style.display='none';
+  document.querySelector('.qbody .qh').style.display='none';
+  document.querySelector('.qbody .qnote').style.display='none';
+  document.getElementById('avail').style.display='none';
+  document.querySelector('.prog').style.display='none';
+  const hi = name && name!=="friend" ? `You're all set, ${escapeHtml(name)}!` : "You're all set!";
+  document.getElementById('qstep').innerHTML = `
     <div class="ty">
       <div class="ty-badge"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div>
-      <div class="ty-eyebrow">Application received</div>
-      <h2 class="ty-h">${hi}</h2>
-      <p class="ty-lead">Thanks for completing the quiz. A <b>licensed specialist</b> will review your answers and
-        <b>reach out shortly</b> to walk you through your personalized early-retirement plan. No pressure, no obligation.</p>
-      <div class="ty-next">
-        <div class="ty-step"><span class="ty-n">1</span><span><b>We review your answers</b><br>Your responses go straight to a licensed specialist.</span></div>
-        <div class="ty-step"><span class="ty-n">2</span><span><b>A specialist calls you</b><br>Often the same day, so keep an eye on your phone and email.</span></div>
-        <div class="ty-step"><span class="ty-n">3</span><span><b>You get your plan</b><br>See exactly how blue-collar workers build tax-free retirement income.</span></div>
-      </div>
-      <div class="ty-tst">
-        <div class="ty-tst-h">Hear from other tradesmen</div>
-        <div class="tgrid">${testimonialsHTML(TESTIMONIALS.slice(0,3))}</div>
-      </div>
-      <div class="ty-foot">Keep an eye on your phone. The call often comes from a local number.</div>
+      <div class="ty-eyebrow">Request received</div>
+      <h2>${hi}</h2>
+      <p>Thanks for completing your quote request. A <b>licensed specialist</b> will review your answers and <b>reach out shortly</b> to walk you through your options. No pressure, no obligation.</p>
     </div>`;
-  scrollToTop();
 }
-function firstName(n){ return (n||"").trim().split(/\s+/)[0]||"friend"; }
-function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-/* ---- Testimonials (real, client-provided) ---- */
-const TESTIMONIALS = [
-  { name:"Marcus T.", initials:"MT", trade:"Electrician", state:"Texas",
-    quote:"I spend every day working to provide for my wife and kids, but I never really thought about what would happen to them financially if something happened to me. Getting my IUL set up gave me a different level of peace of mind. Now I have protection in place for my family while also building cash value that I may be able to access later in life. I like knowing the money I'm putting away is doing more than just sitting there." },
-  { name:"David R.", initials:"DR", trade:"HVAC Technician", state:"Florida",
-    quote:"My income depends on me being able to get up and work every day. That was the biggest thing that hit me. I wanted something that could protect my family while also helping me prepare for my own future. My agent walked me through everything and designed an IUL around what I could comfortably afford. Now I have life insurance protection and a long-term strategy designed to build cash value that I can potentially access tax-advantaged in retirement." },
-  { name:"Anthony M.", initials:"AM", trade:"Welder", state:"Ohio",
-    quote:"I always thought life insurance was just something that paid out when you died. I had no idea certain permanent policies could also build cash value while you're alive. Once it was explained to me, it made a lot more sense. I'm protecting my wife and children today, but I'm also putting money toward something I can potentially use later in life. Having both goals working together was what sold me on setting up a plan." },
-  { name:"Chris B.", initials:"CB", trade:"Truck Driver", state:"Georgia",
-    quote:"As a truck driver, I'm gone a lot, and my family depends heavily on my income. I wanted to know that if something happened to me, my wife wouldn't immediately have to worry about how she was going to pay the mortgage and take care of the kids. The process was straightforward, and we built the coverage around my budget. The biggest result for me is peace of mind. Family protection now, and a cash value strategy for later." },
-  { name:"Michael J.", initials:"MJ", trade:"Construction Foreman", state:"North Carolina",
-    quote:"I've worked construction most of my adult life, and retirement always felt like something I would figure out later. I realized that wasn't much of a plan. What interested me about an IUL was being able to protect my family while building cash value for the future at the same time. Now I actually have a strategy in place instead of just hoping my 401(k) and Social Security will be enough when I'm ready to stop working." },
-  { name:"Brandon S.", initials:"BS", trade:"Plumber", state:"Arizona",
-    quote:"The biggest thing for me was protecting my paycheck and the people who depend on it. If I'm not here, I still want my family to have financial protection. But I also didn't want to ignore myself and spend the next 30 years working without another retirement strategy. Setting up my IUL gave me both. Life insurance protection for my family, and a policy designed to accumulate cash value that I may be able to access later, potentially on a tax-advantaged basis if it's structured and maintained properly." },
-  { name:"Tyler H.", initials:"TH", trade:"Journeyman Lineman", state:"Tennessee",
-    quote:"Being a lineman, I know every time I go to work there's a level of risk that comes with the job. I've got a wife and two kids depending on my income, so my biggest concern was making sure they'd be financially protected if something ever happened to me. What I liked about the IUL was that it wasn't only about protecting them. It gave me something for myself too. I'm able to protect my family and income today while building cash value for the future that I may be able to access tax-advantaged in retirement. I work hard for my money, so knowing I finally have a plan that's working toward both goals gives me a lot of peace of mind." }
-];
-function testimonialCard(t){
-  return `<div class="tcard"><div class="stars">★★★★★</div><p class="tq">${escapeHtml(t.quote)}</p>`+
-    `<div class="tm"><div class="tav">${escapeHtml(t.initials)}</div><div><div class="tn">${escapeHtml(t.name)}</div><div class="tr">${escapeHtml(t.trade)} · ${escapeHtml(t.state)}</div></div></div></div>`;
-}
-function testimonialsHTML(list){ return list.map(testimonialCard).join(''); }
-
-render();
-
-// Populate the sales-section testimonials grid.
-const tgridEl = document.getElementById('tgrid');
-if(tgridEl) tgridEl.innerHTML = testimonialsHTML(TESTIMONIALS);
-
-// Sales-letter CTAs scroll the visitor back up to the lead form.
-document.querySelectorAll('.sales-cta[data-scroll]').forEach(b=>{
-  b.addEventListener('click',()=>{ document.getElementById('leadForm').scrollIntoView({behavior:'smooth',block:'start'}); });
-});
 </script>
 </body>
 </html>
