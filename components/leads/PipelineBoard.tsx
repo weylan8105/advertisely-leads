@@ -284,7 +284,21 @@ export function PipelineBoard({
         </div>
       </div>
 
-      {detailLead && <LeadDetailModal lead={detailLead} onClose={() => setDetailLead(null)} />}
+      {detailLead && (
+        <LeadDetailModal
+          lead={detailLead}
+          onClose={() => setDetailLead(null)}
+          onNoteAdded={(leadId, note) => {
+            // Persist the note into pipeline state so it survives reopening the card.
+            setLeads((cur) =>
+              cur.map((l) => (l.id === leadId ? { ...l, notes: [note, ...(l.notes ?? [])] } : l)),
+            );
+            setDetailLead((dl) =>
+              dl && dl.id === leadId ? { ...dl, notes: [note, ...(dl.notes ?? [])] } : dl,
+            );
+          }}
+        />
+      )}
       {callbackLead && (
         <CallbackModal
           lead={callbackLead}

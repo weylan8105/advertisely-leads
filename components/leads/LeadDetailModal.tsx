@@ -66,7 +66,15 @@ const QUIZ_ORDER = [
   "quiz_lead_tier",
 ];
 
-export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+export function LeadDetailModal({
+  lead,
+  onClose,
+  onNoteAdded,
+}: {
+  lead: Lead;
+  onClose: () => void;
+  onNoteAdded?: (leadId: string, note: LeadNote) => void;
+}) {
   const local = localTimeForState(lead.state);
   const raw = lead.rawFormData ?? {};
   const rawEntries = Object.entries(raw).filter(([, v]) => prettyVal(v).trim() !== "");
@@ -126,6 +134,7 @@ export function LeadDetailModal({ lead, onClose }: { lead: Lead; onClose: () => 
       if (res.ok && data.ok && data.note) {
         setNotes((prev) => [data.note as LeadNote, ...prev]);
         setNoteDraft("");
+        onNoteAdded?.(lead.id, data.note as LeadNote);
       } else {
         setNoteErr(data.error || "Could not save the note.");
       }

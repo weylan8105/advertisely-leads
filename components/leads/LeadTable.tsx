@@ -70,6 +70,9 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
   // Downline agents you can hand leads to (only owners/admins can reassign).
   const [members, setMembers] = useState<{ userId: string; name: string | null; email: string }[]>([]);
   const [canAssign, setCanAssign] = useState(false);
+  // Notes added this session, shown immediately in the Notes column (the leads
+  // prop isn't refetched until the page reloads).
+  const [noteOverrides, setNoteOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/team")
@@ -129,11 +132,13 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
     }
   }
 
-  // Most recent note body for the Notes column (leads carry notes newest-last).
+  // Most recent note body for the Notes column. A note added this session wins;
+  // otherwise use the newest saved note (the API returns them newest-first).
   function latestNote(lead: Lead): string | null {
+    if (noteOverrides[lead.id]) return noteOverrides[lead.id];
     const n = lead.notes;
     if (!n || n.length === 0) return null;
-    return n[n.length - 1]?.body ?? null;
+    return n[0]?.body ?? null;
   }
 
   const selectedIds = Array.from(selected);
@@ -172,8 +177,12 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
         body: JSON.stringify({ body: text }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) addToast("success", `Note added to ${name}.`);
-      else addToast("error", data.error || "Could not add the note.");
+      if (res.ok && data.ok) {
+        setNoteOverrides((prev) => ({ ...prev, [leadId]: text }));
+        addToast("success", `Note added to ${name}.`);
+      } else {
+        addToast("error", data.error || "Could not add the note.");
+      }
     } catch {
       addToast("error", "Could not add the note.");
     }
