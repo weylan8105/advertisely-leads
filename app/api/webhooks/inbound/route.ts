@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
           phone: lead.standardized.phone,
           email: lead.standardized.email,
           state: lead.standardized.state,
+          zip: lead.standardized.zip,
           age: lead.standardized.age,
           income: lead.standardized.income,
           occupation: lead.standardized.occupation,

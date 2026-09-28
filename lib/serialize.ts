@@ -37,6 +37,7 @@ export function serializeLead(l: any): Lead {
     phone: l.phone,
     email: l.email,
     state: l.state,
+    zip: l.zip ?? undefined,
     age: l.age ?? 0,
     // The age-range string (e.g. "40–49") when the form asked a range; agents
     // see this in the Age field instead of a blank/derived number.

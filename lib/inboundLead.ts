@@ -1,5 +1,6 @@
 import { findPackage } from "@/data/packages";
 import { normalizeState } from "./leadImport";
+import { stateFromZip, normalizeZip } from "./zipState";
 
 /**
  * Normalize a flat inbound lead payload (from Make.com / Zapier forwarding a
@@ -19,6 +20,7 @@ const ALIASES: Record<string, string[]> = {
   email: ["email", "email_address", "email address", "e-mail", "work_email"],
   phone: ["phone", "phone_number", "phonenumber", "phone number", "mobile", "mobile_number", "cell", "telephone"],
   state: ["state", "province", "region", "st", "state_province"],
+  zip: ["zip", "zip_code", "zipcode", "postal_code", "postal", "postcode"],
   age: ["age", "your_age"],
   income: ["income", "annual_income", "household_income", "yearly_income"],
   occupation: ["occupation", "job", "job_title", "trade", "profession", "what_do_you_do"],
@@ -43,6 +45,7 @@ export interface NormalizedInboundLead {
     email: string;
     phone: string;
     state: string;
+    zip?: string;
     age?: number;
     income?: number;
     occupation?: string;
@@ -113,7 +116,10 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
       // Normalize to a 2-letter code ("Florida" -> "FL") so the lead matches an
       // order's filterStates. A raw .toUpperCase() ("FLORIDA") silently matches
       // no order and never delivers — the same bug fixed on the Meta path.
-      state: normalizeState(pick("state")).code,
+      // Prefer an explicit state; otherwise derive it from the ZIP (the funnel
+      // collects ZIP, not a state field).
+      state: normalizeState(pick("state")).code || stateFromZip(pick("zip")) || "",
+      zip: normalizeZip(pick("zip")) || undefined,
       age: Number.isFinite(age) ? age : undefined,
       income: Number.isFinite(income) ? income : undefined,
       occupation: pick("occupation") || undefined,

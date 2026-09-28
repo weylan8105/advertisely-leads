@@ -79,6 +79,7 @@ export interface Lead {
   phone: string;
   email: string;
   state: string;
+  zip?: string;
   age: number;
   /** Age-range string from the form (e.g. "40–49", "50+") when captured as a range. */
   ageRange?: string;

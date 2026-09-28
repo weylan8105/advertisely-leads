@@ -405,7 +405,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                     <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
                   </button>
                 </TableCell>
-                <TableCell className="py-1.5 text-sm">{lead.state}</TableCell>
+                <TableCell className="py-1.5 text-sm whitespace-nowrap">{lead.state}{lead.zip ? ` ${lead.zip}` : ""}</TableCell>
                 <TableCell className="py-1.5">
                   <StatusBadge status={lead.status} />
                 </TableCell>

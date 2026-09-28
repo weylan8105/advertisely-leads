@@ -99,6 +99,7 @@ export function LeadDetailModal({
       ["Phone", lead.phone],
       ["Email", lead.email],
       ["State", lead.state],
+      ["ZIP", lead.zip || ""],
       ["Age", lead.ageRange || (lead.age ? String(lead.age) : "")],
       ["Income", lead.income ? formatCurrency(lead.income) : ""],
       ["Occupation", lead.occupation],
@@ -187,7 +188,7 @@ export function LeadDetailModal({
                 </span>
               )}
               <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" /> {lead.state}
+                <MapPin className="h-3.5 w-3.5" /> {lead.state}{lead.zip ? ` ${lead.zip}` : ""}
                 {local ? ` · ${local} local` : ""}
               </span>
             </div>

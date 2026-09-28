@@ -255,7 +255,7 @@ export function PipelineBoard({
                             <div className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
                               <MapPin className="h-2.5 w-2.5 shrink-0" />
                               <span className="truncate">
-                                {lead.state}
+                                {lead.state}{lead.zip ? ` ${lead.zip}` : ""}
                                 {local ? ` · ${local}` : ""}
                               </span>
                               <span className="text-slate-300">·</span>

@@ -132,6 +132,7 @@ model Lead {
   phone           String
   email           String
   state           String
+  zip             String?
   age             Int?
   income          Int?
   occupation      String?
