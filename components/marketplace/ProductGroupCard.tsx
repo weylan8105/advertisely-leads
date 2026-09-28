@@ -70,7 +70,7 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
     onAdded?.();
   }
 
-  const headlinePrice = tiers[0]?.pricePerLead; // freshest tier ($45)
+  const headlinePrice = tiers[0]?.pricePerLead; // freshest tier ($50)
   const lowestPrice = tiers.length ? Math.min(...tiers.map((t) => t.pricePerLead)) : undefined;
 
   // Availability guards for the selected tier (fresh is uncapped).

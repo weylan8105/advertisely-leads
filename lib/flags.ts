@@ -7,7 +7,7 @@
  *
  * To resume sales: set this to false and redeploy.
  */
-export const LEADS_PURCHASE_PAUSED = true;
+export const LEADS_PURCHASE_PAUSED = false;
 
 export const PURCHASE_PAUSED_MESSAGE =
   "Lead purchasing is paused right now. We'll be back online shortly — thanks for your patience.";

@@ -49,8 +49,8 @@ export const leadPackages: LeadPackage[] = [
     tagline: "Delivered in real time, generated on demand. The highest contact and conversion rates on the platform.",
     description:
       "Blue-Collar IUL prospects delivered in real time, generated fresh on demand (under 48 hours old). Highest contact and conversion rates.",
-    pricePerLead: 45,
-    minimumOrder: 25, // max(25, ceil(150/45)=4) = 25
+    pricePerLead: 50,
+    minimumOrder: 25, // max(25, ceil(150/50)=3) = 25
     estimatedDelivery: "Real time",
     badge: "Real-Time",
     available: true,
