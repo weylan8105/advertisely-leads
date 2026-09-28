@@ -27,7 +27,7 @@ const ALIASES: Record<string, string[]> = {
   intentReason: ["intent", "intent_reason", "reason", "why", "interest", "interested", "why_interested"],
   packageId: ["packageid", "package_id", "package"],
   source: ["source", "form", "form_name"],
-  externalId: ["externalid", "external_id", "lead_id", "leadgen_id", "id"],
+  externalId: ["externalid", "external_id", "lead_id", "leadgen_id", "id", "contact_id"],
   // Ad attribution — captured into dedicated columns so the Conversions API can
   // return them for Meta/Google server-side matching (fbclid + UTMs).
   fbclid: ["fbclid", "fbc", "facebook_click_id"],

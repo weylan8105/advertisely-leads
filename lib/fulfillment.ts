@@ -5,7 +5,7 @@ import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
 import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
-import { assignLeadToHouse } from "@/lib/house";
+import { assignLeadToHouse, getHouseAccount } from "@/lib/house";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -293,6 +293,24 @@ export async function fulfillOrder(orderId: string): Promise<number> {
  * potentially absorb this lead and tries to fulfill them. Order of operations
  * matters: FIFO by order createdAt.
  */
+/**
+ * Is this lead within an order's age window? (State is matched by the caller's
+ * query.) Falls back to the package's window when the order has no explicit one,
+ * mirroring fulfillOrder's own age bounds.
+ */
+function leadAgeEligibleForOrder(
+  order: { packageId: string; filterAgeMinDays: number | null; filterAgeMaxDays: number | null },
+  receivedAt: Date,
+): boolean {
+  const pkg = findPackage(order.packageId);
+  const minD = order.filterAgeMinDays ?? pkg?.ageMinDays ?? 0;
+  const maxD = order.filterAgeMaxDays ?? pkg?.ageMaxDays ?? null;
+  const ageDays = (Date.now() - receivedAt.getTime()) / 86_400_000;
+  if (ageDays < minD) return false;
+  if (maxD != null && ageDays > maxD) return false;
+  return true;
+}
+
 export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   if (!prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -311,6 +329,29 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     },
     orderBy: { createdAt: "asc" },
   });
+
+  // ── Even-split (owner directive, Sep 2026) ─────────────────────────────
+  // For a lead that qualifies for a state-scoped buyer order (state + age),
+  // alternate it between the buyer and the house (Ryan) so uploaded in-state
+  // leads are shared ~50/50 rather than all going to whoever bought that state.
+  // Parity of the combined in-state holdings decides: even → buyer, odd → house.
+  const splitOrder = pendingOrders.find(
+    (o) => o.filterStates.length > 0 && leadAgeEligibleForOrder(o, lead.receivedAt),
+  );
+  if (splitOrder) {
+    const house = await getHouseAccount();
+    const recipient = splitOrder.deliverToUserId ?? splitOrder.userId;
+    if (house && house.userId !== recipient) {
+      const [buyerInState, houseInState] = await Promise.all([
+        prisma.lead.count({ where: { orderId: splitOrder.id, state: lead.state, trashedAt: null } }),
+        prisma.lead.count({ where: { assignedUserId: house.userId, state: lead.state, trashedAt: null } }),
+      ]);
+      if ((buyerInState + houseInState) % 2 === 1) {
+        const routed = await assignLeadToHouse(leadId, "even-split share of in-state leads");
+        if (routed) return;
+      }
+    }
+  }
 
   for (const order of pendingOrders) {
     const assigned = await fulfillOrder(order.id);

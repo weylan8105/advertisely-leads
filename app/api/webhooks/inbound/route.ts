@@ -5,6 +5,7 @@ import { normalizeInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
 import { authenticateApiKey, hasScope } from "@/lib/apikey";
 import { fireMetaLeadEvent } from "@/lib/metaCapi";
+import { isTestLead } from "@/lib/testLeads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -148,6 +149,23 @@ export async function POST(req: NextRequest) {
           },
         },
       });
+      // Auto-trash test/internal identities on intake — never deliver, count,
+      // or fire a conversion event for them.
+      if (isTestLead(record.name, record.email)) {
+        await prisma.lead.update({
+          where: { id: record.id },
+          data: { trashedAt: new Date() },
+        });
+        await prisma.leadActivity.create({
+          data: {
+            leadId: record.id,
+            type: "LEAD_RECEIVED",
+            body: "Auto-trashed on intake — test/internal identity.",
+          },
+        });
+        skipped++;
+        continue;
+      }
       created++;
       // Assign to an open order immediately (fires email + Sheets sync).
       await tryFulfillForNewLead(record.id);

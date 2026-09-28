@@ -7,7 +7,15 @@ import type { Prisma } from "@prisma/client";
  *
  * Extend these lists if new test identities show up.
  */
-export const TEST_NAME_PATTERNS = ["ryan hernandez", "weylan walker"];
+export const TEST_NAME_PATTERNS = [
+  "ryan hernandez",
+  "weylan walker",
+  "stephen donaghey",
+  "stephen donaghy",
+  // Generic "test" identity — the user accepted the small false-positive risk
+  // of a broad substring match (e.g. "Jade Testing") to keep junk out.
+  "test",
+];
 export const TEST_EMAIL_PATTERNS = [
   "ryanrush129",
   "weylanwalker",
@@ -15,6 +23,20 @@ export const TEST_EMAIL_PATTERNS = [
   "@example.com",
   "test@advertisely",
 ];
+
+/**
+ * Runtime predicate mirroring the Prisma filter above — for intake paths that
+ * need to decide, in JS, whether a just-received lead is a test/internal one
+ * (so it can be auto-trashed on arrival rather than delivered).
+ */
+export function isTestLead(name?: string | null, email?: string | null): boolean {
+  const n = (name ?? "").toLowerCase();
+  const e = (email ?? "").toLowerCase();
+  return (
+    TEST_NAME_PATTERNS.some((p) => n.includes(p)) ||
+    TEST_EMAIL_PATTERNS.some((p) => e.includes(p))
+  );
+}
 
 /** Prisma filter that MATCHES a fake/test lead (by name or email). */
 export const TEST_LEAD_WHERE: Prisma.LeadWhereInput = {

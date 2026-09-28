@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { mapLeadFields } from "./meta";
 import { tryFulfillForNewLead } from "./fulfillment";
+import { isTestLead } from "./testLeads";
 
 export interface IngestResult {
   status: "ingested" | "skipped_duplicate" | "missing_fields";
@@ -82,6 +83,22 @@ export async function ingestLeadFromFields(opts: {
       },
     },
   });
+
+  // Auto-trash test/internal identities on intake — never deliver or fulfill.
+  if (isTestLead(created.name, created.email)) {
+    await prisma.lead.update({
+      where: { id: created.id },
+      data: { trashedAt: new Date() },
+    });
+    await prisma.leadActivity.create({
+      data: {
+        leadId: created.id,
+        type: "LEAD_RECEIVED",
+        body: "Auto-trashed on intake — test/internal identity.",
+      },
+    });
+    return { status: "ingested", leadId: created.id, assigned: false, orderId: null };
+  }
 
   // Try to immediately assign to an open order (sends email + Sheets sync).
   await tryFulfillForNewLead(created.id);
