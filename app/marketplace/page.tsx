@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { MarketplaceStore } from "@/components/marketplace/MarketplaceStore";
 import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
 import { Badge } from "@/components/ui/badge";
+import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 
 export default function MarketplacePage() {
   return (
@@ -31,6 +32,12 @@ export default function MarketplacePage() {
           <div className="grid lg:grid-cols-[280px_1fr] gap-8">
             <FilterSidebar />
             <div>
+              {LEADS_PURCHASE_PAUSED && (
+                <div className="mb-6 rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800">
+                  <span className="font-semibold">Purchasing is paused. </span>
+                  {PURCHASE_PAUSED_MESSAGE}
+                </div>
+              )}
               <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-800">
                 <span className="font-medium">Heads up: </span>
                 <strong>IUL leads are priced by age</strong> — pick fresh (under 48 hours) or go older for

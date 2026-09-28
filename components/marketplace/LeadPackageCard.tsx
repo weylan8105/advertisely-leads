@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { LeadPackage } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { LEADS_PURCHASE_PAUSED } from "@/lib/flags";
 
 interface LeadPackageCardProps {
   pkg: LeadPackage;
@@ -93,7 +94,12 @@ export function LeadPackageCard({ pkg, highlight }: LeadPackageCardProps) {
         )}
 
         <div className="mt-6 flex gap-2">
-          {isAvailable ? (
+          {LEADS_PURCHASE_PAUSED ? (
+            <Button className="flex-1" size="sm" variant="subtle" disabled>
+              <Lock className="h-3.5 w-3.5" />
+              Purchasing paused
+            </Button>
+          ) : isAvailable ? (
             <>
               <Link href={`/checkout?pkg=${pkg.id}`} className="flex-1">
                 <Button className="w-full" size="sm">

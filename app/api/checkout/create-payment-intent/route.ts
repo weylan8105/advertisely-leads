@@ -6,6 +6,7 @@ import { leadPackages } from "@/data/packages";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
 import { availableForPackage, GENERATED_TO_ORDER } from "@/lib/inventory";
+import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,10 @@ interface CreateIntentBody {
  * payment_intent.succeeded fires, so we never have unpaid orders.
  */
 export async function POST(req: NextRequest) {
+  // Kill switch: purchasing is paused — never create a payment intent.
+  if (LEADS_PURCHASE_PAUSED) {
+    return NextResponse.json({ error: PURCHASE_PAUSED_MESSAGE }, { status: 503 });
+  }
   if (!isStripeConfigured || !stripe) {
     return NextResponse.json(
       { error: "Stripe is not configured yet" },

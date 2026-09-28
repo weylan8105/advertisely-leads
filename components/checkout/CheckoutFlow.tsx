@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useCart } from "@/context/CartContext";
 import { findPackage } from "@/data/packages";
 import { formatCurrency, cn } from "@/lib/utils";
+import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 import type { LeadPackageId } from "@/types";
 
 const ACTIVE_STATES = [
@@ -92,6 +93,20 @@ export function CheckoutFlow({
   });
 
   const paymentItems = items.map((i) => ({ packageId: i.packageId, quantity: i.quantity }));
+
+  // Purchasing paused — block checkout entirely (server also refuses payment).
+  if (LEADS_PURCHASE_PAUSED) {
+    return (
+      <Card className="p-10 text-center max-w-lg mx-auto">
+        <ShoppingCart className="h-10 w-10 mx-auto text-slate-300 mb-4" />
+        <h2 className="text-xl font-semibold">Purchasing is paused</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{PURCHASE_PAUSED_MESSAGE}</p>
+        <Link href="/dashboard" className="inline-block mt-6">
+          <Button>Go to dashboard</Button>
+        </Link>
+      </Card>
+    );
+  }
 
   // Empty-cart state (unless we're on the confirmation screen post-purchase).
   if (hydrated && items.length === 0 && step !== 3) {

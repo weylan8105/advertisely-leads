@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
 import { deliveredCounts } from "@/lib/orderProgress";
 import { ensureOrgContext } from "@/lib/org";
+import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 import { leadPackages } from "@/data/packages";
 import {
   isSheetsConfigured,
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user || !(session.user as any).id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Kill switch: purchasing is paused. Platform admins may still create orders
+  // for internal operations; everyone else is blocked.
+  if (LEADS_PURCHASE_PAUSED && (session.user as any).role !== "ADMIN") {
+    return NextResponse.json({ error: PURCHASE_PAUSED_MESSAGE }, { status: 503 });
   }
 
   let body: CreateOrderBody;

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { tiersForGroup } from "@/data/packages";
 import { useCart } from "@/context/CartContext";
 import { formatCurrency, cn } from "@/lib/utils";
+import { LEADS_PURCHASE_PAUSED } from "@/lib/flags";
 import type { ProductGroup } from "@/types";
 
 export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAdded?: () => void }) {
@@ -241,8 +242,12 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
           </p>
         ) : null}
 
-        <Button className="mt-3 w-full" onClick={add} disabled={belowMin}>
-          {justAdded ? (
+        <Button className="mt-3 w-full" onClick={add} disabled={belowMin || LEADS_PURCHASE_PAUSED}>
+          {LEADS_PURCHASE_PAUSED ? (
+            <>
+              <Lock className="h-4 w-4" /> Purchasing paused
+            </>
+          ) : justAdded ? (
             <>
               <Check className="h-4 w-4" /> Added to cart
             </>
