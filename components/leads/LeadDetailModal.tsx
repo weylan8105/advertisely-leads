@@ -5,6 +5,7 @@ import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2,
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
+import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 
 function prettyKey(k: string) {
   return k
@@ -74,12 +75,16 @@ export function LeadDetailModal({
   lead,
   onClose,
   onNoteAdded,
+  context = "agent",
 }: {
   lead: Lead;
   onClose: () => void;
   onNoteAdded?: (leadId: string, note: LeadNote) => void;
+  /** "admin" opens the card from the leads database (hides agent-only actions). */
+  context?: "agent" | "admin";
 }) {
   const local = localTimeForState(lead.state);
+  const isFunnelLead = lead.originLabel === FUNNEL_LEAD_LABEL;
   const raw = lead.rawFormData ?? {};
   const rawEntries = Object.entries(raw).filter(([, v]) => prettyVal(v).trim() !== "");
 
@@ -181,7 +186,20 @@ export function LeadDetailModal({
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-slate-200 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-2xl font-semibold tracking-tight truncate">{lead.name}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-2xl font-semibold tracking-tight truncate">{lead.name}</h2>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                  isFunnelLead
+                    ? "bg-brand-red/10 text-brand-red ring-1 ring-brand-red/20"
+                    : "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+                )}
+                title="Where this lead came from"
+              >
+                {lead.originLabel}
+              </span>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Phone className="h-3.5 w-3.5" /> {lead.phone}
@@ -198,26 +216,28 @@ export function LeadDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={requestReplacement}
-              disabled={rep === "loading" || rep === "done"}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                rep === "done"
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 hover:border-slate-300 text-foreground disabled:opacity-60",
-              )}
-              title="Request a replacement for this lead"
-            >
-              {rep === "loading" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : rep === "done" ? (
-                <Check className="h-3.5 w-3.5" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              {rep === "done" ? "Replacement requested" : "Request replacement"}
-            </button>
+            {context !== "admin" && (
+              <button
+                onClick={requestReplacement}
+                disabled={rep === "loading" || rep === "done"}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  rep === "done"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 hover:border-slate-300 text-foreground disabled:opacity-60",
+                )}
+                title="Request a replacement for this lead"
+              >
+                {rep === "loading" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : rep === "done" ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {rep === "done" ? "Replacement requested" : "Request replacement"}
+              </button>
+            )}
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close">
               <X className="h-5 w-5" />
             </button>

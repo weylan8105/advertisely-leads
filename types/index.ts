@@ -87,6 +87,8 @@ export interface Lead {
   occupation: string;
   leadType: LeadPackageId;
   leadTypeLabel: string;
+  /** Origin title — "American Income Advantage Lead" (our funnel) or "Enhanced Wealth Lead" (manual import). */
+  originLabel: string;
   status: LeadStatus;
   disposition?: LeadDisposition;
   pipelineStage: string;

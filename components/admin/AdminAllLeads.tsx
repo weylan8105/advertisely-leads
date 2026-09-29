@@ -14,11 +14,14 @@ import {
 } from "@/components/ui/select";
 import { leadPackages } from "@/data/packages";
 import { formatDate, cn } from "@/lib/utils";
+import type { Lead } from "@/types";
+import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
+import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 
 interface AdminLead {
   id: string; name: string; phone: string; email: string; state: string;
   age: number | null; ageRange?: string | null; occupation: string | null; income: number | null; packageName: string;
-  status: string; source: string; campaignName: string | null; receivedAt: string;
+  status: string; source: string; originLabel: string; campaignName: string | null; receivedAt: string;
   assignedTo: { name: string | null; email: string } | null;
 }
 interface Counts { total: number; assigned: number; unassigned: number; }
@@ -44,6 +47,9 @@ export function AdminAllLeads({
   const [occupations, setOccupations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  // Full lead card opened from the database (works for unassigned leads too).
+  const [selected, setSelected] = useState<Lead | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
 
   // Assignment filter can be driven by the dashboard cards (controlled) or on its own.
   const [assignedInternal, setAssignedInternal] = useState("all");
@@ -136,6 +142,22 @@ export function AdminAllLeads({
       ["ryanrush129", "weylanwalker", "weylanw@", "@example.com"].some((p) => e.includes(p))
     );
   };
+
+  // Fetch a lead's full detail and open the card. Any lead in the database can
+  // be opened here — it does not need to be sold into an agent's CRM first.
+  async function openLead(id: string) {
+    setOpening(id);
+    try {
+      const res = await fetch(`/api/admin/leads/${id}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.lead) setSelected(data.lead as Lead);
+      else alert(data.error ?? "Could not open this lead.");
+    } catch {
+      alert("Could not open this lead.");
+    } finally {
+      setOpening(null);
+    }
+  }
 
   async function deleteLead(l: AdminLead) {
     const warn = l.assignedTo ? `\n\n⚠️ This lead is in ${l.assignedTo.name ?? l.assignedTo.email}'s CRM — deleting removes it from their dashboard.` : "";
@@ -317,13 +339,34 @@ export function AdminAllLeads({
               </TableCell></TableRow>
             ) : (
               leads.map((l) => (
-                <TableRow key={l.id} className={cn(isTestLead(l) && "bg-rose-50/60")}>
+                <TableRow
+                  key={l.id}
+                  onClick={() => openLead(l.id)}
+                  title="Open full lead details"
+                  className={cn(
+                    "cursor-pointer transition-colors hover:bg-slate-50",
+                    isTestLead(l) ? "bg-rose-50/60 hover:bg-rose-50" : undefined,
+                  )}
+                >
                   <TableCell>
                     <div className="font-medium text-sm flex items-center gap-1.5">
                       {l.name}
+                      {opening === l.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                       {isTestLead(l) && <Badge variant="destructive" className="text-[9px]">TEST</Badge>}
                     </div>
                     <div className="text-xs text-muted-foreground">{l.phone} · {l.email}</div>
+                    <div className="mt-1">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                          l.originLabel === FUNNEL_LEAD_LABEL
+                            ? "bg-brand-red/10 text-brand-red"
+                            : "bg-slate-100 text-slate-600",
+                        )}
+                      >
+                        {l.originLabel}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell><Badge variant="muted">{l.state || "—"}</Badge></TableCell>
                   <TableCell className="hidden md:table-cell text-sm">{l.occupation ?? "—"}</TableCell>
@@ -342,7 +385,7 @@ export function AdminAllLeads({
                   </TableCell>
                   <TableCell className="text-right pr-3">
                     <button
-                      onClick={() => deleteLead(l)}
+                      onClick={(e) => { e.stopPropagation(); deleteLead(l); }}
                       disabled={deleting === l.id}
                       title="Delete this lead permanently"
                       className="text-muted-foreground hover:text-rose-600 transition-colors disabled:opacity-50"
@@ -360,6 +403,10 @@ export function AdminAllLeads({
         <p className="mt-2 text-xs text-muted-foreground">
           Showing the {leads.length.toLocaleString()} most recent of {matched.toLocaleString()} matches. Narrow the filters (or a date range) to see the rest.
         </p>
+      )}
+
+      {selected && (
+        <LeadDetailModal lead={selected} context="admin" onClose={() => setSelected(null)} />
       )}
     </div>
   );

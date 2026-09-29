@@ -5,6 +5,7 @@
 import type { Lead, LeadStatus, LeadPackageId } from "@/types";
 import { leadPackages } from "@/data/packages";
 import { ageRangeFromRaw } from "./age";
+import { leadOriginLabel } from "./leadOrigin";
 
 const STATUS_LABEL: Record<string, LeadStatus> = {
   NEW: "New",
@@ -46,6 +47,7 @@ export function serializeLead(l: any): Lead {
     occupation: l.occupation ?? "",
     leadType: (l.packageId as LeadPackageId) ?? "blue-collar-iul",
     leadTypeLabel: packageLabel(l.packageId),
+    originLabel: leadOriginLabel(l.source, l.rawFormData),
     status: STATUS_LABEL[l.status] ?? "New",
     disposition: l.disposition ?? undefined,
     pipelineStage: l.pipelineStage ?? "new-lead",

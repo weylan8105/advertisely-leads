@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { leadPackages } from "@/data/packages";
 import { ageRangeFromRaw } from "@/lib/age";
+import { leadOriginLabel } from "@/lib/leadOrigin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -127,6 +128,7 @@ export async function GET(req: NextRequest) {
     packageName: pkgName(l.packageId),
     status: STATUS_LABEL[l.status] ?? l.status,
     source: l.source,
+    originLabel: leadOriginLabel(l.source, l.rawFormData),
     campaignName: l.campaignName,
     receivedAt: l.receivedAt,
     orderId: l.orderId,
