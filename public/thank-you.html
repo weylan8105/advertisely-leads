@@ -11,59 +11,68 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- End Google Tag Manager -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex" />
-<title>You're All Set — American Blue Collar Advantage</title>
+<title>Quote Request Received — American Blue Collar Advantage</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&display=swap');
   :root{
-    --navy:#0F1419; --card:#141A21; --card-2:#1B222B; --line:#2A3542;
-    --orange:#FF6B1A; --amber:#F5A623; --ink:#EDF0F3; --ink-dim:#95A1AE; --ink-faint:#5E6B78; --good:#3FB950;
+    --navy:#101C2B; --navy-panel:#16283C; --navy-line:#28394E;
+    --off:#F5F6F8; --card:#FFFFFF; --card-line:#E2E6EB;
+    --primary:#B9411A; --primary-press:#9C3413;
+    --ink:#101C2B; --ink-2:#42505F; --ink-faint:#6B7788;
+    --onnavy:#EDF1F5; --onnavy-dim:#AEBED0;
+    --good:#2E7D46; --amber:#C4791C;
+    --font-head:'Archivo',system-ui,-apple-system,Segoe UI,sans-serif;
+    --font-body:'Barlow',system-ui,-apple-system,Segoe UI,sans-serif;
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Barlow',-apple-system,sans-serif;color:var(--ink);min-height:100vh;overflow-x:hidden;
-    background:radial-gradient(900px 420px at 50% -10%, rgba(255,107,26,0.10), transparent 60%), var(--navy);}
-  .hazard{height:6px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,var(--navy) 18px 36px)}
-  .wrap{max-width:640px;margin:0 auto;padding:40px 20px 56px;text-align:center}
+  body{font-family:var(--font-body);background:var(--off);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.55;overflow-x:hidden}
+  h1,h2,h3{font-family:var(--font-head);line-height:1.1;letter-spacing:-.01em}
+  b{font-weight:700}
 
-  .badge{width:82px;height:82px;border-radius:50%;margin:8px auto 22px;background:rgba(63,185,80,0.14);
+  /* Confirmation band */
+  .band{background:var(--navy);color:var(--onnavy);text-align:center;padding:48px 20px 42px;position:relative;overflow:hidden}
+  .band:after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--primary)}
+  .badge{width:78px;height:78px;border-radius:50%;margin:0 auto 20px;background:rgba(46,125,70,0.16);
     border:2px solid var(--good);display:flex;align-items:center;justify-content:center;animation:pop .45s cubic-bezier(.2,.7,.2,1)}
-  .badge svg{width:40px;height:40px;fill:none;stroke:var(--good);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .badge svg{width:38px;height:38px;fill:none;stroke:#5CC77E;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;
+    stroke-dasharray:26;stroke-dashoffset:26;animation:draw .5s .2s ease forwards}
   @keyframes pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .eyebrow{font-family:var(--font-head);font-weight:700;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#E08a5f;margin-bottom:10px}
+  .band h1{font-weight:800;font-size:clamp(28px,5vw,40px);color:#fff;margin-bottom:14px;text-wrap:balance}
+  .lead{font-size:16px;color:var(--onnavy-dim);line-height:1.6;max-width:480px;margin:0 auto 8px}
+  .lead b{color:#fff}
 
-  .eyebrow{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--orange);margin-bottom:10px}
-  h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:34px;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;margin-bottom:14px}
-  .lead{font-size:16px;color:var(--ink-dim);line-height:1.6;max-width:460px;margin:0 auto 8px}
-  .lead b{color:var(--ink)}
+  .wrap{max-width:600px;margin:0 auto;padding:36px 20px 56px}
 
-  .next{margin:34px auto 0;text-align:left;max-width:460px}
-  .next .h{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px;text-align:center}
-  .step{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 16px;margin-bottom:10px}
-  .step .n{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(255,107,26,0.14);border:1px solid var(--orange);
-    color:var(--orange);font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
-  .step .t{font-family:'Oswald',sans-serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.02em}
-  .step .d{font-size:13.5px;color:var(--ink-dim);margin-top:2px;line-height:1.5}
+  .sec-h{font-family:var(--font-head);font-weight:700;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);text-align:center;margin-bottom:16px}
 
-  /* testimonials */
-  .tst{margin:36px auto 0;max-width:520px}
-  .tst-h{font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);text-align:center;margin-bottom:14px}
+  .step{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--card-line);border-radius:12px;padding:16px;margin-bottom:11px;box-shadow:0 1px 2px rgba(16,28,43,.05)}
+  .step .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--primary);
+    color:#fff;font-family:var(--font-head);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .step .t{font-family:var(--font-head);font-weight:700;font-size:15.5px;color:var(--ink)}
+  .step .d{font-size:14px;color:var(--ink-2);margin-top:3px;line-height:1.5}
+
+  .tst{margin-top:38px}
   .tgrid{display:grid;grid-template-columns:1fr;gap:12px}
-  .tcard{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left;display:flex;flex-direction:column}
+  .tcard{background:var(--card);border:1px solid var(--card-line);border-radius:12px;padding:18px;text-align:left;box-shadow:0 1px 2px rgba(16,28,43,.05)}
   .tcard .stars{color:var(--amber);font-size:13px;letter-spacing:2px;margin-bottom:9px}
-  .tcard .tq{font-size:13.5px;color:var(--ink-dim);line-height:1.6;margin-bottom:13px}
+  .tcard .tq{font-size:14px;color:var(--ink-2);line-height:1.62;margin-bottom:14px}
   .tcard .tm{display:flex;align-items:center;gap:11px}
-  .tcard .tav{flex:none;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--amber));color:#fff;font-family:'Oswald',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
-  .tcard .tn{font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px;color:var(--ink);text-transform:uppercase;letter-spacing:.02em}
-  .tcard .tr{font-size:12px;color:var(--ink-faint)}
+  .tcard .tav{flex:none;width:38px;height:38px;border-radius:50%;background:var(--navy);color:#fff;font-family:var(--font-head);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .tcard .tn{font-family:var(--font-head);font-weight:700;font-size:14px;color:var(--ink)}
+  .tcard .tr{font-size:12.5px;color:var(--ink-faint)}
 
-  .trust{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:32px}
-  .trust .chip{display:inline-flex;align-items:center;gap:7px;background:var(--card-2);border:1px solid var(--line);
-    border-radius:22px;padding:8px 14px;font-size:12.5px;color:var(--ink-dim)}
+  .trust{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:34px}
+  .trust .chip{display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--card-line);
+    border-radius:22px;padding:8px 14px;font-size:12.5px;color:var(--ink-2)}
   .trust .chip svg{width:14px;height:14px;fill:var(--good)}
-  .trust .chip b{color:var(--ink);font-weight:600}
+  .trust .chip b{color:var(--ink);font-weight:700}
 
-  .foot{margin-top:34px;font-size:12px;color:var(--ink-faint);line-height:1.6}
-  .foot a{color:var(--ink-faint);text-decoration:none}
-  @media (max-width:560px){h1{font-size:27px}}
-  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+  .foot{margin-top:34px;font-size:12.5px;color:var(--ink-faint);line-height:1.6;text-align:center}
+  .foot a{color:var(--ink-faint)}
+  @media (max-width:560px){.band h1{font-size:26px}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}.badge svg{stroke-dashoffset:0}}
 </style>
 </head>
 <body>
@@ -72,58 +81,56 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 
-  <div class="hazard"></div>
-  <div class="wrap">
+  <div class="band">
     <div class="badge"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div>
-
-    <div class="eyebrow">Application Received</div>
-    <h1 id="headline">You're all set!</h1>
-    <p class="lead">Thanks for completing your quiz. A <b>licensed specialist</b> will review your answers and
-      <b>reach out shortly</b> to walk you through your personalized early-retirement plan. No pressure, no obligation.</p>
+    <div class="eyebrow">Quote Request Received</div>
+    <h1 id="headline">You're all set.</h1>
+    <p class="lead">Thanks for your request. A <b>licensed agent</b> will review your answers and
+      <b>reach out shortly</b> to walk you through your options and costs. No pressure, no obligation.</p>
     <p class="lead"><b>Keep an eye on your phone and email.</b> We move fast.</p>
+  </div>
 
-    <div class="next">
-      <div class="h">What happens next</div>
-      <div class="step">
-        <div class="n">1</div>
-        <div><div class="t">We review your answers</div><div class="d">Your responses go straight to a licensed specialist who works your situation.</div></div>
-      </div>
-      <div class="step">
-        <div class="n">2</div>
-        <div><div class="t">A specialist calls you</div><div class="d">Expect a call from a licensed agent shortly, often the same day.</div></div>
-      </div>
-      <div class="step">
-        <div class="n">3</div>
-        <div><div class="t">You get your plan</div><div class="d">They'll walk you through exactly how blue-collar workers build tax-free retirement money.</div></div>
-      </div>
+  <div class="wrap">
+    <div class="sec-h">What happens next</div>
+    <div class="step">
+      <div class="n">1</div>
+      <div><div class="t">We review your request</div><div class="d">Your answers go straight to a licensed agent who looks at the options available in your state.</div></div>
+    </div>
+    <div class="step">
+      <div class="n">2</div>
+      <div><div class="t">An agent reaches out</div><div class="d">Expect a call or text from a licensed agent shortly, often the same day.</div></div>
+    </div>
+    <div class="step">
+      <div class="n">3</div>
+      <div><div class="t">You see your options</div><div class="d">They walk you through coverage and costs so you can decide what fits. No obligation to buy.</div></div>
     </div>
 
     <div class="tst">
-      <div class="tst-h">Hear from other tradesmen</div>
+      <div class="sec-h">Hear from other tradesmen</div>
       <div class="tgrid">
-        <div class="tcard"><div class="stars">★★★★★</div>
-          <p class="tq">I spend every day working to provide for my wife and kids, but I never really thought about what would happen to them financially if something happened to me. Getting my IUL set up gave me a different level of peace of mind. Now I have protection in place for my family while also building cash value that I may be able to access later in life. I like knowing the money I'm putting away is doing more than just sitting there.</p>
-          <div class="tm"><div class="tav">MT</div><div><div class="tn">Marcus T.</div><div class="tr">Electrician · Texas</div></div></div>
+        <div class="tcard"><div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="tq">I spend every day working to provide for my wife and kids, but I never really thought about what would happen to them financially if something happened to me. Getting my IUL set up gave me a different level of peace of mind. Now I have protection in place for my family while also building cash value that I may be able to access later in life.</p>
+          <div class="tm"><div class="tav">MT</div><div><div class="tn">Marcus T.</div><div class="tr">Electrician &middot; Texas</div></div></div>
         </div>
-        <div class="tcard"><div class="stars">★★★★★</div>
-          <p class="tq">My income depends on me being able to get up and work every day. That was the biggest thing that hit me. I wanted something that could protect my family while also helping me prepare for my own future. My agent walked me through everything and designed an IUL around what I could comfortably afford. Now I have life insurance protection and a long-term strategy designed to build cash value that I can potentially access tax-advantaged in retirement.</p>
-          <div class="tm"><div class="tav">DR</div><div><div class="tn">David R.</div><div class="tr">HVAC Technician · Florida</div></div></div>
+        <div class="tcard"><div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="tq">My income depends on me being able to get up and work every day. That was the biggest thing that hit me. I wanted something that could protect my family while also helping me prepare for my own future. My agent walked me through everything and designed an IUL around what I could comfortably afford.</p>
+          <div class="tm"><div class="tav">DR</div><div><div class="tn">David R.</div><div class="tr">HVAC Technician &middot; Florida</div></div></div>
         </div>
-        <div class="tcard"><div class="stars">★★★★★</div>
-          <p class="tq">I always thought life insurance was just something that paid out when you died. I had no idea certain permanent policies could also build cash value while you're alive. Once it was explained to me, it made a lot more sense. I'm protecting my wife and children today, but I'm also putting money toward something I can potentially use later in life. Having both goals working together was what sold me on setting up a plan.</p>
-          <div class="tm"><div class="tav">AM</div><div><div class="tn">Anthony M.</div><div class="tr">Welder · Ohio</div></div></div>
+        <div class="tcard"><div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+          <p class="tq">I always thought life insurance was just something that paid out when you died. I had no idea certain permanent policies could also build cash value while you're alive. Once it was explained to me, it made a lot more sense. I'm protecting my wife and children today, but I'm also putting money toward something I can potentially use later in life.</p>
+          <div class="tm"><div class="tav">AM</div><div><div class="tn">Anthony M.</div><div class="tr">Welder &middot; Ohio</div></div></div>
         </div>
       </div>
     </div>
 
     <div class="trust">
-      <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><b>Licensed</b>&nbsp;specialists</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><b>Licensed</b>&nbsp;agents</span>
       <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>Secure &amp; <b>TCPA-compliant</b></span>
       <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><b>No obligation</b></span>
     </div>
 
     <div class="foot">
-      American Blue Collar Advantage · For the people who build America<br/>
+      American Blue Collar Advantage &middot; For the people who build America<br/>
       Questions? Reply to the email we send you.
     </div>
   </div>
@@ -136,7 +143,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       const n = sessionStorage.getItem("tyName") || "";
       const clean = n.replace(/[^a-zA-Z\s'-]/g, "").trim().slice(0, 40);
       if (clean && clean.toLowerCase() !== "friend") {
-        document.getElementById("headline").textContent = "You're all set, " + clean + "!";
+        document.getElementById("headline").textContent = "You're all set, " + clean + ".";
       }
       sessionStorage.removeItem("tyName");
     } catch (e) {}
