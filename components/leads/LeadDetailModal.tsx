@@ -54,13 +54,17 @@ const HIDDEN_QUIZ = new Set(["quiz_trade", "quiz_age"]);
 
 // Nicer labels + priority order for the quiz answers shown up top.
 const QUIZ_LABELS: Record<string, string> = {
-  quiz_iul_interest: "IUL Interest",
+  quiz_iul_interest: "What matters most",
+  quiz_coverage: "Coverage wanted",
+  quiz_beneficiary: "Beneficiary",
   quiz_household_income: "Household Income",
   quiz_monthly_contribution: "Monthly Contribution",
   quiz_lead_tier: "Lead Tier",
 };
 const QUIZ_ORDER = [
   "quiz_iul_interest",
+  "quiz_coverage",
+  "quiz_beneficiary",
   "quiz_household_income",
   "quiz_monthly_contribution",
   "quiz_lead_tier",

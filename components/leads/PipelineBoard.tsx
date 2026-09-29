@@ -159,7 +159,9 @@ export function PipelineBoard({
                   {colLeads.map((lead) => {
                     const cb = callbackStatus(lead.callbackAt, now);
                     const local = localTimeForState(lead.state);
-                    const fieldCount = lead.rawFormData ? Object.keys(lead.rawFormData).length : 0;
+                    const rf = (lead.rawFormData || {}) as Record<string, unknown>;
+                    const qCoverage = typeof rf.quiz_coverage === "string" ? rf.quiz_coverage : "";
+                    const qBeneficiary = typeof rf.quiz_beneficiary === "string" ? rf.quiz_beneficiary : "";
                     return (
                       <div
                         key={lead.id}
@@ -245,9 +247,14 @@ export function PipelineBoard({
                               <span className="text-[10px] bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
                                 {lead.leadTypeLabel}
                               </span>
-                              {fieldCount > 0 && (
+                              {qCoverage && (
                                 <span className="text-[10px] bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
-                                  {fieldCount} fields
+                                  {qCoverage}
+                                </span>
+                              )}
+                              {qBeneficiary && (
+                                <span className="text-[10px] bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
+                                  Beneficiary: {qBeneficiary}
                                 </span>
                               )}
                             </div>
