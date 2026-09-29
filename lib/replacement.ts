@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { findPackage, leadPoolIdsFor } from "@/data/packages";
@@ -28,9 +29,12 @@ async function systemReviewerId(): Promise<string | null> {
  * Auto-fulfill a single replacement request when matching inventory exists.
  *
  * Policy (see memory: advertisely-fulfillment-policy #4): pick the FRESHEST
- * same-state lead from the SAME pool the bad lead came from, unassigned, not a
- * test lead, and assign it to the requesting agent on the SAME order. Mark the
- * bad lead REPLACED (+ trash it so it never resells). The swap is net-neutral,
+ * lead from the SAME pool the bad lead came from, unassigned, not a test lead,
+ * in the order's age window — preferring the same state, but falling back to ANY
+ * state the client ordered (the order's filterStates) so a replacement can still
+ * be issued when that exact state is out of stock. Assign it to the requesting
+ * agent on the SAME order. Mark the bad lead REPLACED (+ trash it so it never
+ * resells). The swap is net-neutral,
  * so the order's fulfilledCount is left untouched. Sends the standard delivery
  * email for the one replacement lead unless notify=false.
  *
@@ -76,13 +80,17 @@ export async function fulfillReplacement(
   const poolIds = leadPoolIdsFor(bad.packageId);
 
   // Match the age window of the order being replaced (fall back to the package)
-  // so a Real-Time buyer's replacement is also fresh — never an aged lead.
+  // so a Real-Time buyer's replacement is also fresh — never an aged lead. Also
+  // capture the states the client ordered: the replacement may be backfilled
+  // from ANY of them, not only the bad lead's state (owner directive, Sep 2026).
   const replAtFilter: { gt?: Date; lte?: Date } = {};
+  let orderedStates: string[] | null = null; // null = no order; [] = all-states order
   if (orderId) {
     const ord = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { filterAgeMinDays: true, filterAgeMaxDays: true, packageId: true },
+      select: { filterStates: true, filterAgeMinDays: true, filterAgeMaxDays: true, packageId: true },
     });
+    if (ord) orderedStates = ord.filterStates;
     const pk = findPackage(ord?.packageId ?? bad.packageId);
     const maxD = ord?.filterAgeMaxDays ?? pk?.ageMaxDays ?? null;
     const minD = ord?.filterAgeMinDays ?? pk?.ageMinDays ?? null;
@@ -92,21 +100,35 @@ export async function fulfillReplacement(
     if (minD != null) replAtFilter.lte = new Date(nowMs - minD * dayMs);
   }
 
-  // Pick the freshest equal-or-better lead: same pool, same state, in the order's
-  // age window, unassigned, not a test lead, not the bad lead itself.
-  const replacement = await prisma.lead.findFirst({
-    where: {
-      packageId: { in: poolIds },
-      state: bad.state,
-      assignedUserId: null,
-      orderId: null,
-      trashedAt: null,
-      id: { not: bad.id },
-      ...(replAtFilter.gt || replAtFilter.lte ? { receivedAt: replAtFilter } : {}),
-      ...NOT_TEST_LEAD,
-    },
+  // Base match: same pool, in the order's age window, unassigned, not a test
+  // lead, not the bad lead itself.
+  const baseWhere: Prisma.LeadWhereInput = {
+    packageId: { in: poolIds },
+    assignedUserId: null,
+    orderId: null,
+    trashedAt: null,
+    id: { not: bad.id },
+    ...(replAtFilter.gt || replAtFilter.lte ? { receivedAt: replAtFilter } : {}),
+    ...NOT_TEST_LEAD,
+  };
+
+  // Prefer a like-for-like same-state replacement (freshest first)…
+  let replacement = await prisma.lead.findFirst({
+    where: { ...baseWhere, state: bad.state },
     orderBy: { receivedAt: "desc" },
   });
+
+  // …but if none is in stock, backfill from ANY state the client ordered. This
+  // stays within the order's filterStates, so the client never receives a lead
+  // outside their order (an empty filterStates = all-states order → any state).
+  if (!replacement && orderId) {
+    const stateFilter: Prisma.LeadWhereInput =
+      orderedStates && orderedStates.length ? { state: { in: orderedStates } } : {};
+    replacement = await prisma.lead.findFirst({
+      where: { ...baseWhere, ...stateFilter },
+      orderBy: { receivedAt: "desc" },
+    });
+  }
 
   if (!replacement) {
     return { ok: false, status: "NO_STOCK", state: bad.state, poolIds };
