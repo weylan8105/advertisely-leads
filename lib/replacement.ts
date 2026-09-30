@@ -100,34 +100,46 @@ export async function fulfillReplacement(
     if (minD != null) replAtFilter.lte = new Date(nowMs - minD * dayMs);
   }
 
-  // Base match: same pool, in the order's age window, unassigned, not a test
-  // lead, not the bad lead itself.
+  // Base match: same IUL pool, unassigned, not a test lead, not the bad lead
+  // itself. State and age are applied as tiered PREFERENCES below, never hard
+  // gates: a replacement must issue whenever the client has that state in their
+  // order, even if the only stock left is older than the order's fresh window
+  // (owner directive: "all states can replace as long as the client has that
+  // state in their order").
   const baseWhere: Prisma.LeadWhereInput = {
     packageId: { in: poolIds },
     assignedUserId: null,
     orderId: null,
     trashedAt: null,
     id: { not: bad.id },
-    ...(replAtFilter.gt || replAtFilter.lte ? { receivedAt: replAtFilter } : {}),
     ...NOT_TEST_LEAD,
   };
 
-  // Prefer a like-for-like same-state replacement (freshest first)…
-  let replacement = await prisma.lead.findFirst({
-    where: { ...baseWhere, state: bad.state },
-    orderBy: { receivedAt: "desc" },
-  });
+  // State preference: like-for-like same state first, then ANY state the client
+  // ordered (order's filterStates; empty filterStates = all-states order → any).
+  // A lead with no order only backfills within its own state.
+  const stateSets: Prisma.LeadWhereInput[] = [{ state: bad.state }];
+  if (orderId) {
+    stateSets.push(orderedStates && orderedStates.length ? { state: { in: orderedStates } } : {});
+  }
 
-  // …but if none is in stock, backfill from ANY state the client ordered. This
-  // stays within the order's filterStates, so the client never receives a lead
-  // outside their order (an empty filterStates = all-states order → any state).
-  if (!replacement && orderId) {
-    const stateFilter: Prisma.LeadWhereInput =
-      orderedStates && orderedStates.length ? { state: { in: orderedStates } } : {};
-    replacement = await prisma.lead.findFirst({
-      where: { ...baseWhere, ...stateFilter },
-      orderBy: { receivedAt: "desc" },
-    });
+  // Age preference: the order's fresh window first, then ANY age so aged stock
+  // can still make a client whole rather than leaving the request pending.
+  const ageSets: Prisma.LeadWhereInput[] =
+    replAtFilter.gt || replAtFilter.lte ? [{ receivedAt: replAtFilter }, {}] : [{}];
+
+  // Walk preferences from best (fresh + same state) to last resort (any age, any
+  // ordered state), always taking the freshest match within each tier.
+  let replacement: Awaited<ReturnType<typeof prisma.lead.findFirst>> = null;
+  for (const ageSet of ageSets) {
+    for (const stateSet of stateSets) {
+      replacement = await prisma.lead.findFirst({
+        where: { ...baseWhere, ...stateSet, ...ageSet },
+        orderBy: { receivedAt: "desc" },
+      });
+      if (replacement) break;
+    }
+    if (replacement) break;
   }
 
   if (!replacement) {
