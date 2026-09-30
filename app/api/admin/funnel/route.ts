@@ -6,8 +6,9 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Quiz step labels (1-based), matching public/abca-quiz.html STEPS order.
-const STEP_LABELS = ["Trade", "IUL Interest", "Age", "State", "Income", "Budget", "Contact"];
+// Quiz step labels (1-based), matching public/abca-quiz.html STEPS order:
+// iul_interest -> coverage -> beneficiary -> age -> contact.
+const STEP_LABELS = ["What matters most", "Coverage wanted", "Beneficiary", "Age", "Contact"];
 
 /**
  * GET /api/admin/funnel?range=today|7d|30d
@@ -65,8 +66,10 @@ export async function GET(req: NextRequest) {
   const byStep = new Map(stepRows.map((r) => [Number(r.step), Number(r.c)]));
 
   // Each session fires a "step" event for every step it renders, so the distinct
-  // count per step IS the cumulative "reached step N" (monotonic).
-  const maxStep = Math.max(STEP_LABELS.length, ...stepRows.map((r) => Number(r.step)));
+  // count per step IS the cumulative "reached step N" (monotonic). Cap at the
+  // current funnel's step count so stale events from the old funnel (which had
+  // more steps) don't add phantom "Step 6/7" rows.
+  const maxStep = STEP_LABELS.length;
   const steps = [];
   for (let n = 1; n <= maxStep; n++) {
     const count = byStep.get(n) ?? 0;
