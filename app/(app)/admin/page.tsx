@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -72,6 +72,7 @@ let toastCounter = 0;
 export default function AdminPage() {
   const [replacements, setReplacements] = useState<Replacement[]>([]);
   const [backedUpStates, setBackedUpStates] = useState<string[]>([]);
+  const [approveAllLoading, setApproveAllLoading] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [syncPaymentIntentId, setSyncPaymentIntentId] = useState("");
@@ -93,18 +94,8 @@ export default function AdminPage() {
     { name: string; seats: number; lifetimeSpendCents: number; lastOrder: string | null; status: string }[]
   >([]);
 
-  useEffect(() => {
-    fetch("/api/admin/overview")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d) {
-          setStats(d.stats);
-          setAccounts(d.accounts ?? []);
-        }
-      })
-      .catch(() => {});
-
-    fetch("/api/admin/replacements")
+  const loadReplacements = useCallback(() => {
+    return fetch("/api/admin/replacements")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.replacements) {
@@ -126,6 +117,20 @@ export default function AdminPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setStats(d.stats);
+          setAccounts(d.accounts ?? []);
+        }
+      })
+      .catch(() => {});
+
+    loadReplacements();
+  }, [loadReplacements]);
 
   const fmtNum = (n: number | undefined) => (n ?? 0).toLocaleString("en-US");
 
@@ -183,6 +188,32 @@ export default function AdminPage() {
       setLoadingId(null);
     }
   }
+
+  // Greenlight every un-reviewed pending request at once: delivers the ones with
+  // fresh stock now, queues the rest to auto-fulfill when a fresh lead arrives.
+  async function handleApproveAll() {
+    setApproveAllLoading(true);
+    try {
+      const res = await fetch("/api/admin/replacements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve-all" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        addToast("error", data.error ?? "Failed to approve pending requests.");
+        return;
+      }
+      await loadReplacements();
+      addToast("success", data.message ?? "Pending requests approved.");
+    } catch {
+      addToast("error", "Failed to approve pending requests. Please try again.");
+    } finally {
+      setApproveAllLoading(false);
+    }
+  }
+
+  const pendingUnreviewed = replacements.filter((r) => r.status === "PENDING" && !r.autoApproved).length;
 
   return (
     <div>
@@ -455,6 +486,28 @@ export default function AdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {pendingUnreviewed > 0 && (
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+                    <span className="text-sm text-emerald-900">
+                      <strong>{pendingUnreviewed}</strong> request{pendingUnreviewed === 1 ? "" : "s"} awaiting
+                      review. Approving greenlights them — in-stock ones deliver now, the rest auto-fill
+                      when a fresh lead arrives.
+                    </span>
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 text-white hover:bg-emerald-700"
+                      disabled={approveAllLoading || !!loadingId}
+                      onClick={handleApproveAll}
+                    >
+                      {approveAllLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCheck className="h-3.5 w-3.5" />
+                      )}
+                      Approve all pending ({pendingUnreviewed})
+                    </Button>
+                  </div>
+                )}
                 {backedUpStates.length > 0 && (
                   <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
                     <Clock className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />

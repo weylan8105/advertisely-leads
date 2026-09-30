@@ -197,7 +197,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { requestId, action, adminNote } = body as {
     requestId?: string;
-    action?: "approve" | "deny" | "autofulfill";
+    action?: "approve" | "deny" | "autofulfill" | "approve-all";
     adminNote?: string;
   };
 
@@ -215,6 +215,44 @@ export async function PATCH(req: NextRequest) {
       success: true,
       message: `Swept ${summary.processed} pending — ${summary.fulfilled} fulfilled, ${summary.closedDuplicate} closed as duplicates, ${summary.pendingNoStock} left pending (no stock).`,
       ...summary,
+    });
+  }
+
+  // Batch approve: greenlight EVERY pending request at once. In-stock ones deliver
+  // now; the rest are marked approved (autoApproved) and auto-fill when a fresh
+  // lead arrives — same behavior as clicking Approve on each, in one click.
+  if (action === "approve-all" && !requestId) {
+    const pending = await prisma.replacementRequest.findMany({
+      where: { status: "PENDING" },
+      select: { id: true, lead: { select: { state: true } } },
+    });
+    let delivered = 0, queued = 0, closed = 0, failed = 0;
+    const today = new Date().toISOString().slice(0, 10);
+    for (const r of pending) {
+      const outcome = await fulfillReplacement(r.id, { reviewerId: user.id, notify: true });
+      if (outcome.status === "FULFILLED") delivered++;
+      else if (outcome.status === "ALREADY_REPLACED") closed++;
+      else if (outcome.status === "NO_STOCK") {
+        await prisma.replacementRequest.update({
+          where: { id: r.id },
+          data: {
+            autoApproved: true,
+            reviewedById: user.id,
+            reviewedAt: new Date(),
+            adminNote: `Approved ${today} — queued for auto-fulfillment when a fresh ${r.lead?.state ?? ""} lead is available.`,
+          },
+        });
+        queued++;
+      } else failed++;
+    }
+    return NextResponse.json({
+      success: true,
+      processed: pending.length,
+      delivered,
+      queued,
+      closed,
+      failed,
+      message: `Approved ${pending.length} request${pending.length === 1 ? "" : "s"} — ${delivered} delivered now, ${queued} queued to auto-fulfill when fresh leads arrive${closed ? `, ${closed} already replaced` : ""}.`,
     });
   }
 
