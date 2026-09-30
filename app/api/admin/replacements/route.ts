@@ -3,13 +3,20 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillReplacement, autoFulfillPendingReplacements } from "@/lib/replacement";
+import { IUL_POOL_IDS } from "@/data/packages";
+import { NOT_TEST_LEAD } from "@/lib/testLeads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const FRESH_MS = 48 * 60 * 60 * 1000;
+
 /**
  * GET /api/admin/replacements
- * Returns all pending replacement requests. Admin only.
+ * Returns all replacement requests. Each PENDING request is flagged with
+ * `awaitingFreshStock` = true when no fresh (<=48h) lead exists in a state that
+ * could currently fulfill it, so admins can see which states are backed up
+ * waiting on fresh inventory. Admin only.
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -24,18 +31,66 @@ export async function GET(req: NextRequest) {
   }
 
   if (!isDatabaseConfigured || !prisma) {
-    return NextResponse.json({ replacements: [] });
+    return NextResponse.json({ replacements: [], backedUpStates: [] });
   }
 
   const replacements = await prisma.replacementRequest.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      lead: { select: { id: true, name: true, phone: true, email: true } },
+      lead: {
+        select: {
+          id: true, name: true, phone: true, email: true, state: true,
+          orderId: true, order: { select: { filterStates: true } },
+        },
+      },
       requestedBy: { select: { id: true, name: true, email: true } },
     },
   });
 
-  return NextResponse.json({ replacements });
+  // States that currently have fresh (<=48h) unassigned IUL inventory — the only
+  // stock a replacement can draw from (fresh-only rule). Mirrors fulfillReplacement.
+  const freshRows = await prisma.lead.groupBy({
+    by: ["state"],
+    where: {
+      packageId: { in: IUL_POOL_IDS },
+      assignedUserId: null,
+      orderId: null,
+      trashedAt: null,
+      receivedAt: { gt: new Date(Date.now() - FRESH_MS) },
+      ...NOT_TEST_LEAD,
+    },
+    _count: true,
+  });
+  const freshStates = new Set(
+    freshRows.filter((r) => (r._count as number) > 0 && r.state).map((r) => r.state),
+  );
+  const anyFresh = freshStates.size > 0;
+
+  // Can a pending request be fulfilled right now? Same-state stock, or (if it has
+  // an order) stock in any state the client ordered (empty filterStates = all).
+  const fulfillableNow = (lead: (typeof replacements)[number]["lead"]): boolean => {
+    if (!lead) return false;
+    if (lead.state && freshStates.has(lead.state)) return true;
+    if (!lead.orderId) return false; // no order → same-state only
+    const os = lead.order?.filterStates ?? [];
+    if (os.length === 0) return anyFresh; // all-states order
+    return os.some((s) => freshStates.has(s));
+  };
+
+  const annotated = replacements.map((r) => ({
+    ...r,
+    awaitingFreshStock: r.status === "PENDING" && !fulfillableNow(r.lead),
+  }));
+
+  const backedUpStates = Array.from(
+    new Set(
+      annotated
+        .filter((r) => r.awaitingFreshStock && r.lead?.state && /^[A-Z]{2}$/.test(r.lead.state))
+        .map((r) => r.lead!.state),
+    ),
+  ).sort();
+
+  return NextResponse.json({ replacements: annotated, backedUpStates });
 }
 
 /**

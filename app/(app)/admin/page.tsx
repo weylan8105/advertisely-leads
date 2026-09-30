@@ -32,6 +32,7 @@ import {
   CheckCheck,
   XCircle,
   Trash2,
+  Clock,
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
@@ -52,10 +53,12 @@ type ReplacementStatus = "PENDING" | "APPROVED" | "DENIED";
 interface Replacement {
   id: string;
   lead: string;
+  state: string;
   reason: string;
   agent: string;
   submitted: string;
   status: ReplacementStatus;
+  awaitingFreshStock: boolean;
 }
 
 interface Toast {
@@ -67,6 +70,7 @@ let toastCounter = 0;
 
 export default function AdminPage() {
   const [replacements, setReplacements] = useState<Replacement[]>([]);
+  const [backedUpStates, setBackedUpStates] = useState<string[]>([]);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [syncPaymentIntentId, setSyncPaymentIntentId] = useState("");
@@ -107,12 +111,15 @@ export default function AdminPage() {
             d.replacements.map((r: any) => ({
               id: r.id,
               lead: r.lead?.name ?? "—",
+              state: r.lead?.state ?? "",
               reason: r.reason,
               agent: r.requestedBy?.name ?? r.requestedBy?.email ?? "—",
               submitted: new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
               status: r.status,
+              awaitingFreshStock: !!r.awaitingFreshStock,
             })),
           );
+          setBackedUpStates(d.backedUpStates ?? []);
         }
       })
       .catch(() => {});
@@ -435,9 +442,20 @@ export default function AdminPage() {
                 </CardTitle>
                 <CardDescription>
                   Review replacement requests submitted by agents. Approve, deny, or escalate.
+                  Pending requests auto-fill as fresh leads arrive in their states.
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {backedUpStates.length > 0 && (
+                  <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+                    <Clock className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+                    <span>
+                      Waiting on fresh stock in{" "}
+                      <strong>{backedUpStates.join(", ")}</strong>. These requests fill automatically
+                      once a fresh (&lt;48h) lead comes in for that state — no action needed.
+                    </span>
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -456,7 +474,14 @@ export default function AdminPage() {
                       const denyLoading = loadingId === `${r.id}-deny`;
                       return (
                         <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.lead}</TableCell>
+                          <TableCell className="font-medium">
+                            {r.lead}
+                            {r.state && (
+                              <span className="ml-2 inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-slate-600">
+                                {r.state}
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-sm">{r.reason}</TableCell>
                           <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                             {r.agent}
@@ -465,17 +490,24 @@ export default function AdminPage() {
                             {r.submitted}
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={
-                                r.status === "APPROVED"
-                                  ? "success"
-                                  : r.status === "DENIED"
-                                  ? "destructive"
-                                  : "warning"
-                              }
-                            >
-                              {r.status === "APPROVED" ? "Approved" : r.status === "DENIED" ? "Denied" : "Pending"}
-                            </Badge>
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge
+                                variant={
+                                  r.status === "APPROVED"
+                                    ? "success"
+                                    : r.status === "DENIED"
+                                    ? "destructive"
+                                    : "warning"
+                                }
+                              >
+                                {r.status === "APPROVED" ? "Approved" : r.status === "DENIED" ? "Denied" : "Pending"}
+                              </Badge>
+                              {isPending && r.awaitingFreshStock && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                  <Clock className="h-3 w-3" /> Waiting on fresh stock
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             {isPending ? (
