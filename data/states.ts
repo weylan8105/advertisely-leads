@@ -6,7 +6,12 @@ export const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
 
-export const AVAILABLE_STATES = ["TX", "FL", "CA", "IL", "PA", "OH", "CO", "MI", "WA"];
+// States we sell leads in (order availability on the marketplace). 31 states.
+export const AVAILABLE_STATES = [
+  "AL", "AR", "AZ", "CA", "CO", "CT", "FL", "GA", "ID", "IL",
+  "IN", "LA", "MA", "MD", "ME", "MI", "MS", "MT", "NC", "NM",
+  "NV", "OH", "OK", "OR", "PA", "SC", "TN", "TX", "VA", "WA", "WI",
+];
 
 export function isStateAvailable(state: string) {
   return AVAILABLE_STATES.includes(state);

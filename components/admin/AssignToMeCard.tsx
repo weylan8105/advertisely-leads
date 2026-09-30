@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { tiersForGroup } from "@/data/packages";
+import { AVAILABLE_STATES } from "@/data/states";
 import { cn } from "@/lib/utils";
 
 interface SearchLead {
@@ -39,7 +40,8 @@ function ageDays(iso: string): string {
   return d <= 0 ? "today" : `${d}d old`;
 }
 
-const ACTIVE_STATES = ["TX", "FL", "CA", "IL", "PA", "OH", "CO", "MI", "WA"];
+// The states we operate in — kept in sync with marketplace order availability.
+const ACTIVE_STATES = AVAILABLE_STATES;
 const AGE_TIERS = tiersForGroup("iul"); // freshest → oldest, each with age window
 
 export function AssignToMeCard() {
