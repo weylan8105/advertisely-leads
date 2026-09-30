@@ -79,39 +79,34 @@ export async function fulfillReplacement(
   const orderId = bad.orderId ?? null;
   const poolIds = leadPoolIdsFor(bad.packageId);
 
-  // Match the age window of the order being replaced (fall back to the package)
-  // so a Real-Time buyer's replacement is also fresh — never an aged lead. Also
-  // capture the states the client ordered: the replacement may be backfilled
-  // from ANY of them, not only the bad lead's state (owner directive, Sep 2026).
-  const replAtFilter: { gt?: Date; lte?: Date } = {};
+  // Capture the states the client ordered: a replacement may come from ANY of
+  // them, not only the bad lead's state (owner directive, Sep 2026).
   let orderedStates: string[] | null = null; // null = no order; [] = all-states order
   if (orderId) {
     const ord = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { filterStates: true, filterAgeMinDays: true, filterAgeMaxDays: true, packageId: true },
+      select: { filterStates: true },
     });
     if (ord) orderedStates = ord.filterStates;
-    const pk = findPackage(ord?.packageId ?? bad.packageId);
-    const maxD = ord?.filterAgeMaxDays ?? pk?.ageMaxDays ?? null;
-    const minD = ord?.filterAgeMinDays ?? pk?.ageMinDays ?? null;
-    const dayMs = 86_400_000;
-    const nowMs = Date.now();
-    if (maxD != null) replAtFilter.gt = new Date(nowMs - maxD * dayMs);
-    if (minD != null) replAtFilter.lte = new Date(nowMs - minD * dayMs);
   }
 
-  // Base match: same IUL pool, unassigned, not a test lead, not the bad lead
-  // itself. State and age are applied as tiered PREFERENCES below, never hard
-  // gates: a replacement must issue whenever the client has that state in their
-  // order, even if the only stock left is older than the order's fresh window
-  // (owner directive: "all states can replace as long as the client has that
-  // state in their order").
+  // Replacements are ALWAYS fresh: a lead that entered the CRM within the last
+  // 48 hours, regardless of the order's tier. No aged fallback — if no fresh
+  // lead is available the request stays pending rather than handing out an aged
+  // one (owner directive Sep 30 2026: "the leads need to be fresh").
+  const FRESH_MS = 48 * 60 * 60 * 1000;
+  const freshFilter: Prisma.LeadWhereInput = { receivedAt: { gt: new Date(Date.now() - FRESH_MS) } };
+
+  // Base match: same IUL pool, fresh (<=48h), unassigned, not a test lead, not
+  // the bad lead itself. STATE is the only relaxed dimension — a replacement can
+  // come from any state the client ordered when the exact state is dry.
   const baseWhere: Prisma.LeadWhereInput = {
     packageId: { in: poolIds },
     assignedUserId: null,
     orderId: null,
     trashedAt: null,
     id: { not: bad.id },
+    ...freshFilter,
     ...NOT_TEST_LEAD,
   };
 
@@ -123,22 +118,13 @@ export async function fulfillReplacement(
     stateSets.push(orderedStates && orderedStates.length ? { state: { in: orderedStates } } : {});
   }
 
-  // Age preference: the order's fresh window first, then ANY age so aged stock
-  // can still make a client whole rather than leaving the request pending.
-  const ageSets: Prisma.LeadWhereInput[] =
-    replAtFilter.gt || replAtFilter.lte ? [{ receivedAt: replAtFilter }, {}] : [{}];
-
-  // Walk preferences from best (fresh + same state) to last resort (any age, any
-  // ordered state), always taking the freshest match within each tier.
+  // Freshest match: same state first, then any ordered state — all within 48h.
   let replacement: Awaited<ReturnType<typeof prisma.lead.findFirst>> = null;
-  for (const ageSet of ageSets) {
-    for (const stateSet of stateSets) {
-      replacement = await prisma.lead.findFirst({
-        where: { ...baseWhere, ...stateSet, ...ageSet },
-        orderBy: { receivedAt: "desc" },
-      });
-      if (replacement) break;
-    }
+  for (const stateSet of stateSets) {
+    replacement = await prisma.lead.findFirst({
+      where: { ...baseWhere, ...stateSet },
+      orderBy: { receivedAt: "desc" },
+    });
     if (replacement) break;
   }
 
