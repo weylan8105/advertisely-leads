@@ -4,6 +4,11 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { findPackage, leadPoolIdsFor } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
 
+// Replacements are fresh-only: a candidate must have entered the CRM within the
+// last 48 hours (owner directive Sep 30 2026). Module-scoped so both the
+// single-request fulfiller and the intake helper use the same definition.
+const FRESH_MS = 48 * 60 * 60 * 1000;
+
 export type ReplacementOutcome =
   | { ok: true; status: "FULFILLED"; replacementLeadId: string; replacementName: string; replacementState: string; notified: boolean }
   | { ok: false; status: "ALREADY_REPLACED"; note: string }
@@ -44,7 +49,7 @@ async function systemReviewerId(): Promise<string | null> {
  */
 export async function fulfillReplacement(
   requestId: string,
-  opts: { reviewerId?: string | null; notify?: boolean } = {},
+  opts: { reviewerId?: string | null; notify?: boolean; onlyLeadId?: string } = {},
 ): Promise<ReplacementOutcome> {
   if (!prisma) return { ok: false, status: "LEAD_MISSING" };
   const notify = opts.notify ?? true;
@@ -94,18 +99,19 @@ export async function fulfillReplacement(
   // 48 hours, regardless of the order's tier. No aged fallback — if no fresh
   // lead is available the request stays pending rather than handing out an aged
   // one (owner directive Sep 30 2026: "the leads need to be fresh").
-  const FRESH_MS = 48 * 60 * 60 * 1000;
   const freshFilter: Prisma.LeadWhereInput = { receivedAt: { gt: new Date(Date.now() - FRESH_MS) } };
 
   // Base match: same IUL pool, fresh (<=48h), unassigned, not a test lead, not
   // the bad lead itself. STATE is the only relaxed dimension — a replacement can
-  // come from any state the client ordered when the exact state is dry.
+  // come from any state the client ordered when the exact state is dry. When the
+  // caller pins `onlyLeadId` (intake: use THIS just-arrived lead or nothing), the
+  // search is constrained to that lead, still validated against every gate here.
   const baseWhere: Prisma.LeadWhereInput = {
     packageId: { in: poolIds },
     assignedUserId: null,
     orderId: null,
     trashedAt: null,
-    id: { not: bad.id },
+    id: opts.onlyLeadId && opts.onlyLeadId !== bad.id ? opts.onlyLeadId : { not: bad.id },
     ...freshFilter,
     ...NOT_TEST_LEAD,
   };
@@ -216,6 +222,60 @@ export async function fulfillReplacement(
     replacementState: replacement.state,
     notified,
   };
+}
+
+/**
+ * Intake hook: a fresh lead has just arrived and NO open paid order claimed it
+ * (the caller only reaches here for a leftover lead, so paid orders always keep
+ * first claim). Offer this specific lead to a PENDING replacement before it
+ * falls through to the house (Ryan). Among waiting requests we prefer a
+ * like-for-like same-state match, then any request whose order covers this
+ * lead's state, FIFO within each. Pins `onlyLeadId` so it can only ever consume
+ * THIS lead, never divert another. Returns the fulfilled requestId, or null when
+ * no pending request can use it.
+ */
+export async function tryReplacementForFreshLead(
+  leadId: string,
+  opts: { notify?: boolean } = {},
+): Promise<string | null> {
+  if (!prisma) return null;
+
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, state: true, packageId: true, assignedUserId: true, orderId: true, trashedAt: true, receivedAt: true },
+  });
+  // Only an unclaimed, fresh (<=48h) lead can back a replacement.
+  if (!lead || lead.assignedUserId || lead.orderId || lead.trashedAt) return null;
+  if (Date.now() - lead.receivedAt.getTime() > FRESH_MS) return null;
+
+  const leadPool = leadPoolIdsFor(lead.packageId);
+
+  const pending = await prisma.replacementRequest.findMany({
+    where: { status: "PENDING" },
+    include: { lead: { select: { state: true, packageId: true, status: true, trashedAt: true } } },
+    orderBy: { createdAt: "asc" }, // FIFO: the longest-waiting request first
+  });
+
+  // Keep requests whose bad lead draws from the same pool as this fresh lead,
+  // and rank same-state (like-for-like) ahead of cross-state.
+  const candidates = pending
+    .filter(
+      (r) =>
+        r.lead &&
+        !r.lead.trashedAt &&
+        r.lead.status !== "REPLACED" &&
+        leadPoolIdsFor(r.lead.packageId).some((p) => leadPool.includes(p)),
+    )
+    .sort((a, b) => Number(b.lead!.state === lead.state) - Number(a.lead!.state === lead.state));
+
+  for (const req of candidates) {
+    const outcome = await fulfillReplacement(req.id, { onlyLeadId: leadId, notify: opts.notify });
+    if (outcome.ok) return req.id;
+    // A non-ok outcome just means this lead didn't satisfy that request (its
+    // state isn't on the request's order, the request was a duplicate, etc.) —
+    // move on and let the lead fall through to the house if nothing matches.
+  }
+  return null;
 }
 
 /**

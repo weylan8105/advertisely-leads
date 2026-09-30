@@ -6,6 +6,7 @@ import { buildExportRows } from "./leadExport";
 import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
 import { assignLeadToHouse, getHouseAccount } from "@/lib/house";
+import { tryReplacementForFreshLead } from "@/lib/replacement";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -347,6 +348,9 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
         prisma.lead.count({ where: { assignedUserId: house.userId, state: lead.state, trashedAt: null } }),
       ]);
       if ((buyerInState + houseInState) % 2 === 1) {
+        // This lead is the house's even-split share — but a pending replacement
+        // (owed to a paying client) outranks the house. Give it first dibs.
+        if (await tryReplacementForFreshLead(leadId)) return;
         const routed = await assignLeadToHouse(leadId, "even-split share of in-state leads");
         if (routed) return;
       }
@@ -366,9 +370,13 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     }
   }
 
-  // House catch-all: no OPEN ORDER claimed this lead (wrong state, order full, or
-  // age mismatch), so it would otherwise sit orphaned in the pool. Route it to
-  // the house CRM (Ryan) so every new lead is worked, never left unassigned.
-  // assignLeadToHouse is fresh-only, so aged leads still stay out of Ryan's CRM.
+  // No OPEN ORDER claimed this lead — it's a leftover fresh lead. Before it goes
+  // to the house, offer it to a pending replacement (owed to a paying client, so
+  // it outranks the house catch-all). Orders already had first claim above.
+  if (await tryReplacementForFreshLead(leadId)) return;
+
+  // House catch-all: nothing else claimed it, so route it to the house CRM (Ryan)
+  // so every new lead is worked, never left unassigned. assignLeadToHouse is
+  // fresh-only, so aged leads still stay out of Ryan's CRM.
   await assignLeadToHouse(leadId, "not claimed by any open order");
 }
