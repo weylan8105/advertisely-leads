@@ -398,6 +398,10 @@ model ReplacementRequest {
   reviewedById  String?
   reviewedAt    DateTime?
   adminNote     String?           @db.Text
+  // Admin greenlit this request but no fresh lead was in stock yet. It stays
+  // PENDING and auto-fulfills the moment a matching fresh lead arrives — the
+  // admin does not need to click approve again.
+  autoApproved  Boolean           @default(false)
   createdAt     DateTime          @default(now())
 
   lead        Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)

@@ -59,6 +59,7 @@ interface Replacement {
   submitted: string;
   status: ReplacementStatus;
   awaitingFreshStock: boolean;
+  autoApproved: boolean;
 }
 
 interface Toast {
@@ -117,6 +118,7 @@ export default function AdminPage() {
               submitted: new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
               status: r.status,
               awaitingFreshStock: !!r.awaitingFreshStock,
+              autoApproved: !!r.autoApproved,
             })),
           );
           setBackedUpStates(d.backedUpStates ?? []);
@@ -156,17 +158,24 @@ export default function AdminPage() {
         return;
       }
 
-      // Update local state immediately
+      // Update local state immediately. Approve with no stock yet comes back
+      // queued: stays PENDING but greenlit (autoApproved) so it auto-fills later.
+      const queued = action === "approve" && data.queued === true;
       setReplacements((prev) =>
         prev.map((r) =>
           r.id === requestId
-            ? { ...r, status: action === "approve" ? "APPROVED" : "DENIED" }
+            ? {
+                ...r,
+                status: action === "deny" ? "DENIED" : queued ? "PENDING" : "APPROVED",
+                autoApproved: action === "deny" ? false : queued ? true : r.autoApproved,
+              }
             : r,
         ),
       );
       addToast(
         "success",
-        `${leadName}'s replacement request ${action === "approve" ? "approved" : "denied"}.`,
+        data.message ??
+          `${leadName}'s replacement request ${action === "approve" ? "approved" : "denied"}.`,
       );
     } catch {
       addToast("error", `Failed to ${action} request. Please try again.`);
@@ -470,6 +479,7 @@ export default function AdminPage() {
                   <TableBody>
                     {replacements.map((r) => {
                       const isPending = r.status === "PENDING";
+                      const queued = isPending && r.autoApproved; // approved, awaiting fresh stock
                       const approveLoading = loadingId === `${r.id}-approve`;
                       const denyLoading = loadingId === `${r.id}-deny`;
                       return (
@@ -497,12 +507,20 @@ export default function AdminPage() {
                                     ? "success"
                                     : r.status === "DENIED"
                                     ? "destructive"
+                                    : queued
+                                    ? "success"
                                     : "warning"
                                 }
                               >
-                                {r.status === "APPROVED" ? "Approved" : r.status === "DENIED" ? "Denied" : "Pending"}
+                                {r.status === "APPROVED"
+                                  ? "Approved"
+                                  : r.status === "DENIED"
+                                  ? "Denied"
+                                  : queued
+                                  ? "Approved"
+                                  : "Pending"}
                               </Badge>
-                              {isPending && r.awaitingFreshStock && (
+                              {queued && r.awaitingFreshStock && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                                   <Clock className="h-3 w-3" /> Waiting on fresh stock
                                 </span>
@@ -518,28 +536,31 @@ export default function AdminPage() {
                                   className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
                                   disabled={!!loadingId}
                                   onClick={() => handleReplacementAction(r.id, "deny", r.lead)}
+                                  title={queued ? "Cancel this approval" : "Deny this request"}
                                 >
                                   {denyLoading ? (
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                   ) : (
                                     <XCircle className="h-3.5 w-3.5" />
                                   )}
-                                  Deny
+                                  {queued ? "Cancel" : "Deny"}
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                                  disabled={!!loadingId}
-                                  onClick={() => handleReplacementAction(r.id, "approve", r.lead)}
-                                >
-                                  {approveLoading ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <CheckCheck className="h-3.5 w-3.5" />
-                                  )}
-                                  Approve
-                                </Button>
+                                {!queued && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                    disabled={!!loadingId}
+                                    onClick={() => handleReplacementAction(r.id, "approve", r.lead)}
+                                  >
+                                    {approveLoading ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <CheckCheck className="h-3.5 w-3.5" />
+                                    )}
+                                    Approve
+                                  </Button>
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-muted-foreground italic">

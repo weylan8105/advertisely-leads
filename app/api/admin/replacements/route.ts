@@ -77,9 +77,11 @@ export async function GET(req: NextRequest) {
     return os.some((s) => freshStates.has(s));
   };
 
+  // "Waiting on fresh stock" = approved (greenlit) + queued, but no fresh lead is
+  // available yet to fill it. These are the ones that will auto-fill on intake.
   const annotated = replacements.map((r) => ({
     ...r,
-    awaitingFreshStock: r.status === "PENDING" && !fulfillableNow(r.lead),
+    awaitingFreshStock: r.status === "PENDING" && r.autoApproved && !fulfillableNow(r.lead),
   }));
 
   const backedUpStates = Array.from(
@@ -242,10 +244,27 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Request is not pending." }, { status: 409 });
     }
     if (outcome.status === "NO_STOCK") {
-      return NextResponse.json(
-        { error: `No matching ${outcome.state} inventory to fulfill this replacement right now. Left pending.` },
-        { status: 422 },
-      );
+      // Greenlight it for automatic fulfillment: keep it PENDING but mark it
+      // approved so it auto-fills the moment a matching fresh lead arrives — the
+      // admin never has to come back and click approve again.
+      await prisma.replacementRequest.update({
+        where: { id: requestId },
+        data: {
+          autoApproved: true,
+          reviewedById: user.id,
+          reviewedAt: new Date(),
+          adminNote:
+            adminNote ??
+            `Approved ${new Date().toISOString().slice(0, 10)} — queued for auto-fulfillment when a fresh ${outcome.state} lead is available.`,
+        },
+      });
+      return NextResponse.json({
+        success: true,
+        requestId,
+        status: "PENDING",
+        queued: true,
+        message: `Approved. No fresh ${outcome.state} lead is in stock yet — it will auto-fulfill as soon as one arrives. No need to check back.`,
+      });
     }
     return NextResponse.json({ error: "Could not fulfill — lead missing." }, { status: 404 });
   }

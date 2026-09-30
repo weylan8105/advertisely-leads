@@ -250,8 +250,10 @@ export async function tryReplacementForFreshLead(
 
   const leadPool = leadPoolIdsFor(lead.packageId);
 
+  // Only requests the admin has GREENLIT (approved) auto-fill on intake — approval
+  // is the gate. Un-reviewed pending requests wait for an approve/deny decision.
   const pending = await prisma.replacementRequest.findMany({
-    where: { status: "PENDING" },
+    where: { status: "PENDING", autoApproved: true },
     include: { lead: { select: { state: true, packageId: true, status: true, trashedAt: true } } },
     orderBy: { createdAt: "asc" }, // FIFO: the longest-waiting request first
   });
