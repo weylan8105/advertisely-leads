@@ -82,6 +82,26 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
     lookup[key.toLowerCase().trim()] = str;
   }
 
+  // GHL nests the webhook's Custom Data under a `customData` object and ad
+  // attribution under `attributionSource` (both arrive as JSON strings). The
+  // mapped answers (trade/age/income) and the campaign/adset/ad ids only live
+  // there, not at top level — so merge their keys into the lookup. Top-level
+  // keys win; nested keys only fill gaps.
+  const mergeNested = (value: unknown) => {
+    let obj: unknown = value;
+    if (typeof value === "string") {
+      try { obj = JSON.parse(value); } catch { return; }
+    }
+    if (!obj || typeof obj !== "object") return;
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const lk = k.toLowerCase().trim();
+      const str = toStringValue(v);
+      if (str && (lookup[lk] === undefined || lookup[lk] === "")) lookup[lk] = str;
+    }
+  };
+  mergeNested((body as Record<string, unknown>)?.customData);
+  mergeNested((body as Record<string, unknown>)?.attributionSource);
+
   const pick = (field: string): string => {
     for (const alias of ALIASES[field] ?? []) {
       const v = lookup[alias];
@@ -101,7 +121,11 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
   const ageRaw = pick("age");
   const incomeRaw = pick("income");
   const age = ageRaw ? parseInt(ageRaw, 10) : undefined;
-  const income = incomeRaw ? parseInt(incomeRaw.replace(/[^0-9]/g, ""), 10) : undefined;
+  // Take the FIRST number group (lower bound) — income often arrives as a range
+  // like "$175,000 – $250,000"; stripping all non-digits would merge both into
+  // one nonsense number (175000250000).
+  const incomeMatch = incomeRaw.replace(/,/g, "").match(/\d+/);
+  const income = incomeMatch ? parseInt(incomeMatch[0], 10) : undefined;
 
   const requestedPackage = pick("packageId");
   const packageId = requestedPackage && findPackage(requestedPackage)
