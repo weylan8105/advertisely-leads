@@ -346,6 +346,46 @@ async function routeHeldBackTagToHouse(lead: { id: string; tags: string[] }): Pr
   return true;
 }
 
+// How many states the house (Ryan) effectively covers. The house is the
+// catch-all for every state, so it has the broadest coverage and therefore the
+// weakest per-state claim. Used as the denominator in coverage weighting.
+// Tunable: a LARGER value makes the house back off harder from buyers' states
+// (buyers keep more of their turf); a smaller value lets the house compete more.
+export const HOUSE_COVERAGE_STATES = 50;
+
+/**
+ * Coverage-weighted winner for a single lead among the parties competing for its
+ * state. The fairness principle: a party that covers FEWER states should get a
+ * LARGER share of each of those states — otherwise a narrow buyer is squeezed
+ * twice (fewer states AND those few states split away), while a broad party
+ * (many states, or the all-states house) accumulates by default.
+ *
+ * Each party's weight = 1 / (states it covers); its target share of this state =
+ * weight / Σweights. The winner is the party currently furthest BELOW its target
+ * (largest-remainder), so repeated calls converge to the weighted shares. Broad
+ * parties still win on TOTAL volume (they're in many states) but stop dominating
+ * a narrow buyer's home turf. Pure function so the projection tool and
+ * production share identical math.
+ */
+export function coverageWeightedWinner(
+  parties: { coverage: number; count: number }[],
+): number {
+  const weights = parties.map((p) => 1 / Math.max(1, p.coverage));
+  const sumW = weights.reduce((a, b) => a + b, 0) || 1;
+  const total = parties.reduce((a, p) => a + p.count, 0);
+  let best = 0;
+  let bestDeficit = -Infinity;
+  parties.forEach((p, i) => {
+    const target = weights[i] / sumW;
+    const deficit = target * (total + 1) - p.count;
+    if (deficit > bestDeficit) {
+      bestDeficit = deficit;
+      best = i;
+    }
+  });
+  return best;
+}
+
 export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   if (!prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -369,37 +409,70 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     orderBy: { createdAt: "asc" },
   });
 
-  // ── Even-split (owner directive, Sep 2026) ─────────────────────────────
-  // For a lead that qualifies for a state-scoped buyer order (state + age),
-  // alternate it between the buyer and the house (Ryan) so uploaded in-state
-  // leads are shared ~50/50 rather than all going to whoever bought that state.
-  // Parity of the combined in-state holdings decides: even → buyer, odd → house.
-  const splitOrder = pendingOrders.find(
-    (o) => o.filterStates.length > 0 && leadAgeEligibleForOrder(o, lead.receivedAt),
-  );
-  if (splitOrder) {
-    const house = await getHouseAccount();
-    const recipient = splitOrder.deliverToUserId ?? splitOrder.userId;
-    if (house && house.userId !== recipient) {
-      const [buyerInState, houseInState] = await Promise.all([
-        prisma.lead.count({ where: { orderId: splitOrder.id, state: lead.state, trashedAt: null } }),
-        prisma.lead.count({ where: { assignedUserId: house.userId, state: lead.state, trashedAt: null } }),
-      ]);
-      if ((buyerInState + houseInState) % 2 === 1) {
-        // This lead is the house's even-split share — but a pending replacement
-        // (owed to a paying client) outranks the house. Give it first dibs.
-        if (await tryReplacementForFreshLead(leadId)) return;
-        const routed = await assignLeadToHouse(leadId, "even-split share of in-state leads");
-        if (routed) return;
+  // ── Coverage-weighted distribution (owner directive, Oct 2026) ──────────
+  // Replaces the flat 50/50 even-split. Every party competing for THIS lead's
+  // state gets a share inversely proportional to how many states it covers, so
+  // a narrow buyer keeps the majority of its few states while broad orders (and
+  // the all-states house) win on total volume instead of per-state dominance.
+  const house = await getHouseAccount();
+
+  // Buyer orders that can take THIS lead: cover its state, in the age window, and
+  // not already full. Capture each order's current in-state count for weighting.
+  const eligible: { order: (typeof pendingOrders)[number]; count: number }[] = [];
+  for (const o of pendingOrders) {
+    if (!leadAgeEligibleForOrder(o, lead.receivedAt)) continue;
+    const live = await prisma.lead.count({ where: { orderId: o.id, trashedAt: null } });
+    if (live >= o.quantity) continue;
+    const count = await prisma.lead.count({
+      where: { orderId: o.id, state: lead.state, trashedAt: null },
+    });
+    eligible.push({ order: o, count });
+  }
+
+  if (eligible.length > 0 && house) {
+    type Party =
+      | { kind: "buyer"; orderId: string; recipient: string; coverage: number; count: number }
+      | { kind: "house"; coverage: number; count: number };
+    const parties: Party[] = eligible.map((e) => ({
+      kind: "buyer" as const,
+      orderId: e.order.id,
+      recipient: e.order.deliverToUserId ?? e.order.userId,
+      // An all-states order (empty filterStates) is as broad as the house.
+      coverage: e.order.filterStates.length === 0 ? HOUSE_COVERAGE_STATES : e.order.filterStates.length,
+      count: e.count,
+    }));
+    // The house competes too — unless it's already one of the buyer recipients.
+    if (!parties.some((p) => p.kind === "buyer" && p.recipient === house.userId)) {
+      const houseCount = await prisma.lead.count({
+        where: { assignedUserId: house.userId, state: lead.state, trashedAt: null },
+      });
+      parties.push({ kind: "house", coverage: HOUSE_COVERAGE_STATES, count: houseCount });
+    }
+
+    const winner = parties[coverageWeightedWinner(parties)];
+    if (winner.kind === "house") {
+      // House won this lead — but a pending replacement (owed to a paying client)
+      // outranks the house. Give it first dibs, else route to the house CRM.
+      if (await tryReplacementForFreshLead(leadId)) return;
+      if (await assignLeadToHouse(leadId, "coverage-weighted house share")) return;
+      // House declined (e.g. not fresh) — fall through to fill a buyer instead.
+    } else {
+      const assigned = await fulfillOrder(winner.orderId);
+      if (assigned > 0) {
+        const check = await prisma.lead.findUnique({
+          where: { id: leadId },
+          select: { assignedUserId: true },
+        });
+        if (check?.assignedUserId) return;
       }
     }
   }
 
+  // Fallback — always land the lead somewhere: try each pending order (FIFO),
+  // then a pending replacement, then the house catch-all.
   for (const order of pendingOrders) {
     const assigned = await fulfillOrder(order.id);
     if (assigned > 0) {
-      // fulfillOrder assigns `remaining` matching leads, not necessarily THIS
-      // one — confirm this lead actually landed before we stop.
       const check = await prisma.lead.findUnique({
         where: { id: leadId },
         select: { assignedUserId: true },
@@ -407,14 +480,6 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
       if (check?.assignedUserId) return;
     }
   }
-
-  // No OPEN ORDER claimed this lead — it's a leftover fresh lead. Before it goes
-  // to the house, offer it to a pending replacement (owed to a paying client, so
-  // it outranks the house catch-all). Orders already had first claim above.
   if (await tryReplacementForFreshLead(leadId)) return;
-
-  // House catch-all: nothing else claimed it, so route it to the house CRM (Ryan)
-  // so every new lead is worked, never left unassigned. assignLeadToHouse is
-  // fresh-only, so aged leads still stay out of Ryan's CRM.
   await assignLeadToHouse(leadId, "not claimed by any open order");
 }
