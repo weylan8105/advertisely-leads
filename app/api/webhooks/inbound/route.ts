@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
           intentReason: lead.standardized.intentReason,
           packageId: lead.packageId,
           source: lead.source,
+          tags: lead.tags,
           campaignName: lead.attribution.campaignName,
           adsetId: lead.attribution.adsetId,
           creativeId: lead.attribution.creativeId,

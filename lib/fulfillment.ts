@@ -7,6 +7,7 @@ import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packa
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
 import { assignLeadToHouse, getHouseAccount } from "@/lib/house";
 import { tryReplacementForFreshLead } from "@/lib/replacement";
+import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -312,10 +313,47 @@ function leadAgeEligibleForOrder(
   return true;
 }
 
+/**
+ * TEMPORARY testing hold-back (lib/flags.ts HOLDBACK_TAGS_TO_HOUSE). A lead whose
+ * tags match a held-back product goes 100% to the house (Ryan) — bypassing all
+ * buyer distribution — so its quality can be evaluated before it's sold. Routes
+ * regardless of age (these are new test leads) and returns true if it claimed
+ * the lead. Clearing the flag array turns this off and resumes distribution.
+ */
+async function routeHeldBackTagToHouse(lead: { id: string; tags: string[] }): Promise<boolean> {
+  if (!prisma || HOLDBACK_TAGS_TO_HOUSE.length === 0) return false;
+  const tags = (lead.tags ?? []).map((t) => t.toLowerCase());
+  const matched = HOLDBACK_TAGS_TO_HOUSE.find((h) => tags.some((t) => t.includes(h.toLowerCase())));
+  if (!matched) return false;
+  const house = await getHouseAccount();
+  if (!house) return false;
+  const res = await prisma.lead.updateMany({
+    where: { id: lead.id, assignedUserId: null, trashedAt: null },
+    data: {
+      assignedUserId: house.userId,
+      assignedAt: new Date(),
+      ...(house.organizationId ? { organizationId: house.organizationId } : {}),
+    },
+  });
+  if (res.count === 0) return false;
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      type: "LEAD_ASSIGNED",
+      body: `Held to house for testing (tag "${matched}") — not distributed to buyers.`,
+    },
+  });
+  return true;
+}
+
 export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   if (!prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead || lead.assignedUserId) return;
+
+  // Testing hold-back: a lead tagged as a product under evaluation goes straight
+  // to the house (Ryan) before any buyer distribution runs.
+  if (await routeHeldBackTagToHouse(lead)) return;
 
   const pendingOrders = await prisma.order.findMany({
     where: {

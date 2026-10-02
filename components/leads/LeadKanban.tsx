@@ -46,7 +46,14 @@ export function LeadKanban({ leads }: { leads: Lead[] }) {
                     {lead.tags?.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {lead.tags.slice(0, 2).map((t) => (
-                          <Badge key={t} variant="muted" className="text-[10px]">
+                          <Badge
+                            key={t}
+                            // Lead-type tags (e.g. "American Income Advantage
+                            // Lead") stand out in red so the type is obvious;
+                            // other tags stay muted.
+                            variant={/advantage|american income/i.test(t) ? "default" : "muted"}
+                            className="text-[10px]"
+                          >
                             {t}
                           </Badge>
                         ))}

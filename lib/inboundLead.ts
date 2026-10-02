@@ -64,6 +64,7 @@ export interface NormalizedInboundLead {
   source: string;
   externalId?: string;
   raw: Record<string, string>;
+  tags: string[];
 }
 
 function toStringValue(v: unknown): string {
@@ -162,5 +163,17 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
     source: pick("source") || pick("campaignName") || DEFAULT_SOURCE,
     externalId: pick("externalId") || undefined,
     raw,
+    // GHL contacts carry tags (top-level, either a comma-joined string or an
+    // array). Capture them so a lead-type badge like "American Income Advantage
+    // Lead" flows through and can drive routing + display downstream.
+    tags: (() => {
+      const rawTags = (body as Record<string, unknown>)?.tags;
+      const arr = Array.isArray(rawTags)
+        ? rawTags.map((t) => String(t))
+        : typeof rawTags === "string"
+          ? rawTags.split(",")
+          : [];
+      return [...new Set(arr.map((t) => t.trim()).filter(Boolean))];
+    })(),
   };
 }
