@@ -10,7 +10,7 @@ import { stateFromZip, normalizeZip } from "./zipState";
  */
 
 const DEFAULT_PACKAGE = process.env.INBOUND_DEFAULT_PACKAGE_ID || "blue-collar-iul";
-const DEFAULT_SOURCE = "Facebook (Make.com)";
+const DEFAULT_SOURCE = "Facebook instant form";
 
 // Canonical field -> accepted incoming key aliases (all lowercased).
 const ALIASES: Record<string, string[]> = {
@@ -160,7 +160,11 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
       creativeId: pick("creativeId") || undefined,
     },
     packageId,
-    source: pick("source") || pick("campaignName") || DEFAULT_SOURCE,
+    // Display label only (not used in routing). Use an explicit form name if the
+    // connector sends one, otherwise the default — we deliberately DON'T fall back
+    // to the attribution channel ("facebook") or the campaign name, so pipe leads
+    // read cleanly as "Facebook instant form" in the backend.
+    source: lookup["form"] || lookup["form_name"] || DEFAULT_SOURCE,
     externalId: pick("externalId") || undefined,
     raw,
     // GHL contacts carry tags (top-level, either a comma-joined string or an
