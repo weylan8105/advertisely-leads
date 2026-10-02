@@ -42,6 +42,7 @@ import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
 import { AdminDownlineOrders } from "@/components/admin/AdminDownlineOrders";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
+import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
 
@@ -420,11 +421,12 @@ export default function AdminPage() {
           </TabsContent>
 
           <TabsContent value="sources">
+            <CplPanel />
             <Card>
               <CardHeader>
                 <CardTitle>Campaign & source tracking</CardTitle>
                 <CardDescription>
-                  Live performance of Meta campaigns feeding the IUL pipeline.
+                  Sample campaign breakdown (illustrative). Real cost-per-lead is in the panel above.
                 </CardDescription>
               </CardHeader>
               <CardContent>
