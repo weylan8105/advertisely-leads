@@ -38,8 +38,8 @@ export async function GET() {
       _sum: { totalCents: true },
       _max: { createdAt: true },
     }),
-    // Every order, newest first — used to pull each client's LATEST order for the
-    // progress bar (progress reflects only the most recent order, not a sum).
+    // Every order — the progress bar sums the COMBINED total across all of a
+    // client's orders (a client can place several at once, e.g. a 50 + a 25).
     prisma.order.findMany({
       orderBy: { createdAt: "desc" },
       select: { id: true, userId: true, quantity: true },
@@ -67,14 +67,16 @@ export async function GET() {
     spendByUser[o.userId] = o._sum.totalCents ?? 0;
     lastOrderByUser[o.userId] = o._max.createdAt ?? null;
   }
-  // Latest order per user (latestOrders is newest-first, so first seen wins).
-  const latestOrderByUser: Record<string, { id: string; quantity: number }> = {};
+  // ALL orders per user — progress is the COMBINED total across every order a
+  // client has placed (e.g. a 50 + a 25 shows as one 75-lead bar), not just the
+  // latest. (Luke places two at once; both must be visible.)
+  const ordersByUser: Record<string, { id: string; quantity: number }[]> = {};
   for (const o of latestOrders) {
-    if (!(o.userId in latestOrderByUser)) latestOrderByUser[o.userId] = { id: o.id, quantity: o.quantity };
+    (ordersByUser[o.userId] ??= []).push({ id: o.id, quantity: o.quantity });
   }
-  // LIVE delivered count for each latest order (non-trashed leads on it) — so the
-  // progress bar reflects reality and never drifts from the stored counter.
-  const liveByOrder = await deliveredCounts(Object.values(latestOrderByUser).map((o) => o.id));
+  // LIVE delivered count per order (non-trashed leads) so the bar reflects
+  // reality and never drifts from the stored counter.
+  const liveByOrder = await deliveredCounts(latestOrders.map((o) => o.id));
   const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
 
   const ids = new Set<string>([...Object.keys(byUser), ...Object.keys(spendByUser)]);
@@ -97,24 +99,23 @@ export async function GET() {
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
-        // Progress on this client's LATEST order only, from a LIVE lead count
-        // (never a sum across orders, never above quantity — can't read "30/25").
-        orderedQty: latestOrderByUser[id]?.quantity ?? 0,
-        fulfilledQty: Math.min(
-          latestOrderByUser[id] ? (liveByOrder[latestOrderByUser[id].id] ?? 0) : 0,
-          latestOrderByUser[id]?.quantity ?? 0,
+        // Progress = COMBINED total across ALL of this client's orders, from a
+        // LIVE lead count. Each order is capped at its own quantity (so one
+        // order's overflow can't inflate the total), then summed.
+        orderedQty: (ordersByUser[id] ?? []).reduce((s, o) => s + o.quantity, 0),
+        fulfilledQty: (ordersByUser[id] ?? []).reduce(
+          (s, o) => s + Math.min(liveByOrder[o.id] ?? 0, o.quantity),
+          0,
         ),
-        orderProgressPct:
-          (latestOrderByUser[id]?.quantity ?? 0) > 0
-            ? Math.min(
-                100,
-                Math.round(
-                  (Math.min(liveByOrder[latestOrderByUser[id]!.id] ?? 0, latestOrderByUser[id]!.quantity) /
-                    latestOrderByUser[id]!.quantity) *
-                    100,
-                ),
-              )
-            : 0,
+        orderProgressPct: (() => {
+          const ordered = (ordersByUser[id] ?? []).reduce((s, o) => s + o.quantity, 0);
+          if (ordered <= 0) return 0;
+          const done = (ordersByUser[id] ?? []).reduce(
+            (s, o) => s + Math.min(liveByOrder[o.id] ?? 0, o.quantity),
+            0,
+          );
+          return Math.min(100, Math.round((done / ordered) * 100));
+        })(),
       };
     })
     // Only real client accounts (have leads, spent, or placed an order).
