@@ -99,21 +99,21 @@ export async function GET() {
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
-        // Progress = COMBINED total across ALL of this client's orders, from a
-        // LIVE lead count. Each order is capped at its own quantity (so one
-        // order's overflow can't inflate the total), then summed.
-        orderedQty: (ordersByUser[id] ?? []).reduce((s, o) => s + o.quantity, 0),
-        fulfilledQty: (ordersByUser[id] ?? []).reduce(
-          (s, o) => s + Math.min(liveByOrder[o.id] ?? 0, o.quantity),
-          0,
-        ),
+        // Progress = combined total across this client's INCOMPLETE orders only
+        // (still being fulfilled), from a LIVE lead count. Fully delivered orders
+        // are excluded, so the bar shows outstanding work — not lifetime history.
+        // Each order is capped at its own quantity so overflow can't inflate it.
+        orderedQty: (ordersByUser[id] ?? [])
+          .filter((o) => (liveByOrder[o.id] ?? 0) < o.quantity)
+          .reduce((s, o) => s + o.quantity, 0),
+        fulfilledQty: (ordersByUser[id] ?? [])
+          .filter((o) => (liveByOrder[o.id] ?? 0) < o.quantity)
+          .reduce((s, o) => s + Math.min(liveByOrder[o.id] ?? 0, o.quantity), 0),
         orderProgressPct: (() => {
-          const ordered = (ordersByUser[id] ?? []).reduce((s, o) => s + o.quantity, 0);
+          const open = (ordersByUser[id] ?? []).filter((o) => (liveByOrder[o.id] ?? 0) < o.quantity);
+          const ordered = open.reduce((s, o) => s + o.quantity, 0);
           if (ordered <= 0) return 0;
-          const done = (ordersByUser[id] ?? []).reduce(
-            (s, o) => s + Math.min(liveByOrder[o.id] ?? 0, o.quantity),
-            0,
-          );
+          const done = open.reduce((s, o) => s + Math.min(liveByOrder[o.id] ?? 0, o.quantity), 0);
           return Math.min(100, Math.round((done / ordered) * 100));
         })(),
       };
