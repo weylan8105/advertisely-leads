@@ -148,7 +148,8 @@ export async function POST(req: NextRequest) {
       select: { quantity: true },
     });
     if (order) {
-      const cap = Math.floor(order.quantity * 0.1);
+      // Round UP so a 25-lead order allows 3 (owner's call), 50 → 5, etc.
+      const cap = Math.ceil(order.quantity * 0.1);
       const used = await prisma.replacementRequest.count({
         where: {
           lead: { orderId: capLead.orderId },
