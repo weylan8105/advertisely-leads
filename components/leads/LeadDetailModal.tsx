@@ -158,6 +158,7 @@ export function LeadDetailModal({
   // Lead replacement request (files to the admin Replacement queue).
   const [rep, setRep] = useState<"idle" | "loading" | "done">("idle");
   const [repErr, setRepErr] = useState("");
+  const [capExceeded, setCapExceeded] = useState(false);
   async function requestReplacement() {
     const reason = window.prompt(
       `What's wrong with ${lead.name}? (e.g., disconnected number, wrong info, never opted in)`,
@@ -173,7 +174,7 @@ export function LeadDetailModal({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) setRep("done");
-      else { setRep("idle"); setRepErr(data.error || "Could not submit the request."); }
+      else { setRep("idle"); setRepErr(data.error || "Could not submit the request."); setCapExceeded(!!data.capExceeded); }
     } catch {
       setRep("idle");
       setRepErr("Could not submit the request.");
@@ -244,7 +245,17 @@ export function LeadDetailModal({
           </div>
         </div>
         {repErr && (
-          <div className="px-6 pt-2 text-xs text-rose-600">{repErr}</div>
+          <div className="px-6 pt-2 text-xs text-rose-600">
+            {repErr}
+            {capExceeded && (
+              <>
+                {" "}
+                <a href="/marketplace" className="font-semibold underline hover:text-rose-700">
+                  Place a new order →
+                </a>
+              </>
+            )}
+          </div>
         )}
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">

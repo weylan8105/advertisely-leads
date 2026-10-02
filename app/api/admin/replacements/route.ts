@@ -134,6 +134,43 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 10% replacement cap per order: a client may request replacements for at most
+  // 10% of an order's leads. Count the requests already made against the same
+  // order (excluding ones denied/closed as duplicates) and block once the cap is
+  // reached, directing the client to buy a new order instead.
+  const capLead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { orderId: true },
+  });
+  if (capLead?.orderId) {
+    const order = await prisma.order.findUnique({
+      where: { id: capLead.orderId },
+      select: { quantity: true },
+    });
+    if (order) {
+      const cap = Math.floor(order.quantity * 0.1);
+      const used = await prisma.replacementRequest.count({
+        where: {
+          lead: { orderId: capLead.orderId },
+          status: { in: ["PENDING", "APPROVED"] },
+        },
+      });
+      if (used >= cap) {
+        return NextResponse.json(
+          {
+            error: `You've reached the replacement limit for this order — up to 10% (${cap} of ${order.quantity} leads) can be replaced. To get more leads, please place a new order.`,
+            capExceeded: true,
+            cap,
+            used,
+            orderQuantity: order.quantity,
+            marketplaceUrl: "/marketplace",
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
   const request = await prisma.replacementRequest.create({
     data: {
       leadId,

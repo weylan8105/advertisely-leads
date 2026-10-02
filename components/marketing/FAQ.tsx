@@ -22,7 +22,7 @@ const faqs = [
   },
   {
     q: "What's your replacement policy?",
-    a: "Bad numbers, disconnected lines, and clear mismatches are eligible for replacement within 72 hours of delivery, subject to a brief quality review. Request one from the lead's page in your dashboard and our team follows up.",
+    a: "Bad numbers, disconnected lines, and clear mismatches are eligible for replacement within 72 hours of delivery, subject to a brief quality review. Replacements are capped at 10% of each order — once you've replaced 10% of an order's leads, that order's replacements are used up and you'll be prompted to place a new order for more leads. Request one from the lead's page in your dashboard and our team follows up.",
   },
   {
     q: "Do you integrate with my CRM?",

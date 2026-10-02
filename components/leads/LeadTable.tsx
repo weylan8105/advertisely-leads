@@ -143,7 +143,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
 
   const selectedIds = Array.from(selected);
 
-  async function submitReplacement(leadId: string, reason: string): Promise<{ ok: boolean; error?: string }> {
+  async function submitReplacement(leadId: string, reason: string): Promise<{ ok: boolean; error?: string; capExceeded?: boolean }> {
     try {
       const res = await fetch("/api/admin/replacements", {
         method: "POST",
@@ -151,7 +151,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
         body: JSON.stringify({ leadId, reason: reason || "No reason provided" }),
       });
       const data = await res.json().catch(() => ({}));
-      return { ok: res.ok && data.success, error: data.error };
+      return { ok: res.ok && data.success, error: data.error, capExceeded: data.capExceeded };
     } catch {
       return { ok: false, error: "Network error" };
     }
@@ -162,7 +162,12 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
     if (reason === null) return;
     const r = await submitReplacement(leadId, reason.trim());
     if (r.ok) addToast("success", `Replacement request submitted for ${name}. Our team will review within 72 hours.`);
-    else addToast("error", r.error || "Could not submit the replacement request.");
+    else if (r.capExceeded) {
+      // Over the 10% cap — point them to a new order instead.
+      if (window.confirm(`${r.error}\n\nGo to the Marketplace to place a new order?`)) {
+        window.location.href = "/marketplace";
+      }
+    } else addToast("error", r.error || "Could not submit the replacement request.");
   }
 
   async function addNoteOne(leadId: string, name: string) {
