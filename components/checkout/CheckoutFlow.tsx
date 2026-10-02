@@ -21,14 +21,14 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCart } from "@/context/CartContext";
 import { findPackage } from "@/data/packages";
+import { AVAILABLE_STATES } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 import type { LeadPackageId } from "@/types";
 
-const ACTIVE_STATES = [
-  { code: "TX" }, { code: "FL" }, { code: "CA" }, { code: "IL" }, { code: "PA" },
-  { code: "OH" }, { code: "CO" }, { code: "MI" }, { code: "WA" },
-];
+// Every state we currently sell leads in (single source of truth: data/states.ts).
+// Keeps the checkout selector in sync with marketplace order availability.
+const ACTIVE_STATES = AVAILABLE_STATES.map((code) => ({ code }));
 
 const steps = [
   { id: 1, label: "Cart & filters" },
