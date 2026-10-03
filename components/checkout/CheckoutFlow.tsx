@@ -326,7 +326,7 @@ export function CheckoutFlow({
               <span className="text-xs">TCPA capture on every lead</span>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              TrustedForm / Jornaya certificate on every record. Replacement eligibility subject to quality review, and capped at 10% of each order.
+              TrustedForm / Jornaya certificate on every record. Eligible replacements (disconnected, duplicate, over-age, out-of-state) are verified on review and capped at 20% of each order.
             </p>
           </Card>
         </div>

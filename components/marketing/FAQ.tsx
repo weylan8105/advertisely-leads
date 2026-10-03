@@ -22,7 +22,7 @@ const faqs = [
   },
   {
     q: "What's your replacement policy?",
-    a: "Bad numbers, disconnected lines, and clear mismatches are eligible for replacement within 72 hours of delivery, subject to a brief quality review. Replacements are capped at 10% of each order — once you've replaced 10% of an order's leads, that order's replacements are used up and you'll be prompted to place a new order for more leads. Request one from the lead's page in your dashboard and our team follows up.",
+    a: "Eligible replacements are disconnected numbers, duplicates received within 60 days, prospects over the maximum issue age, and out-of-state (off-territory) leads — flagged within 72 hours of delivery and verified on review. No-answers, voicemails, and wrong info aren't eligible, since those are the nature of raw consumer inquiries. Replacements are capped at 20% of each order; once you reach that limit you'll be prompted to place a new order for more leads. Request one from the lead's page in your dashboard and our team follows up.",
   },
   {
     q: "Do you integrate with my CRM?",

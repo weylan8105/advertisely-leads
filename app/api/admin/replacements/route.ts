@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillReplacement, autoFulfillPendingReplacements } from "@/lib/replacement";
 import { IUL_POOL_IDS } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
+import { isEligibleReasonCode, reasonLabel, ELIGIBLE_REPLACEMENT_REASONS } from "@/lib/replacementReasons";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { leadId, reason } = body as { leadId?: string; reason?: string };
+  const { leadId, reason, reasonCode } = body as { leadId?: string; reason?: string; reasonCode?: string };
 
   if (!leadId) {
     return NextResponse.json({ error: "leadId is required" }, { status: 400 });
@@ -134,22 +135,51 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 10% replacement cap per order: a client may request replacements for at most
-  // 10% of an order's leads. Count the requests already made against the same
-  // order (excluding ones denied/closed as duplicates) and block once the cap is
-  // reached, directing the client to buy a new order instead.
+  // Replacements are issued only for specific, verifiable reasons (parity with
+  // our published policy). Reject anything else up front.
+  if (!isEligibleReasonCode(reasonCode)) {
+    return NextResponse.json(
+      {
+        error:
+          "That isn't an eligible replacement reason. We replace disconnected numbers, duplicates (within 60 days), prospects over the age limit, and out-of-state leads. No-answers, voicemails, and wrong info aren't eligible.",
+        ineligibleReason: true,
+        eligibleReasons: ELIGIBLE_REPLACEMENT_REASONS.map((r) => ({ code: r.code, label: r.label })),
+      },
+      { status: 400 },
+    );
+  }
+
   const capLead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { orderId: true },
+    select: { orderId: true, state: true },
   });
+
   if (capLead?.orderId) {
     const order = await prisma.order.findUnique({
       where: { id: capLead.orderId },
-      select: { quantity: true },
+      select: { quantity: true, filterStates: true },
     });
     if (order) {
-      // Round UP so a 25-lead order allows 3 (owner's call), 50 → 5, etc.
-      const cap = Math.ceil(order.quantity * 0.1);
+      // Out-of-state is auto-verifiable: we never deliver off-order leads, so a
+      // lead whose state IS on the order can't qualify as out-of-territory.
+      if (
+        reasonCode === "out_of_state" &&
+        order.filterStates.length > 0 &&
+        capLead.state &&
+        order.filterStates.includes(capLead.state)
+      ) {
+        return NextResponse.json(
+          {
+            error: `This lead is in ${capLead.state}, which is one of the states on your order — so it doesn't qualify as out-of-territory.`,
+            ineligibleReason: true,
+          },
+          { status: 400 },
+        );
+      }
+
+      // 20% replacement cap per order (rounded up), counting prior non-denied
+      // requests. Block at the cap and direct the client to a new order.
+      const cap = Math.ceil(order.quantity * 0.2);
       const used = await prisma.replacementRequest.count({
         where: {
           lead: { orderId: capLead.orderId },
@@ -159,7 +189,7 @@ export async function POST(req: NextRequest) {
       if (used >= cap) {
         return NextResponse.json(
           {
-            error: `You've reached the replacement limit for this order — up to 10% (${cap} of ${order.quantity} leads) can be replaced. To get more leads, please place a new order.`,
+            error: `You've reached the replacement limit for this order — up to 20% (${cap} of ${order.quantity} leads) can be replaced. To get more leads, please place a new order.`,
             capExceeded: true,
             cap,
             used,
@@ -175,7 +205,8 @@ export async function POST(req: NextRequest) {
   const request = await prisma.replacementRequest.create({
     data: {
       leadId,
-      reason: reason ?? "No reason provided",
+      // Store the eligible category plus any free-text detail the client added.
+      reason: `${reasonLabel(reasonCode)}${reason && reason !== "No detail provided" ? ` — ${reason}` : ""}`,
       requestedById: user.id,
       status: "PENDING",
     },

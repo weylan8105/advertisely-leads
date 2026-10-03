@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
 import {
   ChevronRight,
   Users,
@@ -143,31 +144,38 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
 
   const selectedIds = Array.from(selected);
 
-  async function submitReplacement(leadId: string, reason: string): Promise<{ ok: boolean; error?: string; capExceeded?: boolean }> {
+  // Replacement request via the shared reason-picker dialog.
+  const [repLead, setRepLead] = useState<{ id: string; name: string } | null>(null);
+  const [repBusy, setRepBusy] = useState(false);
+
+  async function doReplacementSubmit(reasonCode: string, detail: string) {
+    if (!repLead) return;
+    const name = repLead.name;
+    setRepBusy(true);
     try {
       const res = await fetch("/api/admin/replacements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId, reason: reason || "No reason provided" }),
+        body: JSON.stringify({ leadId: repLead.id, reasonCode, reason: detail || "No detail provided" }),
       });
       const data = await res.json().catch(() => ({}));
-      return { ok: res.ok && data.success, error: data.error, capExceeded: data.capExceeded };
-    } catch {
-      return { ok: false, error: "Network error" };
-    }
-  }
-
-  async function requestReplacementOne(leadId: string, name: string) {
-    const reason = window.prompt(`What's wrong with ${name}? (e.g., disconnected number, wrong info, never opted in)`);
-    if (reason === null) return;
-    const r = await submitReplacement(leadId, reason.trim());
-    if (r.ok) addToast("success", `Replacement request submitted for ${name}. Our team will review within 72 hours.`);
-    else if (r.capExceeded) {
-      // Over the 10% cap — point them to a new order instead.
-      if (window.confirm(`${r.error}\n\nGo to the Marketplace to place a new order?`)) {
-        window.location.href = "/marketplace";
+      if (res.ok && data.success) {
+        addToast("success", `Replacement request submitted for ${name}. Our team will review within 72 hours.`);
+        setRepLead(null);
+      } else if (data.capExceeded) {
+        // Over the 20% cap — point them to a new order instead.
+        setRepLead(null);
+        if (window.confirm(`${data.error}\n\nGo to the Marketplace to place a new order?`)) {
+          window.location.href = "/marketplace";
+        }
+      } else {
+        addToast("error", data.error || "Could not submit the replacement request.");
       }
-    } else addToast("error", r.error || "Could not submit the replacement request.");
+    } catch {
+      addToast("error", "Could not submit the replacement request.");
+    } finally {
+      setRepBusy(false);
+    }
   }
 
   async function addNoteOne(leadId: string, name: string) {
@@ -234,6 +242,13 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
 
   return (
     <div className="space-y-4">
+      <ReplacementReasonDialog
+        open={!!repLead}
+        leadName={repLead?.name ?? ""}
+        busy={repBusy}
+        onClose={() => setRepLead(null)}
+        onSubmit={doReplacementSubmit}
+      />
       {/* Toast notifications */}
       {toasts.length > 0 && (
         <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
@@ -494,7 +509,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                         >
                           Push to CRM (GHL)
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => requestReplacementOne(lead.id, lead.name)}>
+                        <DropdownMenuItem onClick={() => setRepLead({ id: lead.id, name: lead.name })}>
                           Request replacement
                         </DropdownMenuItem>
                         {canAssign && members.length > 0 && (

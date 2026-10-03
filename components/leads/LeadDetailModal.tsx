@@ -6,6 +6,7 @@ import type { Lead, LeadNote } from "@/types";
 import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
+import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
 
 function prettyKey(k: string) {
   return k
@@ -159,25 +160,24 @@ export function LeadDetailModal({
   const [rep, setRep] = useState<"idle" | "loading" | "done">("idle");
   const [repErr, setRepErr] = useState("");
   const [capExceeded, setCapExceeded] = useState(false);
-  async function requestReplacement() {
-    const reason = window.prompt(
-      `What's wrong with ${lead.name}? (e.g., disconnected number, wrong info, never opted in)`,
-    );
-    if (reason === null) return; // cancelled
+  const [repOpen, setRepOpen] = useState(false);
+  async function submitReplacement(reasonCode: string, detail: string) {
     setRep("loading");
     setRepErr("");
+    setCapExceeded(false);
     try {
       const res = await fetch("/api/admin/replacements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId: lead.id, reason: reason.trim() || "No reason provided" }),
+        body: JSON.stringify({ leadId: lead.id, reasonCode, reason: detail || "No detail provided" }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) setRep("done");
-      else { setRep("idle"); setRepErr(data.error || "Could not submit the request."); setCapExceeded(!!data.capExceeded); }
+      if (res.ok && data.success) { setRep("done"); setRepOpen(false); }
+      else { setRep("idle"); setRepErr(data.error || "Could not submit the request."); setCapExceeded(!!data.capExceeded); setRepOpen(false); }
     } catch {
       setRep("idle");
       setRepErr("Could not submit the request.");
+      setRepOpen(false);
     }
   }
 
@@ -219,7 +219,7 @@ export function LeadDetailModal({
           <div className="flex items-center gap-2 shrink-0">
             {context !== "admin" && (
               <button
-                onClick={requestReplacement}
+                onClick={() => { setRepErr(""); setRepOpen(true); }}
                 disabled={rep === "loading" || rep === "done"}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
@@ -381,6 +381,13 @@ export function LeadDetailModal({
           )}
         </div>
       </div>
+      <ReplacementReasonDialog
+        open={repOpen}
+        leadName={lead.name}
+        busy={rep === "loading"}
+        onClose={() => setRepOpen(false)}
+        onSubmit={submitReplacement}
+      />
     </div>
   );
 }
