@@ -5,6 +5,7 @@ import { PlusCircle, Rows3, KanbanSquare, Loader2, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
+import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -138,6 +139,8 @@ export default function LeadsPage() {
           </>
         }
       />
+
+      <PipelineIncentiveBanner />
 
       {viewing === "me" && myOrders.length > 0 && (
         <Card className="p-4 mb-4">
