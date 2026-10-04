@@ -55,6 +55,7 @@ type ReplacementStatus = "PENDING" | "APPROVED" | "DENIED";
 interface Replacement {
   id: string;
   lead: string;
+  phone: string;
   state: string;
   reason: string;
   agent: string;
@@ -130,6 +131,7 @@ function AdminPageInner() {
             d.replacements.map((r: any) => ({
               id: r.id,
               lead: r.lead?.name ?? "—",
+              phone: r.lead?.phone ?? "",
               state: r.lead?.state ?? "",
               reason: r.reason,
               agent: r.requestedBy?.name ?? r.requestedBy?.email ?? "—",
@@ -571,6 +573,15 @@ function AdminPageInner() {
                               <span className="ml-2 inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-slate-600">
                                 {r.state}
                               </span>
+                            )}
+                            {r.phone && (
+                              <a
+                                href={`tel:${r.phone.replace(/[^\d+]/g, "")}`}
+                                className="mt-0.5 block text-xs font-normal text-brand-red hover:underline"
+                                title="Call to verify the number"
+                              >
+                                {r.phone}
+                              </a>
                             )}
                           </TableCell>
                           <TableCell className="text-sm">{r.reason}</TableCell>
