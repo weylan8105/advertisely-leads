@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { PlusCircle, Rows3, KanbanSquare, Loader2, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBanner";
+import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,6 +18,8 @@ import type { Lead } from "@/types";
 interface TeamMember { userId: string; name: string | null; email: string; isSelf?: boolean }
 
 export default function LeadsPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as any)?.role === "ADMIN";
   const [view, setView] = useState<"list" | "kanban">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,6 +144,8 @@ export default function LeadsPage() {
       />
 
       <PipelineIncentiveBanner />
+
+      {isAdmin && <DeliveredLeadsTracker />}
 
       {viewing === "me" && myOrders.length > 0 && (
         <Card className="p-4 mb-4">
