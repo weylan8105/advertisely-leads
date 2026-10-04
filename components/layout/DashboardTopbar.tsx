@@ -59,10 +59,10 @@ export function DashboardTopbar() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Account</DropdownMenuLabel>
               <DropdownMenuItem asChild>
-                <Link href="/settings">Profile & agency</Link>
+                <Link href="/settings">Settings</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/settings">Integrations</Link>
+                <Link href="/settings?tab=integrations">Integrations</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/orders">Billing & orders</Link>

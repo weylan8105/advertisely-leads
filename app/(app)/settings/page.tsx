@@ -19,7 +19,15 @@ import { PasswordSettings } from "@/components/settings/PasswordSettings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Webhook, Eye, Copy } from "lucide-react";
 
-export default function SettingsPage() {
+const SETTINGS_TABS = ["profile", "security", "integrations", "export", "notifications"];
+
+export default function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: { tab?: string };
+}) {
+  const requested = searchParams?.tab;
+  const initialTab = requested && SETTINGS_TABS.includes(requested) ? requested : "profile";
   return (
     <div>
       <PageHeader
@@ -28,7 +36,7 @@ export default function SettingsPage() {
         description="Manage your profile, agency, CRM destinations, exports, and notifications."
       />
 
-      <Tabs defaultValue="profile">
+      <Tabs defaultValue={initialTab} key={initialTab}>
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
