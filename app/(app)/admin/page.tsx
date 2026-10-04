@@ -34,6 +34,7 @@ import {
   XCircle,
   Trash2,
   Clock,
+  Copy,
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
@@ -575,13 +576,29 @@ function AdminPageInner() {
                               </span>
                             )}
                             {r.phone && (
-                              <a
-                                href={`tel:${r.phone.replace(/[^\d+]/g, "")}`}
-                                className="mt-0.5 block text-xs font-normal text-brand-red hover:underline"
-                                title="Call to verify the number"
-                              >
-                                {r.phone}
-                              </a>
+                              <div className="mt-0.5 flex items-center gap-1.5">
+                                <a
+                                  href={`tel:${r.phone.replace(/[^\d+]/g, "")}`}
+                                  className="text-xs font-normal text-brand-red hover:underline"
+                                  title="Call to verify the number"
+                                >
+                                  {r.phone}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard
+                                      .writeText(r.phone)
+                                      .then(() => addToast("success", "Number copied"))
+                                      .catch(() => addToast("error", "Couldn't copy number"));
+                                  }}
+                                  title="Copy number"
+                                  aria-label="Copy number"
+                                  className="text-slate-400 transition-colors hover:text-slate-600"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
                             )}
                           </TableCell>
                           <TableCell className="text-sm">{r.reason}</TableCell>
