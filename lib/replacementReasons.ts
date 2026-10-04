@@ -40,3 +40,17 @@ export function reasonLabel(code: string): string {
 // Short human sentence for the "not eligible" guidance shown to clients.
 export const REPLACEMENT_NOT_ELIGIBLE_NOTE =
   "Not eligible: no-answer, voicemail, wrong number/info, or opt-out claims. Replacements are capped at 20% of each order.";
+
+// Explicitly NOT eligible — shown in the policy block so clients know before they
+// submit what will be denied.
+export const NOT_ELIGIBLE_REPLACEMENT_REASONS = [
+  "No-answers / voicemails / unresponsive numbers",
+  "Wrong number or wrong information",
+  "Not interested / opted out / claims never submitted",
+  "Duplicates received more than 60 days apart",
+  "Free / promotional leads",
+] as const;
+
+// The window and cap, shown alongside the policy.
+export const REPLACEMENT_WINDOW_NOTE =
+  "Flag within 72 hours of your order filling. All requests are verified on review. Replacements are capped at 20% of each order.";
