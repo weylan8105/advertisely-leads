@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest) {
       title: "New lead purchase",
       body: `${o.user?.agency || o.user?.name || o.user?.email || "A client"} ordered ${o.quantity}× ${pkgName(o.packageId)} (${money(o.totalCents)})`,
       at: o.createdAt,
-      href: "/admin",
+      href: "/admin?tab=accounts",
     })),
     ...replacements.map((r) => ({
       id: `rep_${r.id}`,
@@ -63,7 +63,7 @@ export async function GET(_req: NextRequest) {
       title: "Replacement request",
       body: `${r.requestedBy?.name || r.requestedBy?.email || "An agent"} requested a replacement for ${r.lead?.name ?? "a lead"}`,
       at: r.createdAt,
-      href: "/admin",
+      href: "/admin?tab=replacements",
     })),
   ]
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())

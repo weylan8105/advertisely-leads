@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -70,7 +71,22 @@ interface Toast {
 }
 let toastCounter = 0;
 
+// Tabs that a notification (or any deep link) may open via ?tab=<value>.
+const VALID_TABS = new Set([
+  "all-leads", "queue", "meta", "auto", "sources", "funnel",
+  "replacements", "accounts", "downline-orders", "trash", "stripe-sync",
+]);
+
+// Wrapped in Suspense because useSearchParams requires it during prerender.
 export default function AdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminPageInner />
+    </Suspense>
+  );
+}
+
+function AdminPageInner() {
   const [replacements, setReplacements] = useState<Replacement[]>([]);
   const [backedUpStates, setBackedUpStates] = useState<string[]>([]);
   const [approveAllLoading, setApproveAllLoading] = useState(false);
@@ -80,7 +96,17 @@ export default function AdminPage() {
   const [syncOverrideUserId, setSyncOverrideUserId] = useState("");
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
-  const [tab, setTab] = useState("all-leads");
+  // Open the tab named in ?tab= (e.g. from a notification deep link), else default.
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get("tab");
+    return t && VALID_TABS.has(t) ? t : "all-leads";
+  });
+  // React to query changes when already on /admin (Link nav doesn't remount).
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t && VALID_TABS.has(t)) setTab(t);
+  }, [searchParams]);
   // Active CRM-status filter for the All-leads tab, driven by the stat cards.
   const [leadFilter, setLeadFilter] = useState("all");
 
