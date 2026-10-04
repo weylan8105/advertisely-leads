@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
+import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { PnlSummary } from "@/components/dashboard/PnlSummary";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
 import { LeadTable } from "@/components/leads/LeadTable";
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const { data: session } = useSession();
   const userName = (session?.user?.name ?? "there").split(" ")[0];
+  const isAdmin = (session?.user as any)?.role === "ADMIN";
 
   useEffect(() => {
     fetch("/api/orders")
@@ -161,6 +163,8 @@ export default function DashboardPage() {
           </>
         }
       />
+
+      {isAdmin && <DeliveredLeadsTracker />}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard
