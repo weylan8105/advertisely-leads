@@ -9,17 +9,9 @@ import {
   YAxis,
 } from "recharts";
 
-const data = [
-  { day: "Mon", received: 12, contacted: 8, set: 2 },
-  { day: "Tue", received: 18, contacted: 14, set: 4 },
-  { day: "Wed", received: 22, contacted: 17, set: 5 },
-  { day: "Thu", received: 16, contacted: 13, set: 3 },
-  { day: "Fri", received: 24, contacted: 19, set: 6 },
-  { day: "Sat", received: 9, contacted: 6, set: 1 },
-  { day: "Sun", received: 14, contacted: 10, set: 3 },
-];
+type ChartPoint = { day: string; received: number; contacted: number; set: number };
 
-export function LeadPerformanceChart() {
+export function LeadPerformanceChart({ data = [] }: { data?: ChartPoint[] }) {
   return (
     <div className="w-full h-[280px]">
       <ResponsiveContainer width="100%" height="100%">

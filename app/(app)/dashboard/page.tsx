@@ -32,6 +32,16 @@ import { TaskList } from "@/components/leads/TaskList";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import type { Lead, LeadTask } from "@/types";
+
+interface DashData {
+  stats: { total: number; new: number; contacted: number; presentations: number; closed: number; delivered7d: number };
+  distribution: { label: string; count: number }[];
+  chart: { day: string; received: number; contacted: number; set: number }[];
+  recentLeads: Lead[];
+  tasks: LeadTask[];
+}
 
 interface Toast {
   id: number;
@@ -46,15 +56,27 @@ export default function DashboardPage() {
   const [replacementLoading, setReplacementLoading] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const { data: session } = useSession();
+  const router = useRouter();
   const userName = (session?.user?.name ?? "there").split(" ")[0];
   const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const [dash, setDash] = useState<DashData | null>(null);
 
   useEffect(() => {
     fetch("/api/orders")
       .then((r) => r.json())
       .then((data) => { if (data.orders) setRecentOrders(data.orders.slice(0, 3)); })
       .catch(() => {});
+    fetch("/api/dashboard")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.stats) setDash(d); })
+      .catch(() => {});
   }, []);
+
+  // Send work-your-leads quick actions to the CRM (or nudge to order if empty).
+  const workLeads = () => {
+    if ((dash?.stats.total ?? 0) > 0) router.push("/leads");
+    else addToast("info", "No leads yet. Order leads from the Marketplace to get started.");
+  };
 
   function addToast(type: "success" | "error" | "info", message: string) {
     const id = ++toastCounter;
@@ -168,42 +190,37 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard
-          label="Total purchased leads"
-          value={0}
-          delta={0}
-          hint="order leads to get started"
+          label="Total leads"
+          value={dash?.stats.total ?? 0}
+          hint={dash ? `${dash.stats.delivered7d} delivered this week` : "loading…"}
           accent="teal"
           icon={<Users className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="New leads"
-          value={0}
-          delta={0}
-          hint="last 7 days"
+          value={dash?.stats.new ?? 0}
+          hint="awaiting first contact"
           accent="blue"
           icon={<UserPlus className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="Contacted"
-          value={0}
-          delta={0}
-          hint="last 7 days"
+          value={dash?.stats.contacted ?? 0}
+          hint="in conversation"
           accent="violet"
           icon={<PhoneCall className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="Presentations"
-          value={0}
-          delta={0}
-          hint="last 7 days"
+          value={dash?.stats.presentations ?? 0}
+          hint="appointments set"
           accent="amber"
           icon={<CalendarCheck className="h-4 w-4" />}
         />
         <DashboardStatCard
           label="Closed"
-          value={0}
-          delta={0}
-          hint="connect AP tracking"
+          value={dash?.stats.closed ?? 0}
+          hint="policies won"
           accent="emerald"
           icon={<Trophy className="h-4 w-4" />}
         />
@@ -225,7 +242,7 @@ export default function DashboardPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            <LeadPerformanceChart />
+            <LeadPerformanceChart data={dash?.chart ?? []} />
           </CardContent>
         </Card>
 
@@ -233,7 +250,9 @@ export default function DashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle>Today&apos;s tasks</CardTitle>
-              <CardDescription>0 due today across your pipeline</CardDescription>
+              <CardDescription>
+                {dash ? `${dash.tasks.length} due today across your pipeline` : "loading…"}
+              </CardDescription>
             </div>
             <Link href="/leads">
               <Button variant="ghost" size="sm">
@@ -242,7 +261,7 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="flex-1">
-            <TaskList tasks={[]} emptyHint="No tasks yet. Order leads to get started." />
+            <TaskList tasks={dash?.tasks ?? []} emptyHint="Nothing due today. You're all caught up." />
           </CardContent>
         </Card>
       </div>
@@ -258,19 +277,19 @@ export default function DashboardPage() {
               icon={Phone}
               label="Start power-dial session"
               tone="emerald"
-              onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace to start dialing.")}
+              onClick={workLeads}
             />
             <QuickActionButton
               icon={MessageSquare}
               label="Send bulk SMS template"
               tone="sky"
-              onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace first.")}
+              onClick={workLeads}
             />
             <QuickActionButton
               icon={Mail}
               label="Send bulk email template"
               tone="violet"
-              onClick={() => addToast("info", "No leads yet. Order leads from the Marketplace first.")}
+              onClick={workLeads}
             />
             <QuickActionButton
               icon={sheetsLoading ? Loader2 : FileSpreadsheet}
@@ -301,26 +320,43 @@ export default function DashboardPage() {
             <CardDescription>Status distribution</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {[
-              ["New", 0, "bg-brand-red/20"],
-              ["Contacted", 0, "bg-sky-500/20"],
-              ["Presentation Set", 0, "bg-violet-500/20"],
-              ["Closed", 0, "bg-emerald-500/20"],
-            ].map(([label, count, color]) => (
-              <div key={label as string}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span>{label}</span>
-                  <span className="text-muted-foreground">{count} · 0%</span>
-                </div>
-                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div className={`h-full ${color as string}`} style={{ width: "0%" }} />
-                </div>
-              </div>
-            ))}
+            {(() => {
+              const colors: Record<string, string> = {
+                New: "bg-brand-red/40",
+                Contacted: "bg-sky-500/40",
+                "Presentation Set": "bg-violet-500/40",
+                Closed: "bg-emerald-500/40",
+              };
+              const dist = dash?.distribution ?? [
+                { label: "New", count: 0 },
+                { label: "Contacted", count: 0 },
+                { label: "Presentation Set", count: 0 },
+                { label: "Closed", count: 0 },
+              ];
+              const denom = dist.reduce((a, b) => a + b.count, 0) || 1;
+              return dist.map((d) => {
+                const pct = Math.round((d.count / denom) * 100);
+                return (
+                  <div key={d.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span>{d.label}</span>
+                      <span className="text-muted-foreground">{d.count} · {pct}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className={`h-full ${colors[d.label] ?? "bg-slate-300"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
             <div className="pt-3 border-t border-slate-100">
-              <Link href="/marketplace">
+              <Link href={(dash?.stats.total ?? 0) > 0 ? "/leads" : "/marketplace"}>
                 <Button size="sm" variant="outline" className="w-full">
-                  <ShoppingCart className="h-3.5 w-3.5" /> Order leads to populate pipeline
+                  {(dash?.stats.total ?? 0) > 0 ? (
+                    <><ArrowRight className="h-3.5 w-3.5" /> Open your pipeline</>
+                  ) : (
+                    <><ShoppingCart className="h-3.5 w-3.5" /> Order leads to populate pipeline</>
+                  )}
                 </Button>
               </Link>
             </div>
@@ -392,7 +428,13 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
-        <LeadTable leads={[]} showBulk={false} compact />
+        {dash && dash.recentLeads.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-muted-foreground">
+            No leads yet. <Link href="/marketplace" className="text-brand-red hover:underline">Order leads</Link> to populate your CRM.
+          </div>
+        ) : (
+          <LeadTable leads={dash?.recentLeads ?? []} showBulk={false} compact />
+        )}
       </div>
     </div>
   );
