@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/admin/cpl[?refresh=1]
  * Current Facebook cost-per-lead for the Enhanced Wealth ad account + the fresh
- * price floor it implies (2x CPL, min $45). Read-only; does not change prices.
+ * price floor it implies (2x CPL, min $55). Read-only; does not change prices.
  * Admin only.
  */
 export async function GET(req: NextRequest) {
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     multiplier: CPL_PRICE_MULTIPLIER,
     hardMinCents: HARD_MIN_FRESH_CENTS,
     baseFreshCents,
-    floorCents, // max(2x CPL, $45)
+    floorCents, // max(2x CPL, $55)
     effectiveFreshCents, // what the floor would make the fresh price (max of base + floor)
     floorAboveBase: effectiveFreshCents > baseFreshCents,
   });

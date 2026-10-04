@@ -92,7 +92,7 @@ export function CplPanel() {
             Cost per lead — Enhanced Wealth
           </CardTitle>
           <CardDescription>
-            Facebook CPL → the 2× price floor for fresh Advertisely leads (min {data ? money(data.hardMinCents) : "$45"}).
+            Facebook CPL → the 2× price floor for fresh Advertisely leads (min {data ? money(data.hardMinCents) : "$55"}).
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading}>
