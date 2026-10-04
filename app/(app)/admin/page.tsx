@@ -357,7 +357,9 @@ function AdminPageInner() {
 
       <div className="mt-8">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
+          {/* Scroll the long tab bar horizontally on mobile instead of overflowing. */}
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
+          <TabsList className="w-max">
             <TabsTrigger value="all-leads">All leads</TabsTrigger>
             <TabsTrigger value="queue">Manual assignment</TabsTrigger>
             <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
@@ -377,6 +379,7 @@ function AdminPageInner() {
             <TabsTrigger value="trash">Trash</TabsTrigger>
             <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
           </TabsList>
+          </div>
 
           <TabsContent value="all-leads">
             <Card>
