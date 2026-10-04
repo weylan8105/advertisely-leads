@@ -15,7 +15,7 @@ const cols = [
     title: "Agents",
     links: [
       { href: "/dashboard", label: "Dashboard" },
-      { href: "/leads", label: "Leads CRM" },
+      { href: "/leads", label: "Lead CRM / Pipeline" },
       { href: "/orders", label: "Orders" },
       { href: "/settings", label: "Integrations" },
     ],

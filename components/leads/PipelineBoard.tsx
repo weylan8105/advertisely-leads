@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check } from "lucide-react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users } from "lucide-react";
 import { PIPELINE_STAGES, STAGE_IDS, DEFAULT_STAGE } from "@/data/pipeline";
 import { localTimeForState } from "@/data/states";
 import { cn } from "@/lib/utils";
@@ -114,6 +114,15 @@ export function PipelineBoard({
 
   return (
     <>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-semibold text-foreground">
+          <Users className="h-4 w-4 text-brand-red" />
+          {leads.length}
+          <span className="font-normal text-muted-foreground">
+            {leads.length === 1 ? "lead" : "leads"} in pipeline
+          </span>
+        </span>
+      </div>
       <div className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
           {PIPELINE_STAGES.map((stage) => {

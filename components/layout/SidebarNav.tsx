@@ -31,7 +31,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
     title: "Workspace",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/leads", label: "Leads CRM", icon: Users },
+      { href: "/leads", label: "Lead CRM / Pipeline", icon: Users },
       { href: "/team", label: "Team", icon: UsersRound },
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },

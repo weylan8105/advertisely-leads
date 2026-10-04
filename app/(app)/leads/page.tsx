@@ -85,8 +85,7 @@ export default function LeadsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="CRM"
-        title="Leads"
+        title="Lead CRM / Pipeline"
         description="Manage every IUL lead you've purchased — statuses, tasks, notes, dispositions, and consent records all in one place."
         actions={
           <>
