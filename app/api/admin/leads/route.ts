@@ -44,6 +44,8 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status");
   const dateFrom = searchParams.get("dateFrom"); // YYYY-MM-DD (lead generated on/after)
   const dateTo = searchParams.get("dateTo"); // YYYY-MM-DD (lead generated on/before)
+  const deliveredFrom = searchParams.get("deliveredFrom"); // YYYY-MM-DD (lead assigned/delivered on/after)
+  const deliveredTo = searchParams.get("deliveredTo"); // YYYY-MM-DD (lead assigned/delivered on/before)
   const ageMin = searchParams.get("ageMin"); // prospect age
   const ageMax = searchParams.get("ageMax");
   const incomeMin = searchParams.get("incomeMin");
@@ -57,8 +59,9 @@ export async function GET(req: NextRequest) {
   const SORT_FIELD: Record<string, string> = {
     name: "name", state: "state", occupation: "occupation", age: "age",
     campaign: "campaignName", source: "source", assigned: "assignedUserId", receivedAt: "receivedAt",
+    delivered: "assignedAt",
   };
-  const NULLABLE = new Set(["occupation", "age", "campaign", "assigned"]);
+  const NULLABLE = new Set(["occupation", "age", "campaign", "assigned", "delivered"]);
   const sortField = SORT_FIELD[sortByRaw] ?? "receivedAt";
   const orderBy: any = NULLABLE.has(sortByRaw)
     ? { [sortField]: { sort: sortDir, nulls: "last" } }
@@ -80,6 +83,13 @@ export async function GET(req: NextRequest) {
   if (dateFrom) { const d = new Date(dateFrom); if (!isNaN(d.getTime())) receivedAt.gte = d; }
   if (dateTo) { const d = new Date(dateTo); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); receivedAt.lte = d; } }
   if (receivedAt.gte || receivedAt.lte) where.receivedAt = receivedAt;
+
+  // Date delivered (assignedAt) range — when the lead was assigned to an account.
+  // Inclusive of the whole end day. (A delivered filter implies the lead is assigned.)
+  const assignedAt: { gte?: Date; lte?: Date } = {};
+  if (deliveredFrom) { const d = new Date(deliveredFrom); if (!isNaN(d.getTime())) assignedAt.gte = d; }
+  if (deliveredTo) { const d = new Date(deliveredTo); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); assignedAt.lte = d; } }
+  if (assignedAt.gte || assignedAt.lte) where.assignedAt = assignedAt;
 
   // Prospect age range + income floor.
   const ageF: { gte?: number; lte?: number } = {};
@@ -131,6 +141,7 @@ export async function GET(req: NextRequest) {
     originLabel: leadOriginLabel(l.source, l.rawFormData),
     campaignName: l.campaignName,
     receivedAt: l.receivedAt,
+    assignedAt: l.assignedAt,
     orderId: l.orderId,
     assignedTo: l.assignedUser ? { name: l.assignedUser.name, email: l.assignedUser.email } : null,
   }));

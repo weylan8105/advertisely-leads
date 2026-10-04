@@ -22,13 +22,15 @@ interface AdminLead {
   id: string; name: string; phone: string; email: string; state: string;
   age: number | null; ageRange?: string | null; occupation: string | null; income: number | null; packageName: string;
   status: string; source: string; originLabel: string; campaignName: string | null; receivedAt: string;
+  assignedAt: string | null;
   assignedTo: { name: string | null; email: string } | null;
 }
 interface Counts { total: number; assigned: number; unassigned: number; }
 
 const DEFAULTS = {
   pkg: "all", source: "all", campaign: "all", occupation: "all",
-  dateFrom: "", dateTo: "", ageMin: "", ageMax: "", incomeMin: "", search: "",
+  dateFrom: "", dateTo: "", deliveredFrom: "", deliveredTo: "",
+  ageMin: "", ageMax: "", incomeMin: "", search: "",
 };
 
 export function AdminAllLeads({
@@ -81,6 +83,8 @@ export function AdminAllLeads({
     if (f.occupation !== "all") qs.set("occupation", f.occupation);
     if (f.dateFrom) qs.set("dateFrom", f.dateFrom);
     if (f.dateTo) qs.set("dateTo", f.dateTo);
+    if (f.deliveredFrom) qs.set("deliveredFrom", f.deliveredFrom);
+    if (f.deliveredTo) qs.set("deliveredTo", f.deliveredTo);
     if (f.ageMin) qs.set("ageMin", f.ageMin);
     if (f.ageMax) qs.set("ageMax", f.ageMax);
     if (f.incomeMin) qs.set("incomeMin", f.incomeMin);
@@ -283,7 +287,7 @@ export function AdminAllLeads({
         )}
       </div>
 
-      {/* Filters — row 3: date generated + age + income ranges */}
+      {/* Filters — row 3: date generated + date delivered + age + income ranges */}
       <div className="flex flex-wrap items-end gap-3 mb-3">
         <div>
           <Label className="text-[11px] text-muted-foreground">Generated from</Label>
@@ -292,6 +296,14 @@ export function AdminAllLeads({
         <div>
           <Label className="text-[11px] text-muted-foreground">Generated to</Label>
           <Input type="date" className="h-9 w-[150px]" value={f.dateTo} onChange={(e) => set("dateTo", e.target.value)} />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground">Delivered from</Label>
+          <Input type="date" className="h-9 w-[150px]" value={f.deliveredFrom} onChange={(e) => set("deliveredFrom", e.target.value)} />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground">Delivered to</Label>
+          <Input type="date" className="h-9 w-[150px]" value={f.deliveredTo} onChange={(e) => set("deliveredTo", e.target.value)} />
         </div>
         <div>
           <Label className="text-[11px] text-muted-foreground">Age min</Label>
@@ -324,16 +336,17 @@ export function AdminAllLeads({
               {sortHead("Source", "source", "hidden xl:table-cell")}
               {sortHead("CRM", "assigned")}
               {sortHead("Generated", "receivedAt", "hidden md:table-cell")}
+              {sortHead("Delivered", "delivered", "hidden md:table-cell")}
               <TableHead className="text-right pr-3">Delete</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10">
+              <TableRow><TableCell colSpan={10} className="text-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin inline text-muted-foreground" />
               </TableCell></TableRow>
             ) : leads.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10 text-sm text-muted-foreground">
+              <TableRow><TableCell colSpan={10} className="text-center py-10 text-sm text-muted-foreground">
                 <Database className="h-5 w-5 mx-auto mb-2 opacity-40" />
                 No leads match these filters.
               </TableCell></TableRow>
@@ -382,6 +395,9 @@ export function AdminAllLeads({
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                     {formatDate(new Date(l.receivedAt).toISOString())}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                    {l.assignedAt ? formatDate(new Date(l.assignedAt).toISOString()) : "—"}
                   </TableCell>
                   <TableCell className="text-right pr-3">
                     <button
