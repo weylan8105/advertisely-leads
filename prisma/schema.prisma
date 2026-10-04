@@ -27,6 +27,11 @@ model User {
   // States the agent is licensed in (2-letter codes), chosen at signup. Used to
   // pre-fill the state selection on every order.
   licensedStates String[] @default([])
+  // Manually-entered Facebook cost-per-lead (cents) used for the fresh-lead price
+  // floor when the Meta Marketing API isn't connected. Set by an admin; the
+  // canonical (oldest) admin's value is the global one.
+  manualCplCents     Int?
+  manualCplUpdatedAt DateTime?
   createdAt     DateTime  @default(now())
 
   accounts              Account[]
