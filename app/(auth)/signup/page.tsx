@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { AVAILABLE_STATES } from "@/data/states";
+import { cn } from "@/lib/utils";
 
 const perks = [
   "Blue-Collar IUL leads delivered within 24 hours of your order",
@@ -28,7 +30,10 @@ export default function SignupPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [agencyName, setAgencyName] = useState("");
+  const [licensedStates, setLicensedStates] = useState<string[]>([]);
   const [agreed, setAgreed] = useState(false);
+  const toggleState = (code: string) =>
+    setLicensedStates((prev) => (prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState("");
@@ -85,7 +90,7 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, password, agency: agencyName, inviteToken }),
+        body: JSON.stringify({ name, email, phone, password, agency: agencyName, licensedStates, inviteToken }),
       });
 
       if (!res.ok) {
@@ -234,6 +239,41 @@ export default function SignupPage() {
               value={agencyName}
               onChange={(e) => setAgencyName(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>
+                States you&apos;re licensed in{" "}
+                <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <span className="text-[11px] text-muted-foreground">
+                {licensedStates.length > 0 ? `${licensedStates.length} selected` : "pre-fills your orders"}
+              </span>
+            </div>
+            <div className="grid grid-cols-6 gap-1 rounded-md border border-slate-300 p-2 bg-slate-50 max-h-[132px] overflow-y-auto scrollbar-thin">
+              {AVAILABLE_STATES.map((s) => {
+                const on = licensedStates.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleState(s)}
+                    aria-pressed={on}
+                    className={cn(
+                      "text-[11px] py-1 rounded transition-colors",
+                      on ? "bg-brand-red text-white font-semibold" : "text-muted-foreground hover:bg-slate-100",
+                    )}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              We&apos;ll automatically pre-select these states on every order. You can change this
+              anytime in Settings.
+            </p>
           </div>
 
           <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">

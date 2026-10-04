@@ -50,6 +50,8 @@ export function CheckoutFlow({
   const isAuthed = status === "authenticated" || justAuthed;
   const [step, setStep] = useState(1);
   const [selectedStates, setSelectedStates] = useState<string[]>(ACTIVE_STATES.map((s) => s.code));
+  // Once the agent touches the state picker, stop auto-applying their licensed set.
+  const statesTouched = useRef(false);
   // Team delivery: an owner can send this purchase to a downline agent.
   const [downline, setDownline] = useState<{ userId: string; name: string | null; email: string }[]>([]);
   const [deliverToUserId, setDeliverToUserId] = useState<string>("me");
@@ -84,8 +86,25 @@ export function CheckoutFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
-  const toggleState = (code: string) =>
+  // Pre-fill the state picker with the agent's licensed states (set at signup or
+  // in Settings). Falls back to all available states when none are on file.
+  useEffect(() => {
+    if (!isAuthed) return;
+    fetch("/api/account/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.licensedStates) && d.licensedStates.length > 0 && !statesTouched.current) {
+          setSelectedStates(d.licensedStates);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed]);
+
+  const toggleState = (code: string) => {
+    statesTouched.current = true;
     setSelectedStates((prev) => (prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]));
+  };
 
   const belowMin = items.some((i) => {
     const p = findPackage(i.packageId);
@@ -209,8 +228,8 @@ export function CheckoutFlow({
                     State filter <span className="text-muted-foreground font-normal">({selectedStates.length} selected)</span>
                   </div>
                   <div className="flex gap-3 text-xs">
-                    <button type="button" className="text-red-600 hover:underline font-medium" onClick={() => setSelectedStates(ACTIVE_STATES.map((s) => s.code))}>Select all</button>
-                    <button type="button" className="text-slate-500 hover:underline" onClick={() => setSelectedStates([])}>Clear</button>
+                    <button type="button" className="text-red-600 hover:underline font-medium" onClick={() => { statesTouched.current = true; setSelectedStates(ACTIVE_STATES.map((s) => s.code)); }}>Select all</button>
+                    <button type="button" className="text-slate-500 hover:underline" onClick={() => { statesTouched.current = true; setSelectedStates([]); }}>Clear</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">

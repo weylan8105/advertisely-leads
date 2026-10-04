@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
+import { AVAILABLE_STATES } from "@/data/states";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const AVAILABLE = new Set(AVAILABLE_STATES);
+
+/** Keep only valid, available 2-letter state codes, uppercased + de-duped. */
+function cleanStates(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out = new Set<string>();
+  for (const v of input) {
+    const code = typeof v === "string" ? v.toUpperCase().trim() : "";
+    if (AVAILABLE.has(code)) out.add(code);
+  }
+  return [...out];
+}
 
 export async function POST(req: Request) {
   if (!isDatabaseConfigured || !prisma) {
@@ -26,6 +39,7 @@ export async function POST(req: Request) {
   const password = typeof data.password === "string" ? data.password : "";
   const agency = typeof data.agency === "string" ? data.agency.trim() : "";
   const phone = typeof data.phone === "string" ? data.phone.trim() : "";
+  const licensedStates = cleanStates(data.licensedStates);
   const inviteToken = typeof data.inviteToken === "string" ? data.inviteToken.trim() : "";
 
   if (!EMAIL_RE.test(email)) {
@@ -62,6 +76,7 @@ export async function POST(req: Request) {
       name: name || null,
       agency: agency || null,
       phone: phone || null,
+      licensedStates,
       passwordHash,
     },
     select: { id: true },

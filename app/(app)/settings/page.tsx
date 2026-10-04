@@ -14,7 +14,8 @@ import {
 import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
 import { GoogleSheetsConnectCard } from "@/components/settings/GoogleSheetsConnectCard";
 import { integrations } from "@/data/integrations";
-import { currentUser } from "@/data/user";
+import { ProfileSettings } from "@/components/settings/ProfileSettings";
+import { PasswordSettings } from "@/components/settings/PasswordSettings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Webhook, Eye, Copy } from "lucide-react";
 
@@ -30,82 +31,18 @@ export default function SettingsPage() {
       <Tabs defaultValue="profile">
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="agency">Agency</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
           <TabsTrigger value="export">Exports</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
-          <Card>
-            <CardHeader>
-              <CardTitle>Your profile</CardTitle>
-              <CardDescription>
-                Used for lead assignment, CRM attribution, and outreach signature.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Full name</Label>
-                <Input defaultValue={currentUser.name} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Work email</Label>
-                <Input defaultValue={currentUser.email} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Producer license state</Label>
-                <Input defaultValue={currentUser.state} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>NPN (optional)</Label>
-                <Input placeholder="National Producer Number" />
-              </div>
-              <div className="sm:col-span-2 flex justify-end gap-2">
-                <Button variant="outline">Cancel</Button>
-                <Button>Save changes</Button>
-              </div>
-            </CardContent>
-          </Card>
+          <ProfileSettings />
         </TabsContent>
 
-        <TabsContent value="agency">
-          <Card>
-            <CardHeader>
-              <CardTitle>Agency information</CardTitle>
-              <CardDescription>
-                Used on invoices and routed for agency-level lead distribution.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Agency name</Label>
-                <Input defaultValue={currentUser.agency} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>IMO / Carrier alignment</Label>
-                <Input placeholder="Your IMO or carrier" defaultValue="" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Number of producers</Label>
-                <Select defaultValue="2-5">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Solo</SelectItem>
-                    <SelectItem value="2-5">2–5</SelectItem>
-                    <SelectItem value="6-15">6–15</SelectItem>
-                    <SelectItem value="16+">16+</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>States licensed</Label>
-                <Input placeholder="TX, FL, OH, GA" defaultValue="TX, FL, OH, GA" />
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="security">
+          <PasswordSettings />
         </TabsContent>
 
         <TabsContent value="integrations">
