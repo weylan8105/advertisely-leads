@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
 import { GoogleSheetsConnectCard } from "@/components/settings/GoogleSheetsConnectCard";
+import { GoogleCalendarConnectCard } from "@/components/settings/GoogleCalendarConnectCard";
 import { integrations } from "@/data/integrations";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
 import { PasswordSettings } from "@/components/settings/PasswordSettings";
@@ -112,6 +113,8 @@ export default function SettingsPage({
                 </div>
               </CardContent>
             </Card>
+
+            <GoogleCalendarConnectCard />
 
             <GoogleSheetsConnectCard />
           </div>

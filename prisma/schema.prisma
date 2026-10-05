@@ -155,6 +155,7 @@ model Lead {
   soldPremiumCents Int?         // annual premium (AP) logged when moved to Issued PAID — powers P&L
   soldAt          DateTime?
   callbackAt      DateTime?     // scheduled call-back reminder (card counts down / flashes when due)
+  callbackEventId String?       // Google Calendar event id for the current callback (if synced)
   source          String // e.g. "Meta - Lineman Retirement Q2"
   campaignName    String?
   adsetId         String?
@@ -333,6 +334,7 @@ model Integration {
 enum IntegrationType {
   GOHIGHLEVEL
   GOOGLE_SHEETS
+  GOOGLE_CALENDAR
   WEBHOOK
   SALESFORCE
   HUBSPOT

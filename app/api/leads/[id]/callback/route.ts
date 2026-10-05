@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getOrgContext, canManageTeam } from "@/lib/org";
+import { syncCallbackEvent } from "@/lib/googleCalendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, assignedUserId: true, organizationId: true, name: true },
+    select: { id: true, assignedUserId: true, organizationId: true, name: true, callbackEventId: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
@@ -49,5 +50,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   });
 
-  return NextResponse.json({ ok: true, callbackAt: at ? at.toISOString() : null });
+  // Mirror the reminder to the caller's Google Calendar if they've connected it.
+  // Best-effort: never fail the callback save on a calendar error.
+  let calendarSynced = false;
+  try {
+    const result = await syncCallbackEvent({
+      userId,
+      leadId: lead.id,
+      leadName: lead.name,
+      callbackAt: at,
+      existingEventId: lead.callbackEventId ?? null,
+    });
+    if (result) {
+      await prisma.lead.update({ where: { id: lead.id }, data: { callbackEventId: result.eventId } });
+      calendarSynced = true;
+    }
+  } catch (e) {
+    console.warn("Calendar sync failed for callback:", e);
+  }
+
+  return NextResponse.json({ ok: true, callbackAt: at ? at.toISOString() : null, calendarSynced });
 }
