@@ -92,6 +92,8 @@ export interface Lead {
   status: LeadStatus;
   disposition?: LeadDisposition;
   pipelineStage: string;
+  /** Opportunity value (in cents) the agent assigns; shown on the card + summed per stage. */
+  valueCents?: number;
   source: string;
   tags: string[];
   consent: {

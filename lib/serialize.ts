@@ -51,6 +51,7 @@ export function serializeLead(l: any): Lead {
     status: STATUS_LABEL[l.status] ?? "New",
     disposition: l.disposition ?? undefined,
     pipelineStage: l.pipelineStage ?? "new-lead",
+    valueCents: l.valueCents ?? undefined,
     source: l.source,
     tags: Array.isArray(l.tags) ? l.tags : [],
     consent: {

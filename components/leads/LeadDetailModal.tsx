@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -76,11 +76,13 @@ export function LeadDetailModal({
   lead,
   onClose,
   onNoteAdded,
+  onValueChanged,
   context = "agent",
 }: {
   lead: Lead;
   onClose: () => void;
   onNoteAdded?: (leadId: string, note: LeadNote) => void;
+  onValueChanged?: (leadId: string, valueCents: number | null) => void;
   /** "admin" opens the card from the leads database (hides agent-only actions). */
   context?: "agent" | "admin";
 }) {
@@ -124,6 +126,38 @@ export function LeadDetailModal({
     const hit = Object.entries(raw).find(([k]) => k.toLowerCase() === "consent_language");
     return hit ? prettyVal(hit[1]) : "";
   })();
+
+  // Editable opportunity value ($) — shown on the card + summed per stage.
+  const [valueInput, setValueInput] = useState(
+    lead.valueCents != null ? String(lead.valueCents / 100) : "",
+  );
+  const [valueSaving, setValueSaving] = useState(false);
+  const [valueMsg, setValueMsg] = useState<"saved" | "error" | null>(null);
+  async function saveValue() {
+    setValueSaving(true);
+    setValueMsg(null);
+    const trimmed = valueInput.replace(/[^0-9.]/g, "").trim();
+    const valueCents = trimmed === "" ? null : Math.round(parseFloat(trimmed) * 100);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/value`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ valueCents }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setValueMsg("saved");
+        onValueChanged?.(lead.id, data.valueCents ?? null);
+        setValueInput(data.valueCents != null ? String(data.valueCents / 100) : "");
+      } else {
+        setValueMsg("error");
+      }
+    } catch {
+      setValueMsg("error");
+    } finally {
+      setValueSaving(false);
+    }
+  }
 
   // Agent notes on this lead.
   const [notes, setNotes] = useState<LeadNote[]>(lead.notes ?? []);
@@ -259,6 +293,38 @@ export function LeadDetailModal({
         )}
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">
+          {/* Opportunity value — editable; shows on the card + sums per stage. */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <DollarSign className="h-3.5 w-3.5" /> Lead value
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={valueInput}
+                  onChange={(e) => { setValueInput(e.target.value); setValueMsg(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveValue(); }}
+                  placeholder="0"
+                  className="w-40 rounded-lg border border-slate-200 py-2 pl-7 pr-3 text-sm focus:border-brand-red focus:outline-none focus:ring-1 focus:ring-brand-red"
+                />
+              </div>
+              <button
+                onClick={saveValue}
+                disabled={valueSaving}
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand-red px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-redDark disabled:opacity-50"
+              >
+                {valueSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Save value
+              </button>
+              {valueMsg === "saved" && <span className="text-xs text-emerald-600">Saved</span>}
+              {valueMsg === "error" && <span className="text-xs text-rose-600">Couldn&apos;t save</span>}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Shown on the pipeline card and totaled at the top of each stage.</p>
+          </div>
+
           {/* Quiz answers — the highest-value sales data, surfaced first. */}
           {quizEntries.length > 0 && (
             <div>

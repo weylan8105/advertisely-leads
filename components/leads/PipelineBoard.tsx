@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users } from "lucide-react";
 import { PIPELINE_STAGES, STAGE_IDS, DEFAULT_STAGE } from "@/data/pipeline";
 import { localTimeForState } from "@/data/states";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+
+// Compact money for stage totals / card value (e.g. $6,000 or $141,832).
+const money = (cents: number) =>
+  formatCurrency(Math.round(cents) / 100).replace(/\.00$/, "");
 import type { Lead } from "@/types";
 import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
 import { CallbackModal } from "@/components/leads/CallbackModal";
@@ -153,12 +157,20 @@ export function PipelineBoard({
                   isOver ? "border-brand-red/50 bg-brand-red/[0.04]" : "border-slate-200",
                 )}
               >
-                <div className="p-3 border-b border-slate-200 flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full shrink-0", TONE_DOT[stage.tone])} />
-                  <span className="text-xs font-medium leading-tight flex-1">{stage.label}</span>
-                  <span className="text-[11px] text-muted-foreground bg-white border border-slate-200 rounded-full px-1.5">
-                    {colLeads.length}
-                  </span>
+                <div className="p-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full shrink-0", TONE_DOT[stage.tone])} />
+                    <span className="text-xs font-medium leading-tight flex-1">{stage.label}</span>
+                    <span className="text-[11px] text-muted-foreground bg-white border border-slate-200 rounded-full px-1.5">
+                      {colLeads.length}
+                    </span>
+                  </div>
+                  {(() => {
+                    const totalCents = colLeads.reduce((sum, l) => sum + (l.valueCents ?? 0), 0);
+                    return totalCents > 0 ? (
+                      <div className="mt-1 pl-4 text-[11px] font-semibold text-emerald-700">{money(totalCents)}</div>
+                    ) : null;
+                  })()}
                 </div>
 
                 <div className="p-2 space-y-2 overflow-y-auto scrollbar-thin flex-1">
@@ -252,6 +264,12 @@ export function PipelineBoard({
                               </button>
                             </div>
 
+                            {typeof lead.valueCents === "number" && lead.valueCents > 0 && (
+                              <div className="mt-1 text-xs font-semibold text-emerald-700">
+                                {money(lead.valueCents)}
+                              </div>
+                            )}
+
                             <div className="mt-1.5 flex flex-wrap gap-1">
                               <span className="text-[10px] bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
                                 {lead.leadTypeLabel}
@@ -312,6 +330,10 @@ export function PipelineBoard({
             setDetailLead((dl) =>
               dl && dl.id === leadId ? { ...dl, notes: [note, ...(dl.notes ?? [])] } : dl,
             );
+          }}
+          onValueChanged={(leadId, valueCents) => {
+            setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, valueCents: valueCents ?? undefined } : l)));
+            setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, valueCents: valueCents ?? undefined } : dl));
           }}
         />
       )}
