@@ -331,6 +331,15 @@ model Integration {
   @@unique([userId, type])
 }
 
+// Global round-robin cursor for fresh-lead intake distribution. A single row
+// (id = "global") remembers which participant (buyer or house) received the last
+// lead, so the rotation continues fairly across separate intake events.
+model DistributionCursor {
+  id              String   @id
+  lastRecipientId String?
+  updatedAt       DateTime @updatedAt
+}
+
 enum IntegrationType {
   GOHIGHLEVEL
   GOOGLE_SHEETS

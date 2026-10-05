@@ -17,7 +17,7 @@ import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
  *  1. Immediately after an order is placed (catch existing inventory).
  *  2. After each Meta webhook insert (assign fresh leads to pending orders).
  */
-export async function fulfillOrder(orderId: string): Promise<number> {
+export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string } = {}): Promise<number> {
   if (!prisma) return 0;
 
   const order = await prisma.order.findUnique({
@@ -72,9 +72,11 @@ export async function fulfillOrder(orderId: string): Promise<number> {
       ...(receivedAtFilter.gt || receivedAtFilter.lte ? { receivedAt: receivedAtFilter } : {}),
       // Never deliver obviously-fake / internal test leads to a buyer.
       ...NOT_TEST_LEAD,
+      // Round-robin intake pins a single lead so exactly that one is assigned.
+      ...(opts.onlyLeadId ? { id: opts.onlyLeadId } : {}),
     },
     orderBy: { receivedAt: "asc" },
-    take: remaining,
+    take: opts.onlyLeadId ? 1 : remaining,
   });
 
   if (candidates.length === 0) return 0;
@@ -399,7 +401,6 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     where: {
       status: { in: ["PENDING", "PROCESSING", "DELIVERING"] },
       // Match direct-pool orders and any aged-bucket order drawing from this pool.
-      // fulfillOrder re-checks each order's age window, so mismatched ages are skipped.
       packageId: { in: purchasableIdsForPool(lead.packageId) },
       OR: [
         { filterStates: { isEmpty: true } },
@@ -407,79 +408,62 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
       ],
     },
     orderBy: { createdAt: "asc" },
+    include: { leads: { where: { trashedAt: null }, select: { id: true } } },
   });
 
-  // ── Coverage-weighted distribution (owner directive, Oct 2026) ──────────
-  // Replaces the flat 50/50 even-split. Every party competing for THIS lead's
-  // state gets a share inversely proportional to how many states it covers, so
-  // a narrow buyer keeps the majority of its few states while broad orders (and
-  // the all-states house) win on total volume instead of per-state dominance.
   const house = await getHouseAccount();
 
-  // Buyer orders that can take THIS lead: cover its state, in the age window, and
-  // not already full. Capture each order's current in-state count for weighting.
-  const eligible: { order: (typeof pendingOrders)[number]; count: number }[] = [];
-  for (const o of pendingOrders) {
-    if (!leadAgeEligibleForOrder(o, lead.receivedAt)) continue;
-    const live = await prisma.lead.count({ where: { orderId: o.id, trashedAt: null } });
-    if (live >= o.quantity) continue;
-    const count = await prisma.lead.count({
-      where: { orderId: o.id, state: lead.state, trashedAt: null },
-    });
-    eligible.push({ order: o, count });
-  }
+  // Orders that can take THIS lead: cover its state, in the age window, not full.
+  const eligibleOrders = pendingOrders.filter(
+    (o) => o.filterStates.length > 0 && o.leads.length < o.quantity && leadAgeEligibleForOrder(o, lead.receivedAt),
+  );
 
-  if (eligible.length > 0 && house) {
-    type Party =
-      | { kind: "buyer"; orderId: string; recipient: string; coverage: number; count: number }
-      | { kind: "house"; coverage: number; count: number };
-    const parties: Party[] = eligible.map((e) => ({
-      kind: "buyer" as const,
-      orderId: e.order.id,
-      recipient: e.order.deliverToUserId ?? e.order.userId,
-      // An all-states order (empty filterStates) is as broad as the house.
-      coverage: e.order.filterStates.length === 0 ? HOUSE_COVERAGE_STATES : e.order.filterStates.length,
-      count: e.count,
-    }));
-    // The house competes too — unless it's already one of the buyer recipients.
-    if (!parties.some((p) => p.kind === "buyer" && p.recipient === house.userId)) {
-      const houseCount = await prisma.lead.count({
-        where: { assignedUserId: house.userId, state: lead.state, trashedAt: null },
-      });
-      parties.push({ kind: "house", coverage: HOUSE_COVERAGE_STATES, count: houseCount });
-    }
-
-    const winner = parties[coverageWeightedWinner(parties)];
-    if (winner.kind === "house") {
-      // House won this lead — but a pending replacement (owed to a paying client)
-      // outranks the house. Give it first dibs, else route to the house CRM.
-      if (await tryReplacementForFreshLead(leadId)) return;
-      if (await assignLeadToHouse(leadId, "coverage-weighted house share")) return;
-      // House declined (e.g. not fresh) — fall through to fill a buyer instead.
-    } else {
-      const assigned = await fulfillOrder(winner.orderId);
-      if (assigned > 0) {
-        const check = await prisma.lead.findUnique({
-          where: { id: leadId },
-          select: { assignedUserId: true },
-        });
-        if (check?.assignedUserId) return;
+  // ── True round-robin intake (owner directive, Oct 2026) ─────────────────
+  // Rotate each incoming lead across every DISTINCT buyer with an eligible open
+  // order (a buyer with two orders is still one slot), plus the house (Ryan) as a
+  // final slot, tracked by a persistent cursor so "whoever got the last lead"
+  // determines who's next. Replaces the coverage-weighted split. When no open
+  // order is eligible, the lead goes to the house (catch-all).
+  if (eligibleOrders.length > 0 && house) {
+    const orderForRecipient = new Map<string, string>(); // recipientId -> oldest eligible orderId
+    const buyerIds: string[] = [];
+    for (const o of eligibleOrders) {
+      const rid = o.deliverToUserId ?? o.userId;
+      if (rid === house.userId) continue; // the house is its own rotation slot
+      if (!orderForRecipient.has(rid)) {
+        orderForRecipient.set(rid, o.id);
+        buyerIds.push(rid);
       }
     }
-  }
+    const rotation = [...buyerIds, house.userId];
 
-  // Fallback — always land the lead somewhere: try each pending order (FIFO),
-  // then a pending replacement, then the house catch-all.
-  for (const order of pendingOrders) {
-    const assigned = await fulfillOrder(order.id);
-    if (assigned > 0) {
-      const check = await prisma.lead.findUnique({
-        where: { id: leadId },
-        select: { assignedUserId: true },
+    const cursor = await prisma.distributionCursor.findUnique({ where: { id: "global" } });
+    const lastIdx = cursor?.lastRecipientId ? rotation.indexOf(cursor.lastRecipientId) : -1;
+    const setCursor = (rid: string) =>
+      prisma!.distributionCursor.upsert({
+        where: { id: "global" },
+        update: { lastRecipientId: rid },
+        create: { id: "global", lastRecipientId: rid },
       });
-      if (check?.assignedUserId) return;
+
+    // Start at the slot AFTER whoever got the last lead; take the first that accepts.
+    for (let step = 1; step <= rotation.length; step++) {
+      const rid = rotation[(lastIdx + step) % rotation.length];
+      if (rid === house.userId) {
+        // House's turn: an owed replacement (to a paying client) outranks the
+        // house; otherwise the lead goes to the house CRM (Ryan).
+        if (await tryReplacementForFreshLead(leadId)) { await setCursor(rid); return; }
+        if (await assignLeadToHouse(leadId, "round-robin turn (house)")) { await setCursor(rid); return; }
+        continue; // house declined (e.g. lead not fresh) — try the next buyer
+      }
+      const assigned = await fulfillOrder(orderForRecipient.get(rid)!, { onlyLeadId: leadId });
+      if (assigned > 0) { await setCursor(rid); return; }
+      // That buyer's order filled concurrently — advance to the next slot.
     }
   }
+
+  // No eligible open order (or the rotation couldn't place it): a pending
+  // replacement first, then the house catch-all so every lead lands somewhere.
   if (await tryReplacementForFreshLead(leadId)) return;
   await assignLeadToHouse(leadId, "not claimed by any open order");
 }
