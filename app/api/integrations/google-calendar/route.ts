@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { isCalendarConfigured } from "@/lib/googleCalendar";
+import { isCalendarConfigured, calendarRedirectUri } from "@/lib/googleCalendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +22,8 @@ export async function GET() {
     configured: isCalendarConfigured(),
     connected: !!(integ?.enabled && cfg.refreshToken),
     email: cfg.email ?? null,
+    // The exact URI Google must have in the OAuth client's Authorized redirect URIs.
+    redirectUri: calendarRedirectUri(),
   });
 }
 

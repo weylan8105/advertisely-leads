@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, Loader2, Check, AlertCircle } from "lucide-react";
+import { CalendarCheck, Loader2, Check, AlertCircle, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Status {
   configured: boolean;
   connected: boolean;
   email: string | null;
+  redirectUri?: string;
 }
 
 const RESULT_MSG: Record<string, { ok: boolean; text: string }> = {
@@ -25,6 +26,7 @@ export function GoogleCalendarConnectCard() {
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -106,11 +108,39 @@ export function GoogleCalendarConnectCard() {
             for Advertisely, a Connect button will appear here.
           </p>
         ) : (
-          <a href="/api/integrations/google-calendar/connect">
-            <Button size="sm">
-              <CalendarCheck className="h-4 w-4" /> Connect Google Calendar
-            </Button>
-          </a>
+          <div className="space-y-3">
+            <a href="/api/integrations/google-calendar/connect">
+              <Button size="sm">
+                <CalendarCheck className="h-4 w-4" /> Connect Google Calendar
+              </Button>
+            </a>
+            {status?.redirectUri && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                <div className="text-muted-foreground mb-1">
+                  Seeing <span className="font-mono">redirect_uri_mismatch</span>? Add this exact URL to your
+                  Google OAuth client&apos;s <span className="font-medium">Authorized redirect URIs</span>:
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate rounded bg-white border border-slate-200 px-2 py-1 font-mono text-[11px]">
+                    {status.redirectUri}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(status.redirectUri!).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      });
+                    }}
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
