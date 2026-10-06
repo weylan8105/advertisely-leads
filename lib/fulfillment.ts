@@ -451,13 +451,19 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     }
     const rotation = [...buyerIds, house.userId];
 
-    const cursor = await prisma.distributionCursor.findUnique({ where: { id: "global" } });
+    // Rotate PER STATE so each state alternates independently — a buyer gets an
+    // EXACT equal (50/50, or 1/N with more buyers) share of the leads in THEIR
+    // states, every time, regardless of other states. A lead in a house-only
+    // state can no longer eat the buyer's turn in their states. Equal
+    // opportunity, NEVER weighted (owner directive, Oct 5 2026).
+    const cursorKey = `st:${lead.state}`;
+    const cursor = await prisma.distributionCursor.findUnique({ where: { id: cursorKey } });
     const lastIdx = cursor?.lastRecipientId ? rotation.indexOf(cursor.lastRecipientId) : -1;
     const setCursor = (rid: string) =>
       prisma!.distributionCursor.upsert({
-        where: { id: "global" },
+        where: { id: cursorKey },
         update: { lastRecipientId: rid },
-        create: { id: "global", lastRecipientId: rid },
+        create: { id: cursorKey, lastRecipientId: rid },
       });
 
     // Start at the slot AFTER whoever got the last lead; take the first that accepts.
