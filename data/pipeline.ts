@@ -35,3 +35,36 @@ export function findStage(id: string): PipelineStage | undefined {
 export function stageLabel(id: string): string {
   return findStage(id)?.label ?? id;
 }
+
+// ── Customization anchors ────────────────────────────────────────────────
+// Clients can rename, recolor, reorder, add and delete pipeline stages, but
+// these two ids must always exist so the rest of the app keeps working:
+//   • "new-lead"   — where fresh leads land (the default stage).
+//   • "issued-paid" — the "sold" stage that feeds P&L, conversions and the
+//                     annual-premium prompt / Meta purchase event.
+// They can be relabeled/recolored/moved, just never removed.
+export const RESERVED_STAGE_IDS = ["new-lead", "issued-paid"] as const;
+export const WON_STAGE_ID = "issued-paid";
+export const INTAKE_STAGE_ID = "new-lead";
+
+export function isReservedStage(id: string): boolean {
+  return (RESERVED_STAGE_IDS as readonly string[]).includes(id);
+}
+
+// Color options offered in the stage editor (value = StageTone, plus a swatch
+// class for the picker and a human label).
+export const STAGE_TONES: { value: StageTone; label: string; dot: string }[] = [
+  { value: "red", label: "Red", dot: "bg-brand-red" },
+  { value: "amber", label: "Amber", dot: "bg-amber-500" },
+  { value: "blue", label: "Blue", dot: "bg-blue-500" },
+  { value: "indigo", label: "Indigo", dot: "bg-indigo-500" },
+  { value: "emerald", label: "Green", dot: "bg-emerald-500" },
+  { value: "rose", label: "Rose", dot: "bg-rose-500" },
+  { value: "slate", label: "Gray", dot: "bg-slate-400" },
+];
+
+export const STAGE_TONE_SET = new Set<StageTone>(STAGE_TONES.map((t) => t.value));
+
+export const MIN_STAGES = 2;
+export const MAX_STAGES = 24;
+export const MAX_STAGE_LABEL_LEN = 48;

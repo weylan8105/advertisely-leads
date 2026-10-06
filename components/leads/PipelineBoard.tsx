@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users } from "lucide-react";
-import { PIPELINE_STAGES, STAGE_IDS, DEFAULT_STAGE } from "@/data/pipeline";
+import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
 import { localTimeForState } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -54,10 +54,15 @@ function callbackStatus(callbackAt: string | undefined, now: number) {
 export function PipelineBoard({
   leads,
   setLeads,
+  stages,
 }: {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
+  /** The board's columns — a user's customized set, or the defaults. */
+  stages?: PipelineStage[];
 }) {
+  const cols = stages && stages.length ? stages : PIPELINE_STAGES;
+  const colIds = new Set(cols.map((s) => s.id));
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
@@ -87,7 +92,7 @@ export function PipelineBoard({
     if (!lead || lead.pipelineStage === stageId) return;
 
     let premiumCents: number | undefined;
-    if (stageId === "issued-paid") {
+    if (stageId === WON_STAGE_ID) {
       const input = window.prompt(
         "Policy sold! Enter the annual premium (AP) in dollars — this feeds your Profit & Loss:",
         "",
@@ -129,9 +134,9 @@ export function PipelineBoard({
       </div>
       <div className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
-          {PIPELINE_STAGES.map((stage) => {
+          {cols.map((stage) => {
             const colLeads = leads.filter((l) => {
-              const s = STAGE_IDS.includes(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
+              const s = colIds.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
               return s === stage.id;
             });
             const isOver = overStage === stage.id;

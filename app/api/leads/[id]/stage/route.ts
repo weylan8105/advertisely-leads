@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getOrgContext, canManageTeam } from "@/lib/org";
-import { STAGE_IDS, stageLabel } from "@/data/pipeline";
+import { WON_STAGE_ID } from "@/data/pipeline";
+import { stagesForUser, labelForStage } from "@/lib/pipelineStages";
 import { fireMetaStageEvent } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
@@ -26,9 +27,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = (await req.json().catch(() => ({}))) as { stage?: string; premiumCents?: number };
   const stage = body.stage ?? "";
-  if (!STAGE_IDS.includes(stage)) {
-    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
-  }
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
@@ -43,9 +41,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (!allowed) return NextResponse.json({ error: "You can't move this lead" }, { status: 403 });
 
-  // Marking a policy sold ("Issued PAID") captures the annual premium for P&L;
-  // moving off that stage clears it.
-  const isSold = stage === "issued-paid";
+  // Validate against the board of whoever OWNS the lead (they may have
+  // customized their stage titles/count); fall back to the defaults.
+  const owner = lead.assignedUserId
+    ? await prisma.user.findUnique({
+        where: { id: lead.assignedUserId },
+        select: { pipelineStages: true },
+      })
+    : null;
+  const stages = stagesForUser(owner?.pipelineStages ?? null);
+  if (!stages.some((s) => s.id === stage)) {
+    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
+
+  // Marking a policy sold (the reserved "won" stage) captures the annual
+  // premium for P&L; moving off that stage clears it.
+  const isSold = stage === WON_STAGE_ID;
   const premiumCents =
     isSold && body.premiumCents != null ? Math.max(0, Math.round(Number(body.premiumCents))) : null;
   await prisma.lead.update({
@@ -57,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   });
   await prisma.leadActivity.create({
-    data: { leadId: params.id, type: "STATUS_CHANGED", body: `Moved to "${stageLabel(stage)}" in the pipeline.` },
+    data: { leadId: params.id, type: "STATUS_CHANGED", body: `Moved to "${labelForStage(stages, stage)}" in the pipeline.` },
   });
 
   // Advancing to a high-intent stage (underwriting/approved/issued-not-paid/

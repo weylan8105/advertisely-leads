@@ -2,10 +2,12 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { PlusCircle, Rows3, KanbanSquare, Loader2, Users } from "lucide-react";
+import { PlusCircle, Rows3, KanbanSquare, Loader2, Users, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
+import { PipelineEditor } from "@/components/leads/PipelineEditor";
+import { PIPELINE_STAGES, type PipelineStage } from "@/data/pipeline";
 import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBanner";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,10 @@ export default function LeadsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [canManage, setCanManage] = useState(false);
   const [viewing, setViewing] = useState<string>("me");
+  // The pipeline columns for the board currently shown (the caller's custom
+  // set, or a downline agent's when viewing theirs). Starts at the defaults.
+  const [stages, setStages] = useState<PipelineStage[]>(PIPELINE_STAGES);
+  const [showEditor, setShowEditor] = useState(false);
   // Each order that delivers to me (my own + any routed to me), shown separately.
   const [myOrders, setMyOrders] = useState<
     { id: string; quantity: number; fulfilledCount: number; routedToMe?: boolean; fromName?: string | null }[]
@@ -69,6 +75,25 @@ export default function LeadsPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    return () => {
+      active = false;
+    };
+  }, [viewing]);
+
+  // Load the pipeline stages for whichever board is shown (mine, or a downline
+  // agent's when a manager is viewing theirs).
+  useEffect(() => {
+    let active = true;
+    const url =
+      viewing && viewing !== "me"
+        ? `/api/pipeline/stages?agent=${encodeURIComponent(viewing)}`
+        : "/api/pipeline/stages";
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (active && Array.isArray(d?.stages) && d.stages.length) setStages(d.stages);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -237,14 +262,22 @@ export default function LeadsPage() {
         </Card>
       ) : (
         <Card className="p-5">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold">Pipeline</h3>
-            <p className="text-xs text-muted-foreground">
-              Drag leads between stages to move them through your sales pipeline. Click any card to
-              open the full lead detail.
-            </p>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">Pipeline</h3>
+              <p className="text-xs text-muted-foreground">
+                Drag leads between stages to move them through your sales pipeline. Click any card to
+                open the full lead detail.
+              </p>
+            </div>
+            {viewing === "me" && (
+              <Button variant="outline" size="sm" onClick={() => setShowEditor(true)} className="shrink-0">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Customize stages
+              </Button>
+            )}
           </div>
-          <PipelineBoard leads={leads} setLeads={setLeads} />
+          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} />
         </Card>
       )}
 
@@ -252,6 +285,14 @@ export default function LeadsPage() {
         All leads should include documented consent before agent outreach. Replacement eligibility
         subject to quality review.
       </p>
+
+      {showEditor && (
+        <PipelineEditor
+          stages={stages}
+          onClose={() => setShowEditor(false)}
+          onSaved={(next) => setStages(next)}
+        />
+      )}
     </div>
   );
 }

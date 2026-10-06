@@ -32,6 +32,11 @@ model User {
   // canonical (oldest) admin's value is the global one.
   manualCplCents     Int?
   manualCplUpdatedAt DateTime?
+  // Per-user CRM pipeline customization: an ordered JSON array of
+  // { id, label, tone } stages. Null = use the default stage set
+  // (see data/pipeline.ts). The reserved anchor ids "new-lead" and
+  // "issued-paid" are always present so P&L / conversions keep working.
+  pipelineStages Json?
   createdAt     DateTime  @default(now())
 
   accounts              Account[]
