@@ -418,16 +418,30 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     (o) => o.filterStates.length > 0 && o.leads.length < o.quantity && leadAgeEligibleForOrder(o, lead.receivedAt),
   );
 
+  // LICENSING GUARD: never deliver a lead in a state the recipient isn't licensed
+  // in. We check the recipient's licensedStates; if they haven't set any yet, fall
+  // back to the order's states (can't enforce licensing we don't have on file).
+  const recipientIds = [...new Set(eligibleOrders.map((o) => o.deliverToUserId ?? o.userId))];
+  const licRows = recipientIds.length
+    ? await prisma.user.findMany({ where: { id: { in: recipientIds } }, select: { id: true, licensedStates: true } })
+    : [];
+  const licensedById = new Map(licRows.map((u) => [u.id, u.licensedStates ?? []]));
+  const licensedOrders = eligibleOrders.filter((o) => {
+    const rid = o.deliverToUserId ?? o.userId;
+    const ls = licensedById.get(rid) ?? [];
+    return ls.length === 0 || ls.includes(lead.state);
+  });
+
   // ── True round-robin intake (owner directive, Oct 2026) ─────────────────
   // Rotate each incoming lead across every DISTINCT buyer with an eligible open
   // order (a buyer with two orders is still one slot), plus the house (Ryan) as a
   // final slot, tracked by a persistent cursor so "whoever got the last lead"
   // determines who's next. Replaces the coverage-weighted split. When no open
   // order is eligible, the lead goes to the house (catch-all).
-  if (eligibleOrders.length > 0 && house) {
+  if (licensedOrders.length > 0 && house) {
     const orderForRecipient = new Map<string, string>(); // recipientId -> oldest eligible orderId
     const buyerIds: string[] = [];
-    for (const o of eligibleOrders) {
+    for (const o of licensedOrders) {
       const rid = o.deliverToUserId ?? o.userId;
       if (rid === house.userId) continue; // the house is its own rotation slot
       if (!orderForRecipient.has(rid)) {
