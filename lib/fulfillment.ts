@@ -397,6 +397,13 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // to the house (Ryan) before any buyer distribution runs.
   if (await routeHeldBackTagToHouse(lead)) return;
 
+  // Replacements get FIRST claim (owner directive, Oct 2026): a lead owed to a
+  // paying client as an approved replacement outranks filling outstanding orders
+  // — we make good on bad leads before fulfilling new volume. Only admin-greenlit
+  // requests auto-fill, and fulfillReplacement still enforces the request's order
+  // states + age, so this can't deliver an off-state/off-order lead.
+  if (await tryReplacementForFreshLead(leadId)) return;
+
   const pendingOrders = await prisma.order.findMany({
     where: {
       status: { in: ["PENDING", "PROCESSING", "DELIVERING"] },
@@ -470,9 +477,8 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     for (let step = 1; step <= rotation.length; step++) {
       const rid = rotation[(lastIdx + step) % rotation.length];
       if (rid === house.userId) {
-        // House's turn: an owed replacement (to a paying client) outranks the
-        // house; otherwise the lead goes to the house CRM (Ryan).
-        if (await tryReplacementForFreshLead(leadId)) { await setCursor(rid); return; }
+        // House's turn: the lead goes to the house CRM (Ryan). Replacements
+        // already had first claim at the top of this function.
         if (await assignLeadToHouse(leadId, "round-robin turn (house)")) { await setCursor(rid); return; }
         continue; // house declined (e.g. lead not fresh) — try the next buyer
       }
@@ -482,8 +488,8 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     }
   }
 
-  // No eligible open order (or the rotation couldn't place it): a pending
-  // replacement first, then the house catch-all so every lead lands somewhere.
-  if (await tryReplacementForFreshLead(leadId)) return;
+  // No eligible open order (or the rotation couldn't place it): the house
+  // catch-all so every lead lands somewhere. Replacements already had first
+  // claim at the top.
   await assignLeadToHouse(leadId, "not claimed by any open order");
 }
