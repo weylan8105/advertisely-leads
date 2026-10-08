@@ -61,6 +61,7 @@ export function serializeLead(l: any): Lead {
       ip: l.consentIp ?? undefined,
     },
     receivedAt: l.receivedAt ? new Date(l.receivedAt).toISOString() : "",
+    assignedAt: l.assignedAt ? new Date(l.assignedAt).toISOString() : undefined,
     lastContactedAt: l.lastContactedAt ? new Date(l.lastContactedAt).toISOString() : undefined,
     assignedAgent: l.assignedUser?.name ?? undefined,
     intentReason: l.intentReason ?? "",

@@ -5,7 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillReplacement, autoFulfillPendingReplacements } from "@/lib/replacement";
 import { IUL_POOL_IDS } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
-import { isEligibleReasonCode, reasonLabel, ELIGIBLE_REPLACEMENT_REASONS } from "@/lib/replacementReasons";
+import { isEligibleReasonCode, reasonLabel, ELIGIBLE_REPLACEMENT_REASONS, replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -131,6 +131,21 @@ export async function POST(req: NextRequest) {
   if (existing) {
     return NextResponse.json(
       { error: "A replacement request is already pending for this lead." },
+      { status: 409 },
+    );
+  }
+
+  // Hard gate: the replacement window (72h from delivery) must still be open.
+  const windowLead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { assignedAt: true },
+  });
+  if (replacementWindowClosed(windowLead?.assignedAt ?? null)) {
+    return NextResponse.json(
+      {
+        error: `This lead is outside the ${REPLACEMENT_WINDOW_HOURS}-hour replacement window (measured from delivery), so it's no longer eligible for a replacement.`,
+        windowClosed: true,
+      },
       { status: 409 },
     );
   }

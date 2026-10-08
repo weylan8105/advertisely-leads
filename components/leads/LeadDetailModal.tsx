@@ -7,6 +7,7 @@ import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
+import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
 
 function prettyKey(k: string) {
   return k
@@ -195,6 +196,7 @@ export function LeadDetailModal({
   const [repErr, setRepErr] = useState("");
   const [capExceeded, setCapExceeded] = useState(false);
   const [repOpen, setRepOpen] = useState(false);
+  const windowClosed = replacementWindowClosed(lead.assignedAt);
   async function submitReplacement(reasonCode: string, detail: string) {
     setRep("loading");
     setRepErr("");
@@ -254,14 +256,16 @@ export function LeadDetailModal({
             {context !== "admin" && (
               <button
                 onClick={() => { setRepErr(""); setRepOpen(true); }}
-                disabled={rep === "loading" || rep === "done"}
+                disabled={rep === "loading" || rep === "done" || windowClosed}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
                   rep === "done"
                     ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                     : "border-slate-200 hover:border-slate-300 text-foreground disabled:opacity-60",
                 )}
-                title="Request a replacement for this lead"
+                title={windowClosed
+                  ? `Replacement window closed (${REPLACEMENT_WINDOW_HOURS}h from delivery)`
+                  : "Request a replacement for this lead"}
               >
                 {rep === "loading" ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -270,7 +274,11 @@ export function LeadDetailModal({
                 ) : (
                   <RefreshCw className="h-3.5 w-3.5" />
                 )}
-                {rep === "done" ? "Replacement requested" : "Request replacement"}
+                {rep === "done"
+                  ? "Replacement requested"
+                  : windowClosed
+                    ? "Replacement window closed"
+                    : "Request replacement"}
               </button>
             )}
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close">

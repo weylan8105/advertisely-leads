@@ -103,6 +103,7 @@ export interface Lead {
     ip?: string;
   };
   receivedAt: string;
+  assignedAt?: string; // when the lead was delivered to the client (for the replacement window)
   lastContactedAt?: string;
   assignedAgent?: string;
   intentReason: string;

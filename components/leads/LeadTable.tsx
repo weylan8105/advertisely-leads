@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
+import { replacementWindowClosed } from "@/lib/replacementReasons";
 import {
   ChevronRight,
   Users,
@@ -509,8 +510,13 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                         >
                           Push to CRM (GHL)
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setRepLead({ id: lead.id, name: lead.name })}>
-                          Request replacement
+                        <DropdownMenuItem
+                          disabled={replacementWindowClosed(lead.assignedAt)}
+                          onClick={() => setRepLead({ id: lead.id, name: lead.name })}
+                        >
+                          {replacementWindowClosed(lead.assignedAt)
+                            ? "Replacement window closed"
+                            : "Request replacement"}
                         </DropdownMenuItem>
                         {canAssign && members.length > 0 && (
                           <>

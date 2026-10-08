@@ -54,3 +54,19 @@ export const NOT_ELIGIBLE_REPLACEMENT_REASONS = [
 // The window and cap, shown alongside the policy.
 export const REPLACEMENT_WINDOW_NOTE =
   "Flag within 72 hours of your order filling. All requests are verified on review. Replacements are capped at 20% of each order.";
+
+// A replacement can only be requested within this many hours of the lead being
+// delivered to the client. Enforced in the API (hard gate) and the UI (the
+// request button is disabled once it's closed).
+export const REPLACEMENT_WINDOW_HOURS = 72;
+
+/**
+ * True when the replacement window has CLOSED for a lead delivered at the given
+ * time. Unknown/missing delivery time → not closed (don't block on missing data).
+ */
+export function replacementWindowClosed(deliveredAtIso?: string | Date | null): boolean {
+  if (!deliveredAtIso) return false;
+  const t = new Date(deliveredAtIso).getTime();
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t > REPLACEMENT_WINDOW_HOURS * 3_600_000;
+}
