@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { X, Loader2, CalendarPlus, Check, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { googleCalendarEventUrl } from "@/lib/calendarLinks";
 import type { Lead } from "@/types";
 
 function inMinutes(min: number) {
@@ -32,6 +34,9 @@ export function CallbackModal({
 }) {
   const [exact, setExact] = useState(lead.callbackAt ? toLocalInput(new Date(lead.callbackAt)) : "");
   const [saving, setSaving] = useState(false);
+  // After a successful save with a time, show the confirmation step with the
+  // "Add to Google Calendar" action (or a ✓ when it already auto-synced).
+  const [done, setDone] = useState<{ at: Date; synced: boolean } | null>(null);
 
   async function save(when: Date | null) {
     setSaving(true);
@@ -41,12 +46,16 @@ export function CallbackModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ callbackAt: iso }),
     });
+    const data = await res.json().catch(() => ({}));
     setSaving(false);
     if (res.ok) {
       onSaved(iso);
-      onClose();
+      // Clearing the reminder just closes; setting one advances to the
+      // confirmation step so the user can drop it on their Google Calendar.
+      if (when) setDone({ at: when, synced: !!data.calendarSynced });
+      else onClose();
     } else {
-      alert((await res.json().catch(() => ({}))).error ?? "Could not save callback");
+      alert(data.error ?? "Could not save callback");
     }
   }
 
@@ -57,6 +66,71 @@ export function CallbackModal({
     ["Tomorrow 9 AM", tomorrow9am()],
   ];
 
+  // ── Confirmation step ────────────────────────────────────────────────────
+  if (done) {
+    const gcalUrl = googleCalendarEventUrl({
+      title: `Call back: ${lead.name}`,
+      start: done.at,
+      details: "Callback reminder from your Advertisely CRM.",
+    });
+    return (
+      <div className="fixed inset-0 z-[60] grid place-items-center p-4">
+        <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight">Callback set</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {lead.name} ·{" "}
+                {done.at.toLocaleString(undefined, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Close">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {done.synced ? (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+              <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+              Added to your Google Calendar automatically.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <a href={gcalUrl} target="_blank" rel="noopener noreferrer" className="block">
+                <Button className="w-full">
+                  <CalendarPlus className="h-4 w-4" />
+                  Add to Google Calendar
+                  <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+                </Button>
+              </a>
+              <p className="text-xs text-muted-foreground">
+                Want callbacks added to your calendar automatically?{" "}
+                <Link href="/settings?tab=integrations" className="font-medium text-brand-red hover:underline">
+                  Connect Google Calendar
+                </Link>{" "}
+                once in Settings → Integrations.
+              </p>
+            </div>
+          )}
+
+          <div className="mt-5 flex justify-end">
+            <Button variant="outline" onClick={onClose}>
+              Done
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Picker step ──────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center p-4">
       <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
