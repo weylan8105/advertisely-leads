@@ -22,20 +22,17 @@ export function PipelineIncentiveBanner() {
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-bold tracking-tight text-foreground sm:text-base">
-              How to make more money without spending any more
+            <h3 className="text-[15px] font-extrabold uppercase tracking-tight text-brand-red sm:text-base">
+              Must-Do Activity for Every Agent
             </h3>
-            <span className="inline-flex items-center rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+            <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
               Better leads
             </span>
           </div>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-            As you work a lead, drag it into <span className="font-semibold text-foreground">Approved</span>,{" "}
-            <span className="font-semibold text-foreground">Issued Not Paid</span>, and{" "}
-            <span className="font-semibold text-foreground">Issued PAID&nbsp;💰</span> when it closes. That tells
-            us exactly which leads are converting — and we use it to sharpen who we target, so the leads you
-            receive keep getting better. <span className="font-medium text-foreground">Same spend, higher
-            quality, more closes.</span>
+          <p className="mt-1.5 text-sm font-bold leading-relaxed text-brand-red">
+            Drag every lead you work into Approved, Issued Not Paid, and Issued PAID&nbsp;💰 as the lead
+            progresses. Advertisely tracks each and every lead you work and constantly optimizes lead quality
+            so you can win BIG. You save more, get higher-quality leads, and close more.
           </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-muted-foreground">
             <Stage>Approved</Stage>
