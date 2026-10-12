@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { AVAILABLE_STATES } from "@/data/states";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Package, Truck, DollarSign, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -80,6 +81,55 @@ export default function OrdersPage() {
   const [canManage, setCanManage] = useState(false);
   const [routingId, setRoutingId] = useState<string | null>(null);
   const [routeMsg, setRouteMsg] = useState<string | null>(null);
+  // Editing the states an open order pulls leads from.
+  const [editingStatesId, setEditingStatesId] = useState<string | null>(null);
+  const [statesDraft, setStatesDraft] = useState<string[]>([]);
+  const [savingStates, setSavingStates] = useState(false);
+  const [statesMsg, setStatesMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [licensedStates, setLicensedStates] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/account/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.licensedStates)) setLicensedStates(d.licensedStates);
+      })
+      .catch(() => {});
+  }, []);
+
+  function openStatesEditor(order: DbOrder) {
+    setEditingStatesId(order.id);
+    setStatesDraft(order.filterStates ?? []);
+    setStatesMsg(null);
+    setEditingId(null); // close the sheet editor if open
+  }
+
+  function toggleDraftState(code: string) {
+    setStatesDraft((prev) => (prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]));
+  }
+
+  async function saveStates(orderId: string) {
+    setSavingStates(true);
+    setStatesMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/states`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ states: statesDraft }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, filterStates: data.states } : o)));
+        setStatesMsg({ type: "success", text: "States updated — future leads will use the new set." });
+      } else {
+        setStatesMsg({ type: "error", text: data.error || "Couldn't update the states." });
+      }
+    } catch {
+      setStatesMsg({ type: "error", text: "Something went wrong updating the states." });
+    } finally {
+      setSavingStates(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/team")
@@ -308,6 +358,23 @@ export default function OrdersPage() {
                             {routingId === order.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                           </div>
                         )}
+                        {["PENDING", "PROCESSING", "DELIVERING"].includes(order.status) && (
+                          <div className="mt-1.5 text-[11px] text-muted-foreground">
+                            <span className="font-medium text-foreground">{(order.filterStates ?? []).length}</span>{" "}
+                            state{(order.filterStates ?? []).length === 1 ? "" : "s"}
+                            {(order.filterStates ?? []).length > 0 && (
+                              <>: {(order.filterStates ?? []).slice(0, 6).join(", ")}
+                                {(order.filterStates ?? []).length > 6 ? ` +${order.filterStates.length - 6}` : ""}</>
+                            )}{" · "}
+                            <button
+                              type="button"
+                              onClick={() => openStatesEditor(order)}
+                              className="font-medium text-brand-red hover:underline"
+                            >
+                              Edit states
+                            </button>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusVariant(order.status) as any}>
@@ -383,6 +450,53 @@ export default function OrdersPage() {
                                 {sheetMsg.text}
                               </p>
                             )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {editingStatesId === order.id && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="bg-slate-50">
+                          <div className="max-w-2xl space-y-2 py-2">
+                            <div className="text-xs text-muted-foreground">
+                              Choose the states this order pulls leads from. <strong>Future</strong> leads use the
+                              new set — already-delivered leads stay. You can only select states you&apos;re
+                              licensed in{licensedStates.length === 0 ? " (set your licensed states in Settings → Profile)" : ""}.
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(licensedStates.length ? licensedStates : AVAILABLE_STATES).map((code) => {
+                                const on = statesDraft.includes(code);
+                                return (
+                                  <button
+                                    key={code}
+                                    type="button"
+                                    onClick={() => toggleDraftState(code)}
+                                    className={cn(
+                                      "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                                      on
+                                        ? "border-brand-red bg-brand-red/10 text-brand-red"
+                                        : "border-slate-200 bg-white text-muted-foreground hover:border-slate-300",
+                                    )}
+                                  >
+                                    {code}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button size="sm" onClick={() => saveStates(order.id)} disabled={savingStates || statesDraft.length === 0}>
+                                {savingStates ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save states
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setEditingStatesId(null)}>
+                                Cancel
+                              </Button>
+                              <span className="text-[11px] text-muted-foreground">{statesDraft.length} selected</span>
+                              {statesMsg && (
+                                <span className={cn("text-[11px]", statesMsg.type === "error" ? "text-rose-600" : "text-emerald-600")}>
+                                  {statesMsg.text}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                       </TableRow>
