@@ -125,6 +125,28 @@ export function normalizeState(raw: string): { code: string; unknown: boolean } 
   return { code: s, unknown: true };
 }
 
+// Real US places that are never a sellable/orderable state in our system (no
+// order or license covers them) but ARE legitimate locations — a lead here is
+// a real person we just have no buyer for, not garbage data.
+const US_TERRITORIES = new Set(["DC", "PR", "VI", "GU", "AS", "MP"]);
+const TERRITORY_NAME_RE =
+  /\b(district of columbia|washington dc|puerto rico|virgin islands|guam|american samoa|northern mariana)\b/i;
+
+/**
+ * Does this raw state value name a REAL US location (a 50-state or a US
+ * territory / DC), even if we can't sell it? Used by fulfillment to tell a
+ * "recognized state we just have no buyer for" (legit overflow) apart from a
+ * "trash lead" with a garbage state field. Recognized overflow costs the house
+ * a round-robin turn; trash does not.
+ */
+export function isRecognizedUsLocation(raw: string): boolean {
+  const { code, unknown } = normalizeState(raw);
+  if (!unknown && VALID_STATES.has(code)) return true;
+  const up = (raw ?? "").trim().toUpperCase().replace(/[^A-Z]/g, "");
+  if (US_TERRITORIES.has(up)) return true;
+  return TERRITORY_NAME_RE.test(raw ?? "");
+}
+
 /** RFC-ish CSV parser: handles quoted fields, escaped quotes, CRLF, BOM. */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];

@@ -8,6 +8,7 @@ import { NOT_TEST_LEAD } from "@/lib/testLeads";
 import { assignLeadToHouse, getHouseAccount } from "@/lib/house";
 import { tryReplacementForFreshLead } from "@/lib/replacement";
 import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
+import { isRecognizedUsLocation } from "@/lib/leadImport";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -388,6 +389,41 @@ export function coverageWeightedWinner(
   return best;
 }
 
+// ── House overflow skip-credit (owner directive, Oct 2026) ────────────────
+// When a lead in a RECOGNIZED state that no buyer order covers is routed to the
+// house, Ryan gets the lead "for free" — so it banks a credit that skips his
+// next turn in a covered-state round-robin (the buyer gets that lead instead),
+// keeping his total take fair. A TRASH lead (unrecognizable state) routed to
+// the house banks NO credit — he keeps his normal turns. Stored as a single
+// counter in the existing DistributionCursor table (no schema change). Low
+// lead volume makes the read-modify-write race immaterial, same as the cursor.
+const HOUSE_SKIP_CREDIT_ID = "house:overflow-skip-credit";
+
+async function getHouseSkipCredit(): Promise<number> {
+  if (!prisma) return 0;
+  const row = await prisma.distributionCursor.findUnique({ where: { id: HOUSE_SKIP_CREDIT_ID } });
+  const n = parseInt(row?.lastRecipientId ?? "0", 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+async function setHouseSkipCredit(n: number): Promise<void> {
+  if (!prisma) return;
+  const v = String(Math.max(0, n));
+  await prisma.distributionCursor.upsert({
+    where: { id: HOUSE_SKIP_CREDIT_ID },
+    update: { lastRecipientId: v },
+    create: { id: HOUSE_SKIP_CREDIT_ID, lastRecipientId: v },
+  });
+}
+
+/** Consume one skip credit if any are banked; returns true if the house's turn should be skipped. */
+async function consumeHouseSkipCredit(): Promise<boolean> {
+  const cur = await getHouseSkipCredit();
+  if (cur <= 0) return false;
+  await setHouseSkipCredit(cur - 1);
+  return true;
+}
+
 export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   if (!prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -477,8 +513,15 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     for (let step = 1; step <= rotation.length; step++) {
       const rid = rotation[(lastIdx + step) % rotation.length];
       if (rid === house.userId) {
-        // House's turn: the lead goes to the house CRM (Ryan). Replacements
-        // already had first claim at the top of this function.
+        // House's turn. But if Ryan has banked skip-credit from recognized
+        // overflow leads (states no buyer covers), spend one and skip his turn
+        // so a buyer gets this lead instead — keeping his total take fair. Only
+        // skip when there's actually a buyer to hand it to.
+        if (buyerIds.length > 0 && (await consumeHouseSkipCredit())) {
+          continue; // Ryan skips — a prior free overflow lead already compensated him
+        }
+        // The lead goes to the house CRM (Ryan). Replacements already had first
+        // claim at the top of this function.
         if (await assignLeadToHouse(leadId, "round-robin turn (house)")) { await setCursor(rid); return; }
         continue; // house declined (e.g. lead not fresh) — try the next buyer
       }
@@ -491,5 +534,14 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // No eligible open order (or the rotation couldn't place it): the house
   // catch-all so every lead lands somewhere. Replacements already had first
   // claim at the top.
-  await assignLeadToHouse(leadId, "not claimed by any open order");
+  const genuineOverflow = licensedOrders.length === 0; // no buyer order covers this lead's state
+  const assignedToHouse = await assignLeadToHouse(leadId, "not claimed by any open order");
+
+  // Fairness: if this was a RECOGNIZED state with no buyer (true overflow Ryan
+  // received for free), bank a skip-credit so he forfeits a future covered-state
+  // round-robin turn. A TRASH lead (unrecognizable state) banks nothing — he
+  // keeps his turns. Only when the house actually took the lead.
+  if (assignedToHouse && genuineOverflow && isRecognizedUsLocation(lead.state)) {
+    await setHouseSkipCredit((await getHouseSkipCredit()) + 1);
+  }
 }
