@@ -479,3 +479,73 @@ export async function sendTeamInviteEmail({
 
   return sendEmail({ to: toEmail, subject, html });
 }
+
+/**
+ * Weekly admin digest: clients who aren't working their leads. One email to
+ * each admin listing flagged accounts (never worked a lead, piled-up New Lead
+ * inventory, or gone quiet) so stalled buyers get a nudge before they churn.
+ * See app/api/cron/stalled-leads/route.ts + lib/leadActivity.ts.
+ */
+export async function sendStalledLeadsDigestEmail({
+  toEmail,
+  flagged,
+  totals,
+  dashboardUrl,
+}: {
+  toEmail: string;
+  flagged: {
+    name: string;
+    email: string;
+    total: number;
+    untouched: number;
+    worked: number;
+    workedPct: number;
+    converted: number;
+    quietDays: number | null;
+    reasons: string[];
+  }[];
+  totals: { clients: number; leads: number; worked: number; converted: number; untouched: number };
+  dashboardUrl?: string;
+}) {
+  const url = dashboardUrl ?? "https://advertisely.io/leads";
+  const workedPct = totals.leads ? Math.round((totals.worked / totals.leads) * 100) : 0;
+  const subject =
+    flagged.length === 0
+      ? `✅ Lead activity: all clients working their leads`
+      : `⚠️ ${flagged.length} client${flagged.length === 1 ? "" : "s"} not working their leads (${totals.untouched} leads idle)`;
+
+  const rows = flagged
+    .map((c) => {
+      const last = c.quietDays === null ? "never" : `${c.quietDays}d ago`;
+      const pctColor = c.workedPct >= 60 ? "#059669" : c.workedPct >= 20 ? "#d97706" : "#dc2626";
+      return `<tr style="border-bottom:1px solid #eef2f7;">
+<td style="padding:10px;font-size:13px;font-weight:600;color:#0f172a;">${escapeHtml(c.name || c.email)}<div style="font-size:11px;color:#94a3b8;font-weight:400;">${escapeHtml(c.email)}</div></td>
+<td style="padding:10px;font-size:13px;color:#0f172a;text-align:center;">${c.total}</td>
+<td style="padding:10px;font-size:13px;font-weight:700;color:#dc2626;text-align:center;">${c.untouched}</td>
+<td style="padding:10px;font-size:13px;font-weight:700;color:${pctColor};text-align:center;">${c.workedPct}%</td>
+<td style="padding:10px;font-size:12px;color:#475569;text-align:center;white-space:nowrap;">${last}</td>
+<td style="padding:10px;font-size:12px;color:#64748b;">${escapeHtml(c.reasons.join("; "))}</td></tr>`;
+    })
+    .join("");
+
+  const tableHtml = flagged.length
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate;overflow:hidden;margin:8px 0 20px;">
+<thead><tr style="background:#0f172a;text-align:left;">${["Client", "Leads", "Idle", "Worked", "Last move", "Why flagged"].map((h) => `<th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;${h === "Leads" || h === "Idle" || h === "Worked" || h === "Last move" ? "text-align:center;" : ""}">${h}</th>`).join("")}</tr></thead>
+<tbody>${rows}</tbody></table>`
+    : `<p style="margin:0 0 20px;font-size:15px;color:#059669;font-weight:600;">Every client with leads has moved at least some off New Lead this week. Nice.</p>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;"><tr><td align="center">
+<table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:#dc2626;padding:24px 32px;"><div style="color:#fff;font-size:20px;font-weight:700;">Advertisely</div><div style="color:#fca5a5;font-size:13px;margin-top:2px;">Weekly Lead-Activity Report</div></td></tr>
+<tr><td style="padding:28px 32px;">
+<p style="margin:0 0 6px;font-size:20px;font-weight:700;color:#0f172a;">Who's working their leads</p>
+<p style="margin:0 0 18px;font-size:14px;color:#475569;line-height:1.6;">Across <strong>${totals.clients}</strong> client pipelines: <strong>${totals.leads}</strong> leads, <strong>${workedPct}%</strong> worked, <strong>${totals.converted}</strong> in a conversion stage. <strong style="color:#dc2626;">${totals.untouched}</strong> leads are sitting untouched in New Lead.</p>
+${tableHtml}
+<div style="text-align:center;margin:4px 0 8px;"><a href="${url}" style="display:inline-block;background:#dc2626;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;">Open Lead CRM →</a></div>
+<p style="margin:16px 0 0;font-size:12px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:14px;">"Idle" = leads still in New Lead. "Worked" = share of a client's leads moved into a later stage. Flagged when a client has never worked a lead, has ${/* threshold mirrors lib/leadActivity.ts */ ""}10+ idle leads, or has gone 7+ days without a stage move.</p>
+</td></tr></table></td></tr></table></body></html>`;
+
+  return sendEmail({ to: toEmail, subject, html });
+}
