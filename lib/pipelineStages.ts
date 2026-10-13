@@ -12,6 +12,8 @@ import {
   type StageTone,
   STAGE_TONE_SET,
   RESERVED_STAGE_IDS,
+  CONVERSION_STAGE_IDS,
+  isConversionStage,
   WON_STAGE_ID,
   INTAKE_STAGE_ID,
   MIN_STAGES,
@@ -73,6 +75,14 @@ export function normalizeStages(input: unknown): PipelineStage[] | null {
     if (raw && typeof raw === "object") {
       const rid = (raw as Record<string, unknown>).id;
       if (typeof rid === "string" && (RESERVED_STAGE_IDS as readonly string[]).includes(rid) && !usedIds.has(rid)) {
+        usedIds.add(rid);
+        // Conversion stages are LOCKED: always force the default label + tone so
+        // they can't be renamed/recolored (they drive the Meta ad-tracking API).
+        if (isConversionStage(rid)) {
+          out.push({ ...DEFAULT_BY_ID.get(rid)! });
+          continue;
+        }
+        // The intake anchor (new-lead) keeps any client-supplied label/tone.
         const label =
           typeof (raw as any).label === "string" && (raw as any).label.trim()
             ? (raw as any).label.trim().slice(0, MAX_STAGE_LABEL_LEN)
@@ -80,7 +90,6 @@ export function normalizeStages(input: unknown): PipelineStage[] | null {
         const tone: StageTone = STAGE_TONE_SET.has((raw as any).tone)
           ? (raw as any).tone
           : DEFAULT_BY_ID.get(rid)!.tone;
-        usedIds.add(rid);
         out.push({ id: rid, label, tone });
         continue;
       }
@@ -89,8 +98,9 @@ export function normalizeStages(input: unknown): PipelineStage[] | null {
     if (s) out.push(s);
   }
 
-  // Ensure both reserved anchors exist. If missing, reinsert from defaults:
-  // intake at the front, the won stage at the end.
+  // Guarantee every reserved stage exists. Intake goes to the front; the won
+  // stage (issued-paid) to the end; the other conversion stages sit just before
+  // it (in canonical order) — so ad-tracking stages are always present.
   if (!usedIds.has(INTAKE_STAGE_ID)) {
     out.unshift({ ...DEFAULT_BY_ID.get(INTAKE_STAGE_ID)! });
     usedIds.add(INTAKE_STAGE_ID);
@@ -98,6 +108,12 @@ export function normalizeStages(input: unknown): PipelineStage[] | null {
   if (!usedIds.has(WON_STAGE_ID)) {
     out.push({ ...DEFAULT_BY_ID.get(WON_STAGE_ID)! });
     usedIds.add(WON_STAGE_ID);
+  }
+  for (const id of CONVERSION_STAGE_IDS) {
+    if (id === WON_STAGE_ID || usedIds.has(id)) continue;
+    const wonIdx = out.findIndex((s) => s.id === WON_STAGE_ID);
+    out.splice(wonIdx < 0 ? out.length : wonIdx, 0, { ...DEFAULT_BY_ID.get(id)! });
+    usedIds.add(id);
   }
 
   if (out.length < MIN_STAGES) return null; // unusable → caller uses defaults

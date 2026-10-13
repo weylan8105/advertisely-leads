@@ -34,6 +34,9 @@ export async function GET(req: NextRequest) {
   const myId = (session.user as any).id as string;
   // Owners/admins can narrow the team view to one agent.
   const agentParam = searchParams.get("agent");
+  // "main" (default) = the agent's own board; "goldmine" = the team-shared
+  // aged-lead pool that every org member can work.
+  const pipelineParam = searchParams.get("pipeline") === "goldmine" ? "goldmine" : "main";
 
   const where: any = {};
   if (statusParam && statusParam !== "all") {
@@ -54,6 +57,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `No account found for "${emailParam}"` }, { status: 404 });
     }
     where.assignedUserId = target.id;
+  } else if (pipelineParam === "goldmine") {
+    // Goldmine is a team-shared pool: every member of the org sees the same
+    // aged leads and can work them. No per-agent narrowing.
+    const ctx = await ensureOrgContext(myId);
+    if (!ctx) return NextResponse.json({ leads: [] });
+    where.organizationId = ctx.organizationId;
+    where.pipeline = "goldmine";
   } else {
     // Each person's CRM shows only THEIR OWN assigned leads — a lead lives in
     // exactly one agent's list, so an upline and a downline agent never both see
@@ -71,6 +81,8 @@ export async function GET(req: NextRequest) {
     } else {
       where.assignedUserId = myId;
     }
+    // The main board never shows leads that have dropped into Goldmine.
+    where.pipeline = "main";
   }
 
   const leads = await prisma.lead.findMany({

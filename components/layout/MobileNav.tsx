@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   LifeBuoy,
+  Gem,
   Menu,
   X,
   LogOut,
@@ -34,6 +35,7 @@ const TABS: Item[] = [
 const ALL: Item[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Lead CRM / Pipeline", icon: Users },
+  { href: "/goldmine", label: "Goldmine", icon: Gem },
   { href: "/team", label: "Team", icon: UsersRound },
   { href: "/orders", label: "Orders", icon: Package },
   { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },

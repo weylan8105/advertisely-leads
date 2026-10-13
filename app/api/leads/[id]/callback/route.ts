@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { getOrgContext, canManageTeam } from "@/lib/org";
+import { canActOnLead } from "@/lib/leadAccess";
 import { syncCallbackEvent } from "@/lib/googleCalendar";
 
 export const runtime = "nodejs";
@@ -30,16 +30,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, assignedUserId: true, organizationId: true, name: true, callbackEventId: true },
+    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true, name: true, callbackEventId: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
-  let allowed = isPlatformAdmin || lead.assignedUserId === userId;
-  if (!allowed && lead.organizationId) {
-    const ctx = await getOrgContext(userId);
-    allowed = !!ctx && ctx.organizationId === lead.organizationId && canManageTeam(ctx.role);
+  if (!(await canActOnLead(userId, isPlatformAdmin, lead))) {
+    return NextResponse.json({ error: "You can't schedule this lead" }, { status: 403 });
   }
-  if (!allowed) return NextResponse.json({ error: "You can't schedule this lead" }, { status: 403 });
 
   await prisma.lead.update({ where: { id: params.id }, data: { callbackAt: at } });
   await prisma.leadActivity.create({

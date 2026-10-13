@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { canActOnLead } from "@/lib/leadAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,18 +30,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, assignedUserId: true, organizationId: true },
+    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
-  // Authorization: own the lead, manage its org, or be a platform admin.
-  const ownsLead = lead.assignedUserId === callerId;
-  let managesOrg = false;
-  if (!ownsLead && !isPlatformAdmin) {
-    const ctx = await ensureOrgContext(callerId);
-    managesOrg = !!ctx && canManageTeam(ctx.role) && !!lead.organizationId && lead.organizationId === ctx.organizationId;
-  }
-  if (!ownsLead && !managesOrg && !isPlatformAdmin) {
+  // Authorization: own the lead, be a platform admin, manage its org, or (for a
+  // Goldmine lead) be any member of its team — handled by canActOnLead.
+  if (!(await canActOnLead(callerId, isPlatformAdmin, lead))) {
     return NextResponse.json({ error: "You can only add notes to your own leads." }, { status: 403 });
   }
 

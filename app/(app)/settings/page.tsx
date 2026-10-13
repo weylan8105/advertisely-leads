@@ -15,13 +15,14 @@ import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
 import { GoogleSheetsConnectCard } from "@/components/settings/GoogleSheetsConnectCard";
 import { GoogleCalendarConnectCard } from "@/components/settings/GoogleCalendarConnectCard";
 import { SendblueConnectCard } from "@/components/settings/SendblueConnectCard";
+import { GoldmineSettingsCard } from "@/components/settings/GoldmineSettingsCard";
 import { integrations } from "@/data/integrations";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
 import { PasswordSettings } from "@/components/settings/PasswordSettings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Webhook, Eye, Copy } from "lucide-react";
 
-const SETTINGS_TABS = ["profile", "security", "integrations", "export", "notifications"];
+const SETTINGS_TABS = ["profile", "security", "integrations", "goldmine", "export", "notifications"];
 
 export default function SettingsPage({
   searchParams,
@@ -43,6 +44,7 @@ export default function SettingsPage({
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="goldmine">Goldmine</TabsTrigger>
           <TabsTrigger value="export">Exports</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
@@ -120,6 +122,12 @@ export default function SettingsPage({
             <GoogleCalendarConnectCard />
 
             <GoogleSheetsConnectCard />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="goldmine">
+          <div className="space-y-6 max-w-2xl">
+            <GoldmineSettingsCard />
           </div>
         </TabsContent>
 

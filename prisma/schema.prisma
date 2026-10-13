@@ -158,6 +158,10 @@ model Lead {
   status          LeadStatus    @default(NEW)
   disposition     String?
   pipelineStage   String        @default("new-lead") // CRM kanban stage id (see data/pipeline.ts)
+  // Which pipeline this lead lives in: "main" (the agent's board) or "goldmine"
+  // (the team-shared aged-lead board). Aged leads auto-move main → goldmine.
+  pipeline        String        @default("main")
+  goldmineAt      DateTime?     // when the lead moved into the Goldmine pipeline
   // Opportunity value the agent assigns to this lead (shown on the card + summed
   // per pipeline stage). Separate from soldPremiumCents (which powers P&L at close).
   valueCents      Int?
@@ -208,6 +212,7 @@ model Lead {
   @@index([state, packageId, status, assignedUserId])
   @@index([receivedAt])
   @@index([organizationId])
+  @@index([organizationId, pipeline])
   @@index([trashedAt])
   @@index([updatedAt])
 }
@@ -484,6 +489,13 @@ model Organization {
   // Round-robin pointer — advanced each time a lead is auto-assigned so the
   // rotation is fair and survives across separate fulfillment runs.
   rrCursor         Int              @default(0)
+  // Goldmine: the team-shared aged-lead pipeline. When enabled, the owner's
+  // main-pipeline leads auto-move here after `goldmineAfterDays` (time since
+  // assignedAt). goldmineStages = this team's Goldmine stage set (same shape as
+  // User.pipelineStages; reserved anchors new-lead/issued-paid always present).
+  goldmineEnabled   Boolean  @default(false)
+  goldmineAfterDays Int?
+  goldmineStages    Json?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 

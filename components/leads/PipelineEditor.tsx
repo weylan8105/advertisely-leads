@@ -5,11 +5,12 @@ import { X, Loader2, Plus, Trash2, ArrowUp, ArrowDown, Lock, RotateCcw, GripVert
 import { Button } from "@/components/ui/button";
 import {
   STAGE_TONES,
-  WON_STAGE_ID,
   INTAKE_STAGE_ID,
   isReservedStage,
+  isConversionStage,
   MAX_STAGES,
   MAX_STAGE_LABEL_LEN,
+  PIPELINE_STAGES,
   type PipelineStage,
   type StageTone,
 } from "@/data/pipeline";
@@ -27,10 +28,15 @@ export function PipelineEditor({
   stages: initial,
   onClose,
   onSaved,
+  endpoint = "/api/pipeline/stages",
+  title = "Customize your pipeline",
 }: {
   stages: PipelineStage[];
   onClose: () => void;
   onSaved: (stages: PipelineStage[]) => void;
+  /** API to PUT { stages } to (and DELETE to reset). Defaults to the user's main pipeline. */
+  endpoint?: string;
+  title?: string;
 }) {
   const [rows, setRows] = useState<Row[]>(() => withKeys(initial));
   const [saving, setSaving] = useState(false);
@@ -71,7 +77,7 @@ export function PipelineEditor({
     }
     setSaving(true);
     try {
-      const res = await fetch("/api/pipeline/stages", {
+      const res = await fetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stages: cleaned }),
@@ -92,7 +98,16 @@ export function PipelineEditor({
     setResetting(true);
     setError(null);
     try {
-      const res = await fetch("/api/pipeline/stages", { method: "DELETE" });
+      // The user's main pipeline resets via DELETE (null = defaults); other
+      // boards (e.g. Goldmine) reset by writing the default stage set back.
+      const res =
+        endpoint === "/api/pipeline/stages"
+          ? await fetch(endpoint, { method: "DELETE" })
+          : await fetch(endpoint, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ stages: PIPELINE_STAGES }),
+            });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not reset");
       onSaved(data.stages as PipelineStage[]);
@@ -131,8 +146,13 @@ export function PipelineEditor({
         <div className="px-6 overflow-y-auto scrollbar-thin flex-1 space-y-2">
           {rows.map((r, idx) => {
             const reserved = isReservedStage(r.id);
-            const role =
-              r.id === INTAKE_STAGE_ID ? "New leads arrive here" : r.id === WON_STAGE_ID ? "Counts as a sale 💰" : null;
+            const conversion = isConversionStage(r.id);
+            const role = conversion
+              ? "Conversion event — locked for ad tracking"
+              : r.id === INTAKE_STAGE_ID
+                ? "New leads arrive here"
+                : null;
+            const toneDot = TONE_DOT[r.tone] ?? "bg-slate-400";
             return (
               <div
                 key={r.key}
@@ -143,30 +163,43 @@ export function PipelineEditor({
               >
                 <GripVertical className="h-4 w-4 text-slate-300 shrink-0" />
 
-                {/* Color picker */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {STAGE_TONES.map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      title={t.label}
-                      onClick={() => update(r.key, { tone: t.value as StageTone })}
-                      className={cn(
-                        "h-4 w-4 rounded-full transition-transform",
-                        t.dot,
-                        r.tone === t.value ? "ring-2 ring-offset-1 ring-slate-500 scale-110" : "opacity-60 hover:opacity-100",
-                      )}
-                    />
-                  ))}
-                </div>
+                {/* Color: a static dot for locked conversion stages, else a picker */}
+                {conversion ? (
+                  <span className="shrink-0 grid place-items-center w-[116px]">
+                    <span className={cn("h-4 w-4 rounded-full", toneDot)} />
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {STAGE_TONES.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        title={t.label}
+                        onClick={() => update(r.key, { tone: t.value as StageTone })}
+                        className={cn(
+                          "h-4 w-4 rounded-full transition-transform",
+                          t.dot,
+                          r.tone === t.value ? "ring-2 ring-offset-1 ring-slate-500 scale-110" : "opacity-60 hover:opacity-100",
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
 
-                {/* Label */}
+                {/* Label — read-only for locked conversion stages */}
                 <div className="flex-1 min-w-0">
                   <input
                     value={r.label}
                     onChange={(e) => update(r.key, { label: e.target.value.slice(0, MAX_STAGE_LABEL_LEN) })}
                     placeholder="Stage name"
-                    className="w-full h-9 rounded-md border border-slate-200 px-2.5 text-sm focus:border-brand-red/50 focus:outline-none"
+                    readOnly={conversion}
+                    disabled={conversion}
+                    className={cn(
+                      "w-full h-9 rounded-md border px-2.5 text-sm focus:outline-none",
+                      conversion
+                        ? "border-slate-200 bg-slate-100 text-muted-foreground cursor-not-allowed"
+                        : "border-slate-200 focus:border-brand-red/50",
+                    )}
                   />
                   {role && (
                     <div className="mt-0.5 pl-0.5 text-[10px] font-medium text-muted-foreground inline-flex items-center gap-1">

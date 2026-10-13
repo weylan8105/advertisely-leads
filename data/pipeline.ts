@@ -37,18 +37,29 @@ export function stageLabel(id: string): string {
 }
 
 // ── Customization anchors ────────────────────────────────────────────────
-// Clients can rename, recolor, reorder, add and delete pipeline stages, but
-// these two ids must always exist so the rest of the app keeps working:
-//   • "new-lead"   — where fresh leads land (the default stage).
-//   • "issued-paid" — the "sold" stage that feeds P&L, conversions and the
-//                     annual-premium prompt / Meta purchase event.
-// They can be relabeled/recolored/moved, just never removed.
-export const RESERVED_STAGE_IDS = ["new-lead", "issued-paid"] as const;
-export const WON_STAGE_ID = "issued-paid";
+// Clients can rename, recolor, reorder, add and delete pipeline stages — EXCEPT
+// the conversion stages below, which are FIXED.
+//
+// CONVERSION_STAGE_IDS are wired to the Meta Conversions API (see lib/metaCapi.ts
+// STAGE_EVENTS) — moving a lead into one fires an ad-optimization event. They are
+// fully locked (no rename/recolor/delete) so ad performance tracking never breaks.
+// "new-lead" is the intake anchor (default stage + routing): it can be
+// relabeled/recolored but never removed.
+export const CONVERSION_STAGE_IDS = ["underwriting", "approved", "issued-not-paid", "issued-paid"] as const;
 export const INTAKE_STAGE_ID = "new-lead";
+export const WON_STAGE_ID = "issued-paid";
+
+// Stages that must ALWAYS exist and can't be deleted (intake + all conversion
+// stages). Conversion stages are additionally locked from renaming/recoloring.
+export const RESERVED_STAGE_IDS = [INTAKE_STAGE_ID, ...CONVERSION_STAGE_IDS] as const;
 
 export function isReservedStage(id: string): boolean {
   return (RESERVED_STAGE_IDS as readonly string[]).includes(id);
+}
+
+/** Conversion-API stage — fully locked (no rename/recolor/delete). */
+export function isConversionStage(id: string): boolean {
+  return (CONVERSION_STAGE_IDS as readonly string[]).includes(id);
 }
 
 // Color options offered in the stage editor (value = StageTone, plus a swatch

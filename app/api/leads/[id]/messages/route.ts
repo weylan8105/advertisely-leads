@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { getOrgContext, canManageTeam } from "@/lib/org";
+import { canActOnLead } from "@/lib/leadAccess";
 import { isSendblueConfigured, sendMessage, toE164 } from "@/lib/sendblue";
 
 export const runtime = "nodejs";
@@ -16,16 +16,13 @@ async function authorize(leadId: string) {
 
   const lead = await prisma!.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, name: true, phone: true, assignedUserId: true, organizationId: true },
+    select: { id: true, name: true, phone: true, assignedUserId: true, organizationId: true, pipeline: true },
   });
   if (!lead) return { error: NextResponse.json({ error: "Lead not found" }, { status: 404 }) };
 
-  let allowed = isAdmin || lead.assignedUserId === userId;
-  if (!allowed && lead.organizationId) {
-    const ctx = await getOrgContext(userId);
-    allowed = !!ctx && ctx.organizationId === lead.organizationId && canManageTeam(ctx.role);
+  if (!(await canActOnLead(userId, isAdmin, lead))) {
+    return { error: NextResponse.json({ error: "You can't message this lead" }, { status: 403 }) };
   }
-  if (!allowed) return { error: NextResponse.json({ error: "You can't message this lead" }, { status: 403 }) };
   return { userId, lead };
 }
 

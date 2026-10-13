@@ -13,6 +13,7 @@ import {
   Shield,
   Sparkles,
   LifeBuoy,
+  Gem,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/leads", label: "Lead CRM / Pipeline", icon: Users },
+      { href: "/goldmine", label: "Goldmine", icon: Gem },
       { href: "/team", label: "Team", icon: UsersRound },
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },
