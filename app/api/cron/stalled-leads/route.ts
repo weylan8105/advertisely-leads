@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     name: c.name,
     email: c.email,
     total: c.total,
-    untouched: c.untouched,
+    idle: c.idle,
     worked: c.worked,
     workedPct: c.workedPct,
     converted: c.converted,
