@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
 import { stagesForUser, normalizeStages } from "@/lib/pipelineStages";
 import { RESERVED_STAGE_IDS, MIN_STAGES } from "@/data/pipeline";
+import { GOLDMINE_DEFAULT_DAYS } from "@/lib/goldmine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +64,17 @@ export async function PUT(req: NextRequest) {
   else if (typeof body.afterDays === "number" && Number.isFinite(body.afterDays)) {
     data.goldmineAfterDays = Math.max(1, Math.round(body.afterDays));
   }
+
+  // Turning Goldmine on for the first time defaults the auto-move window to 30
+  // days (adjustable). Only applied when no value is set and none was provided.
+  if (body.enabled === true && data.goldmineAfterDays === undefined) {
+    const current = await prisma.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { goldmineAfterDays: true },
+    });
+    if (current?.goldmineAfterDays == null) data.goldmineAfterDays = GOLDMINE_DEFAULT_DAYS;
+  }
+
   if (body.stages !== undefined) {
     const normalized = normalizeStages(body.stages);
     if (!normalized || normalized.length < MIN_STAGES) {

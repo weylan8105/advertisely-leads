@@ -30,7 +30,8 @@ export function GoldmineSettingsCard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d: Config | null) => {
         setConfig(d);
-        setDays(d?.afterDays ? String(d.afterDays) : "");
+        // Default the window to 30 days (adjustable) when none is set yet.
+        setDays(d?.afterDays ? String(d.afterDays) : "30");
       })
       .catch(() => setConfig(null))
       .finally(() => setLoading(false));
@@ -110,8 +111,8 @@ export function GoldmineSettingsCard() {
                 <div className="border-t border-slate-100 pt-4">
                   <label className="text-sm font-medium">Move leads to Goldmine after…</label>
                   <p className="text-xs text-muted-foreground mb-2">
-                    Days since a lead was assigned to you. Sold leads never move. Leave blank to move none
-                    automatically (you can still move leads by hand).
+                    Days since a lead was assigned to you (defaults to 30). Sold leads never move. Leave
+                    blank to move none automatically (you can still move leads by hand).
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -119,7 +120,7 @@ export function GoldmineSettingsCard() {
                       min={1}
                       value={days}
                       onChange={(e) => setDays(e.target.value)}
-                      placeholder="e.g. 30"
+                      placeholder="30"
                       className="w-28 h-10 rounded-md border border-slate-200 px-3 text-sm focus:border-brand-red focus:outline-none"
                     />
                     <span className="text-sm text-muted-foreground">days</span>
