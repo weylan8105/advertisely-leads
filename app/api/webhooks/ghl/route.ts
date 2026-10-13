@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
+import { normalizeState } from "@/lib/leadImport";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,7 +95,9 @@ export async function POST(req: NextRequest) {
 
   const phone = pick(flat, ["phone", "phone_number", "phoneNumber"]);
   const email = pick(flat, ["email", "email_address"]) ?? "";
-  const state = pick(flat, ["state", "us_state", "State"]) ?? "";
+  // Free-text state field — coerce to a 2-letter code so coverage/round-robin
+  // matching works and the lead doesn't leak to the house on a formatting typo.
+  const state = normalizeState(pick(flat, ["state", "us_state", "State"]) ?? "").code;
   const ageRaw = pick(flat, ["age"]);
   const age = ageRaw ? parseInt(ageRaw.replace(/[^0-9]/g, ""), 10) || null : null;
   const incomeRaw = pick(flat, ["income", "household_income", "annual_income"]);

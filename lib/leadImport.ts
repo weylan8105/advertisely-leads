@@ -16,12 +16,112 @@ const US_STATES: Record<string, string> = {
 };
 const VALID_STATES = new Set(Object.values(US_STATES));
 
-/** Normalize a state value to a 2-letter uppercase code. Returns {code, unknown}. */
+// Common colloquial / newspaper abbreviations and short forms that aren't the
+// full name and aren't the 2-letter code (so the exact matches miss them).
+// Facebook lead forms produce these constantly (free-text state field).
+const STATE_ABBREV: Record<string, string> = {
+  ca: "CA", cal: "CA", cali: "CA", calif: "CA",
+  fl: "FL", fla: "FL", flo: "FL",
+  mass: "MA",
+  penn: "PA", penna: "PA",
+  conn: "CT",
+  tenn: "TN", tennvia: "TN",
+  ariz: "AZ",
+  colo: "CO",
+  wash: "WA",
+  wis: "WI", wisc: "WI",
+  mich: "MI",
+  minn: "MN",
+  nev: "NV",
+  okla: "OK",
+  ore: "OR", oreg: "OR",
+  kan: "KS", kans: "KS",
+  neb: "NE", nebr: "NE",
+  dela: "DE",
+  mont: "MT",
+  wyo: "WY",
+  wva: "WV", wvirginia: "WV",
+};
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let curr = new Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+/**
+ * Normalize a state value to a 2-letter uppercase code. Returns {code, unknown}.
+ *
+ * Facebook instant-form state fields are free text and arrive messy: full names
+ * ("California"), codes ("CA"), abbreviations ("Calif.", "Fla"), city+state
+ * ("Dallas, TX" / "DALLAS:TX"), and typos ("Florids"). Everything that resolves
+ * to a real state is coerced to its code so coverage/round-robin matching works
+ * and the lead doesn't leak to the house on a formatting mismatch. Anything we
+ * genuinely can't resolve is returned unchanged with unknown=true.
+ */
 export function normalizeState(raw: string): { code: string; unknown: boolean } {
   const s = (raw ?? "").trim();
   if (!s) return { code: "", unknown: false };
+
+  // 1. Exact 2-letter code / exact full name.
   if (VALID_STATES.has(s.toUpperCase())) return { code: s.toUpperCase(), unknown: false };
   if (US_STATES[s.toLowerCase()]) return { code: US_STATES[s.toLowerCase()], unknown: false };
+
+  const letters = s.toLowerCase().replace(/[^a-z]/g, "");
+
+  // 2. Punctuated 2-letter code ("N.Y." → NY) and known abbreviations.
+  if (letters.length === 2 && VALID_STATES.has(letters.toUpperCase())) {
+    return { code: letters.toUpperCase(), unknown: false };
+  }
+  if (STATE_ABBREV[letters]) return { code: STATE_ABBREV[letters], unknown: false };
+
+  // 3. Embedded standalone 2-letter code ("Dallas, TX", "DALLAS:TX", "TX - Texas").
+  //    Only when exactly one distinct valid code appears (avoids ambiguity).
+  const tokens = (s.toUpperCase().match(/\b[A-Z]{2}\b/g) ?? []).filter((t) => VALID_STATES.has(t));
+  const distinctTokens = [...new Set(tokens)];
+  if (distinctTokens.length === 1) return { code: distinctTokens[0], unknown: false };
+
+  // 4. Unique full-name prefix ("Calif" → California, "Penn" → Pennsylvania).
+  if (letters.length >= 4) {
+    const pref = Object.keys(US_STATES).filter((name) => name.replace(/\s/g, "").startsWith(letters));
+    const prefCodes = [...new Set(pref.map((name) => US_STATES[name]))];
+    if (prefCodes.length === 1) return { code: prefCodes[0], unknown: false };
+  }
+
+  // 5. Fuzzy full-name match for typos ("Florids" → Florida). Unique best only.
+  if (letters.length >= 3) {
+    let best: { code: string; dist: number } | null = null;
+    let tie = false;
+    for (const [name, code] of Object.entries(US_STATES)) {
+      const d = levenshtein(letters, name.replace(/\s/g, ""));
+      const limit = name.length >= 8 ? 2 : 1;
+      if (d <= limit) {
+        if (!best || d < best.dist) { best = { code, dist: d }; tie = false; }
+        else if (d === best.dist && code !== best.code) tie = true;
+      }
+    }
+    if (best && !tie) return { code: best.code, unknown: false };
+  }
+
+  // 6. Exactly one full state name appears as a word ("State of California").
+  const named = [...new Set(
+    Object.keys(US_STATES)
+      .filter((name) => new RegExp(`\\b${name}\\b`, "i").test(s))
+      .map((name) => US_STATES[name]),
+  )];
+  if (named.length === 1) return { code: named[0], unknown: false };
+
   return { code: s, unknown: true };
 }
 
