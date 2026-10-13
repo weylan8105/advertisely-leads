@@ -7,6 +7,7 @@ import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
+import { LeadMessages } from "@/components/leads/LeadMessages";
 import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
 
 function prettyKey(k: string) {
@@ -363,6 +364,9 @@ export function LeadDetailModal({
               ))}
             </div>
           </div>
+
+          {/* Text the lead (iMessage/SMS via Sendblue). */}
+          <LeadMessages leadId={lead.id} leadName={lead.name} />
 
           {/* Agent notes — add and review notes on this lead. */}
           <div>

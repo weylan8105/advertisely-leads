@@ -37,6 +37,10 @@ model User {
   // (see data/pipeline.ts). The reserved anchor ids "new-lead" and
   // "issued-paid" are always present so P&L / conversions keep working.
   pipelineStages Json?
+  // Sendblue texting: the agent's assigned Sendblue line (E.164, the number
+  // leads see) and optional seat id. Null = this agent can't text yet.
+  sendblueNumber String?
+  sendblueSeatId String?
   createdAt     DateTime  @default(now())
 
   accounts              Account[]
@@ -199,12 +203,33 @@ model Lead {
   activity            LeadActivity[]
   exportLogs          ExportLog[]
   replacementRequests ReplacementRequest[]
+  messages            Message[]
 
   @@index([state, packageId, status, assignedUserId])
   @@index([receivedAt])
   @@index([organizationId])
   @@index([trashedAt])
   @@index([updatedAt])
+}
+
+// A text message (iMessage/SMS/RCS) to or from a lead, sent through Sendblue.
+model Message {
+  id           String   @id @default(cuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId       String? // the agent whose Sendblue line sent/received it
+  direction    String // "outbound" | "inbound"
+  service      String? // "iMessage" | "SMS" | "RCS"
+  content      String   @db.Text
+  mediaUrls    String[] @default([])
+  status       String? // Sendblue status: QUEUED/SENT/DELIVERED/ERROR/...
+  errorMessage String?
+  providerId   String?  @unique // Sendblue message_handle — idempotency key
+  fromNumber   String?
+  toNumber     String?
+  createdAt    DateTime @default(now())
+
+  @@index([leadId, createdAt])
 }
 
 enum LeadStatus {
