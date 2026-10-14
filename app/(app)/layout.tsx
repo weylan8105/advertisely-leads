@@ -2,6 +2,7 @@ import { SidebarNav } from "@/components/layout/SidebarNav";
 import { DashboardTopbar } from "@/components/layout/DashboardTopbar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { PhonePrompt } from "@/components/account/PhonePrompt";
+import { AnnouncementModal } from "@/components/announcements/AnnouncementModal";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <MobileNav />
       <PhonePrompt />
+      <AnnouncementModal />
     </div>
   );
 }
