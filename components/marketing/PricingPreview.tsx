@@ -29,9 +29,12 @@ export function PricingPreview() {
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        {leadPackages.slice(0, 3).map((p) => (
-          <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "blue-collar-iul"} />
-        ))}
+        {leadPackages
+          .filter((p) => !p.hidden) // real-time only — aged/pool entries are paused & hidden
+          .slice(0, 3)
+          .map((p) => (
+            <LeadPackageCard key={p.id} pkg={p} highlight={p.id === "iul-fresh"} />
+          ))}
       </div>
     </section>
   );

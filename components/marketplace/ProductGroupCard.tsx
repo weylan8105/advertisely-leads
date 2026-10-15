@@ -70,8 +70,7 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
     onAdded?.();
   }
 
-  const headlinePrice = tiers[0]?.pricePerLead; // freshest tier ($50)
-  const lowestPrice = tiers.length ? Math.min(...tiers.map((t) => t.pricePerLead)) : undefined;
+  const headlinePrice = tiers[0]?.pricePerLead; // freshest tier
 
   // Availability guards for the selected tier (fresh is uncapped).
   const selCap = tierCap(selected);
@@ -122,13 +121,13 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
         <div className="mt-4 flex items-baseline gap-2">
           <span className="text-3xl font-semibold tracking-tight">{formatCurrency(headlinePrice ?? 0)}</span>
           <span className="text-xs text-muted-foreground">/ lead</span>
-          {lowestPrice !== undefined && lowestPrice !== headlinePrice && (
-            <span className="text-xs text-muted-foreground">· down to {formatCurrency(lowestPrice)} aged</span>
-          )}
         </div>
 
-        {/* Age subcategories */}
+        {/* Age subcategories — only when there's more than one tier to pick from. */}
+        {tiers.length > 1 && (
         <div className="mt-4 text-[11px] uppercase tracking-wide text-muted-foreground">Choose lead age</div>
+        )}
+        {tiers.length > 1 && (
         <div className="mt-2 space-y-1.5">
           {tiers.map((t) => {
             const active = t.id === selected?.id;
@@ -189,6 +188,7 @@ export function ProductGroupCard({ group, onAdded }: { group: ProductGroup; onAd
             );
           })}
         </div>
+        )}
 
         {/* Quantity + add */}
         <div className="mt-5 flex items-center justify-between gap-3">

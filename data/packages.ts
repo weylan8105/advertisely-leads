@@ -90,7 +90,7 @@ export const leadPackages: LeadPackage[] = [
     minimumOrder: 25, // max(25, ceil(150/22)=7) = 25
     estimatedDelivery: "Within 24 hours",
     badge: "Best value",
-    available: true,
+    available: false, // aged leads paused — real-time only
     leadPackageId: "aged-iul",
     ageMinDays: 6,
     ageMaxDays: 30,
@@ -107,7 +107,7 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 12,
     minimumOrder: 25, // max(25, ceil(150/12)=13) = 25
     estimatedDelivery: "Within 24 hours",
-    available: true,
+    available: false, // aged leads paused — real-time only
     leadPackageId: "aged-iul",
     ageMinDays: 30,
     ageMaxDays: 45,
@@ -124,7 +124,7 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 9,
     minimumOrder: 25, // max(25, ceil(150/9)=17) = 25
     estimatedDelivery: "Within 24 hours",
-    available: true,
+    available: false, // aged leads paused — real-time only
     leadPackageId: "aged-iul",
     ageMinDays: 45,
     ageMaxDays: 90,
@@ -141,7 +141,7 @@ export const leadPackages: LeadPackage[] = [
     pricePerLead: 6,
     minimumOrder: 25, // max(25, ceil(150/6)=25) = 25
     estimatedDelivery: "Within 24 hours",
-    available: true,
+    available: false, // aged leads paused — real-time only
     leadPackageId: "aged-iul",
     ageMinDays: 90,
     ageMaxDays: 150,
@@ -159,7 +159,7 @@ export const leadPackages: LeadPackage[] = [
     minimumOrder: 50, // max(25, ceil(150/3)=50) = 50
     estimatedDelivery: "Within 24 hours",
     badge: "Lowest price",
-    available: true,
+    available: false, // aged leads paused — real-time only
     leadPackageId: "aged-iul",
     ageMinDays: 150,
     features: ["150+ days old", "TCPA consent captured", "Deepest discount", "Same IUL source"],
@@ -224,7 +224,7 @@ export const productGroups: ProductGroup[] = [
     name: "Blue Collar IUL Leads",
     tagline: "Tax-free retirement prospects who raised their hand.",
     blurb:
-      "Blue-collar W-2 earners and tradesmen who responded to a tax-free, tax-advantaged early-retirement offer — high-intent prospects looking to retire sooner and keep more of what they earn. Start with fresh leads for the highest contact rates, or go older for deep volume discounts.",
+      "Blue-collar W-2 earners and tradesmen who responded to a tax-free, tax-advantaged early-retirement offer — high-intent prospects looking to retire sooner and keep more of what they earn. Delivered in real time for the highest contact and conversion rates.",
     available: true,
   },
   {
