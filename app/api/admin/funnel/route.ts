@@ -10,10 +10,57 @@ export const dynamic = "force-dynamic";
 // iul_interest -> coverage -> beneficiary -> age -> contact.
 const STEP_LABELS = ["What matters most", "Coverage wanted", "Beneficiary", "Age", "Contact"];
 
+const DAY = 86_400_000;
+const dayStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+const parseYmd = (s: string | null): Date | null => {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+/** Resolve a range preset (or explicit from/to) into UTC [from, to) bounds. */
+function resolveRange(range: string, fromParam: string | null, toParam: string | null) {
+  const now = new Date();
+  const todayStart = dayStart(now);
+
+  const cFrom = parseYmd(fromParam);
+  const cTo = parseYmd(toParam);
+  if (cFrom && cTo) {
+    // Inclusive of the 'to' day.
+    return { from: cFrom, to: new Date(cTo.getTime() + DAY), range: "custom" };
+  }
+
+  switch (range) {
+    case "today":
+      return { from: todayStart, to: now, range };
+    case "yesterday":
+      return { from: new Date(todayStart.getTime() - DAY), to: todayStart, range };
+    case "14d":
+      return { from: new Date(now.getTime() - 14 * DAY), to: now, range };
+    case "30d":
+      return { from: new Date(now.getTime() - 30 * DAY), to: now, range };
+    case "90d":
+      return { from: new Date(now.getTime() - 90 * DAY), to: now, range };
+    case "this_month":
+      return { from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), to: now, range };
+    case "last_month":
+      return {
+        from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)),
+        to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+        range,
+      };
+    case "max":
+      return { from: new Date(0), to: now, range };
+    case "7d":
+    default:
+      return { from: new Date(now.getTime() - 7 * DAY), to: now, range: "7d" };
+  }
+}
+
 /**
- * GET /api/admin/funnel?range=today|7d|30d
- * Landing-page funnel: page views, how far visitors get (per step), completions.
- * Admin only.
+ * GET /api/admin/funnel?range=today|yesterday|7d|14d|30d|90d|this_month|last_month|max
+ *   or ?from=YYYY-MM-DD&to=YYYY-MM-DD (custom range)
+ * Landing-page funnel analytics for the ABCA quiz. Admin only.
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -21,42 +68,45 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
   if (!isDatabaseConfigured || !prisma) {
-    return NextResponse.json({ views: 0, completes: 0, steps: [] });
+    return NextResponse.json({ views: 0, completes: 0, steps: [], series: [] });
   }
 
   const params = new URL(req.url).searchParams;
-  const range = params.get("range") ?? "7d";
   const source = params.get("source") ?? "abca-quiz";
-  const now = new Date();
-  let from: Date;
-  if (range === "today") {
-    from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  } else if (range === "30d") {
-    from = new Date(Date.now() - 30 * 86_400_000);
-  } else {
-    from = new Date(Date.now() - 7 * 86_400_000);
-  }
+  const { from, to, range } = resolveRange(
+    params.get("range") ?? "7d",
+    params.get("from"),
+    params.get("to"),
+  );
 
-  const [viewsRows, stepRows, completeRows, adViewsRows, adCompletesRows] = await Promise.all([
+  const [viewsRows, stepRows, completeRows, adViewsRows, adCompletesRows, seriesRows] = await Promise.all([
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
-      WHERE type = 'view' AND "source" = ${source} AND "createdAt" >= ${from}`,
+      WHERE type = 'view' AND "source" = ${source} AND "createdAt" >= ${from} AND "createdAt" < ${to}`,
     prisma.$queryRaw<{ step: number; c: number }[]>`
       SELECT "step", COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
-      WHERE type = 'step' AND "step" IS NOT NULL AND "source" = ${source} AND "createdAt" >= ${from}
+      WHERE type = 'step' AND "step" IS NOT NULL AND "source" = ${source} AND "createdAt" >= ${from} AND "createdAt" < ${to}
       GROUP BY "step" ORDER BY "step"`,
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
-      WHERE type = 'complete' AND "source" = ${source} AND "createdAt" >= ${from}`,
-    // Ad visitors = sessions that arrived with a Facebook click id.
+      WHERE type = 'complete' AND "source" = ${source} AND "createdAt" >= ${from} AND "createdAt" < ${to}`,
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
       WHERE type = 'view' AND "source" = ${source} AND "fbclid" IS NOT NULL AND "fbclid" <> ''
-        AND "createdAt" >= ${from}`,
+        AND "createdAt" >= ${from} AND "createdAt" < ${to}`,
     prisma.$queryRaw<{ c: number }[]>`
       SELECT COUNT(DISTINCT "sessionId")::int AS c FROM "FunnelEvent"
       WHERE type = 'complete' AND "source" = ${source} AND "fbclid" IS NOT NULL AND "fbclid" <> ''
-        AND "createdAt" >= ${from}`,
+        AND "createdAt" >= ${from} AND "createdAt" < ${to}`,
+    // Daily trend: distinct sessions per day for views / completes / ad views.
+    prisma.$queryRaw<{ day: Date; views: number; completes: number; adviews: number }[]>`
+      SELECT date_trunc('day', "createdAt") AS day,
+        COUNT(DISTINCT CASE WHEN type='view' THEN "sessionId" END)::int AS views,
+        COUNT(DISTINCT CASE WHEN type='complete' THEN "sessionId" END)::int AS completes,
+        COUNT(DISTINCT CASE WHEN type='view' AND "fbclid" IS NOT NULL AND "fbclid" <> '' THEN "sessionId" END)::int AS adviews
+      FROM "FunnelEvent"
+      WHERE "source" = ${source} AND "createdAt" >= ${from} AND "createdAt" < ${to}
+      GROUP BY day ORDER BY day`,
   ]);
 
   const views = viewsRows[0]?.c ?? 0;
@@ -65,33 +115,47 @@ export async function GET(req: NextRequest) {
   const adCompletes = adCompletesRows[0]?.c ?? 0;
   const byStep = new Map(stepRows.map((r) => [Number(r.step), Number(r.c)]));
 
-  // Each session fires a "step" event for every step it renders, so the distinct
-  // count per step IS the cumulative "reached step N" (monotonic). Cap at the
-  // current funnel's step count so stale events from the old funnel (which had
-  // more steps) don't add phantom "Step 6/7" rows.
   const maxStep = STEP_LABELS.length;
   const steps = [];
+  let biggestDrop = { step: 0, label: "", dropPct: 0, lost: 0 };
   for (let n = 1; n <= maxStep; n++) {
     const count = byStep.get(n) ?? 0;
-    const prev = n === 1 ? views || count : (byStep.get(n - 1) ?? 0);
-    steps.push({
-      step: n,
-      label: STEP_LABELS[n - 1] ?? `Step ${n}`,
-      count,
-      // % of the previous step that continued to this one
-      stepConversion: prev > 0 ? Math.round((count / prev) * 100) : 0,
-    });
+    const prevCount = n === 1 ? views || count : byStep.get(n - 1) ?? 0;
+    const stepConversion = prevCount > 0 ? Math.round((count / prevCount) * 100) : 0;
+    const dropPct = n === 1 ? 0 : 100 - stepConversion;
+    const lost = Math.max(0, prevCount - count);
+    if (n > 1 && dropPct >= biggestDrop.dropPct) {
+      biggestDrop = { step: n, label: STEP_LABELS[n - 1] ?? `Step ${n}`, dropPct, lost };
+    }
+    steps.push({ step: n, label: STEP_LABELS[n - 1] ?? `Step ${n}`, count, stepConversion, dropPct, lost });
   }
+
+  const series = seriesRows.map((r) => ({
+    date: new Date(r.day).toISOString().slice(0, 10),
+    views: Number(r.views),
+    completes: Number(r.completes),
+    adViews: Number(r.adviews),
+  }));
+
+  const nonAdViews = Math.max(0, views - adViews);
+  const nonAdCompletes = Math.max(0, completes - adCompletes);
 
   return NextResponse.json({
     range,
     from: from.toISOString(),
+    to: to.toISOString(),
     views,
     completes,
     completionRate: views > 0 ? Math.round((completes / views) * 100) : 0,
     adViews,
     adCompletes,
     adCompletionRate: adViews > 0 ? Math.round((adCompletes / adViews) * 100) : 0,
+    adSharePct: views > 0 ? Math.round((adViews / views) * 100) : 0,
+    nonAdViews,
+    nonAdCompletes,
+    nonAdCompletionRate: nonAdViews > 0 ? Math.round((nonAdCompletes / nonAdViews) * 100) : 0,
     steps,
+    biggestDrop: biggestDrop.step > 0 ? biggestDrop : null,
+    series,
   });
 }
