@@ -29,8 +29,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "./StatusBadge";
 import { ExportButton } from "./ExportButton";
+import {
+  PIPELINE_STAGES,
+  DEFAULT_STAGE,
+  STAGE_TONE_STYLES,
+  type PipelineStage,
+} from "@/data/pipeline";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -47,13 +53,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
-import { leadStatuses } from "@/data/leads";
 import { AVAILABLE_STATES, US_STATES } from "@/data/states";
 
 interface LeadTableProps {
   leads: Lead[];
   showBulk?: boolean;
   compact?: boolean;
+  /** The pipeline stages to color/filter rows by (defaults to the standard set). */
+  stages?: PipelineStage[];
 }
 
 interface Toast {
@@ -64,9 +71,15 @@ interface Toast {
 
 let toastCounter = 0;
 
-export function LeadTable({ leads, showBulk = true, compact = false }: LeadTableProps) {
+export function LeadTable({ leads, showBulk = true, compact = false, stages }: LeadTableProps) {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [stageFilter, setStageFilter] = useState<string>("all");
+
+  // Resolve a lead's pipeline stage (id → label + color), falling back to the
+  // default stage for unknown ids so a row always has a stage + tint.
+  const stageList = stages && stages.length ? stages : PIPELINE_STAGES;
+  const stageById = useMemo(() => new Map(stageList.map((s) => [s.id, s])), [stageList]);
+  const stageFor = (lead: Lead) => stageById.get(lead.pipelineStage) ?? stageById.get(DEFAULT_STAGE) ?? stageList[0];
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   // Downline agents you can hand leads to (only owners/admins can reassign).
@@ -91,10 +104,11 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
           .join(" ")
           .toLowerCase()
           .includes(search.toLowerCase());
-      const matchesStatus = statusFilter === "all" || l.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const stageId = stageById.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
+      const matchesStage = stageFilter === "all" || stageId === stageFilter;
+      return matchesSearch && matchesStage;
     });
-  }, [leads, search, statusFilter]);
+  }, [leads, search, stageFilter, stageById]);
 
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
@@ -288,15 +302,18 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                 className="pl-9"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[170px]">
-                <SelectValue placeholder="Status" />
+            <Select value={stageFilter} onValueChange={setStageFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Stage" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {leadStatuses.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
+                <SelectItem value="all">All stages</SelectItem>
+                {stageList.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className={cn("h-2 w-2 rounded-full", STAGE_TONE_STYLES[s.tone].dot)} />
+                      {s.label}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -376,7 +393,7 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
               <TableHead className="text-[11px] uppercase tracking-wide">Phone</TableHead>
               <TableHead className="text-[11px] uppercase tracking-wide">Email</TableHead>
               <TableHead className="text-[11px] uppercase tracking-wide w-14">State</TableHead>
-              <TableHead className="text-[11px] uppercase tracking-wide">Status</TableHead>
+              <TableHead className="text-[11px] uppercase tracking-wide">Stage</TableHead>
               <TableHead className="text-[11px] uppercase tracking-wide">Notes</TableHead>
               <TableHead className="text-[11px] uppercase tracking-wide text-right text-muted-foreground/70">
                 Actions
@@ -384,10 +401,13 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((lead) => (
-              <TableRow key={lead.id} className="hover:bg-slate-50/70">
+            {filtered.map((lead) => {
+              const st = stageFor(lead);
+              const styles = STAGE_TONE_STYLES[st?.tone ?? "slate"];
+              return (
+              <TableRow key={lead.id} className={cn("transition-colors", styles.row, "hover:brightness-[0.97]")}>
                 {showBulk && (
-                  <TableCell className="sticky left-0 bg-white z-10">
+                  <TableCell className={cn("sticky left-0 z-10", styles.row)}>
                     <Checkbox
                       checked={selected.has(lead.id)}
                       onCheckedChange={() => toggle(lead.id)}
@@ -428,7 +448,15 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                 </TableCell>
                 <TableCell className="py-1.5 text-sm whitespace-nowrap">{lead.state}{lead.zip ? ` ${lead.zip}` : ""}</TableCell>
                 <TableCell className="py-1.5">
-                  <StatusBadge status={lead.status} />
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap",
+                      styles.badge,
+                    )}
+                  >
+                    <span className={cn("h-1.5 w-1.5 rounded-full", styles.dot)} />
+                    {st?.label ?? lead.pipelineStage}
+                  </span>
                 </TableCell>
                 {/* Notes — latest note, click to add another */}
                 <TableCell className="py-1.5">
@@ -541,7 +569,8 @@ export function LeadTable({ leads, showBulk = true, compact = false }: LeadTable
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={showBulk ? 8 : 7} className="text-center text-sm text-muted-foreground py-12">

@@ -12,7 +12,6 @@ import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBan
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/types";
@@ -103,13 +102,6 @@ export default function LeadsPage() {
   const downline = members.filter((m) => !m.isSelf);
   const viewingAgent = downline.find((m) => m.userId === viewing);
 
-  const buckets = {
-    all: leads,
-    new: leads.filter((l) => l.status === "New"),
-    contacted: leads.filter((l) => l.status === "Contacted"),
-    appointments: leads.filter((l) => l.status === "Appointment Set"),
-    closed: leads.filter((l) => l.status === "Closed"),
-  };
 
   return (
     <div>
@@ -235,30 +227,7 @@ export default function LeadsPage() {
         </Card>
       ) : view === "list" ? (
         <Card className="p-5">
-          <Tabs defaultValue="all">
-            <TabsList>
-              <TabsTrigger value="all">All ({buckets.all.length})</TabsTrigger>
-              <TabsTrigger value="new">New ({buckets.new.length})</TabsTrigger>
-              <TabsTrigger value="contacted">Contacted ({buckets.contacted.length})</TabsTrigger>
-              <TabsTrigger value="appt">Appointments ({buckets.appointments.length})</TabsTrigger>
-              <TabsTrigger value="closed">Closed ({buckets.closed.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="all">
-              <LeadTable leads={buckets.all} />
-            </TabsContent>
-            <TabsContent value="new">
-              <LeadTable leads={buckets.new} />
-            </TabsContent>
-            <TabsContent value="contacted">
-              <LeadTable leads={buckets.contacted} />
-            </TabsContent>
-            <TabsContent value="appt">
-              <LeadTable leads={buckets.appointments} />
-            </TabsContent>
-            <TabsContent value="closed">
-              <LeadTable leads={buckets.closed} />
-            </TabsContent>
-          </Tabs>
+          <LeadTable leads={leads} stages={stages} />
         </Card>
       ) : (
         <Card className="p-5">

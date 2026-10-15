@@ -76,6 +76,18 @@ export const STAGE_TONES: { value: StageTone; label: string; dot: string }[] = [
 
 export const STAGE_TONE_SET = new Set<StageTone>(STAGE_TONES.map((t) => t.value));
 
+// Per-tone styles for the list view: a soft full-row tint + a stage badge.
+// (Literal class strings so Tailwind's JIT picks them up.)
+export const STAGE_TONE_STYLES: Record<StageTone, { row: string; badge: string; dot: string }> = {
+  red: { row: "bg-red-50", badge: "bg-red-100 text-red-700 border-red-200", dot: "bg-brand-red" },
+  amber: { row: "bg-amber-50", badge: "bg-amber-100 text-amber-800 border-amber-200", dot: "bg-amber-500" },
+  blue: { row: "bg-blue-50", badge: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+  indigo: { row: "bg-indigo-50", badge: "bg-indigo-100 text-indigo-700 border-indigo-200", dot: "bg-indigo-500" },
+  emerald: { row: "bg-emerald-50", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+  rose: { row: "bg-rose-50", badge: "bg-rose-100 text-rose-700 border-rose-200", dot: "bg-rose-500" },
+  slate: { row: "bg-slate-50", badge: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" },
+};
+
 export const MIN_STAGES = 2;
 export const MAX_STAGES = 24;
 export const MAX_STAGE_LABEL_LEN = 48;
