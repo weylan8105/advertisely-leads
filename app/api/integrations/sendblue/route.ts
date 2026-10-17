@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { isSendblueConfigured, toE164 } from "@/lib/sendblue";
+import { canUseTexting } from "@/lib/texting";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +14,9 @@ export async function GET() {
   const userId = (session?.user as any)?.id as string | undefined;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const isAdmin = (session?.user as any)?.role === "ADMIN";
-  if (!isDatabaseConfigured || !prisma) return NextResponse.json({ configured: false });
+  if (!isDatabaseConfigured || !prisma) return NextResponse.json({ configured: false, canUse: false });
 
+  const canUse = await canUseTexting(userId, isAdmin);
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { sendblueNumber: true, sendblueSeatId: true } });
 
   // The inbound/status webhook URL to register in Sendblue — admins only (carries the secret token).
@@ -27,6 +29,7 @@ export async function GET() {
 
   return NextResponse.json({
     configured: isSendblueConfigured(),
+    canUse,
     number: user?.sendblueNumber ?? null,
     seatId: user?.sendblueSeatId ?? null,
     isAdmin,
@@ -40,6 +43,10 @@ export async function PUT(req: NextRequest) {
   const userId = (session?.user as any)?.id as string | undefined;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  if (!(await canUseTexting(userId, isAdmin))) {
+    return NextResponse.json({ error: "Texting isn't enabled for your account yet." }, { status: 403 });
+  }
 
   const body = (await req.json().catch(() => ({}))) as { number?: string | null; seatId?: string | null };
   const number = body.number ? toE164(body.number) : null;

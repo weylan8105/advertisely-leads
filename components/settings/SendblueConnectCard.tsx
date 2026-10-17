@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 interface Status {
   configured: boolean;
+  canUse?: boolean;
   number: string | null;
   seatId: string | null;
   isAdmin?: boolean;
@@ -56,6 +57,10 @@ export function SendblueConnectCard() {
       setSaving(false);
     }
   }
+
+  // Limited rollout: only show the texting setup to users with access
+  // (platform admins + members of a Goldmine-enabled team).
+  if (!status || status.canUse === false) return null;
 
   return (
     <Card>

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { canActOnLead } from "@/lib/leadAccess";
+import { canUseTexting } from "@/lib/texting";
 import { isSendblueConfigured, sendMessage, toE164 } from "@/lib/sendblue";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ async function authorize(leadId: string) {
   const userId = (session?.user as any)?.id as string | undefined;
   if (!userId) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const canUse = await canUseTexting(userId, isAdmin);
 
   const lead = await prisma!.lead.findUnique({
     where: { id: leadId },
@@ -23,7 +25,7 @@ async function authorize(leadId: string) {
   if (!(await canActOnLead(userId, isAdmin, lead))) {
     return { error: NextResponse.json({ error: "You can't message this lead" }, { status: 403 }) };
   }
-  return { userId, lead };
+  return { userId, lead, canUse };
 }
 
 /** GET /api/leads/:id/messages — the conversation thread with this lead. */
@@ -31,6 +33,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   const a = await authorize(params.id);
   if ("error" in a) return a.error;
+  // Limited rollout: hide the thread entirely for users without texting access.
+  if (!a.canUse) return NextResponse.json({ messages: [], configured: isSendblueConfigured(), canUse: false });
 
   const messages = await prisma.message.findMany({
     where: { leadId: params.id },
@@ -40,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       status: true, errorMessage: true, createdAt: true,
     },
   });
-  return NextResponse.json({ messages, configured: isSendblueConfigured() });
+  return NextResponse.json({ messages, configured: isSendblueConfigured(), canUse: true });
 }
 
 /** POST /api/leads/:id/messages — send a text to this lead via Sendblue. */
@@ -51,6 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   const a = await authorize(params.id);
   if ("error" in a) return a.error;
+  if (!a.canUse) return NextResponse.json({ error: "Texting isn't enabled for your account yet." }, { status: 403 });
   const { lead } = a;
 
   const body = (await req.json().catch(() => ({}))) as { content?: string; mediaUrl?: string };

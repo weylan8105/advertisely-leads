@@ -24,6 +24,8 @@ export function LeadMessages({ leadId, leadName }: { leadId: string; leadName: s
   const [messages, setMessages] = useState<Msg[]>([]);
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(true);
+  // Limited rollout: null = unknown (hidden until we confirm access).
+  const [canUse, setCanUse] = useState<boolean | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export function LeadMessages({ leadId, leadName }: { leadId: string; leadName: s
       const r = await fetch(`/api/leads/${leadId}/messages`);
       if (!r.ok) return;
       const d = await r.json();
+      setCanUse(d.canUse !== false);
       setConfigured(d.configured !== false);
       setMessages(d.messages ?? []);
       if (scroll) requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: 1e9 }));
@@ -78,6 +81,9 @@ export function LeadMessages({ leadId, leadName }: { leadId: string; leadName: s
       setSending(false);
     }
   }
+
+  // Limited rollout: hide texting entirely for users without access.
+  if (canUse !== true) return null;
 
   return (
     <div>
