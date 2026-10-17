@@ -115,7 +115,11 @@ export async function GET(req: NextRequest) {
   const adCompletes = adCompletesRows[0]?.c ?? 0;
   const byStep = new Map(stepRows.map((r) => [Number(r.step), Number(r.c)]));
 
-  const maxStep = STEP_LABELS.length;
+  // Render every step that actually has data, not just the ones we have labels
+  // for — the live quiz can have more steps than STEP_LABELS (it currently runs
+  // past step 5). Unlabeled steps fall back to "Step N" so none are dropped.
+  const maxStepInData = stepRows.reduce((m, r) => Math.max(m, Number(r.step) || 0), 0);
+  const maxStep = Math.max(STEP_LABELS.length, maxStepInData);
   const steps = [];
   let biggestDrop = { step: 0, label: "", dropPct: 0, lost: 0 };
   for (let n = 1; n <= maxStep; n++) {

@@ -351,11 +351,21 @@ function AdminPageInner() {
       </div>
 
       {/* Always-visible live landing-page traffic — deep-links to the full funnel tab */}
-      <TrafficSnapshot onOpenFunnel={() => setTab("funnel")} />
+      <TrafficSnapshot
+        onOpenFunnel={() => {
+          setTab("funnel");
+          // The funnel tab lives further down the page; scroll to it so the
+          // deep-link visibly opens it instead of silently switching a tab
+          // that's below the fold.
+          requestAnimationFrame(() =>
+            document.getElementById("admin-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          );
+        }}
+      />
 
       <AssignToMeCard />
 
-      <div className="mt-8">
+      <div id="admin-tabs" className="mt-8 scroll-mt-4">
         <Tabs value={tab} onValueChange={setTab}>
           {/* Scroll the long tab bar horizontally on mobile instead of overflowing. */}
           <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
