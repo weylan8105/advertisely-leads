@@ -10,11 +10,17 @@ import { prisma } from "./prisma";
 import { fulfillOrder } from "./fulfillment";
 import { findPackage } from "@/data/packages";
 
-export const SUB_WEEKLY_CENTS = 50_000; // $500/week
+export const SUB_MIN_WEEKLY_CENTS = 50_000; // $500/week — the MINIMUM; agents can set more
+export const SUB_MAX_WEEKLY_CENTS = 2_000_000; // $20,000/week sanity cap (typo/abuse guard)
 export const SUB_PRICE_PER_LEAD_CENTS = 5_500; // $55/lead
-export const SUB_MIN_WEEKS = 4; // 4-week minimum commitment ($2,000)
+export const SUB_MIN_WEEKS = 4; // 4-week minimum commitment
 export const SUB_PACKAGE_ID = "iul-fresh"; // real-time leads
-export const SUB_PRICE_LOOKUP_KEY = "lead_sub_weekly_500";
+
+/** Clamp/round an arbitrary weekly amount to a valid whole-dollar value ≥ min. */
+export function normalizeWeeklyCents(cents: number): number {
+  const rounded = Math.round((Number(cents) || 0) / 100) * 100; // whole dollars
+  return Math.min(SUB_MAX_WEEKLY_CENTS, Math.max(SUB_MIN_WEEKLY_CENTS, rounded));
+}
 
 /** Leads a given budget buys at $55/lead, and the leftover cents. */
 export function leadsForCents(cents: number): { leads: number; remainder: number } {
@@ -22,17 +28,18 @@ export function leadsForCents(cents: number): { leads: number; remainder: number
   return { leads, remainder: cents - leads * SUB_PRICE_PER_LEAD_CENTS };
 }
 
-/** Find-or-create the weekly $500 recurring Price (stable via lookup_key). */
-export async function getWeeklyPriceId(): Promise<string> {
+/** Find-or-create a weekly recurring Price for the given amount (one per amount). */
+export async function getWeeklyPriceId(weeklyCents: number): Promise<string> {
   if (!stripe) throw new Error("Stripe not configured");
-  const found = await stripe.prices.list({ lookup_keys: [SUB_PRICE_LOOKUP_KEY], active: true, limit: 1 });
+  const key = `lead_sub_weekly_${weeklyCents}`;
+  const found = await stripe.prices.list({ lookup_keys: [key], active: true, limit: 1 });
   if (found.data[0]) return found.data[0].id;
   const price = await stripe.prices.create({
     currency: "usd",
-    unit_amount: SUB_WEEKLY_CENTS,
+    unit_amount: weeklyCents,
     recurring: { interval: "week" },
-    lookup_key: SUB_PRICE_LOOKUP_KEY,
-    product_data: { name: "Advertisely Lead Subscription — $500/week" },
+    lookup_key: key,
+    product_data: { name: `Advertisely Lead Subscription — $${Math.round(weeklyCents / 100)}/week` },
   });
   return price.id;
 }
@@ -59,6 +66,9 @@ export async function upsertLocalSubscription(sub: Stripe.Subscription) {
   const filterStates = md.filterStates ? md.filterStates.split(",").filter(Boolean) : [];
   const organizationId = md.organizationId || null;
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
+  const weeklyCents = md.weeklyCents
+    ? Math.max(SUB_MIN_WEEKLY_CENTS, parseInt(md.weeklyCents, 10) || SUB_MIN_WEEKLY_CENTS)
+    : SUB_MIN_WEEKLY_CENTS;
 
   return prisma.leadSubscription.upsert({
     where: { stripeSubscriptionId: sub.id },
@@ -75,7 +85,7 @@ export async function upsertLocalSubscription(sub: Stripe.Subscription) {
       stripeCustomerId: customerId,
       stripeSubscriptionId: sub.id,
       status: mapStatus(sub.status),
-      weeklyCents: SUB_WEEKLY_CENTS,
+      weeklyCents,
       pricePerLeadCents: SUB_PRICE_PER_LEAD_CENTS,
       minWeeks: SUB_MIN_WEEKS,
       filterStates,
@@ -110,7 +120,10 @@ export async function processPaidInvoice(invoice: Stripe.Invoice) {
   const local = await upsertLocalSubscription(stripeSub);
   if (!local) return;
 
-  const budget = SUB_WEEKLY_CENTS + local.rolloverCents;
+  // Lead budget = what they actually paid this cycle + any rollover. This picks
+  // up each agent's own weekly amount automatically (it's just the invoice).
+  const amountPaid = typeof (invoice as any).amount_paid === "number" ? (invoice as any).amount_paid : local.weeklyCents;
+  const budget = amountPaid + local.rolloverCents;
   const { leads, remainder } = leadsForCents(budget);
 
   if (leads > 0) {

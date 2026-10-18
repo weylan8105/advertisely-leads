@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 import {
   LayoutDashboard,
   Users,
@@ -16,7 +15,6 @@ import {
   Shield,
   LifeBuoy,
   Gem,
-  Repeat,
   Menu,
   X,
   LogOut,
@@ -42,7 +40,6 @@ const ALL: Item[] = [
   { href: "/orders", label: "Orders", icon: Package },
   { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },
   { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
-  { href: "/subscription", label: "Subscribe & Save", icon: Repeat },
   { href: "/settings", label: "Settings & Integrations", icon: Settings },
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
 ];
@@ -54,9 +51,7 @@ export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const isActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href));
-  const items = ALL.filter(
-    (i) => (!i.adminOnly || isAdmin) && (i.href !== "/subscription" || LEAD_SUBSCRIPTIONS_PUBLIC || isAdmin),
-  );
+  const items = ALL.filter((i) => !i.adminOnly || isAdmin);
 
   return (
     <>

@@ -1,7 +1,7 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { MarketplaceStore } from "@/components/marketplace/MarketplaceStore";
+import { MarketplaceTabs } from "@/components/marketplace/MarketplaceTabs";
 import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
 import { Badge } from "@/components/ui/badge";
 import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
@@ -38,13 +38,7 @@ export default function MarketplacePage() {
                   {PURCHASE_PAUSED_MESSAGE}
                 </div>
               )}
-              <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-800">
-                <span className="font-medium">Heads up: </span>
-                <strong>IUL leads are priced by age</strong> — pick fresh (under 48 hours) or go older for
-                deep discounts, all under one product. Mix any ages in your cart; every order is a 25-lead
-                minimum. Trucker IUL leads are coming soon.
-              </div>
-              <MarketplaceStore />
+              <MarketplaceTabs />
 
               <div className="mt-10 rounded-xl border border-slate-200 bg-white p-5 text-xs text-muted-foreground">
                 <span className="text-foreground font-medium">Disclaimers: </span>

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
-import { SUB_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents } from "@/lib/leadSubscription";
+import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents } from "@/lib/leadSubscription";
 import { LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 
 export const runtime = "nodejs";
@@ -16,13 +16,13 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const isAdmin = (session?.user as any)?.role === "ADMIN";
-  const leadsPerWeek = leadsForCents(SUB_WEEKLY_CENTS).leads;
   const base = {
     available: isStripeConfigured,
     canSubscribe: LEAD_SUBSCRIPTIONS_PUBLIC || isAdmin,
-    weeklyCents: SUB_WEEKLY_CENTS,
+    minWeeklyCents: SUB_MIN_WEEKLY_CENTS,
+    weeklyCents: SUB_MIN_WEEKLY_CENTS, // default for the subscribe form
     pricePerLeadCents: SUB_PRICE_PER_LEAD_CENTS,
-    leadsPerWeek,
+    leadsPerWeek: leadsForCents(SUB_MIN_WEEKLY_CENTS).leads,
     minWeeks: SUB_MIN_WEEKS,
   };
 
@@ -49,6 +49,8 @@ export async function GET() {
   return NextResponse.json({
     ...base,
     subscribed: true,
+    weeklyCents: sub.weeklyCents,
+    leadsPerWeek: leadsForCents(sub.weeklyCents).leads,
     status: sub.status,
     filterStates: sub.filterStates,
     weeksBilled: sub.weeksBilled,

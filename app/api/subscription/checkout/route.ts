@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { ensureOrgContext } from "@/lib/org";
-import { getWeeklyPriceId } from "@/lib/leadSubscription";
+import { getWeeklyPriceId, normalizeWeeklyCents } from "@/lib/leadSubscription";
 import { AVAILABLE_STATES } from "@/data/states";
 import { LEADS_PURCHASE_PAUSED, LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 
@@ -33,29 +33,31 @@ export async function POST(req: NextRequest) {
   });
   if (active) return NextResponse.json({ error: "You already have a subscription." }, { status: 400 });
 
-  const body = (await req.json().catch(() => ({}))) as { states?: string[] };
+  const body = (await req.json().catch(() => ({}))) as { states?: string[]; weeklyCents?: number };
   const valid = new Set(AVAILABLE_STATES.map((s) => String(s).toUpperCase()));
   const states = [...new Set((body.states ?? []).map((s) => String(s).toUpperCase()).filter((s) => valid.has(s)))];
   if (states.length === 0) {
     return NextResponse.json({ error: "Pick at least one state for your leads." }, { status: 400 });
   }
+  // Weekly amount is customizable with a $500 minimum.
+  const weeklyCents = normalizeWeeklyCents(body.weeklyCents ?? 0);
 
   const orgId = (await ensureOrgContext(userId))?.organizationId ?? "";
   const base = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
 
   try {
-    const priceId = await getWeeklyPriceId();
+    const priceId = await getWeeklyPriceId(weeklyCents);
     const checkout = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
       customer_email: email,
       // Metadata on the subscription so the webhook can build weekly orders.
       subscription_data: {
-        metadata: { userId, organizationId: orgId, filterStates: states.join(",") },
+        metadata: { userId, organizationId: orgId, filterStates: states.join(","), weeklyCents: String(weeklyCents) },
       },
       metadata: { userId, kind: "lead-subscription" },
-      success_url: `${base}/subscription?status=success`,
-      cancel_url: `${base}/subscription?status=cancel`,
+      success_url: `${base}/marketplace?tab=subscribe&status=success`,
+      cancel_url: `${base}/marketplace?tab=subscribe&status=cancel`,
     });
     return NextResponse.json({ url: checkout.url });
   } catch (e: any) {

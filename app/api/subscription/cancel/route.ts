@@ -7,13 +7,12 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DAY = 86_400;
+const SUPPORT_EMAIL = "support@advertisely.io";
 
 /**
  * POST /api/subscription/cancel — cancel the caller's lead subscription.
- * Honors the 4-week minimum: if they're still inside it, the subscription is
- * scheduled to end at the 4-week mark (they're billed through the minimum);
- * otherwise it ends at the end of the current week.
+ * Self-service cancellation is only allowed AFTER the 4-week minimum (4 paid
+ * weeks). Before that, we refuse and direct them to support.
  */
 export async function POST() {
   if (!isStripeConfigured || !stripe) return NextResponse.json({ error: "Payments aren't set up." }, { status: 503 });
@@ -30,28 +29,25 @@ export async function POST() {
   if (!sub) return NextResponse.json({ error: "No active subscription." }, { status: 400 });
   if (sub.cancelAt) return NextResponse.json({ error: "Your subscription is already set to cancel." }, { status: 400 });
 
+  // Inside the 4-week minimum → no self-service cancel; direct them to support.
+  if (sub.weeksBilled < sub.minWeeks) {
+    return NextResponse.json(
+      {
+        error: "support_required",
+        needsSupport: true,
+        supportEmail: SUPPORT_EMAIL,
+        message: `You're in your ${sub.minWeeks}-week minimum (${sub.weeksBilled} of ${sub.minWeeks} payments made). To cancel before the minimum is met, please reach out to support at ${SUPPORT_EMAIL}.`,
+      },
+      { status: 403 },
+    );
+  }
+
   try {
-    const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
-
-    if (sub.weeksBilled >= sub.minWeeks) {
-      // Past the minimum → stop at the end of the current week.
-      const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: true });
-      const when = (updated as any).current_period_end ? new Date((updated as any).current_period_end * 1000) : null;
-      await prisma.leadSubscription.update({ where: { id: sub.id }, data: { cancelAt: when } });
-      return NextResponse.json({ ok: true, cancelAt: when, message: "Your subscription will end at the end of this week." });
-    }
-
-    // Inside the 4-week minimum → schedule cancellation at the 4-week mark.
-    const startSec = (stripeSub as any).start_date ?? Math.floor(sub.createdAt.getTime() / 1000);
-    const cancelAtSec = startSec + sub.minWeeks * 7 * DAY;
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at: cancelAtSec });
-    const when = new Date(cancelAtSec * 1000);
+    // Past the minimum → stop at the end of the current week.
+    const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: true });
+    const when = (updated as any).current_period_end ? new Date((updated as any).current_period_end * 1000) : null;
     await prisma.leadSubscription.update({ where: { id: sub.id }, data: { cancelAt: when } });
-    return NextResponse.json({
-      ok: true,
-      cancelAt: when,
-      message: `You're within the 4-week minimum, so your subscription stays active (and billed weekly) until it ends on ${when.toLocaleDateString()}.`,
-    });
+    return NextResponse.json({ ok: true, cancelAt: when, message: "Your subscription will end at the end of this week." });
   } catch (e: any) {
     console.error("Subscription cancel failed:", e?.message ?? e);
     return NextResponse.json({ error: "Could not cancel. Please try again." }, { status: 502 });

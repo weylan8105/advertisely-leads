@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -15,7 +14,6 @@ import {
   Sparkles,
   LifeBuoy,
   Gem,
-  Repeat,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
@@ -40,7 +38,6 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },
       { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
-      { href: "/subscription", label: "Subscribe & Save", icon: Repeat },
     ],
   },
   {
@@ -76,9 +73,7 @@ export function SidebarNav() {
               {section.title}
             </div>
             <nav className="space-y-1">
-              {section.items
-                .filter((item) => item.href !== "/subscription" || LEAD_SUBSCRIPTIONS_PUBLIC || isAdmin)
-                .map((item) => {
+              {section.items.map((item) => {
                 const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
                 const Icon = item.icon;
                 return (
