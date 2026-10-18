@@ -49,6 +49,7 @@ model User {
   accounts              Account[]
   sessions              Session[]
   orders                Order[]
+  leadSubscriptions     LeadSubscription[]
   assignedLeads         Lead[]               @relation("AssignedAgent")
   integrations          Integration[]
   exportLogs            ExportLog[]
@@ -220,6 +221,33 @@ model Lead {
   @@index([updatedAt])
 }
 
+// Weekly "subscribe & save" lead subscription ($500/week → ~9 fresh leads/week
+// at $55/lead, remainder rolls over; 4-week minimum, auto-renews). Backed by a
+// Stripe subscription; each paid weekly invoice spawns a fresh-lead Order.
+model LeadSubscription {
+  id                   String    @id @default(cuid())
+  userId               String
+  organizationId       String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String    @unique
+  status               String    @default("active") // active | past_due | canceled | incomplete
+  weeklyCents          Int       @default(50000)
+  pricePerLeadCents    Int       @default(5500)
+  filterStates         String[]  @default([])
+  rolloverCents        Int       @default(0) // leftover cents carried to the next week
+  weeksBilled          Int       @default(0) // paid weeks so far (for the 4-week minimum)
+  minWeeks             Int       @default(4)
+  currentPeriodEnd     DateTime?
+  cancelAt             DateTime?
+  canceledAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
 // A text message (iMessage/SMS/RCS) to or from a lead, sent through Sendblue.
 model Message {
   id           String   @id @default(cuid())
@@ -334,6 +362,7 @@ model Order {
   // the buyer (upline). Set at checkout or by routing an order to a team agent.
   deliverToUserId       String?
   stripePaymentIntentId String?
+  stripeInvoiceId       String?       @unique // set for weekly subscription orders (idempotency)
   createdAt             DateTime      @default(now())
   fulfilledAt           DateTime?
   organizationId        String? // team that placed this order (Phase 1)

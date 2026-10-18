@@ -4,6 +4,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { fulfillOrder } from "@/lib/fulfillment";
 import { findPackage } from "@/data/packages";
 import { ensureOrgContext } from "@/lib/org";
+import { processPaidInvoice, upsertLocalSubscription } from "@/lib/leadSubscription";
 import { sendOrderConfirmationEmail, sendThankYouEmail, isEmailConfigured } from "@/lib/email";
 import Stripe from "stripe";
 
@@ -45,20 +46,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  // We only care about successful payments for the lead-purchase flow.
-  if (event.type === "payment_intent.succeeded") {
-    await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent);
-  } else if (event.type === "payment_intent.payment_failed") {
-    console.log(
-      "Stripe webhook: payment failed",
-      (event.data.object as Stripe.PaymentIntent).id,
-    );
+  try {
+    switch (event.type) {
+      // ── One-off lead purchases ──────────────────────────────────────────
+      case "payment_intent.succeeded":
+        await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent);
+        break;
+      case "payment_intent.payment_failed":
+        console.log("Stripe webhook: payment failed", (event.data.object as Stripe.PaymentIntent).id);
+        break;
+
+      // ── Weekly lead subscriptions ───────────────────────────────────────
+      case "checkout.session.completed": {
+        const s = event.data.object as Stripe.Checkout.Session;
+        if (s.mode === "subscription" && s.subscription && stripe) {
+          const subId = typeof s.subscription === "string" ? s.subscription : s.subscription.id;
+          await upsertLocalSubscription(await stripe.subscriptions.retrieve(subId));
+        }
+        break;
+      }
+      case "invoice.paid":
+        // Each paid weekly invoice → that week's fresh-lead order (idempotent).
+        await processPaidInvoice(event.data.object as Stripe.Invoice);
+        break;
+      case "customer.subscription.updated":
+        await upsertLocalSubscription(event.data.object as Stripe.Subscription);
+        break;
+      case "customer.subscription.deleted":
+        if (prisma) {
+          await prisma.leadSubscription.updateMany({
+            where: { stripeSubscriptionId: (event.data.object as Stripe.Subscription).id },
+            data: { status: "canceled", canceledAt: new Date() },
+          });
+        }
+        break;
+      case "invoice.payment_failed":
+        console.log("Stripe webhook: subscription invoice failed", (event.data.object as Stripe.Invoice).id);
+        break;
+    }
+  } catch (err) {
+    // Log but still 200 so Stripe doesn't hammer retries on a transient error.
+    console.error("Stripe webhook handler error:", event.type, err);
   }
 
   return NextResponse.json({ received: true });
 }
 
 async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
+  // Subscription payments are invoice-driven — handled by invoice.paid, not here.
+  if ((intent as any).invoice) return;
   if (!isDatabaseConfigured || !prisma) {
     console.error(
       "Stripe webhook: payment succeeded but DB not configured — order not created!",

@@ -13,6 +13,17 @@ export const PURCHASE_PAUSED_MESSAGE =
   "Lead purchasing is paused right now. We'll be back online shortly — thanks for your patience.";
 
 /**
+ * Weekly "Subscribe & Save" lead subscription rollout.
+ *
+ * While false, the subscription page, nav link, and checkout are ADMIN-ONLY —
+ * so the recurring-billing flow can be tested end-to-end (Stripe test mode +
+ * confirm the webhook delivers checkout.session.completed / invoice.paid /
+ * customer.subscription.*) before any real agent can subscribe and be charged.
+ * Flip to true to open subscriptions to all agents.
+ */
+export const LEAD_SUBSCRIPTIONS_PUBLIC = false;
+
+/**
  * TEMPORARY testing hold-back. Any incoming lead whose tags match one of these
  * (case-insensitive substring) is routed 100% to the house (Ryan) instead of
  * being distributed to buyers — so a new lead type's quality can be evaluated
