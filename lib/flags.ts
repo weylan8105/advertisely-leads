@@ -21,7 +21,7 @@ export const PURCHASE_PAUSED_MESSAGE =
  * customer.subscription.*) before any real agent can subscribe and be charged.
  * Flip to true to open subscriptions to all agents.
  */
-export const LEAD_SUBSCRIPTIONS_PUBLIC = false;
+export const LEAD_SUBSCRIPTIONS_PUBLIC = true;
 
 /**
  * TEMPORARY testing hold-back. Any incoming lead whose tags match one of these
