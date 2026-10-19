@@ -23,6 +23,59 @@ export async function getHouseAccount(): Promise<{ userId: string; organizationI
 }
 
 /**
+ * Admins eligible to absorb OVERFLOW this cycle (owner directive, Oct 2026):
+ * role ADMIN, with a weekly target set, and still UNDER their rolling-7-day
+ * overflow count. Each becomes a round-robin slot; once an admin hits their
+ * target they drop out (and overflow stays in the bank). Ordered by createdAt
+ * so the rotation is stable.
+ */
+export async function getEligibleAdminSlots(): Promise<{ userId: string; organizationId: string | null }[]> {
+  if (!prisma) return [];
+  const admins = await prisma.user.findMany({
+    where: { role: "ADMIN", weeklyLeadTarget: { gt: 0 } },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      weeklyLeadTarget: true,
+      ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 },
+    },
+  });
+  if (admins.length === 0) return [];
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const slots: { userId: string; organizationId: string | null }[] = [];
+  for (const a of admins) {
+    const got = await prisma.lead.count({
+      where: { assignedUserId: a.id, orderId: null, trashedAt: null, assignedAt: { gte: weekAgo } },
+    });
+    if (got < (a.weeklyLeadTarget ?? 0)) slots.push({ userId: a.id, organizationId: a.ownedOrganizations[0]?.id ?? null });
+  }
+  return slots;
+}
+
+/** Assign one FRESH overflow lead to a specific admin (round-robin overflow slot). */
+export async function assignOverflowLeadTo(
+  leadId: string,
+  userId: string,
+  organizationId: string | null,
+  reason: string,
+): Promise<boolean> {
+  if (!prisma) return false;
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { receivedAt: true } });
+  if (!lead) return false;
+  // Overflow is fresh-only (never aged) — an aged lead stays in the bank as stock.
+  if ((Date.now() - lead.receivedAt.getTime()) / 86_400_000 > HOUSE_FRESH_DAYS) return false;
+  const res = await prisma.lead.updateMany({
+    where: { id: leadId, assignedUserId: null, trashedAt: null },
+    data: { assignedUserId: userId, assignedAt: new Date(), ...(organizationId ? { organizationId } : {}) },
+  });
+  if (res.count === 0) return false;
+  await prisma.leadActivity.create({
+    data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to admin CRM — ${reason}.` },
+  });
+  return true;
+}
+
+/**
  * The set of states an incoming lead could still be delivered into — i.e. the
  * union of filterStates across all OPEN orders (an empty filterStates = all
  * states, so such an order makes every state "covered"). A lead whose state is

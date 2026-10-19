@@ -5,7 +5,7 @@ import { appendRows, isSheetsConfigured } from "./sheets";
 import { buildExportRows } from "./leadExport";
 import { findPackage, leadPoolIdsFor, purchasableIdsForPool } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
-import { assignLeadToHouse, getHouseAccount } from "@/lib/house";
+import { getHouseAccount, getEligibleAdminSlots, assignOverflowLeadTo } from "@/lib/house";
 import { tryReplacementForFreshLead } from "@/lib/replacement";
 import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 import { isRecognizedUsLocation } from "@/lib/leadImport";
@@ -454,7 +454,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     include: { leads: { where: { trashedAt: null }, select: { id: true } } },
   });
 
-  const house = await getHouseAccount();
+  const adminSlots = await getEligibleAdminSlots();
 
   // Orders that can take THIS lead: cover its state, in the age window, not full.
   const eligibleOrders = pendingOrders.filter(
@@ -475,30 +475,28 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     return ls.length === 0 || ls.includes(lead.state);
   });
 
-  // ── True round-robin intake (owner directive, Oct 2026) ─────────────────
-  // Rotate each incoming lead across every DISTINCT buyer with an eligible open
-  // order (a buyer with two orders is still one slot), plus the house (Ryan) as a
-  // final slot, tracked by a persistent cursor so "whoever got the last lead"
-  // determines who's next. Replaces the coverage-weighted split. When no open
-  // order is eligible, the lead goes to the house (catch-all).
-  if (licensedOrders.length > 0 && house) {
-    const orderForRecipient = new Map<string, string>(); // recipientId -> oldest eligible orderId
-    const buyerIds: string[] = [];
-    for (const o of licensedOrders) {
-      const rid = o.deliverToUserId ?? o.userId;
-      if (rid === house.userId) continue; // the house is its own rotation slot
-      if (!orderForRecipient.has(rid)) {
-        orderForRecipient.set(rid, o.id);
-        buyerIds.push(rid);
-      }
+  // ── Per-state round-robin intake (owner directive) ──────────────────────
+  // Rotate each fresh lead across every DISTINCT buyer with an eligible open
+  // order (a buyer with two orders is still one slot), PLUS every admin still
+  // under their rolling-7-day overflow target (each an "overflow slot"). Per
+  // state, so each state alternates independently (an exact 1/N share). Overflow
+  // is NO LONGER auto-routed to Ryan — admins opt in via their weekly target,
+  // and anything no buyer/admin takes stays in the BANK as sellable stock.
+  const orderForRecipient = new Map<string, string>(); // recipientId -> oldest eligible orderId
+  const buyerIds: string[] = [];
+  for (const o of licensedOrders) {
+    const rid = o.deliverToUserId ?? o.userId;
+    if (!orderForRecipient.has(rid)) {
+      orderForRecipient.set(rid, o.id);
+      buyerIds.push(rid);
     }
-    const rotation = [...buyerIds, house.userId];
+  }
+  const adminById = new Map(adminSlots.map((s) => [s.userId, s]));
+  // An admin who is also a buyer stays a buyer slot (don't double-count).
+  const adminIds = adminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
+  const rotation = [...buyerIds, ...adminIds];
 
-    // Rotate PER STATE so each state alternates independently — a buyer gets an
-    // EXACT equal (50/50, or 1/N with more buyers) share of the leads in THEIR
-    // states, every time, regardless of other states. A lead in a house-only
-    // state can no longer eat the buyer's turn in their states. Equal
-    // opportunity, NEVER weighted (owner directive, Oct 5 2026).
+  if (rotation.length > 0) {
     const cursorKey = `st:${lead.state}`;
     const cursor = await prisma.distributionCursor.findUnique({ where: { id: cursorKey } });
     const lastIdx = cursor?.lastRecipientId ? rotation.indexOf(cursor.lastRecipientId) : -1;
@@ -512,18 +510,15 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     // Start at the slot AFTER whoever got the last lead; take the first that accepts.
     for (let step = 1; step <= rotation.length; step++) {
       const rid = rotation[(lastIdx + step) % rotation.length];
-      if (rid === house.userId) {
-        // House's turn. But if Ryan has banked skip-credit from recognized
-        // overflow leads (states no buyer covers), spend one and skip his turn
-        // so a buyer gets this lead instead — keeping his total take fair. Only
-        // skip when there's actually a buyer to hand it to.
-        if (buyerIds.length > 0 && (await consumeHouseSkipCredit())) {
-          continue; // Ryan skips — a prior free overflow lead already compensated him
-        }
-        // The lead goes to the house CRM (Ryan). Replacements already had first
+      const adminSlot = adminById.get(rid);
+      if (adminSlot) {
+        // An admin's overflow turn (fresh-only). Replacements already had first
         // claim at the top of this function.
-        if (await assignLeadToHouse(leadId, "round-robin turn (house)")) { await setCursor(rid); return; }
-        continue; // house declined (e.g. lead not fresh) — try the next buyer
+        if (await assignOverflowLeadTo(leadId, adminSlot.userId, adminSlot.organizationId, "round-robin overflow")) {
+          await setCursor(rid);
+          return;
+        }
+        continue; // admin declined (e.g. lead not fresh) — try the next slot
       }
       const assigned = await fulfillOrder(orderForRecipient.get(rid)!, { onlyLeadId: leadId });
       if (assigned > 0) { await setCursor(rid); return; }
@@ -531,17 +526,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     }
   }
 
-  // No eligible open order (or the rotation couldn't place it): the house
-  // catch-all so every lead lands somewhere. Replacements already had first
-  // claim at the top.
-  const genuineOverflow = licensedOrders.length === 0; // no buyer order covers this lead's state
-  const assignedToHouse = await assignLeadToHouse(leadId, "not claimed by any open order");
-
-  // Fairness: if this was a RECOGNIZED state with no buyer (true overflow Ryan
-  // received for free), bank a skip-credit so he forfeits a future covered-state
-  // round-robin turn. A TRASH lead (unrecognizable state) banks nothing — he
-  // keeps his turns. Only when the house actually took the lead.
-  if (assignedToHouse && genuineOverflow && isRecognizedUsLocation(lead.state)) {
-    await setHouseSkipCredit((await getHouseSkipCredit()) + 1);
-  }
+  // Not claimed by any buyer order, and no admin under their weekly target took
+  // it → leave it in the BANK (unassigned) as sellable stock for its state.
+  // Overflow is no longer auto-routed to an admin (owner directive, Oct 2026).
 }
