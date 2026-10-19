@@ -10,6 +10,7 @@ import { PipelineEditor } from "@/components/leads/PipelineEditor";
 import { PIPELINE_STAGES, type PipelineStage } from "@/data/pipeline";
 import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBanner";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
+import { AdminLeadVolumeCard } from "@/components/leads/AdminLeadVolumeCard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -164,7 +165,9 @@ export default function LeadsPage() {
 
       {isAdmin && <DeliveredLeadsTracker />}
 
-      {viewing === "me" && myOrders.length > 0 && (
+      {viewing === "me" && isAdmin ? (
+        <AdminLeadVolumeCard />
+      ) : viewing === "me" && myOrders.length > 0 ? (
         <Card className="p-4 mb-4">
           <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3">Your lead orders</div>
           <div className="space-y-3">
@@ -200,7 +203,7 @@ export default function LeadsPage() {
             })}
           </div>
         </Card>
-      )}
+      ) : null}
 
       {error && (
         <Card className="p-5 mb-4 border-destructive/40">

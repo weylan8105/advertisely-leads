@@ -41,6 +41,11 @@ model User {
   // leads see) and optional seat id. Null = this agent can't text yet.
   sendblueNumber String?
   sendblueSeatId String?
+  // Admin overflow appetite: how many overflow leads this admin wants per
+  // rolling 7-day window. While under this count they're in the round-robin as a
+  // house slot; at/over it they drop out (and overflow stays in the bank).
+  // Null/0 = not taking overflow.
+  weeklyLeadTarget Int?
   // Keys of one-time in-app announcements this user has already seen/dismissed
   // (see data/announcements.ts). Used to show each announcement exactly once.
   announcementsSeen String[] @default([])
