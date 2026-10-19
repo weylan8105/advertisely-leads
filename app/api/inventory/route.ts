@@ -36,22 +36,31 @@ export async function GET(req: NextRequest) {
       ...(states.length ? { state: { in: states } } : {}),
       ...NOT_TEST_LEAD, // exclude fake/test leads from availability
     },
-    select: { receivedAt: true },
+    select: { receivedAt: true, state: true },
   });
 
   const DAY = 86_400_000;
   const now = Date.now();
-  const ages = leads.map((l) => (now - new Date(l.receivedAt).getTime()) / DAY);
+  const aged = leads.map((l) => ({ age: (now - new Date(l.receivedAt).getTime()) / DAY, state: l.state }));
 
   const out: Record<string, number> = {};
   for (const t of tiers) {
     const min = t.ageMinDays ?? 0;
     const max = t.ageMaxDays ?? Infinity; // exclusive upper edge
-    out[t.id] = ages.filter((a) => a >= min && a < max).length;
+    out[t.id] = aged.filter((a) => a.age >= min && a.age < max).length;
+  }
+
+  // Fresh (sellable) stock per state — the "lead bank" counts the marketplace
+  // shows so buyers see how many are ready in each state right now. Fresh window
+  // = the iul-fresh tier (0–2 days).
+  const byState: Record<string, number> = {};
+  for (const a of aged) {
+    if (a.state && a.age >= 0 && a.age < 2) byState[a.state] = (byState[a.state] ?? 0) + 1;
   }
 
   return NextResponse.json({
     tiers: out,
+    byState,
     total: leads.length,
     states,
     updatedAt: new Date().toISOString(),

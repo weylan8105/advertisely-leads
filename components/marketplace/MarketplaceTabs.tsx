@@ -37,9 +37,9 @@ export function MarketplaceTabs() {
         <>
           <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-800">
             <span className="font-medium">Heads up: </span>
-            <strong>Real-time IUL leads</strong> — delivered fresh, under 48 hours old. Every order is a
-            25-lead minimum. Trucker IUL leads are coming soon. Or switch to <strong>Subscribe &amp; Save</strong>{" "}
-            for a steady weekly flow on autopilot.
+            <strong>Fresh IUL leads</strong> — under 48 hours old. Buy from in-stock inventory by state, or any
+            states without stock are delivered fresh as they&apos;re generated. Every order is a 25-lead minimum.
+            Or switch to <strong>Subscribe &amp; Save</strong> for a steady weekly flow on autopilot.
           </div>
           <MarketplaceStore />
         </>

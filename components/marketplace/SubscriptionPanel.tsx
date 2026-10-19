@@ -38,6 +38,7 @@ export function SubscriptionPanel() {
   const [loading, setLoading] = useState(true);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [states, setStates] = useState<string[]>([]);
+  const [inv, setInv] = useState<Record<string, number>>({}); // fresh stock per state
   const [weeklyDollars, setWeeklyDollars] = useState(500); // customizable, $500 min
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,11 @@ export function SubscriptionPanel() {
 
   useEffect(() => {
     load();
+    // Live per-state fresh stock (the "lead bank") for the state picker.
+    fetch("/api/inventory")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.byState) setInv(d.byState); })
+      .catch(() => {});
     try {
       const p = new URLSearchParams(window.location.search).get("status");
       if (p === "success") setBanner({ ok: true, text: "You're subscribed! Your first week of leads is on the way." });
@@ -278,19 +284,31 @@ export function SubscriptionPanel() {
 
           {/* States */}
           <h3 className="text-lg font-semibold mt-6">Pick your states</h3>
-          <p className="text-sm text-muted-foreground mt-1">Your weekly leads will come from these states.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Your weekly leads will come from these states. The number is how many are in stock right now.
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {AVAILABLE_STATES.map((s) => {
               const on = states.includes(s);
+              const count = inv[s] ?? 0;
               return (
                 <button key={s} onClick={() => toggleState(s)}
-                  className={cn("rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                  className={cn("rounded-lg border px-3 py-1.5 text-sm transition-colors inline-flex items-center gap-1.5",
                     on ? "border-brand-red bg-brand-red/[0.06] text-brand-red font-medium" : "border-slate-200 hover:border-slate-300")}>
                   {s}
+                  {count > 0 ? (
+                    <span className="text-[10px] font-semibold text-emerald-600">{count}</span>
+                  ) : (
+                    <span className="text-[9px] text-muted-foreground">fresh</span>
+                  )}
                 </button>
               );
             })}
           </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            <span className="font-medium text-emerald-700">Green number</span> = leads in stock, ready now.
+            <span className="font-medium"> “fresh”</span> = none in stock yet — delivered fresh in real time as they&apos;re generated.
+          </p>
 
           {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
           <Button className="mt-5" onClick={subscribe} disabled={busy || states.length === 0 || weeklyDollars < minDollars}>
@@ -305,7 +323,7 @@ export function SubscriptionPanel() {
           <div className="text-3xl font-semibold">{formatCurrency(weeklyDollars)}<span className="text-sm font-normal text-muted-foreground">/week</span></div>
           <div className="text-sm text-muted-foreground mt-1">≈ {formLeads} fresh leads every week</div>
           <ul className="mt-4 space-y-2 text-sm">
-            <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {perLead}/lead — real-time, under 48 hours old</li>
+            <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {perLead}/lead — fresh, under 48 hours old</li>
             <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Delivered automatically, every week</li>
             <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Leftover rolls over — nothing wasted</li>
             <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {formatCurrency(minDollars)}/week minimum, then auto-renews</li>

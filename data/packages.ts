@@ -45,19 +45,19 @@ export const leadPackages: LeadPackage[] = [
   // leads → minimumOrder = max(25, ceil(150 / price)). So only the $3 (150+) tier exceeds 25.
   {
     id: "iul-fresh",
-    name: "Real-Time IUL Leads",
-    tagline: "Delivered in real time, generated on demand. The highest contact and conversion rates on the platform.",
+    name: "Fresh IUL Leads",
+    tagline: "Freshly generated, high-intent prospects — the highest contact and conversion rates on the platform.",
     description:
-      "Blue-Collar IUL prospects delivered in real time, generated fresh on demand (under 48 hours old). Highest contact and conversion rates.",
+      "Blue-Collar IUL prospects, freshly generated and under 48 hours old. Highest contact and conversion rates.",
     pricePerLead: 60,
     minimumOrder: 25, // max(25, ceil(150/60)=3) = 25
-    estimatedDelivery: "Real time",
-    badge: "Real-Time",
+    estimatedDelivery: "Fast delivery",
+    badge: "Fresh",
     available: true,
     leadPackageId: "aged-iul",
     ageMinDays: 0,
     ageMaxDays: 2,
-    features: ["Real-time delivery", "Under 48 hours old", "Highest answer rate", "TCPA consent captured"],
+    features: ["Freshly generated", "Under 48 hours old", "Highest answer rate", "TCPA consent captured"],
     ideal: ["Speed-to-lead callers", "Closers who work fresh intent", "Agencies with live floors"],
     niches: ["Lineman", "Electrician", "Plumber", "Pipefitter"],
   },
@@ -224,7 +224,7 @@ export const productGroups: ProductGroup[] = [
     name: "Blue Collar IUL Leads",
     tagline: "Tax-free retirement prospects who raised their hand.",
     blurb:
-      "Blue-collar W-2 earners and tradesmen who responded to a tax-free, tax-advantaged early-retirement offer — high-intent prospects looking to retire sooner and keep more of what they earn. Delivered in real time for the highest contact and conversion rates.",
+      "Blue-collar W-2 earners and tradesmen who responded to a tax-free, tax-advantaged early-retirement offer — high-intent prospects looking to retire sooner and keep more of what they earn. Delivered fresh for the highest contact and conversion rates.",
     available: true,
   },
   {

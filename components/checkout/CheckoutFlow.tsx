@@ -52,6 +52,8 @@ export function CheckoutFlow({
   const [selectedStates, setSelectedStates] = useState<string[]>(ACTIVE_STATES.map((s) => s.code));
   // Once the agent touches the state picker, stop auto-applying their licensed set.
   const statesTouched = useRef(false);
+  // Live fresh stock per state (the "lead bank"), shown on each state chip.
+  const [inv, setInv] = useState<Record<string, number>>({});
   // Team delivery: an owner can send this purchase to a downline agent.
   const [downline, setDownline] = useState<{ userId: string; name: string | null; email: string }[]>([]);
   const [deliverToUserId, setDeliverToUserId] = useState<string>("me");
@@ -73,6 +75,14 @@ export function CheckoutFlow({
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed]);
+
+  // Live per-state fresh stock for the picker.
+  useEffect(() => {
+    fetch("/api/inventory")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.byState) setInv(d.byState); })
+      .catch(() => {});
+  }, []);
 
   // Seed the cart from a ?pkg= link (legacy "Order leads" buttons) exactly once.
   const seeded = useRef(false);
@@ -233,14 +243,25 @@ export function CheckoutFlow({
                   </div>
                 </div>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  {ACTIVE_STATES.map((s) => (
+                  {ACTIVE_STATES.map((s) => {
+                    const count = inv[s.code] ?? 0;
+                    return (
                     <label key={s.code} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors select-none", selectedStates.includes(s.code) ? "border-red-500 bg-red-50 text-red-700 font-medium" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300")}>
                       <Checkbox checked={selectedStates.includes(s.code)} onCheckedChange={() => toggleState(s.code)} className="h-3.5 w-3.5 shrink-0" />
-                      {s.code}
+                      <span>{s.code}</span>
+                      {count > 0 ? (
+                        <span className="ml-auto text-[10px] font-semibold text-emerald-600">{count}</span>
+                      ) : (
+                        <span className="ml-auto text-[9px] text-muted-foreground">fresh</span>
+                      )}
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
-                <p className="text-[10px] text-muted-foreground">Applies to every tier in this order. More states = faster fulfillment.</p>
+                <p className="text-[10px] text-muted-foreground">
+                  <span className="font-medium text-emerald-700">Green number</span> = leads in stock, ready now.
+                  <span className="font-medium"> “fresh”</span> = none in stock yet — delivered fresh in real time as they&apos;re generated.
+                </p>
               </div>
             </div>
           )}
