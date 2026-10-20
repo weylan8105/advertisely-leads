@@ -145,11 +145,52 @@ export async function GET(req: NextRequest) {
     : [];
   const buyerName: Record<string, string> = {};
   for (const b of buyers) buyerName[b.id] = b.name ?? b.email ?? "upline";
+
+  // Replacement requests on these orders (matched via the bad lead's orderId),
+  // so the buyer can see how many they asked for and where each one stands.
+  const orderIds = orders.map((o) => o.id);
+  const reps = orderIds.length
+    ? await prisma.replacementRequest.findMany({
+        where: { lead: { orderId: { in: orderIds } } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          status: true,
+          autoApproved: true,
+          reason: true,
+          adminNote: true,
+          createdAt: true,
+          reviewedAt: true,
+          lead: { select: { orderId: true, name: true } },
+        },
+      })
+    : [];
+  // Client-facing stage: under_review → approved (finding a replacement) → replaced; or denied.
+  const repStage = (r: (typeof reps)[number]) =>
+    r.status === "APPROVED" ? "replaced" : r.status === "DENIED" ? "denied" : r.autoApproved ? "finding" : "under_review";
+  type RepSummary = {
+    total: number; replaced: number; finding: number; underReview: number; denied: number;
+    items: { leadName: string; stage: string; reason: string; adminNote: string | null; at: string }[];
+  };
+  const repByOrder: Record<string, RepSummary> = {};
+  for (const r of reps) {
+    const oid = r.lead.orderId;
+    if (!oid) continue;
+    const g = (repByOrder[oid] ??= { total: 0, replaced: 0, finding: 0, underReview: 0, denied: 0, items: [] });
+    const stage = repStage(r);
+    g.total++;
+    if (stage === "replaced") g.replaced++;
+    else if (stage === "denied") g.denied++;
+    else if (stage === "finding") g.finding++;
+    else g.underReview++;
+    g.items.push({ leadName: r.lead.name, stage, reason: r.reason, adminNote: r.adminNote, at: r.createdAt.toISOString() });
+  }
+
   const withLive = orders.map((o) => ({
     ...o,
     fulfilledCount: Math.min(live[o.id] ?? 0, o.quantity),
     routedToMe: o.userId !== myId && o.deliverToUserId === myId,
     fromName: o.userId !== myId ? buyerName[o.userId] ?? null : null,
+    replacements: repByOrder[o.id] ?? null,
   }));
   // Summary across every order that delivers to me (my own + routed to me), so
   // an agent can see "X of <total> delivered, Y remaining" at a glance.

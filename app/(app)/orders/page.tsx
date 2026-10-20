@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { PlusCircle, Loader2, Inbox, FileSpreadsheet } from "lucide-react";
+import { PlusCircle, Loader2, Inbox, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+interface RepItem {
+  leadName: string;
+  stage: string;
+  reason: string;
+  adminNote: string | null;
+  at: string;
+}
+interface RepSummary {
+  total: number;
+  replaced: number;
+  finding: number;
+  underReview: number;
+  denied: number;
+  items: RepItem[];
+}
+
 interface DbOrder {
   id: string;
   packageId: string;
@@ -36,9 +52,25 @@ interface DbOrder {
   sheetOverrideId?: string | null;
   deliverToUserId?: string | null;
   createdAt: string;
+  replacements?: RepSummary | null;
 }
 
 interface TeamMember { userId: string; name: string | null; email: string; isSelf?: boolean }
+
+// Client-facing replacement stage → label + chip color. The admin's internal
+// PENDING/APPROVED/DENIED is translated to progress the buyer can read.
+function repStageMeta(stage: string): { label: string; cls: string } {
+  switch (stage) {
+    case "replaced":
+      return { label: "Replaced", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+    case "finding":
+      return { label: "Finding replacement", cls: "border-sky-200 bg-sky-50 text-sky-700" };
+    case "denied":
+      return { label: "Not eligible", cls: "border-rose-200 bg-rose-50 text-rose-700" };
+    default:
+      return { label: "Under review", cls: "border-amber-200 bg-amber-50 text-amber-700" };
+  }
+}
 
 function statusVariant(status: string) {
   switch (status) {
@@ -83,6 +115,8 @@ export default function OrdersPage() {
   const [routeMsg, setRouteMsg] = useState<string | null>(null);
   // Editing the states an open order pulls leads from.
   const [editingStatesId, setEditingStatesId] = useState<string | null>(null);
+  // Which order's replacement-request detail row is expanded.
+  const [repOpenId, setRepOpenId] = useState<string | null>(null);
   const [statesDraft, setStatesDraft] = useState<string[]>([]);
   const [savingStates, setSavingStates] = useState(false);
   const [statesMsg, setStatesMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
@@ -375,6 +409,22 @@ export default function OrdersPage() {
                             </button>
                           </div>
                         )}
+                        {order.replacements && order.replacements.total > 0 && (
+                          <div className="mt-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setRepOpenId(repOpenId === order.id ? null : order.id)}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-red hover:underline"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              {order.replacements.total} replacement{order.replacements.total === 1 ? "" : "s"}
+                              {order.replacements.replaced > 0 ? ` · ${order.replacements.replaced} done` : ""}
+                              {order.replacements.finding + order.replacements.underReview > 0
+                                ? ` · ${order.replacements.finding + order.replacements.underReview} in progress`
+                                : ""}
+                            </button>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusVariant(order.status) as any}>
@@ -450,6 +500,51 @@ export default function OrdersPage() {
                                 {sheetMsg.text}
                               </p>
                             )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {repOpenId === order.id && order.replacements && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="bg-slate-50">
+                          <div className="max-w-2xl space-y-2 py-2">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span className="text-xs font-semibold">
+                                Replacement requests ({order.replacements.total})
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {order.replacements.replaced} replaced ·{" "}
+                                {order.replacements.finding + order.replacements.underReview} in progress
+                                {order.replacements.denied > 0 ? ` · ${order.replacements.denied} not eligible` : ""}
+                              </span>
+                            </div>
+                            <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+                              {order.replacements.items.map((it, i) => {
+                                const meta = repStageMeta(it.stage);
+                                return (
+                                  <div key={i} className="flex items-start gap-3 px-3 py-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate text-xs font-medium">{it.leadName || "Lead"}</div>
+                                      {it.reason && (
+                                        <div className="truncate text-[11px] text-muted-foreground">{it.reason}</div>
+                                      )}
+                                      {it.adminNote && (
+                                        <div className="text-[11px] italic text-muted-foreground">Note: {it.adminNote}</div>
+                                      )}
+                                    </div>
+                                    <div className="flex shrink-0 flex-col items-end gap-1">
+                                      <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium", meta.cls)}>
+                                        {meta.label}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground">{formatDate(it.at)}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              Replacements for valid leads are delivered fresh as new matching inventory comes in.
+                            </p>
                           </div>
                         </TableCell>
                       </TableRow>
