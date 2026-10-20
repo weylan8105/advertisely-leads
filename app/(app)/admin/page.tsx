@@ -378,9 +378,13 @@ function AdminPageInner() {
             <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
             <TabsTrigger value="replacements">
               Replacement queue
-              {replacements.filter((r) => r.status === "PENDING").length > 0 && (
+              {/* Only count requests that actually need YOU to act — i.e. pending
+                  and not yet reviewed. Approved-and-waiting-on-fresh-stock fill
+                  automatically as leads arrive, and denied/approved are resolved,
+                  so none of those should light up the badge. */}
+              {pendingUnreviewed > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-brand-red text-white text-[10px] h-4 min-w-[16px] px-1">
-                  {replacements.filter((r) => r.status === "PENDING").length}
+                  {pendingUnreviewed}
                 </span>
               )}
             </TabsTrigger>

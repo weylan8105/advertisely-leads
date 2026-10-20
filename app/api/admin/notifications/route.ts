@@ -38,7 +38,10 @@ export async function GET(_req: NextRequest) {
       include: { user: { select: { name: true, email: true, agency: true } } },
     }),
     prisma.replacementRequest.findMany({
-      where: { status: "PENDING" },
+      // Only surface requests that actually need an admin decision. Ones the
+      // admin already greenlit that are waiting on fresh stock (autoApproved)
+      // fill themselves as leads arrive — they shouldn't ping the admin.
+      where: { status: "PENDING", autoApproved: false },
       orderBy: { createdAt: "desc" },
       take: 25,
       include: {
