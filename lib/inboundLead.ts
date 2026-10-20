@@ -160,11 +160,13 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
       creativeId: pick("creativeId") || undefined,
     },
     packageId,
-    // Display label only (not used in routing). Use an explicit form name if the
-    // connector sends one, otherwise the default — we deliberately DON'T fall back
-    // to the attribution channel ("facebook") or the campaign name, so pipe leads
-    // read cleanly as "Facebook instant form" in the backend.
-    source: lookup["form"] || lookup["form_name"] || DEFAULT_SOURCE,
+    // Display label only (not used in routing). Prefer an explicit form name
+    // (GHL sends one), then an explicit source/lead_source the connector posts —
+    // e.g. the ABCA quiz sends "early-retirement-quiz", so those leads read as
+    // their real source instead of being mislabeled. We still DON'T fall back to
+    // the attribution channel ("facebook") or campaign name, so a bare FB-form
+    // pipe lead (no source field) still reads cleanly as "Facebook instant form".
+    source: lookup["form"] || lookup["form_name"] || lookup["lead_source"] || lookup["source"] || DEFAULT_SOURCE,
     externalId: pick("externalId") || undefined,
     raw,
     // GHL contacts carry tags (top-level, either a comma-joined string or an

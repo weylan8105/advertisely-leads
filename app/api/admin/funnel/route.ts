@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { getAbcaAdInsights } from "@/lib/metaInsights";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -120,18 +121,30 @@ export async function GET(req: NextRequest) {
   // past step 5). Unlabeled steps fall back to "Step N" so none are dropped.
   const maxStepInData = stepRows.reduce((m, r) => Math.max(m, Number(r.step) || 0), 0);
   const maxStep = Math.max(STEP_LABELS.length, maxStepInData);
+
+  // The funnel now starts at the LANDING PAGE (page views = 100% baseline), so
+  // the big pre-quiz drop — visitors who hit the ZIP/landing page but never start
+  // the quiz — is visible instead of hidden. "What matters most" (quiz step 1) is
+  // only reached after the ZIP gate, so it is no longer treated as 100%.
+  const rawSteps: { label: string; count: number }[] = [
+    { label: "Visited page (ZIP)", count: views },
+  ];
+  for (let n = 1; n <= maxStep; n++) {
+    rawSteps.push({ label: STEP_LABELS[n - 1] ?? `Step ${n}`, count: byStep.get(n) ?? 0 });
+  }
   const steps = [];
   let biggestDrop = { step: 0, label: "", dropPct: 0, lost: 0 };
-  for (let n = 1; n <= maxStep; n++) {
-    const count = byStep.get(n) ?? 0;
-    const prevCount = n === 1 ? views || count : byStep.get(n - 1) ?? 0;
+  for (let i = 0; i < rawSteps.length; i++) {
+    const count = rawSteps[i].count;
+    const prevCount = i === 0 ? count : rawSteps[i - 1].count;
     const stepConversion = prevCount > 0 ? Math.round((count / prevCount) * 100) : 0;
-    const dropPct = n === 1 ? 0 : 100 - stepConversion;
+    const dropPct = i === 0 ? 0 : 100 - stepConversion;
     const lost = Math.max(0, prevCount - count);
-    if (n > 1 && dropPct >= biggestDrop.dropPct) {
-      biggestDrop = { step: n, label: STEP_LABELS[n - 1] ?? `Step ${n}`, dropPct, lost };
+    const step = i + 1; // 1-based display position (step 1 = landing page)
+    if (i > 0 && dropPct >= biggestDrop.dropPct) {
+      biggestDrop = { step, label: rawSteps[i].label, dropPct, lost };
     }
-    steps.push({ step: n, label: STEP_LABELS[n - 1] ?? `Step ${n}`, count, stepConversion, dropPct, lost });
+    steps.push({ step, label: rawSteps[i].label, count, stepConversion, dropPct, lost });
   }
 
   const series = seriesRows.map((r) => ({
@@ -143,6 +156,19 @@ export async function GET(req: NextRequest) {
 
   const nonAdViews = Math.max(0, views - adViews);
   const nonAdCompletes = Math.max(0, completes - adCompletes);
+
+  // TRUE ad conversion: ad-attributed leads ÷ Facebook-reported clicks / landing
+  // page views for the ABCA funnel account. Reads lower than leads ÷ tracked page
+  // views because Facebook counts clicks our on-page beacon never sees. Inert
+  // (adFunnelConfigured:false, no Graph call) until ABCA_AD_ACCOUNT_ID is set.
+  const sinceYmd = from.toISOString().slice(0, 10);
+  const untilYmd = new Date(Math.max(from.getTime(), to.getTime() - 1)).toISOString().slice(0, 10);
+  const adFunnel = await getAbcaAdInsights(sinceYmd, untilYmd);
+  const adClickDenom = adFunnel.landingPageViews || adFunnel.linkClicks || 0;
+  const trueAdConversionRate =
+    adFunnel.configured && adClickDenom > 0
+      ? Math.round((adCompletes / adClickDenom) * 1000) / 10
+      : null;
 
   return NextResponse.json({
     range,
@@ -161,5 +187,11 @@ export async function GET(req: NextRequest) {
     steps,
     biggestDrop: biggestDrop.step > 0 ? biggestDrop : null,
     series,
+    // True ad conversion (leads ÷ real Facebook clicks for the ABCA funnel).
+    adFunnelConfigured: adFunnel.configured,
+    adLinkClicks: adFunnel.linkClicks,
+    adLandingViews: adFunnel.landingPageViews,
+    trueAdConversionRate,
+    adFunnelError: adFunnel.error ?? null,
   });
 }

@@ -17,6 +17,11 @@ interface FunnelData {
   steps: Step[];
   biggestDrop: { step: number; label: string; dropPct: number; lost: number } | null;
   series: SeriesPoint[];
+  adFunnelConfigured?: boolean;
+  adLinkClicks?: number;
+  adLandingViews?: number;
+  trueAdConversionRate?: number | null;
+  adFunnelError?: string | null;
 }
 
 type Selection = { kind: "preset"; key: string } | { kind: "custom"; from: string; to: string };
@@ -187,10 +192,30 @@ export function FunnelAnalytics() {
             <Stat icon={<TrendingDown className="h-3.5 w-3.5" />} label="Completion rate"
               value={`${data.completionRate}%`} sub={`ads ${data.adCompletionRate}% · direct ${data.nonAdCompletionRate}%`} />
           </div>
-          <p className="mt-2 mb-6 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-[11px] text-muted-foreground">
             <span className="font-medium text-foreground">From ads</span> = visitors who arrived with a Facebook click ID
             (real ad traffic). Page views includes all visits (ads + direct + testing).
           </p>
+
+          {/* True ad conversion vs Facebook's own click count (ABCA funnel account). */}
+          {data.adFunnelConfigured && data.trueAdConversionRate != null ? (
+            <div className="mt-2 mb-6 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-muted-foreground">
+              <Megaphone className="h-3.5 w-3.5 mt-0.5 shrink-0 text-brand-red" />
+              <span>
+                <span className="font-semibold text-foreground">True ad conversion: {data.trueAdConversionRate}%</span>{" "}
+                — {data.adCompletes.toLocaleString()} ad leads ÷{" "}
+                {(data.adLandingViews || data.adLinkClicks || 0).toLocaleString()} Facebook{" "}
+                {data.adLandingViews ? "landing-page views" : "link clicks"} (Meta-reported). This is lower than the
+                5%-style rate above because Facebook counts clicks that never load the page.
+              </span>
+            </div>
+          ) : (
+            <p className="mt-2 mb-6 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">True ad conversion</span> (leads ÷ real Facebook clicks) is off
+              until the ABCA funnel ad account is connected — set <code className="rounded bg-slate-100 px-1">ABCA_AD_ACCOUNT_ID</code>.
+              {data.adFunnelError ? ` (${data.adFunnelError})` : ""}
+            </p>
+          )}
 
           {/* Daily trend */}
           {series.length > 0 && (
@@ -282,8 +307,8 @@ export function FunnelAnalytics() {
           </div>
 
           <p className="mt-4 text-[11px] text-muted-foreground">
-            Each bar = visitors who reached that step · the drop % shows where people leave · completion rate = {data.completionRate}%.
-            Data is first-party and anonymous.
+            100% = everyone who opened the page (step 1) · each bar = visitors who reached that step · the drop % shows
+            where people leave · overall completion rate = {data.completionRate}% of page views. Data is first-party and anonymous.
           </p>
         </>
       )}
