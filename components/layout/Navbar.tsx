@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { Logo } from "./Logo";
+import { AccountMenu } from "./AccountMenu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,8 +20,10 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   // Reflect auth state (any login method) so signed-in visitors don't see
   // "Sign in / Create account" and mistake it for having been logged out.
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const isAuthed = status === "authenticated";
+  const acctName = session?.user?.name ?? session?.user?.email ?? "Your account";
+  const acctEmail = session?.user?.email;
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between">
@@ -40,9 +43,12 @@ export function Navbar() {
         </div>
         <div className="hidden md:flex items-center gap-3">
           {isAuthed ? (
-            <Link href="/dashboard">
-              <Button size="sm">Go to dashboard</Button>
-            </Link>
+            <>
+              <Link href="/dashboard">
+                <Button variant="outline" size="sm">Dashboard</Button>
+              </Link>
+              <AccountMenu />
+            </>
           ) : (
             <>
               <Link href="/login">
@@ -81,13 +87,34 @@ export function Navbar() {
               {item.label}
             </Link>
           ))}
+          {isAuthed && (
+            <div className="mt-1 border-t border-slate-200 pt-3">
+              <div className="text-xs font-medium">{acctName}</div>
+              {acctEmail && acctEmail !== acctName && (
+                <div className="text-[11px] text-muted-foreground">{acctEmail}</div>
+              )}
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
             {isAuthed ? (
-              <Link href="/dashboard" className="flex-1" onClick={() => setOpen(false)}>
-                <Button size="sm" className="w-full">
-                  Go to dashboard
+              <>
+                <Link href="/dashboard" className="flex-1" onClick={() => setOpen(false)}>
+                  <Button size="sm" className="w-full">
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setOpen(false);
+                    signOut({ callbackUrl: "/login" });
+                  }}
+                >
+                  Sign out
                 </Button>
-              </Link>
+              </>
             ) : (
               <>
                 <Link href="/login" className="flex-1" onClick={() => setOpen(false)}>
