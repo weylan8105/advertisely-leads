@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -129,6 +129,26 @@ export function LeadDetailModal({
     return hit ? prettyVal(hit[1]) : "";
   })();
 
+  // One-click copy for any contact detail, with a brief ✓. Copying also makes this
+  // the "current" lead highlighted on the pipeline (same key the board uses).
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(text: string, key: string) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied((k) => (k === key ? null : k)), 1300);
+      try { localStorage.setItem("pipeline_active_lead", lead.id); } catch { /* ignore */ }
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+  const telDigits = (lead.phone || "").replace(/[^\d+]/g, "");
+  const place = `${lead.state || ""}${lead.zip ? ` ${lead.zip}` : ""}`.trim();
+  const allContact = [lead.name, lead.phone, lead.email, place].filter(Boolean).join("\n");
+  const CopyMark = ({ k }: { k: string }) =>
+    copied === k ? <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover/cp:opacity-60 transition-opacity" />;
+
   // Editable opportunity value ($) — shown on the card + summed per stage.
   const [valueInput, setValueInput] = useState(
     lead.valueCents != null ? String(lead.valueCents / 100) : "",
@@ -225,7 +245,15 @@ export function LeadDetailModal({
         <div className="p-6 border-b border-slate-200 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-semibold tracking-tight truncate">{lead.name}</h2>
+              <button
+                type="button"
+                onClick={() => copy(lead.name, "name")}
+                title="Click to copy name"
+                className="group/cp inline-flex min-w-0 items-center gap-1.5 text-left hover:text-brand-red"
+              >
+                <h2 className="text-2xl font-semibold tracking-tight truncate">{lead.name}</h2>
+                <CopyMark k="name" />
+              </button>
               <span
                 className={cn(
                   "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
@@ -239,18 +267,43 @@ export function LeadDetailModal({
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Phone className="h-3.5 w-3.5" /> {lead.phone}
-              </span>
+              <button type="button" onClick={() => copy(lead.phone, "phone")} title="Click to copy number"
+                className="group/cp inline-flex items-center gap-1 rounded hover:text-brand-red">
+                <Phone className="h-3.5 w-3.5" /> <span className="font-mono">{lead.phone}</span> <CopyMark k="phone" />
+              </button>
               {lead.email && (
-                <span className="inline-flex items-center gap-1">
-                  <Mail className="h-3.5 w-3.5" /> {lead.email}
-                </span>
+                <button type="button" onClick={() => copy(lead.email, "email")} title="Click to copy email"
+                  className="group/cp inline-flex items-center gap-1 rounded hover:text-brand-red">
+                  <Mail className="h-3.5 w-3.5" /> {lead.email} <CopyMark k="email" />
+                </button>
               )}
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" /> {lead.state}{lead.zip ? ` ${lead.zip}` : ""}
-                {local ? ` · ${local} local` : ""}
-              </span>
+              <button type="button" onClick={() => copy(place, "place")} title="Click to copy state/ZIP"
+                className="group/cp inline-flex items-center gap-1 rounded hover:text-brand-red">
+                <MapPin className="h-3.5 w-3.5" /> {place}
+                {local ? ` · ${local} local` : ""} <CopyMark k="place" />
+              </button>
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              {telDigits && (
+                <>
+                  <a href={`tel:${telDigits}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">
+                    <Phone className="h-3.5 w-3.5" /> Call
+                  </a>
+                  <a href={`sms:${telDigits}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">
+                    <MessageSquare className="h-3.5 w-3.5" /> Text
+                  </a>
+                </>
+              )}
+              {lead.email && (
+                <a href={`mailto:${lead.email}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">
+                  <Mail className="h-3.5 w-3.5" /> Email
+                </a>
+              )}
+              <button type="button" onClick={() => copy(allContact, "all")}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">
+                {copied === "all" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied === "all" ? "Copied" : "Copy all"}
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -357,10 +410,18 @@ export function LeadDetailModal({
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Lead details</div>
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
               {facts.map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-3 border-b border-slate-100 py-1.5">
+                <button
+                  type="button"
+                  key={k}
+                  onClick={() => copy(v, `fact-${k}`)}
+                  title={`Click to copy ${k.toLowerCase()}`}
+                  className="group/cp flex w-full justify-between gap-3 border-b border-slate-100 py-1.5 text-left hover:bg-slate-50 rounded-sm"
+                >
                   <span className="text-muted-foreground">{k}</span>
-                  <span className="font-medium text-right break-words">{v}</span>
-                </div>
+                  <span className="inline-flex items-center gap-1.5 font-medium text-right break-words">
+                    {v} <CopyMark k={`fact-${k}`} />
+                  </span>
+                </button>
               ))}
             </div>
           </div>
