@@ -41,12 +41,29 @@ export async function GET(req: NextRequest) {
       lead: {
         select: {
           id: true, name: true, phone: true, email: true, state: true,
+          status: true, trashedAt: true, assignedUserId: true,
           orderId: true, order: { select: { filterStates: true } },
         },
       },
       requestedBy: { select: { id: true, name: true, email: true } },
     },
   });
+
+  // Leads that already have an open or completed request — a denial on the same lead
+  // can't be undone (that would create a second live request / double replacement).
+  const leadsWithLiveRequest = new Set(
+    replacements.filter((r) => r.status === "PENDING" || r.status === "APPROVED").map((r) => r.leadId),
+  );
+  // A denial can be undone back to "pending review" unless the lead has since been
+  // replaced or trashed (auto-closed duplicates land as DENIED for exactly that reason).
+  const canUndoDeny = (r: (typeof replacements)[number]): boolean =>
+    r.status === "DENIED" &&
+    !!r.lead &&
+    r.lead.status !== "REPLACED" &&
+    // still owned by whoever asked — otherwise approving it would replace someone else's lead
+    r.lead.assignedUserId === r.requestedById &&
+    !r.lead.trashedAt &&
+    !leadsWithLiveRequest.has(r.leadId);
 
   // States that currently have fresh (<=48h) unassigned IUL inventory — the only
   // stock a replacement can draw from (fresh-only rule). Mirrors fulfillReplacement.
@@ -83,6 +100,7 @@ export async function GET(req: NextRequest) {
   const annotated = replacements.map((r) => ({
     ...r,
     awaitingFreshStock: r.status === "PENDING" && r.autoApproved && !fulfillableNow(r.lead),
+    undoable: canUndoDeny(r),
   }));
 
   const backedUpStates = Array.from(
@@ -263,8 +281,9 @@ export async function POST(req: NextRequest) {
 
 /**
  * PATCH /api/admin/replacements
- * Body: { requestId: string; action: "approve" | "deny"; adminNote?: string }
- * Admin approves or denies a replacement request.
+ * Body: { requestId: string; action: "approve" | "deny" | "undo-deny"; adminNote?: string }
+ * Admin approves or denies a replacement request, or undoes a denial (back to
+ * pending review) when it was a mistake.
  */
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -279,9 +298,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { requestId, action, adminNote } = body as {
+  const { requestId, action, adminNote, force } = body as {
     requestId?: string;
-    action?: "approve" | "deny" | "autofulfill" | "approve-all";
+    force?: boolean;
+    action?: "approve" | "deny" | "autofulfill" | "approve-all" | "undo-deny";
     adminNote?: string;
   };
 
@@ -337,6 +357,103 @@ export async function PATCH(req: NextRequest) {
       closed,
       failed,
       message: `Approved ${pending.length} request${pending.length === 1 ? "" : "s"} — ${delivered} delivered now, ${queued} queued to auto-fulfill when fresh leads arrive${closed ? `, ${closed} already replaced` : ""}.`,
+    });
+  }
+
+  // Undo a denial made by mistake: DENIED -> PENDING (unreviewed), so it shows back
+  // up in the queue for a fresh approve/deny. Refused when the lead was already
+  // replaced or trashed (auto-closed duplicates), or when another open/approved
+  // request exists for the same lead — either would risk a double replacement.
+  if (action === "undo-deny") {
+    if (!requestId) {
+      return NextResponse.json({ error: "requestId is required" }, { status: 400 });
+    }
+    const request = await prisma.replacementRequest.findUnique({
+      where: { id: requestId },
+      include: { lead: { select: { id: true, status: true, trashedAt: true, assignedUserId: true, orderId: true, order: { select: { quantity: true } } } } },
+    });
+    if (!request) {
+      return NextResponse.json({ error: "Replacement request not found" }, { status: 404 });
+    }
+    if (request.status !== "DENIED") {
+      return NextResponse.json({ error: "Only a denied request can be undone." }, { status: 409 });
+    }
+    if (!request.lead || request.lead.status === "REPLACED" || request.lead.trashedAt) {
+      return NextResponse.json(
+        { error: "This lead has already been replaced (or is in the trash), so the denial can't be undone." },
+        { status: 409 },
+      );
+    }
+    const other = await prisma.replacementRequest.findFirst({
+      where: { leadId: request.leadId, id: { not: request.id }, status: { in: ["PENDING", "APPROVED"] } },
+      select: { id: true, status: true },
+    });
+    if (other) {
+      return NextResponse.json(
+        { error: `This lead already has another ${other.status === "APPROVED" ? "completed" : "open"} replacement request, so this denial can't be undone.` },
+        { status: 409 },
+      );
+    }
+    if (request.lead.assignedUserId !== request.requestedById) {
+      return NextResponse.json(
+        { error: "This lead no longer belongs to the agent who asked for the replacement, so the denial can't be undone." },
+        { status: 409 },
+      );
+    }
+    // Same 20%-per-order cap the client hits when filing. The slot this denial freed
+    // may have been used since; going over needs an explicit admin override (force).
+    if (request.lead.orderId && request.lead.order && !force) {
+      const cap = Math.ceil(request.lead.order.quantity * 0.2);
+      const used = await prisma.replacementRequest.count({
+        where: { lead: { orderId: request.lead.orderId }, status: { in: ["PENDING", "APPROVED"] } },
+      });
+      if (used >= cap) {
+        return NextResponse.json(
+          {
+            error: `This order is already at its replacement limit (${used} of ${cap}). Undoing would put it over.`,
+            capExceeded: true, cap, used,
+          },
+          { status: 409 },
+        );
+      }
+    }
+    // One atomic statement: flips DENIED -> PENDING only if no other open/approved
+    // request exists for the lead, so a double-click or a race can't create two.
+    const res: number = await prisma.$executeRaw`
+      UPDATE "ReplacementRequest"
+      SET status = 'PENDING', "autoApproved" = false, "reviewedById" = NULL, "reviewedAt" = NULL, "adminNote" = NULL
+      WHERE id = ${requestId} AND status = 'DENIED'
+        AND NOT EXISTS (
+          SELECT 1 FROM "ReplacementRequest" o
+          WHERE o."leadId" = ${request.leadId} AND o.id <> ${requestId} AND o.status IN ('PENDING', 'APPROVED')
+        )`;
+    if (res === 0) {
+      return NextResponse.json({ error: "This request changed in the meantime — refresh and try again." }, { status: 409 });
+    }
+    // Client-visible history line stays neutral; who undid it (and the cleared denial
+    // note, which clients could see) is kept in metadata for the audit trail.
+    await prisma.leadActivity.create({
+      data: {
+        leadId: request.leadId,
+        type: "NOTE_ADDED",
+        author: "Advertisely team",
+        body: "Replacement request reopened for review (an earlier denial was undone).",
+        metadata: {
+          action: "replacement_undo_deny",
+          requestId: request.id,
+          undoneBy: user.id,
+          undoneByName: user.name ?? user.email ?? null,
+          previousReviewerId: request.reviewedById,
+          previousReviewedAt: request.reviewedAt ? request.reviewedAt.toISOString() : null,
+          previousNote: request.adminNote,
+        },
+      },
+    });
+    return NextResponse.json({
+      success: true,
+      requestId,
+      status: "PENDING",
+      message: "Denial undone — the request is back in the queue for review.",
     });
   }
 

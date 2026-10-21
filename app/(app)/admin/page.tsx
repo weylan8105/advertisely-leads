@@ -31,6 +31,7 @@ import {
   AlertCircle,
   X,
   CheckCheck,
+  RotateCcw,
   XCircle,
   Trash2,
   Clock,
@@ -64,6 +65,7 @@ interface Replacement {
   status: ReplacementStatus;
   awaitingFreshStock: boolean;
   autoApproved: boolean;
+  undoable: boolean; // denied by mistake can be reopened (server says it's safe)
 }
 
 interface Toast {
@@ -140,6 +142,7 @@ function AdminPageInner() {
               status: r.status,
               awaitingFreshStock: !!r.awaitingFreshStock,
               autoApproved: !!r.autoApproved,
+              undoable: !!r.undoable,
             })),
           );
           setBackedUpStates(d.backedUpStates ?? []);
@@ -176,20 +179,31 @@ function AdminPageInner() {
 
   async function handleReplacementAction(
     requestId: string,
-    action: "approve" | "deny",
+    action: "approve" | "deny" | "undo-deny",
     leadName: string,
+    force = false,
   ) {
     setLoadingId(`${requestId}-${action}`);
     try {
       const res = await fetch("/api/admin/replacements", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, action }),
+        body: JSON.stringify({ requestId, action, force }),
       });
       const data = await res.json();
 
       if (!res.ok) {
+        // Order already at its 20% replacement cap: let the admin knowingly override.
+        if (action === "undo-deny" && data.capExceeded && !force) {
+          setLoadingId(null);
+          if (window.confirm(`${data.error}\n\nUndo anyway and go over the limit for this order?`)) {
+            return handleReplacementAction(requestId, action, leadName, true);
+          }
+          return;
+        }
         addToast("error", data.error ?? `Failed to ${action} request.`);
+        // The row may be stale (e.g. Undo no longer allowed) — re-sync from the server.
+        await loadReplacements();
         return;
       }
 
@@ -199,18 +213,24 @@ function AdminPageInner() {
       setReplacements((prev) =>
         prev.map((r) =>
           r.id === requestId
-            ? {
-                ...r,
-                status: action === "deny" ? "DENIED" : queued ? "PENDING" : "APPROVED",
-                autoApproved: action === "deny" ? false : queued ? true : r.autoApproved,
-              }
+            ? action === "undo-deny"
+              ? // Back to "Pending" review: approve or deny it again from here.
+                { ...r, status: "PENDING", autoApproved: false, awaitingFreshStock: false, undoable: false }
+              : {
+                  ...r,
+                  status: action === "deny" ? "DENIED" : queued ? "PENDING" : "APPROVED",
+                  autoApproved: action === "deny" ? false : queued ? true : r.autoApproved,
+                  undoable: action === "deny",
+                }
             : r,
         ),
       );
       addToast(
         "success",
         data.message ??
-          `${leadName}'s replacement request ${action === "approve" ? "approved" : "denied"}.`,
+          (action === "undo-deny"
+            ? `${leadName}'s denial was undone — back in the queue for review.`
+            : `${leadName}'s replacement request ${action === "approve" ? "approved" : "denied"}.`),
       );
     } catch {
       addToast("error", `Failed to ${action} request. Please try again.`);
@@ -687,6 +707,25 @@ function AdminPageInner() {
                                     Approve
                                   </Button>
                                 )}
+                              </div>
+                            ) : r.status === "DENIED" && r.undoable ? (
+                              <div className="inline-flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground italic">Denied</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                  disabled={!!loadingId}
+                                  onClick={() => handleReplacementAction(r.id, "undo-deny", r.lead)}
+                                  title="Undo this denial — puts the request back in the queue for review"
+                                >
+                                  {loadingId === `${r.id}-undo-deny` ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                  )}
+                                  Undo
+                                </Button>
                               </div>
                             ) : (
                               <span className="text-xs text-muted-foreground italic">
