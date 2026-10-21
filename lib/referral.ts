@@ -102,3 +102,43 @@ export async function settleBucks(opts: {
     }
   }
 }
+
+/**
+ * A referred order was refunded (fully or partly): take back the Bucks its
+ * code's owner earned, in proportion to the refund — but only what's still in
+ * their balance. Bucks already spent can't be recovered, so the balance never
+ * goes below $0. Idempotent per (paymentRef, cumulative refunded amount).
+ */
+export async function clawbackReferralBucks(paymentRef: string, refundedCents: number, chargedCents: number) {
+  if (!prisma || chargedCents <= 0 || refundedCents <= 0) return;
+  const db = prisma;
+  const earns = await db.bucksTransaction.findMany({ where: { paymentRef, kind: "EARN" }, select: { userId: true, amountCents: true } });
+  for (const e of earns) {
+    const target = Math.round(e.amountCents * Math.min(1, refundedCents / chargedCents));
+    const prior = await db.bucksTransaction.aggregate({
+      where: { userId: e.userId, kind: "CLAWBACK", paymentRef: { startsWith: `${paymentRef}:refund:` } },
+      _sum: { amountCents: true },
+    });
+    const owed = target + (prior._sum.amountCents ?? 0); // prior clawbacks are negative
+    if (owed <= 0) continue;
+    try {
+      await db.$transaction(async (tx) => {
+        const u = await tx.user.findUnique({ where: { id: e.userId }, select: { bucksCents: true } });
+        const take = Math.min(owed, Math.max(0, u?.bucksCents ?? 0));
+        if (take <= 0) return; // already spent — nothing to take back
+        await tx.bucksTransaction.create({
+          data: {
+            userId: e.userId,
+            amountCents: -take,
+            kind: "CLAWBACK",
+            note: "Referred order was refunded",
+            paymentRef: `${paymentRef}:refund:${refundedCents}`,
+          },
+        });
+        await tx.user.update({ where: { id: e.userId }, data: { bucksCents: { decrement: take } } });
+      });
+    } catch (err: any) {
+      if (err?.code !== "P2002") throw err; // this refund event was already handled
+    }
+  }
+}

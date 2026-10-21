@@ -96,8 +96,10 @@ export async function placeCheckoutOrders(opts: {
   if (createdOrders.length === 0) return createdOrders;
   const firstOrder = createdOrders[0];
 
-  // Advertisely Bucks Marketing Campaign (draft): the discount + Bucks are recorded on the first
-  // order of the checkout, then balances settle (idempotent per paymentRef).
+  // Advertisely Bucks Marketing Campaign (draft): the code + discount are recorded on the
+  // first order of the checkout; Bucks spent are spread across the orders (each
+  // up to its own total) so P&L can subtract them per order. Then balances
+  // settle (idempotent per paymentRef).
   const bucksSpent = opts.bucksAppliedCents ?? 0;
   if (opts.referral || bucksSpent > 0 || (opts.discountCents ?? 0) > 0) {
     await prisma.order.update({
@@ -106,9 +108,16 @@ export async function placeCheckoutOrders(opts: {
         referralCode: opts.referral?.code ?? null,
         referrerUserId: opts.referral?.ownerId ?? null,
         discountCents: opts.discountCents ?? 0,
-        bucksAppliedCents: bucksSpent,
       },
     });
+    let bucksLeft = bucksSpent;
+    for (const o of createdOrders) {
+      if (bucksLeft <= 0) break;
+      const total = (await prisma.order.findUnique({ where: { id: o.id }, select: { totalCents: true } }))?.totalCents ?? 0;
+      const part = Math.min(bucksLeft, total);
+      if (part > 0) await prisma.order.update({ where: { id: o.id }, data: { bucksAppliedCents: part } });
+      bucksLeft -= part;
+    }
     await settleBucks({
       paymentRef: opts.paymentRef,
       buyerUserId: opts.userId,

@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * bought) — used by the dashboard's "Your numbers", which is always personal.
  *
  * Net = commission (annual premium logged on sold policies) + buyback − lead spend.
- * Lead spend = what was paid for leads (order totals; $0 for free self-assigned).
+ * Lead spend = cash paid for leads (order totals minus Advertisely Bucks; $0 for free self-assigned).
  */
 export async function GET(req: Request) {
   if (!isDatabaseConfigured || !prisma) {
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
     }),
     prisma.order.findMany({
       where: orderWhere as any,
-      select: { id: true, packageId: true, totalCents: true, quantity: true, createdAt: true },
+      select: { id: true, packageId: true, totalCents: true, bucksAppliedCents: true, quantity: true, createdAt: true },
     }),
   ]);
 
@@ -53,7 +53,9 @@ export async function GET(req: Request) {
 
   const apCents = soldLeads.reduce((s, l) => s + (l.soldPremiumCents ?? 0), 0);
   const commissionCents = apCents; // first-year comp model (AP = commission)
-  const costCents = orders.reduce((s, o) => s + o.totalCents, 0);
+  // Spend = cash actually paid. Leads paid for with Advertisely Bucks don't count.
+  const paidCents = (o: { totalCents: number; bucksAppliedCents: number }) => Math.max(0, o.totalCents - o.bucksAppliedCents);
+  const costCents = orders.reduce((s, o) => s + paidCents(o), 0);
   const buybackCents = 0; // reserved: credit for replaced/dead leads
   const netCents = commissionCents + buybackCents - costCents;
   const roi = costCents > 0 ? (commissionCents + buybackCents) / costCents : null;
@@ -73,6 +75,7 @@ export async function GET(req: Request) {
   const campaigns = orders
     .map((o) => {
       const ap = prem[o.id] ?? 0;
+      const cost = paidCents(o);
       return {
         id: o.id,
         name: findPackage(o.packageId)?.name ?? o.packageId,
@@ -81,9 +84,9 @@ export async function GET(req: Request) {
         closed: closed[o.id] ?? 0,
         apCents: ap,
         commissionCents: ap,
-        costCents: o.totalCents,
-        netCents: ap - o.totalCents,
-        roi: o.totalCents > 0 ? ap / o.totalCents : null,
+        costCents: cost,
+        netCents: ap - cost,
+        roi: cost > 0 ? ap / cost : null,
       };
     })
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));

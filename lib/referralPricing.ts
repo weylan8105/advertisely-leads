@@ -50,6 +50,7 @@ export function priceCart(
     if (!pkg) continue;
     const list = Math.round(pkg.pricePerLead * 100);
     const discounted = opts.codeApplied && REFERRAL_PACKAGE_IDS.has(pkg.id);
+    // 6667 × 0.9 = 6000.3 → 6000: the code price is exactly $60.00.
     const per = discounted ? Math.round(list * (1 - REFERRAL_DISCOUNT_RATE)) : list;
     lines.push({ packageId: pkg.id, quantity: it.quantity, listCentsPerLead: list, centsPerLead: per, discounted });
     listCents += list * it.quantity;

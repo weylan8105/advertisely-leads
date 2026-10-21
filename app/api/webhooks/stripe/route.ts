@@ -3,6 +3,7 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { processPaidInvoice, upsertLocalSubscription } from "@/lib/leadSubscription";
 import { placeCheckoutOrders, type PaidLine } from "@/lib/checkoutOrders";
+import { clawbackReferralBucks } from "@/lib/referral";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -49,6 +50,14 @@ export async function POST(req: NextRequest) {
       case "payment_intent.succeeded":
         await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent);
         break;
+      case "charge.refunded": {
+        // Advertisely Bucks Marketing Campaign: take back the referrer's Bucks
+        // for a refunded referred order (only what's still unspent).
+        const ch = event.data.object as Stripe.Charge;
+        const pi = typeof ch.payment_intent === "string" ? ch.payment_intent : ch.payment_intent?.id;
+        if (pi) await clawbackReferralBucks(pi, ch.amount_refunded, ch.amount);
+        break;
+      }
       case "payment_intent.payment_failed":
         console.log("Stripe webhook: payment failed", (event.data.object as Stripe.PaymentIntent).id);
         break;

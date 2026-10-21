@@ -38,8 +38,8 @@ export const HOLDBACK_TAGS_TO_HOUSE = ["american income advantage"];
  * Advertisely Bucks Marketing Campaign — DRAFT, NOT LIVE.
  *
  * When true:
- *  - Fresh leads list at $66 (REFERRAL_LIST_PRICE). Entering anyone's referral
- *    code at checkout takes 10% off fresh leads (back to ~$59.40).
+ *  - Fresh leads list at $66.67. Entering anyone's referral code at checkout
+ *    takes 10% off fresh leads — exactly $60.00.
  *  - The code's owner earns $12 in Advertisely Bucks per fresh lead bought with
  *    it (no cap). Bucks pay for future lead orders, no cap either.
  *  - Platform ADMINs neither earn nor spend Bucks.

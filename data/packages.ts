@@ -50,8 +50,9 @@ export const leadPackages: LeadPackage[] = [
     tagline: "Freshly generated, high-intent prospects — the highest contact and conversion rates on the platform.",
     description:
       "Blue-Collar IUL prospects, freshly generated and under 48 hours old. Highest contact and conversion rates.",
-    // Referral program (draft): list price rises to $66; a referral code takes 10% off.
-    pricePerLead: REFERRAL_PROGRAM_ENABLED ? 66 : 60,
+    // Advertisely Bucks Marketing Campaign (draft): list price rises to $66.67 so a
+    // referral code's 10% off lands on exactly $60.00.
+    pricePerLead: REFERRAL_PROGRAM_ENABLED ? 66.67 : 60,
     minimumOrder: 25, // max(25, ceil(150/60)=3) = 25
     estimatedDelivery: "Fast delivery",
     badge: "Fresh",

@@ -621,7 +621,7 @@ model BucksTransaction {
   id              String   @id @default(cuid())
   userId          String
   amountCents     Int
-  kind            String // "EARN" | "SPEND" | "ADJUST"
+  kind            String // "EARN" | "SPEND" | "CLAWBACK" | "ADJUST"
   note            String?
   // EARN: the buyer who used the code. SPEND/EARN: the checkout it came from.
   sourceUserId    String?
