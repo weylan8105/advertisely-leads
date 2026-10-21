@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, X, ArrowRight, Users } from "lucide-react";
+import { Loader2, X, ArrowRight, Users, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { formatCurrency, cn } from "@/lib/utils";
+import { ClientOrdersModal } from "@/components/admin/ClientOrdersModal";
 import type { Lead } from "@/types";
 
 interface Account {
@@ -42,13 +43,15 @@ export function AdminAccounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Account | null>(null);
+  const [managing, setManaging] = useState<Account | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     fetch("/api/admin/accounts")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => setAccounts(d.accounts ?? []))
       .catch((e) => setError(e.message));
-  }, []);
+  }, [reloadKey]);
 
   if (error) return <div className="text-rose-600 text-sm py-8 text-center">Couldn&apos;t load accounts: {error}</div>;
   if (!accounts)
@@ -137,9 +140,14 @@ export function AdminAccounts() {
                   <td className="py-2.5 text-right tabular-nums">{a.apCents ? money(a.apCents) : "—"}</td>
                   <td className="py-2.5 text-right tabular-nums text-muted-foreground">{money(a.leadSpendCents)}</td>
                   <td className="py-2.5 text-right">
-                    <Button size="sm" variant="outline" onClick={() => setViewing(a)}>
-                      View CRM <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="inline-flex gap-1.5">
+                      <Button size="sm" onClick={() => setManaging(a)}>
+                        <Package className="h-3.5 w-3.5" /> Manage orders
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setViewing(a)}>
+                        View CRM <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -156,10 +164,16 @@ export function AdminAccounts() {
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
         Order progress = leads delivered ÷ leads ordered across their open (incomplete) orders · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
-        Click <span className="font-medium">View CRM</span> to see any account&apos;s full pipeline.
+        <span className="font-medium">Manage orders</span> to change an order&apos;s states, quantity, or close/reopen it; <span className="font-medium">View CRM</span> to see their full pipeline.
       </p>
 
       {viewing && <AccountBoardModal account={viewing} onClose={() => setViewing(null)} />}
+      {managing && (
+        <ClientOrdersModal
+          account={managing}
+          onClose={(changed) => { setManaging(null); if (changed) setReloadKey((k) => k + 1); }}
+        />
+      )}
     </>
   );
 }

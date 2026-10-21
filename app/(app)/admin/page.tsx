@@ -41,7 +41,6 @@ import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
 import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButton";
 import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
-import { AssignToMeCard } from "@/components/admin/AssignToMeCard";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
 import { AdminDownlineOrders } from "@/components/admin/AdminDownlineOrders";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
@@ -81,6 +80,9 @@ const VALID_TABS = new Set([
   "replacements", "accounts", "downline-orders", "trash", "stripe-sync",
 ]);
 
+// These two live in the box near the top of the page, not the lower tab bar.
+const TOP_TABS = new Set(["accounts", "replacements"]);
+
 // Wrapped in Suspense because useSearchParams requires it during prerender.
 export default function AdminPage() {
   return (
@@ -104,13 +106,24 @@ function AdminPageInner() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(() => {
     const t = searchParams.get("tab");
-    return t && VALID_TABS.has(t) ? t : "all-leads";
+    return t && VALID_TABS.has(t) && !TOP_TABS.has(t) ? t : "all-leads";
   });
+  // The Client accounts / Replacement Queue box near the top of the page.
+  const [topTab, setTopTab] = useState<"accounts" | "replacements">(() =>
+    searchParams.get("tab") === "replacements" ? "replacements" : "accounts",
+  );
+  const openTopTab = useCallback((t: "accounts" | "replacements") => {
+    setTopTab(t);
+    requestAnimationFrame(() =>
+      document.getElementById("client-box")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  }, []);
   // React to query changes when already on /admin (Link nav doesn't remount).
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t && VALID_TABS.has(t)) setTab(t);
-  }, [searchParams]);
+    if (t === "accounts" || t === "replacements") openTopTab(t);
+    else if (t && VALID_TABS.has(t)) setTab(t);
+  }, [searchParams, openTopTab]);
   // Active CRM-status filter for the All-leads tab, driven by the stat cards.
   const [leadFilter, setLeadFilter] = useState("all");
 
@@ -354,7 +367,7 @@ function AdminPageInner() {
           />
         </button>
         <button
-          onClick={() => setTab("accounts")}
+          onClick={() => openTopTab("accounts")}
           className="text-left transition-transform hover:-translate-y-0.5"
           title="See client accounts + conversion"
         >
@@ -365,7 +378,7 @@ function AdminPageInner() {
             hint="paying agents · click to view"
             accent="emerald"
             icon={<Building2 className="h-4 w-4" />}
-            selected={tab === "accounts"}
+            selected={topTab === "accounts"}
           />
         </button>
       </div>
@@ -383,177 +396,35 @@ function AdminPageInner() {
         }}
       />
 
-      <AssignToMeCard />
-
-      <div id="admin-tabs" className="mt-8 scroll-mt-4">
-        <Tabs value={tab} onValueChange={setTab}>
-          {/* Scroll the long tab bar horizontally on mobile instead of overflowing. */}
-          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
-          <TabsList className="w-max">
-            <TabsTrigger value="all-leads">All leads</TabsTrigger>
-            <TabsTrigger value="queue">Manual assignment</TabsTrigger>
-            <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
-            <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
-            <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
-            <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
-            <TabsTrigger value="replacements">
-              Replacement queue
-              {/* Only count requests that actually need YOU to act — i.e. pending
-                  and not yet reviewed. Approved-and-waiting-on-fresh-stock fill
-                  automatically as leads arrive, and denied/approved are resolved,
-                  so none of those should light up the badge. */}
-              {pendingUnreviewed > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-brand-red text-white text-[10px] h-4 min-w-[16px] px-1">
-                  {pendingUnreviewed}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="accounts">Client accounts</TabsTrigger>
-            <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
-            <TabsTrigger value="trash">Trash</TabsTrigger>
-            <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
-          </TabsList>
-          </div>
-
-          <TabsContent value="all-leads">
-            <Card>
-              <CardHeader>
-                <CardTitle>Lead database</CardTitle>
-                <CardDescription>
-                  Every lead in the system — assigned or not. Search and filter to verify
-                  exactly what has come in from Meta and where it went.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AdminAllLeads assigned={leadFilter} onAssignedChange={setLeadFilter} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="queue">
-            <Card>
-              <CardHeader>
-                <CardTitle>Manual lead dispersal</CardTitle>
-                <CardDescription>
-                  Assign unassigned inbound leads to agents. New leads land here from Meta ad
-                  campaigns the moment they opt in.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AdminLeadQueue />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="meta">
-            <MetaIntegrationManager />
-          </TabsContent>
-
-          <TabsContent value="auto">
-            <Card>
-              <CardHeader>
-                <CardTitle>Auto-distribution queue</CardTitle>
-                <CardDescription>
-                  Future-ready system. Define rules to route new leads to agents by state,
-                  niche, package subscription, or round-robin.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                  <Sparkles className="h-7 w-7 mx-auto text-brand-red" />
-                  <h3 className="mt-3 font-medium">Auto-distribution engine coming online</h3>
-                  <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-                    When enabled, every new inbound IUL lead is routed to the right agent
-                    automatically based on geography, niche, and active order quotas.
-                  </p>
-                  <Badge className="mt-4" variant="purple">
-                    Roadmap · Q3
-                  </Badge>
-                </div>
-                <div className="mt-6 grid md:grid-cols-3 gap-4">
-                  {[
-                    { title: "Routing rules", body: "State, age, niche, agency seat, round-robin, weighted by order quota." },
-                    { title: "Throttling", body: "Daily caps per agent. Pause when CRM reports no pickup." },
-                    { title: "Failover", body: "Unrouted leads fall back to manual queue automatically." },
-                  ].map((c) => (
-                    <div key={c.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                      <div className="text-sm font-medium">{c.title}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{c.body}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="sources">
-            <CplPanel />
-            <Card>
-              <CardHeader>
-                <CardTitle>Campaign & source tracking</CardTitle>
-                <CardDescription>
-                  Sample campaign breakdown (illustrative). Real cost-per-lead is in the panel above.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Campaign</TableHead>
-                        <TableHead className="hidden md:table-cell">Spend (30d)</TableHead>
-                        <TableHead className="hidden md:table-cell">Leads</TableHead>
-                        <TableHead className="hidden md:table-cell">CPL</TableHead>
-                        <TableHead>Quality</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {["Facebook — IUL Blue Collar", "Facebook — FIA Retirement", "Instagram — Final Expense", "Facebook — IUL Age 35-45", "Instagram — IUL Women", "Facebook — FIA Midwest", "Google — Retirement Planning", "Facebook — Final Expense Senior"].slice(0, 8).map((s, i) => {
-                        const spend = 1200 + i * 380;
-                        const leads = 32 + i * 7;
-                        const cpl = spend / leads;
-                        const q = 72 + ((i * 13) % 22);
-                        return (
-                          <TableRow key={s}>
-                            <TableCell className="text-sm">{s}</TableCell>
-                            <TableCell className="hidden md:table-cell">{formatCurrency(spend)}</TableCell>
-                            <TableCell className="hidden md:table-cell">{leads}</TableCell>
-                            <TableCell className="hidden md:table-cell">{formatCurrency(cpl)}</TableCell>
-                            <TableCell className="min-w-[140px]">
-                              <div className="flex items-center gap-2">
-                                <Progress value={q} className="h-1.5 max-w-[80px]" />
-                                <span className="text-xs text-muted-foreground">{q}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant={q > 80 ? "success" : q > 70 ? "info" : "warning"}>
-                                {q > 80 ? "Strong" : q > 70 ? "Healthy" : "Watch"}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="replacements">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 text-brand-red" />
-                  Quality & replacement queue
-                </CardTitle>
-                <CardDescription>
-                  Review replacement requests submitted by agents. Approve, deny, or escalate.
-                  Pending requests auto-fill as fresh leads arrive in their states.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+      {/* Client accounts + Replacement Queue — the day-to-day client management box. */}
+      <Card id="client-box" className="mt-6 scroll-mt-4">
+        <Tabs value={topTab} onValueChange={(v) => setTopTab(v as "accounts" | "replacements")}>
+          <CardHeader className="pb-3">
+            <TabsList className="w-max">
+              <TabsTrigger value="accounts">Client accounts</TabsTrigger>
+              <TabsTrigger value="replacements">
+                Replacement Queue
+                {/* Only requests that need YOU to act (pending, not yet reviewed). */}
+                {pendingUnreviewed > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-brand-red text-white text-[10px] h-4 min-w-[16px] px-1">
+                    {pendingUnreviewed}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </CardHeader>
+          <CardContent>
+            <TabsContent value="accounts" className="mt-0">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Every client with leads or orders. Manage their lead orders or open their CRM.
+              </p>
+              <AdminAccounts />
+            </TabsContent>
+            <TabsContent value="replacements" className="mt-0">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Review replacement requests submitted by agents. Approve, deny, or undo a denial.
+                Approved requests auto-fill as fresh leads arrive in their states.
+              </p>
                 {pendingUnreviewed > 0 && (
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
                     <span className="text-sm text-emerald-900">
@@ -738,9 +609,154 @@ function AdminPageInner() {
                     })}
                   </TableBody>
                 </Table>
+            </TabsContent>
+          </CardContent>
+        </Tabs>
+      </Card>
+
+      <div id="admin-tabs" className="mt-8 scroll-mt-4">
+        <Tabs value={tab} onValueChange={setTab}>
+          {/* Scroll the long tab bar horizontally on mobile instead of overflowing. */}
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
+          <TabsList className="w-max">
+            <TabsTrigger value="all-leads">All leads</TabsTrigger>
+            <TabsTrigger value="queue">Manual assignment</TabsTrigger>
+            <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
+            <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
+            <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
+            <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
+            <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
+            <TabsTrigger value="trash">Trash</TabsTrigger>
+            <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
+          </TabsList>
+          </div>
+
+          <TabsContent value="all-leads">
+            <Card>
+              <CardHeader>
+                <CardTitle>Lead database</CardTitle>
+                <CardDescription>
+                  Every lead in the system — assigned or not. Search and filter to verify
+                  exactly what has come in from Meta and where it went.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminAllLeads assigned={leadFilter} onAssignedChange={setLeadFilter} />
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="queue">
+            <Card>
+              <CardHeader>
+                <CardTitle>Manual lead dispersal</CardTitle>
+                <CardDescription>
+                  Assign unassigned inbound leads to agents. New leads land here from Meta ad
+                  campaigns the moment they opt in.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdminLeadQueue />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="meta">
+            <MetaIntegrationManager />
+          </TabsContent>
+
+          <TabsContent value="auto">
+            <Card>
+              <CardHeader>
+                <CardTitle>Auto-distribution queue</CardTitle>
+                <CardDescription>
+                  Future-ready system. Define rules to route new leads to agents by state,
+                  niche, package subscription, or round-robin.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                  <Sparkles className="h-7 w-7 mx-auto text-brand-red" />
+                  <h3 className="mt-3 font-medium">Auto-distribution engine coming online</h3>
+                  <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
+                    When enabled, every new inbound IUL lead is routed to the right agent
+                    automatically based on geography, niche, and active order quotas.
+                  </p>
+                  <Badge className="mt-4" variant="purple">
+                    Roadmap · Q3
+                  </Badge>
+                </div>
+                <div className="mt-6 grid md:grid-cols-3 gap-4">
+                  {[
+                    { title: "Routing rules", body: "State, age, niche, agency seat, round-robin, weighted by order quota." },
+                    { title: "Throttling", body: "Daily caps per agent. Pause when CRM reports no pickup." },
+                    { title: "Failover", body: "Unrouted leads fall back to manual queue automatically." },
+                  ].map((c) => (
+                    <div key={c.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-sm font-medium">{c.title}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{c.body}</div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="sources">
+            <CplPanel />
+            <Card>
+              <CardHeader>
+                <CardTitle>Campaign & source tracking</CardTitle>
+                <CardDescription>
+                  Sample campaign breakdown (illustrative). Real cost-per-lead is in the panel above.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Campaign</TableHead>
+                        <TableHead className="hidden md:table-cell">Spend (30d)</TableHead>
+                        <TableHead className="hidden md:table-cell">Leads</TableHead>
+                        <TableHead className="hidden md:table-cell">CPL</TableHead>
+                        <TableHead>Quality</TableHead>
+                        <TableHead className="text-right">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {["Facebook — IUL Blue Collar", "Facebook — FIA Retirement", "Instagram — Final Expense", "Facebook — IUL Age 35-45", "Instagram — IUL Women", "Facebook — FIA Midwest", "Google — Retirement Planning", "Facebook — Final Expense Senior"].slice(0, 8).map((s, i) => {
+                        const spend = 1200 + i * 380;
+                        const leads = 32 + i * 7;
+                        const cpl = spend / leads;
+                        const q = 72 + ((i * 13) % 22);
+                        return (
+                          <TableRow key={s}>
+                            <TableCell className="text-sm">{s}</TableCell>
+                            <TableCell className="hidden md:table-cell">{formatCurrency(spend)}</TableCell>
+                            <TableCell className="hidden md:table-cell">{leads}</TableCell>
+                            <TableCell className="hidden md:table-cell">{formatCurrency(cpl)}</TableCell>
+                            <TableCell className="min-w-[140px]">
+                              <div className="flex items-center gap-2">
+                                <Progress value={q} className="h-1.5 max-w-[80px]" />
+                                <span className="text-xs text-muted-foreground">{q}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={q > 80 ? "success" : q > 70 ? "info" : "warning"}>
+                                {q > 80 ? "Strong" : q > 70 ? "Healthy" : "Watch"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
 
           <TabsContent value="stripe-sync">
             <Card>
@@ -820,17 +836,6 @@ function AdminPageInner() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="accounts">
-            <Card>
-              <CardHeader>
-                <CardTitle>Client accounts</CardTitle>
-                <CardDescription>Agencies and individual agents currently paying.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AdminAccounts />
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="downline-orders">
             <Card>
