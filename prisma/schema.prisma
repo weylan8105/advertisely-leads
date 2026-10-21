@@ -448,10 +448,11 @@ model ApiKey {
 model FunnelEvent {
   id        String   @id @default(cuid())
   sessionId String
-  type      String // "view" | "step" | "complete"
-  step      Int? // 1-based step index for "step" events
+  type      String // "view" | "step" | "complete" | "zip_error"
+  step      Int? // 1-based step index for "step" events; digits typed (0-4) for "zip_error"
   source    String   @default("abca-quiz")
   fbclid    String? // Facebook click id from the landing URL — present = ad visitor
+  cta       String? // which entry point started the quiz (hero_zip_auto, hero_zip_submit, final_zip_*, header, sticky)
   createdAt DateTime @default(now())
 
   @@index([createdAt])

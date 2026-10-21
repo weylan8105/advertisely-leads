@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface Step { step: number; label: string; count: number; stepConversion: number; dropPct: number; lost: number }
-interface SeriesPoint { date: string; views: number; completes: number; adViews: number }
+interface SeriesPoint { date: string; views: number; completes: number; adViews: number; anViews?: number }
 interface FunnelData {
   range: string; from: string; to: string;
   views: number; completes: number; completionRate: number;
@@ -22,7 +22,26 @@ interface FunnelData {
   adLandingViews?: number;
   trueAdConversionRate?: number | null;
   adFunnelError?: string | null;
+  anVisitors?: number;
+  anStarted?: number;
+  anCompletes?: number;
+  duplicateLoads?: number;
+  viewSessions?: number;
+  adCompletesAll?: number;
+  entryPoints?: { cta: string; count: number }[];
+  zipErrors?: { empty: number; partial: number };
 }
+
+// Human-readable names for the quiz entry points the landing page reports.
+const CTA_LABELS: Record<string, string> = {
+  hero_zip_auto: "Hero ZIP (auto)",
+  hero_zip_submit: "Hero ZIP (button)",
+  final_zip_auto: "Bottom ZIP (auto)",
+  final_zip_submit: "Bottom ZIP (button)",
+  header: "Header button",
+  sticky: "Sticky button",
+  untracked: "Before tracking",
+};
 
 type Selection = { kind: "preset"; key: string } | { kind: "custom"; from: string; to: string };
 
@@ -182,7 +201,7 @@ export function FunnelAnalytics() {
         <>
           {/* Headline stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Stat icon={<Eye className="h-3.5 w-3.5" />} label="Page views" value={data.views.toLocaleString()}
+            <Stat icon={<Eye className="h-3.5 w-3.5" />} label="Visitors" value={data.views.toLocaleString()}
               sub={`${data.adViews.toLocaleString()} from ads · ${data.nonAdViews.toLocaleString()} direct`} />
             <Stat accent icon={<Megaphone className="h-3.5 w-3.5 text-brand-red" />} label="From ads (FB)"
               value={data.adViews.toLocaleString()}
@@ -193,9 +212,44 @@ export function FunnelAnalytics() {
               value={`${data.completionRate}%`} sub={`ads ${data.adCompletionRate}% · direct ${data.nonAdCompletionRate}%`} />
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            <span className="font-medium text-foreground">From ads</span> = visitors who arrived with a Facebook click ID
-            (real ad traffic). Page views includes all visits (ads + direct + testing).
+            <span className="font-medium text-foreground">Visitors</span> = unique people (repeat page loads merged).{" "}
+            <span className="font-medium text-foreground">From ads</span> = arrived with a Facebook click ID. Direct includes
+            testing.
           </p>
+
+          {/* What the headline excludes, so a junk-click burst can't masquerade as a page problem. */}
+          {((data.anVisitors ?? 0) > 0 || (data.duplicateLoads ?? 0) > 0) && (
+            <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-900">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
+              <span>
+                <span className="font-semibold">Not counted above:</span>{" "}
+                {(data.anVisitors ?? 0) > 0 && (
+                  <>
+                    {(data.anVisitors ?? 0).toLocaleString()} Audience Network visits (accidental in-app ad taps) —{" "}
+                    {data.anStarted ?? 0} started, {data.anCompletes ?? 0} became leads
+                    {(data.duplicateLoads ?? 0) > 0 ? "; " : "."}
+                  </>
+                )}
+                {(data.duplicateLoads ?? 0) > 0 && (
+                  <>{(data.duplicateLoads ?? 0).toLocaleString()} repeat page loads by the same visitor.</>
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* How people entered the quiz + ZIP-button dead ends (measures the ZIP-form changes). */}
+          {((data.entryPoints?.length ?? 0) > 0 || (data.zipErrors?.empty ?? 0) + (data.zipErrors?.partial ?? 0) > 0) && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">Started the quiz from:</span>{" "}
+              {(data.entryPoints ?? []).map((e) => `${CTA_LABELS[e.cta] ?? e.cta} ${e.count.toLocaleString()}`).join(" · ")}
+              {(data.zipErrors?.empty ?? 0) + (data.zipErrors?.partial ?? 0) > 0 && (
+                <>
+                  {" "}· <span className="font-medium text-foreground">ZIP button tapped without a full ZIP:</span>{" "}
+                  {data.zipErrors?.empty ?? 0} empty, {data.zipErrors?.partial ?? 0} partial
+                </>
+              )}
+            </p>
+          )}
 
           {/* True ad conversion vs Facebook's own click count (ABCA funnel account). */}
           {data.adFunnelConfigured && data.trueAdConversionRate != null ? (
@@ -203,7 +257,7 @@ export function FunnelAnalytics() {
               <Megaphone className="h-3.5 w-3.5 mt-0.5 shrink-0 text-brand-red" />
               <span>
                 <span className="font-semibold text-foreground">True ad conversion: {data.trueAdConversionRate}%</span>{" "}
-                — {data.adCompletes.toLocaleString()} ad leads ÷{" "}
+                — {(data.adCompletesAll ?? data.adCompletes).toLocaleString()} ad leads ÷{" "}
                 {(data.adLandingViews || data.adLinkClicks || 0).toLocaleString()} Facebook{" "}
                 {data.adLandingViews ? "landing-page views" : "link clicks"} (Meta-reported). This is lower than the
                 5%-style rate above because Facebook counts clicks that never load the page.
@@ -223,7 +277,7 @@ export function FunnelAnalytics() {
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center justify-between">
                 <span>Daily trend</span>
                 <span className="inline-flex items-center gap-3 normal-case tracking-normal">
-                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-brand-red/50" /> Views</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-brand-red/50" /> Visitors</span>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-emerald-500" /> Completed</span>
                 </span>
               </div>
@@ -233,7 +287,7 @@ export function FunnelAnalytics() {
                     <div
                       key={s.date}
                       className="flex-1 min-w-0 h-full flex items-end justify-center relative group"
-                      title={`${s.date}: ${s.views} views · ${s.completes} completed · ${s.adViews} from ads`}
+                      title={`${s.date}: ${s.views} visitors · ${s.completes} completed · ${s.adViews} from ads${s.anViews ? ` · ${s.anViews} Audience Network (excluded)` : ""}`}
                     >
                       <div className="relative w-full max-w-[16px] h-full flex items-end justify-center">
                         <div className="w-full rounded-t bg-gradient-to-t from-brand-red/60 to-brand-red/20 group-hover:from-brand-red/80"
@@ -307,8 +361,9 @@ export function FunnelAnalytics() {
           </div>
 
           <p className="mt-4 text-[11px] text-muted-foreground">
-            100% = everyone who opened the page (step 1) · each bar = visitors who reached that step · the drop % shows
-            where people leave · overall completion rate = {data.completionRate}% of page views. Data is first-party and anonymous.
+            100% = unique visitors who opened the page (step 1; repeat loads merged, Audience Network excluded) · each bar =
+            visitors who reached that step · the drop % shows where people leave · overall completion rate ={" "}
+            {data.completionRate}% of visitors. Data is first-party and anonymous.
           </p>
         </>
       )}
