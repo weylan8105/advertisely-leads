@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
         type: "LEAD_ASSIGNED" as const,
         author: session?.user?.name ?? "Owner",
         body: targetUserId ? `Bulk-reassigned to ${targetName ?? "an agent"}.` : "Bulk-unassigned.",
+        metadata: { transfer: true, toUserId: targetUserId },
       })),
     }),
   ]);

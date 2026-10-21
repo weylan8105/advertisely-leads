@@ -96,6 +96,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         type: "LEAD_ASSIGNED",
         author: session?.user?.name ?? "Owner",
         body: targetUserId ? `Reassigned to ${targetName ?? "an agent"}.` : "Unassigned.",
+        // Marks a transfer (not a delivery) for the "Delivered to your pipeline" count.
+        metadata: { transfer: true, fromUserId: lead.assignedUserId ?? null, toUserId: targetUserId },
       },
     }),
   ]);

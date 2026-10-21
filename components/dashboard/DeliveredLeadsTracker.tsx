@@ -22,6 +22,7 @@ export function DeliveredLeadsTracker() {
   const [from, setFrom] = useState(fmt(monthStart));
   const [to, setTo] = useState(fmt(today));
   const [count, setCount] = useState<number | null>(null);
+  const [transferred, setTransferred] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export function DeliveredLeadsTracker() {
     const qs = new URLSearchParams({ from, to });
     fetch(`/api/leads/delivered-count?${qs}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (active) setCount(d?.count ?? 0); })
+      .then((d) => { if (active) { setCount(d?.count ?? 0); setTransferred(d?.transferredExcluded ?? 0); } })
       .catch(() => { if (active) setCount(null); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -62,6 +63,11 @@ export function DeliveredLeadsTracker() {
         className="h-8 w-[140px]"
         aria-label="Delivered to"
       />
+      {!loading && transferred > 0 && (
+        <span className="text-xs text-muted-foreground">
+          · {transferred.toLocaleString()} transferred from other agents not counted
+        </span>
+      )}
     </div>
   );
 }

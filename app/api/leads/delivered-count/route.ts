@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
  * How many real (non-trashed) leads were DELIVERED to the caller's own pipeline
  * (assignedAt) in the date range. For admin/house accounts that receive leads
  * without placing a Stripe order, so they can reconcile what to "buy" internally.
- * Admin only.
+ * Leads TRANSFERRED to the caller from another agent (manual or bulk reassign) are
+ * not deliveries and are excluded; how many were excluded comes back as
+ * `transferredExcluded`. Admin only.
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -33,13 +35,27 @@ export async function GET(req: NextRequest) {
   if (from) { const d = new Date(from); if (!isNaN(d.getTime())) assignedAt.gte = d; }
   if (to) { const d = new Date(to); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); assignedAt.lte = d; } }
 
-  const count = await prisma.lead.count({
-    where: {
-      assignedUserId: callerId,
-      trashedAt: null,
-      ...(assignedAt.gte || assignedAt.lte ? { assignedAt } : {}),
-    },
-  });
+  const gte = assignedAt.gte ?? null;
+  const lte = assignedAt.lte ?? null;
+  // A lead's CURRENT assignment came from a transfer when a reassign activity was
+  // written with that assignment (same transaction → within a minute of assignedAt).
+  const rows = await prisma.$queryRaw<{ total: number; transferred: number }[]>`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM "LeadActivity" a
+        WHERE a."leadId" = l.id
+          AND a.type = 'LEAD_ASSIGNED'
+          AND (a.metadata->>'transfer' = 'true' OR a.body LIKE 'Reassigned to%' OR a.body LIKE 'Bulk-reassigned to%')
+          AND a."createdAt" >= l."assignedAt" - interval '1 minute'
+      ))::int AS transferred
+    FROM "Lead" l
+    WHERE l."assignedUserId" = ${callerId}
+      AND l."trashedAt" IS NULL
+      AND (${gte}::timestamp IS NULL OR l."assignedAt" >= ${gte}::timestamp)
+      AND (${lte}::timestamp IS NULL OR l."assignedAt" <= ${lte}::timestamp)`;
+  const total = rows[0]?.total ?? 0;
+  const transferred = rows[0]?.transferred ?? 0;
 
-  return NextResponse.json({ count, from, to });
+  return NextResponse.json({ count: total - transferred, transferredExcluded: transferred, from, to });
 }
