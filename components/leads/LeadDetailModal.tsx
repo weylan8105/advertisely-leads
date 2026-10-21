@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState } from "@/data/states";
@@ -79,12 +79,15 @@ export function LeadDetailModal({
   onClose,
   onNoteAdded,
   onValueChanged,
+  onAssigned,
   context = "agent",
 }: {
   lead: Lead;
   onClose: () => void;
   onNoteAdded?: (leadId: string, note: LeadNote) => void;
   onValueChanged?: (leadId: string, valueCents: number | null) => void;
+  /** Called after the lead is moved to another agent's pipeline. */
+  onAssigned?: (leadId: string, userId: string, agentName: string) => void;
   /** "admin" opens the card from the leads database (hides agent-only actions). */
   context?: "agent" | "admin";
 }) {
@@ -128,6 +131,45 @@ export function LeadDetailModal({
     const hit = Object.entries(raw).find(([k]) => k.toLowerCase() === "consent_language");
     return hit ? prettyVal(hit[1]) : "";
   })();
+
+  // Assign this lead to a downline agent's pipeline (team owners/managers only).
+  const [team, setTeam] = useState<{ userId: string; name: string | null; email: string; isSelf?: boolean }[]>([]);
+  const [canAssign, setCanAssign] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [assignMsg, setAssignMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) { setCanAssign(!!d.canManage); setTeam(d.members ?? []); } })
+      .catch(() => {});
+  }, []);
+  async function assignTo(userId: string, agentName: string, force = false): Promise<void> {
+    if (!force && !window.confirm(`Move ${lead.name} into ${agentName}'s pipeline?`)) return;
+    setAssigning(true);
+    setAssignMsg(null);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, ...(force ? { force: true } : {}) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 422 && !force) {
+        // Outside that agent's order (state/age) — let the owner knowingly override.
+        const msg = String(data.error || "This lead doesn't match that agent's order.").replace(/ Pass force:true to override\.?/, "");
+        setAssigning(false);
+        if (window.confirm(`${msg}\n\nAssign it anyway?`)) return assignTo(userId, agentName, true);
+        return;
+      }
+      if (!res.ok) { setAssignMsg({ ok: false, text: data.error || "Couldn't assign the lead." }); return; }
+      setAssignMsg({ ok: true, text: `Moved to ${agentName}'s pipeline.` });
+      onAssigned?.(lead.id, userId, agentName);
+    } catch {
+      setAssignMsg({ ok: false, text: "Couldn't assign the lead." });
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   // One-click copy for any contact detail, with a brief ✓. Copying also makes this
   // the "current" lead highlighted on the pipeline (same key the board uses).
@@ -307,6 +349,30 @@ export function LeadDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {canAssign && team.length > 1 && (
+              <div className="flex flex-col items-end">
+                <select
+                  value=""
+                  disabled={assigning}
+                  onChange={(e) => {
+                    const m = team.find((t) => t.userId === e.target.value);
+                    if (m) void assignTo(m.userId, m.isSelf ? "your" : m.name ?? m.email);
+                  }}
+                  title="Move this lead into a downline agent's pipeline"
+                  className="h-[30px] max-w-[11rem] rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-foreground hover:border-brand-red/40 focus:outline-none focus:ring-2 focus:ring-brand-red/15 disabled:opacity-60"
+                >
+                  <option value="">{assigning ? "Assigning…" : "Assign to…"}</option>
+                  {team.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.isSelf ? "Me (my pipeline)" : m.name ?? m.email}
+                    </option>
+                  ))}
+                </select>
+                {assignMsg && (
+                  <span className={cn("mt-1 text-[11px]", assignMsg.ok ? "text-emerald-600" : "text-rose-600")}>{assignMsg.text}</span>
+                )}
+              </div>
+            )}
             {context !== "admin" && (
               <button
                 onClick={() => { setRepErr(""); setRepOpen(true); }}

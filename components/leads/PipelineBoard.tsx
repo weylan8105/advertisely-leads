@@ -437,6 +437,14 @@ export function PipelineBoard({
         <LeadDetailModal
           lead={detailLead}
           onClose={() => setDetailLead(null)}
+          onAssigned={(leadId) => {
+            // It now lives in someone else's pipeline — take it off this board.
+            setTimeout(() => {
+              setLeads((cur) => cur.filter((l) => l.id !== leadId));
+              setDetailLead(null);
+              if (activeId === leadId) markActive(null);
+            }, 900);
+          }}
           onNoteAdded={(leadId, note) => {
             // Persist the note into pipeline state so it survives reopening the card.
             setLeads((cur) =>

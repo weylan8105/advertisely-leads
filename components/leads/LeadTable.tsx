@@ -246,14 +246,19 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
   }
 
   // Manually reassign a lead to a downline agent (or unassign).
-  async function assignLead(leadId: string, leadName: string, userId: string | null, agentName: string) {
+  async function assignLead(leadId: string, leadName: string, userId: string | null, agentName: string, force = false): Promise<void> {
     try {
       const res = await fetch(`/api/leads/${leadId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId, ...(force ? { force: true } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.status === 422 && !force && userId) {
+        const msg = String(data.error || "This lead doesn't match that agent's order.").replace(/ Pass force:true to override\.?/, "");
+        if (window.confirm(`${msg}\n\nAssign it anyway?`)) return assignLead(leadId, leadName, userId, agentName, true);
+        return;
+      }
       if (!res.ok) { addToast("error", data.error || "Could not reassign the lead."); return; }
       addToast("success", userId ? `${leadName} reassigned to ${agentName}.` : `${leadName} unassigned.`);
       setTimeout(() => window.location.reload(), 800);
@@ -625,6 +630,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
         <LeadDetailModal
           lead={detailLead}
           onClose={() => setDetailLead(null)}
+          onAssigned={() => setTimeout(() => window.location.reload(), 900)}
           onNoteAdded={(leadId, note) => {
             setNoteOverrides((prev) => ({ ...prev, [leadId]: note.body }));
             setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, notes: [note, ...(dl.notes ?? [])] } : dl));
