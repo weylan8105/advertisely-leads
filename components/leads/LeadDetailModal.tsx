@@ -50,6 +50,17 @@ const HIDDEN_KEYS = new Set(
     "ad_id", "ad_name", "adgroup_id", "creative", "creative_id", "page_id",
     "form_id", "form_name", "leadgen_id", "created_time", "platform", "is_organic",
     "partner_name", "user_agent", "client_user_agent", "external_id", "id", "lead_id",
+    // GoHighLevel / inbound-webhook plumbing — internal only, never shown to
+    // ANYONE (agents, customers, or admins). Scalar keys here; nested-object
+    // blobs (location, workflow, customData, attribution, trigger data) are also
+    // dropped by the object filter on otherEntries below.
+    "contact_id", "contactid", "contact_type", "contacttype", "contact_source",
+    "location", "location_id", "locationid", "workflow", "workflow_id", "workflowid",
+    "custom_data", "customdata", "trigger_data", "triggerdata",
+    "attribution", "attribution_source", "attributionsource", "ad_source", "adsource",
+    "referrer", "keyword", "tags", "date_added", "dateadded", "date_updated", "dateupdated",
+    "country", "city", "postal_code", "postalcode", "full_address", "fulladdress", "address",
+    "timezone", "assigned_to", "assignedto", "dnd", "company", "company_name", "companyname",
   ].map((k) => k.toLowerCase()),
 );
 
@@ -108,7 +119,13 @@ export function LeadDetailModal({
   // Any other genuine form answers (e.g. Meta lead-form questions) — minus the
   // backend/tracking/redundant keys.
   const otherEntries = rawEntries.filter(
-    ([k]) => !k.toLowerCase().startsWith("quiz_") && !HIDDEN_KEYS.has(k.toLowerCase()),
+    ([k, v]) =>
+      !k.toLowerCase().startsWith("quiz_") &&
+      !HIDDEN_KEYS.has(k.toLowerCase()) &&
+      // Drop any nested-object/array value — these are always webhook plumbing
+      // (location, workflow, customData, attribution, trigger data), never a
+      // genuine form answer, which is always a scalar.
+      !(v !== null && typeof v === "object"),
   );
 
   const facts: [string, string][] = (
