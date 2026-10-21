@@ -298,11 +298,62 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   /* one real-client line under the CTA */
   .proof{margin-top:10px;font-size:13.5px;line-height:1.45;color:var(--onnavy);font-style:italic}
   .proof span{display:block;margin-top:2px;font-style:normal;font-size:12px;color:var(--onnavy-dim)}
+  /* ---- A/B test: B swaps the hero card's ZIP form for a one-tap question ---- */
+  .hero-b{display:none}
+  .ab-b .hero-b{display:block}
+  .ab-b .hero-a{display:none}
+  .hero-b .tsub{margin-top:4px;font-size:14px;color:var(--onnavy-dim)}
+  .tapgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .tapopt{min-height:56px;border-radius:11px;border:2px solid #fff;background:#fff;color:#101C2B;font-family:var(--font-head);font-weight:800;font-size:16px;line-height:1.2;cursor:pointer;padding:12px 8px;box-shadow:0 4px 10px -4px rgba(0,0,0,.35);transition:transform .12s ease,border-color .12s ease}
+  .tapopt:hover,.tapopt:focus-visible{border-color:var(--primary);outline:none}
+  .tapopt:active{transform:translateY(1px)}
+  /* ZIP step inside the quiz (version B) */
+  .qavail{min-height:20px;margin-top:8px;font-size:14px;font-weight:700;color:#5CC97E;text-align:center}
   .avail svg{width:18px;height:18px;flex:none;fill:none;stroke:#5CC97E;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:26;stroke-dashoffset:26}
   .avail.show svg{animation:availCheck .55s .12s forwards ease}
   @keyframes availCheck{to{stroke-dashoffset:0}}
   @media(prefers-reduced-motion:reduce){ .avail{transition:none} .avail svg{animation:none;stroke-dashoffset:0} }
 </style>
+<script>
+/* ---- A/B test: B = tap-first hero ("Who are you protecting?"), A = ZIP-first hero ----
+   AB_SPLIT_B = share of visitors who get B.  0 = test OFF (everyone A) · 0.5 = 50/50 · 1 = everyone B.
+   Runs before the hero paints (no flash). Ad visitors are bucketed by their click id, so the
+   same ad click always sees the same version; others are bucketed once per tab session.
+   QA override: add ?abv=A or ?abv=B to the URL. */
+var AB_SPLIT_B = 0.5;
+var AB_KEY = "abca_ab_tapfirst";
+// ABCA_AB_TAG is what the tracking beacons record: "A"/"B" only for randomly assigned visitors
+// while the test runs. Forced ?abv= (QA) visits send "QA" (stored as nothing), and nothing is
+// tagged once the test is switched off — so the dashboard comparison only ever sees real test traffic.
+window.ABCA_AB_TAG = null;
+window.ABCA_AB = (function(){
+  function get(k) { try { var v = localStorage.getItem(k); if (v) return v; } catch (e) {} try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function put(k, v) { try { localStorage.setItem(k, v); return; } catch (e) {} try { sessionStorage.setItem(k, v); } catch (e) {} }
+  try {
+    var q = new URLSearchParams(location.search);
+    var forced = (q.get("abv") || "").toUpperCase();
+    if (forced === "A" || forced === "B") { window.ABCA_AB_TAG = "QA"; return forced; }
+    if (!(AB_SPLIT_B > 0)) return "A";
+    if (AB_SPLIT_B >= 1) return "B";
+    // Keep a browser's first version for the whole test, even on a new ad click (new fbclid).
+    var v = get(AB_KEY);
+    if (v !== "A" && v !== "B") {
+      var fb = q.get("fbclid") || "", x;
+      if (fb.length >= 20) {
+        var h = 0; for (var i = 0; i < fb.length; i++) h = (h * 31 + fb.charCodeAt(i)) >>> 0;
+        x = (h % 10000) / 10000;
+      } else {
+        x = Math.random();
+      }
+      v = x < AB_SPLIT_B ? "B" : "A";
+      put(AB_KEY, v);
+    }
+    window.ABCA_AB_TAG = v;
+    return v;
+  } catch (e) { return "A"; }
+})();
+if (window.ABCA_AB === "B") document.documentElement.classList.add("ab-b");
+</script>
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -345,6 +396,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <h1>Protect the life your hard work pays for.</h1>
         <p class="lead">One policy can offer <b>up to $1 million in coverage</b>, <b>living benefits</b> for a qualifying illness, and <b>cash value</b> for retirement.</p>
         <div class="qcard">
+          <!-- Version B (A/B test): one-tap first question; ZIP comes on the next screen -->
+          <div class="hero-b" id="heroTap">
+            <div class="fh">Who are you protecting?</div>
+            <div class="tsub">Tap one to see what you qualify for.</div>
+            <div class="tapgrid" role="group" aria-label="Who are you protecting?">
+              <button type="button" class="tapopt" onclick="heroTap('Spouse')">My spouse</button>
+              <button type="button" class="tapopt" onclick="heroTap('Children')">My kids</button>
+              <button type="button" class="tapopt" onclick="heroTap('Parents')">My parents</button>
+              <button type="button" class="tapopt" onclick="heroTap('Other')">Someone else</button>
+            </div>
+          </div>
+          <!-- Version A (control): ZIP-first -->
+          <div class="hero-a">
           <div class="fh">See what you qualify for in your state.</div>
           <form class="hero-form" id="zipForm" onsubmit="return heroZip(event, this)">
             <div class="zip-row">
@@ -354,6 +418,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div class="zip-err" id="zipErr" role="alert"></div>
             <div class="avail" id="avail1" role="status" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l6 6L20 6"/></svg><span></span></div>
           </form>
+          </div>
           <div class="reassure">Free &middot; Takes about 2 minutes &middot; No obligation</div>
           <p class="proof">&ldquo;My biggest concern was making sure my wife and two kids would be protected.&rdquo;<span>&mdash; Tyler H., Journeyman Lineman, Tennessee &middot; real client, shared with permission</span></p>
           <div class="expect">Answer a few questions. A licensed agent follows up to discuss options and costs.</div>
@@ -526,7 +591,7 @@ function trackEvent(type, step, cta) {
   try {
     const fbclid = new URLSearchParams(location.search).get("fbclid") || "";
     // cta = which entry point started the quiz (hero_zip_auto, header, sticky, ...)
-    const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz", fbclid, cta: cta || undefined });
+    const body = JSON.stringify({ sessionId, type, step, source: "abca-quiz", fbclid, cta: cta || undefined, variant: window.ABCA_AB_TAG || undefined });
     if (navigator.sendBeacon) navigator.sendBeacon(TRACK_URL, new Blob([body], { type: "text/plain" }));
     else fetch(TRACK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
   } catch (e) {}
@@ -578,6 +643,8 @@ function zip3State(zip){ const d=String(zip||"").replace(/\D/g,""); if(d.length<
 let zipAutoTimer=null;
 const ZIP_BTN_DEFAULT="Get My Free Quote";
 function zipDetect(input){
+  // Version B hides the hero ZIP form; ignore stray events (e.g. browser autofill) from it.
+  if(window.ABCA_AB==="B" && input.id==="zipInput") return;
   const digits=(input.value||"").replace(/\D/g,"").slice(0,5);
   if(input.value!==digits) input.value=digits;
   const form=input.closest("form");
@@ -607,7 +674,7 @@ function zipDetect(input){
   }
 }
 
-const STEPS = [
+const STEPS_A = [
   { key:"iul_interest", q:"What matters most to you?", sub:"Choose the closest fit. You can discuss the details with an agent.",
     opts:[
       "Life insurance protection for my family",
@@ -623,6 +690,16 @@ const STEPS = [
   { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
   { key:"contact", q:"Where should we send your quote?", contact:true }
 ];
+// Version B order: who you're protecting (tapped on the hero) -> ZIP -> what matters most
+// -> coverage -> age -> contact. Same questions as A, ZIP moved from the hero into step 2.
+const ZIP_STEP = { key:"zip", q:"Great. What ZIP code are you in?", sub:"Plans and prices vary by state.", zip:true };
+const STEPS_B = [
+  STEPS_A.find(s=>s.key==="beneficiary"),
+  ZIP_STEP,
+  ...STEPS_A.filter(s=>s.key!=="beneficiary")
+];
+const STEPS = window.ABCA_AB==="B" ? STEPS_B : STEPS_A;
+const ZIP_STEP_IDX = STEPS.findIndex(s=>s.zip); // -1 in version A (ZIP is taken on the hero)
 let step = 0, navLock = false, renderToken = 0, submitting = false;
 
 // Back to the landing page to fix the ZIP: reopens the form it came from with the
@@ -638,7 +715,14 @@ function changeZip(){
   form.scrollIntoView({block:'center'});
   input.focus(); try{ input.select(); }catch(e){}
 }
-function startQuiz(zip, cta){
+// Version B: the hero tap answers "Who are you protecting?" and opens the quiz on the ZIP step.
+function heroTap(val){
+  if(quizOpen) return;
+  answers.beneficiary = val;
+  startQuiz('', 'hero_tap', 1);
+}
+if(window.ABCA_AB==="B"){ const ih=document.getElementById('qIntroH'); if(ih) ih.textContent="Let’s see what you qualify for."; }
+function startQuiz(zip, cta, startAt){
   if(quizOpen) return; // ZIP auto-advance + a button tap must not open it twice
   clearTimeout(zipAutoTimer);
   lastEntry = cta || "";
@@ -646,19 +730,24 @@ function startQuiz(zip, cta){
   // No-ZIP entries (header/sticky): use a full ZIP currently in either field — never one
   // the visitor already deleted. ZIP is required again on the contact step regardless.
   const typedZip = ['zipInput','zipInput2'].map(function(id){ const el=document.getElementById(id); return el ? (el.value||'').replace(/\D/g,'') : ''; }).filter(function(v){ return v.length===5; })[0] || '';
-  answers.zip = (zip||"").trim() || typedZip;
+  // (B collects ZIP inside the quiz, so keep one already entered there across close/reopen.)
+  answers.zip = (zip||"").trim() || typedZip || (ZIP_STEP_IDX >= 0 ? (answers.zip||"") : "");
   answers.state = zip3State(answers.zip) || "";
-  step = 0;
+  step = Math.min(Math.max(startAt||0, 0), STEPS.length-1);
   document.getElementById('landing').style.display='none';
   const q = document.getElementById('quiz'); q.classList.add('on'); q.setAttribute('aria-hidden','false');
   ['qIntroH','qIntroB','qIntroR'].forEach(id=>document.getElementById(id).style.display='');
   document.querySelector('.prog').style.display='';
   window.scrollTo(0,0);
   quizOpen = true; updateSticky();
+  // step N = the Nth quiz screen was reached. B's hero tap answers step 1 on the landing page
+  // and lands on step 2 (ZIP), so it reports both.
   trackEvent("step",1,cta||"other");
+  if(step>0) trackEvent("step",step+1);
   render();
 }
 function closeQuiz(){
+  clearTimeout(zipAutoTimer); // a pending ZIP auto-advance must not fire after closing
   const q=document.getElementById('quiz'); q.classList.remove('on'); q.setAttribute('aria-hidden','true');
   document.getElementById('landing').style.display='';
   quizOpen = false; updateSticky();
@@ -690,18 +779,24 @@ function render(){
   const s = STEPS[step];
   const host = document.getElementById('qstep');
   let html = `<div class="qq">${s.q}</div>` + (s.sub?`<div class="qsub">${s.sub}</div>`:"");
-  // First question: show the ZIP we captured with an easy way back to fix it
-  // (auto-advance opens the quiz as soon as 5 digits are typed, typos included).
-  if(step===0 && /^\d{5}$/.test(answers.zip||"")){
+  // The screen right after the ZIP was entered shows it with an easy way back to fix it
+  // (auto-advance moves on as soon as 5 digits are typed, typos included).
+  // A: ZIP is on the hero, so that's quiz step 1 -> back to the hero form.
+  // B: ZIP is its own quiz step -> back to that step.
+  const recapAt = ZIP_STEP_IDX >= 0 ? ZIP_STEP_IDX + 1 : 0;
+  if(step===recapAt && /^\d{5}$/.test(answers.zip||"")){
     const sn = STATE_NAME[answers.state] ? " ("+STATE_NAME[answers.state]+")" : "";
-    html += `<div class="qzip">ZIP code: <b>${answers.zip}</b>${sn} <button type="button" class="qlink" onclick="changeZip()">Change ZIP</button></div>`;
+    const fix = ZIP_STEP_IDX >= 0 ? `goToStep(${ZIP_STEP_IDX})` : "changeZip()";
+    html += `<div class="qzip">ZIP code: <b>${answers.zip}</b>${sn} <button type="button" class="qlink" onclick="${fix}">Change ZIP</button></div>`;
   }
+  // Back from the first quiz screen: A returns to the hero ZIP field; B to the landing page.
+  const backFirst = ZIP_STEP_IDX >= 0 ? "closeQuiz()" : "changeZip()";
 
   if(s.opts){
     html += `<div class="opts${s.grid?' grid':''}" role="radiogroup" aria-label="${s.q}">` + s.opts.map((o)=>
       `<button class="opt${answers[s.key]===o?' sel':''}" type="button" role="radio" aria-checked="${answers[s.key]===o?'true':'false'}" data-v="${o.replace(/"/g,'&quot;')}"><span class="dot" aria-hidden="true"></span><span>${o}</span></button>`).join("") + `</div>`;
-    // Step 1's Back returns to the ZIP field; later steps go to the previous question.
-    html += `<div class="qnav"><button class="qback" type="button" onclick="${step>0?'back()':'changeZip()'}">Back</button></div>`;
+    // Later steps go to the previous question.
+    html += `<div class="qnav"><button class="qback" type="button" onclick="${step>0?'back()':backFirst}">Back</button></div>`;
     host.innerHTML = html;
     host.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>{
       answers[s.key]=b.getAttribute('data-v');
@@ -709,6 +804,29 @@ function render(){
       b.classList.add('sel'); b.setAttribute('aria-checked','true');
       const tok=renderToken; setTimeout(()=>{ if(renderToken===tok) go(); },240);
     }));
+  } else if(s.zip){
+    // Version B's ZIP screen: same behaviour as the hero field (digits only, state cue,
+    // auto-advance shortly after a typed 5th digit, red error on an empty/partial Continue).
+    html += `<input class="qinput" id="qZip" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="Enter your ZIP code" aria-label="ZIP code" value="${(answers.zip||'').replace(/\D/g,'')}">
+      <div class="qavail" id="qAvail" role="status"></div>
+      <div class="fieldmsg" id="qZipMsg" role="alert"></div>
+      <div class="qnav"><button class="qback" type="button" onclick="back()">Back</button>
+      <button class="btn qcont" type="button" onclick="submitQuizZip()">Continue <svg viewBox='0 0 24 24' aria-hidden="true"><path d='M5 12h14M13 6l6 6-6 6'/></svg></button></div>`;
+    host.innerHTML = html;
+    const qz=document.getElementById('qZip');
+    const tok=renderToken;
+    const upd=(typed)=>{
+      const d=(qz.value||'').replace(/\D/g,'').slice(0,5);
+      if(qz.value!==d) qz.value=d;
+      const nm=d.length===5 ? (STATE_NAME[zip3State(d)]||"") : "";
+      document.getElementById('qAvail').textContent = nm ? "✓ Coverage is available in "+nm : "";
+      if(d.length && qz.classList.contains('err')){ qz.classList.remove('err'); document.getElementById('qZipMsg').textContent=''; }
+      clearTimeout(zipAutoTimer);
+      if(typed && d.length===5) zipAutoTimer=setTimeout(()=>{ if(quizOpen && renderToken===tok && (qz.value||'').replace(/\D/g,'')===d) submitQuizZip(); },700);
+    };
+    qz.addEventListener('input',()=>upd(true));
+    qz.addEventListener('keydown',e=>{ if(e.key==='Enter') submitQuizZip(); });
+    upd(false); qz.focus();
   } else if(s.input==="number"){
     html += `<input class="qinput" id="ageInput" inputmode="numeric" maxlength="3" placeholder="Your age" value="${answers.age||''}" aria-label="Your age">
       <div class="fieldmsg" id="ageMsg" role="alert"></div>
@@ -741,12 +859,32 @@ function render(){
     window._phoneTen=phoneTen; window._fmtPhone=fmtPhone;
   }
 }
-function go(){ if(navLock) return; if(step < STEPS.length-1){ navLock=true; step++; trackEvent("step",step+1); render(); } }
+function go(){ if(navLock) return; if(step < STEPS.length-1){ navLock=true; step++; trackEvent("step",step+1);
+  // B: ZIP already typed into the bottom form -> don't ask for it again (still report the screen,
+  // so the dashboard's "Entered ZIP" / "Reached contact" milestones keep their step numbers).
+  if(STEPS[step].zip && /^\d{5}$/.test(answers.zip||"") && /^final/.test(lastEntry) && step < STEPS.length-1){ step++; trackEvent("step",step+1); }
+  render(); } }
 function back(){ if(step>0){ // keep any typed contact values before leaving that step
     const nEl=document.getElementById('cName'); if(nEl) answers.name=nEl.value.trim();
     const pEl=document.getElementById('cPhone'); if(pEl) answers.phone=pEl.value.trim();
     const eEl=document.getElementById('cEmail'); if(eEl) answers.email=eEl.value.trim();
     step--; render(); } }
+// Version B ZIP screen -> validate, store ZIP/state, move on.
+function submitQuizZip(){
+  const qz=document.getElementById('qZip'); if(!qz) return;
+  const d=(qz.value||'').replace(/\D/g,'');
+  if(d.length!==5){
+    qz.classList.add('err');
+    document.getElementById('qZipMsg').textContent = d.length ? "Enter all 5 digits of your ZIP code." : "Enter your ZIP code to continue.";
+    qz.focus();
+    trackEvent("zip_error", d.length, "quiz_zip");
+    return;
+  }
+  clearTimeout(zipAutoTimer);
+  answers.zip=d; answers.state=zip3State(d)||"";
+  go();
+}
+function goToStep(i){ if(i>=0 && i<STEPS.length){ clearTimeout(zipAutoTimer); step=i; render(); } }
 function submitAge(){
   const el=document.getElementById('ageInput'); const n=parseInt((el.value||'').replace(/\D/g,''),10);
   if(!n || n<18 || n>85){ el.classList.add('err'); document.getElementById('ageMsg').textContent="Enter an age between 18 and 85."; return; }
@@ -851,7 +989,8 @@ function updateSticky(){
   el.hidden = quizOpen || heroVisible || finalVisible;
 }
 (function(){
-  const hero=document.getElementById('zipForm'), fin=document.getElementById('finalCta');
+  // Watch whichever hero CTA this visitor's version shows (B hides the ZIP form).
+  const hero=document.getElementById(window.ABCA_AB==="B" ? 'heroTap' : 'zipForm'), fin=document.getElementById('finalCta');
   if('IntersectionObserver' in window){
     // body.hero-in-view hides the header button on phones while the hero ZIP form is on screen.
     document.body.classList.add('hero-in-view');

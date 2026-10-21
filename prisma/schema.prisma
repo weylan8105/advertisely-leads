@@ -452,7 +452,8 @@ model FunnelEvent {
   step      Int? // 1-based step index for "step" events; digits typed (0-4) for "zip_error"
   source    String   @default("abca-quiz")
   fbclid    String? // Facebook click id from the landing URL — present = ad visitor
-  cta       String? // which entry point started the quiz (hero_zip_auto, hero_zip_submit, final_zip_*, header, sticky)
+  cta       String? // which entry point started the quiz (hero_zip_auto, hero_zip_submit, final_zip_*, header, sticky, hero_tap)
+  variant   String? // landing-page A/B test arm: "A" (ZIP-first hero) | "B" (tap-first hero)
   createdAt DateTime @default(now())
 
   @@index([createdAt])

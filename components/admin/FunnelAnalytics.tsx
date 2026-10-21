@@ -30,6 +30,119 @@ interface FunnelData {
   adCompletesAll?: number;
   entryPoints?: { cta: string; count: number }[];
   zipErrors?: { empty: number; partial: number };
+  variant?: "A" | "B" | null;
+  stepMode?: "questions" | "milestones";
+  abTest?: ABTest | null;
+}
+
+interface ArmStats {
+  visitors: number; started: number; zipEntered: number; reachedContact: number; leads: number;
+  startRate: number; zipRate: number; contactRate: number; leadRate: number;
+}
+interface ABTest {
+  A: ArmStats; B: ArmStats;
+  startP: number | null; contactP: number | null; leadP: number | null;
+  startLiftPct: number | null; contactLiftPct: number | null; leadLiftPct: number | null;
+  leadCI: [number, number] | null;
+  plannedStart: number; plannedLeads: number;
+  window: { start: string; end: string };
+}
+
+// Plain-English read of one A/B metric. Only calls a winner once both versions reach
+// the planned sample — a "significant" result on day 3 is usually noise from peeking.
+// A non-significant result at the planned sample is "inconclusive", never "no difference":
+// this test can only reliably detect about a 30% change in leads per visitor.
+function abVerdict(p: number | null, lift: number | null, nA: number, nB: number, planned: number) {
+  if (p === null || lift === null || Math.min(nA, nB) < 30) return { text: "Not enough data yet", tone: "muted" as const };
+  const l = `${lift > 0 ? "+" : ""}${lift}%`;
+  const reached = Math.min(nA, nB) >= planned;
+  if (p < 0.05) {
+    const who = lift > 0 ? "B is ahead" : "A is ahead";
+    return reached
+      ? { text: `${who} (${l} for B, significant)`, tone: lift > 0 ? ("good" as const) : ("bad" as const) }
+      : { text: `${who} (${l} for B) — early signal, keep running`, tone: "muted" as const };
+  }
+  return reached
+    ? { text: `Inconclusive (${l} for B) — a real gap smaller than ~30% can't be ruled out`, tone: "muted" as const }
+    : { text: `Too close to call (${l} for B) — keep running`, tone: "muted" as const };
+}
+
+function ABTestCard({ ab }: { ab: ABTest }) {
+  const n = Math.min(ab.A.visitors, ab.B.visitors);
+  // Guardrail agreed up front: stop B if it's clearly producing fewer leads after ~1,000 each.
+  const stopB = n >= 1000 && ab.leadP !== null && ab.leadP < 0.05 && (ab.leadLiftPct ?? 0) < 0;
+  const lead = stopB
+    ? { text: `B is losing leads (${ab.leadLiftPct}% for B) — guardrail hit, stop version B`, tone: "bad" as const }
+    : abVerdict(ab.leadP, ab.leadLiftPct, ab.A.visitors, ab.B.visitors, ab.plannedLeads);
+  // Reaching the contact form is the fair early read (both versions have answered the same
+  // questions by then). "Started" isn't comparable (a tap vs typing a ZIP), so it stays neutral.
+  const contact = abVerdict(ab.contactP, ab.contactLiftPct, ab.A.visitors, ab.B.visitors, ab.plannedStart);
+  const start = { ...abVerdict(ab.startP, ab.startLiftPct, ab.A.visitors, ab.B.visitors, ab.plannedStart), tone: "muted" as const };
+  const tone = (t: "good" | "bad" | "muted") => (t === "good" ? "text-emerald-700" : t === "bad" ? "text-rose-600" : "text-foreground");
+  const row = (name: string, a: ArmStats) => (
+    <tr className="border-t border-slate-100">
+      <td className="py-1.5 pr-2 font-medium">{name}</td>
+      <td className="py-1.5 px-2 text-right tabular-nums">{a.visitors.toLocaleString()}</td>
+      <td className="py-1.5 px-2 text-right tabular-nums">{a.started.toLocaleString()} <span className="text-muted-foreground">({a.startRate}%)</span></td>
+      <td className="py-1.5 px-2 text-right tabular-nums">{a.zipEntered.toLocaleString()} <span className="text-muted-foreground">({a.zipRate}%)</span></td>
+      <td className="py-1.5 px-2 text-right tabular-nums">{a.reachedContact.toLocaleString()} <span className="text-muted-foreground">({a.contactRate}%)</span></td>
+      <td className="py-1.5 px-2 text-right tabular-nums">{a.leads.toLocaleString()}</td>
+      <td className="py-1.5 pl-2 text-right tabular-nums font-semibold">{a.leadRate}%</td>
+    </tr>
+  );
+  return (
+    <div className="mb-5 rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <div className="text-sm font-semibold">A/B test: tap-first hero (B) vs ZIP-first (A)</div>
+        <div className="text-[11px] text-muted-foreground">
+          Whole test since {new Date(ab.window.start).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ad visitors only · winner = leads per visitor
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[11px] text-muted-foreground">
+              <th className="text-left font-medium pb-1 pr-2">Version</th>
+              <th className="text-right font-medium pb-1 px-2">Visitors</th>
+              <th className="text-right font-medium pb-1 px-2">Started</th>
+              <th className="text-right font-medium pb-1 px-2">Entered ZIP</th>
+              <th className="text-right font-medium pb-1 px-2">Contact form</th>
+              <th className="text-right font-medium pb-1 px-2">Leads</th>
+              <th className="text-right font-medium pb-1 pl-2">Leads / visitor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {row("A — ZIP first", ab.A)}
+            {row("B — tap first", ab.B)}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        <div>
+          <span className="text-muted-foreground">Leads per visitor (decides the winner): </span>
+          <span className={cn("font-medium", tone(lead.tone))}>{lead.text}</span>
+          {ab.leadP !== null && <span className="text-muted-foreground"> · p = {ab.leadP}</span>}
+          {ab.leadCI && (
+            <span className="text-muted-foreground">
+              {" "}· likely range for B: {ab.leadCI[0] > 0 ? "+" : ""}{ab.leadCI[0]}% to {ab.leadCI[1] > 0 ? "+" : ""}{ab.leadCI[1]}%
+            </span>
+          )}
+        </div>
+        <div><span className="text-muted-foreground">Reached the contact form (fair early read): </span><span className={cn("font-medium", tone(contact.tone))}>{contact.text}</span>{ab.contactP !== null && <span className="text-muted-foreground"> · p = {ab.contactP}</span>}</div>
+        <div><span className="text-muted-foreground">Started the quiz (info only — a tap is easier than typing a ZIP): </span><span className={cn("font-medium", tone(start.tone))}>{start.text}</span></div>
+        {stopB && <div className="font-semibold text-rose-600">Stop version B: after 1,000+ visitors each it&apos;s producing clearly fewer leads per visitor. Set AB_SPLIT_B = 0 in abca-quiz.html.</div>}
+      </div>
+      <div className="mt-2">
+        <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
+          <span>Sample per version: {n.toLocaleString()} / {ab.plannedLeads.toLocaleString()} for the leads decision</span>
+          <span>first-answer read at {ab.plannedStart.toLocaleString()}</span>
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-full bg-brand-red/70" style={{ width: `${Math.min(100, Math.round((n / ab.plannedLeads) * 100))}%` }} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Human-readable names for the quiz entry points the landing page reports.
@@ -153,16 +266,23 @@ export function FunnelAnalytics() {
   const [sel, setSel] = useState<Selection>({ kind: "preset", key: "7d" });
   const [data, setData] = useState<FunnelData | null>(null);
   const [loading, setLoading] = useState(true);
+  // A/B test: which version's funnel to show ("all" = both, step bars become milestones).
+  const [variant, setVariant] = useState<"all" | "A" | "B">("all");
 
+  // Only the latest request may update the view (fast range/version switching can
+  // otherwise land an older response under the newer selection's label).
+  const reqId = useRef(0);
   const load = useCallback(() => {
+    const id = ++reqId.current;
     setLoading(true);
-    const qs = sel.kind === "custom" ? `from=${sel.from}&to=${sel.to}` : `range=${sel.key}`;
+    const qs = (sel.kind === "custom" ? `from=${sel.from}&to=${sel.to}` : `range=${sel.key}`) +
+      (variant !== "all" ? `&variant=${variant}` : "");
     fetch(`/api/admin/funnel?${qs}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d) => setData(d))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, [sel]);
+      .then((d) => { if (id === reqId.current) setData(d); })
+      .catch(() => { if (id === reqId.current) setData(null); })
+      .finally(() => { if (id === reqId.current) setLoading(false); });
+  }, [sel, variant]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -184,8 +304,30 @@ export function FunnelAnalytics() {
       {data && endDisplay && (
         <p className="mb-4 text-[11px] text-muted-foreground">
           Showing <span className="font-medium text-foreground">{fmtDay(data.from)} – {fmtDay(endDisplay)}</span>
+          {variant !== "all" && <> · <span className="font-medium text-foreground">Version {variant} only</span></>}
         </p>
       )}
+
+      {/* A/B test: comparison + which version's funnel to show */}
+      {(data?.abTest || variant !== "all") && (
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Funnel for:</span>
+          {(["all", "A", "B"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVariant(v)}
+              className={cn(
+                "rounded-md border px-2.5 py-1",
+                variant === v ? "border-brand-red bg-brand-red/10 text-brand-red font-medium" : "border-slate-200 text-muted-foreground hover:bg-slate-50",
+              )}
+            >
+              {v === "all" ? "Both versions" : v === "A" ? "A — ZIP first" : "B — tap first"}
+            </button>
+          ))}
+        </div>
+      )}
+      {!loading && data?.abTest && <ABTestCard ab={data.abTest} />}
 
       {loading ? (
         <div className="flex items-center gap-2 justify-center py-16 text-muted-foreground">
@@ -218,7 +360,7 @@ export function FunnelAnalytics() {
           </p>
 
           {/* What the headline excludes, so a junk-click burst can't masquerade as a page problem. */}
-          {((data.anVisitors ?? 0) > 0 || (data.duplicateLoads ?? 0) > 0) && (
+          {variant === "all" && ((data.anVisitors ?? 0) > 0 || (data.duplicateLoads ?? 0) > 0) && (
             <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-900">
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
               <span>
@@ -323,7 +465,12 @@ export function FunnelAnalytics() {
           )}
 
           {/* Step funnel */}
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">How far visitors get</div>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+            How far visitors get
+            {data.stepMode === "milestones" && (
+              <span className="normal-case tracking-normal"> · both versions (milestones) — pick A or B above for each question</span>
+            )}
+          </div>
           <div className="space-y-2">
             {data.steps.map((s, i) => {
               const pctOfTop = top > 0 ? Math.round((s.count / top) * 100) : 0;
