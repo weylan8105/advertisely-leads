@@ -35,6 +35,11 @@ export default function LeadsPage() {
   // set, or a downline agent's when viewing theirs). Starts at the defaults.
   const [stages, setStages] = useState<PipelineStage[]>(PIPELINE_STAGES);
   const [showEditor, setShowEditor] = useState(false);
+  // ?open=<leadId> (old /leads/<id> links redirect here) opens that lead's contact card.
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+  useEffect(() => {
+    try { setOpenLeadId(new URLSearchParams(window.location.search).get("open")); } catch { /* ignore */ }
+  }, []);
   // Each order that delivers to me (my own + any routed to me), shown separately.
   const [myOrders, setMyOrders] = useState<
     { id: string; quantity: number; fulfilledCount: number; routedToMe?: boolean; fromName?: string | null }[]
@@ -230,7 +235,7 @@ export default function LeadsPage() {
         </Card>
       ) : view === "list" ? (
         <Card className="p-5">
-          <LeadTable leads={leads} stages={stages} />
+          <LeadTable leads={leads} stages={stages} openLeadId={openLeadId} />
         </Card>
       ) : (
         <Card className="p-5">
@@ -249,7 +254,7 @@ export default function LeadsPage() {
               </Button>
             )}
           </div>
-          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} />
+          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} openLeadId={openLeadId} />
         </Card>
       )}
 

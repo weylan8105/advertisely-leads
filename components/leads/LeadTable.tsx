@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
+import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
 import { replacementWindowClosed } from "@/lib/replacementReasons";
 import {
   ChevronRight,
@@ -59,6 +60,8 @@ interface LeadTableProps {
   leads: Lead[];
   showBulk?: boolean;
   compact?: boolean;
+  /** Open this lead's contact card on load (e.g. arriving from /leads/[id]). */
+  openLeadId?: string | null;
   /** The pipeline stages to color/filter rows by (defaults to the standard set). */
   stages?: PipelineStage[];
 }
@@ -71,7 +74,7 @@ interface Toast {
 
 let toastCounter = 0;
 
-export function LeadTable({ leads, showBulk = true, compact = false, stages }: LeadTableProps) {
+export function LeadTable({ leads, showBulk = true, compact = false, stages, openLeadId }: LeadTableProps) {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
 
@@ -149,6 +152,19 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
     setActiveId(id);
     try { localStorage.setItem(ACTIVE_KEY, id); } catch { /* ignore */ }
   }
+
+  // The lead contact card (same one the Pipeline view opens).
+  const [detailLead, setDetailLead] = useState<Lead | null>(null);
+  function openCard(lead: Lead) {
+    markActive(lead.id);
+    setDetailLead(lead);
+  }
+  useEffect(() => {
+    if (!openLeadId) return;
+    const l = leads.find((x) => x.id === openLeadId);
+    if (l) openCard(l);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLeadId, leads]);
 
   // Click-to-copy for phone / email cells (Google-Sheets-style quick copy).
   async function copyText(text: string, label: string, leadId?: string) {
@@ -434,13 +450,14 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
                   </TableCell>
                 )}
                 <TableCell className="py-1.5">
-                  <Link
-                    href={`/leads/${lead.id}`}
-                    onClick={() => markActive(lead.id)}
-                    className="font-medium leading-tight hover:text-brand-red transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => openCard(lead)}
+                    title="Open contact card"
+                    className="font-medium leading-tight text-left hover:text-brand-red hover:underline transition-colors"
                   >
                     {lead.name}
-                  </Link>
+                  </button>
                   {activeId === lead.id && (
                     <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-brand-red px-1.5 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide text-white">
                       <span className="h-1 w-1 rounded-full bg-white animate-pulse" /> Current
@@ -533,10 +550,8 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/leads/${lead.id}`}>
-                            View details <ChevronRight className="h-3 w-3 ml-auto" />
-                          </Link>
+                        <DropdownMenuItem onClick={() => openCard(lead)}>
+                          View details <ChevronRight className="h-3 w-3 ml-auto" />
                         </DropdownMenuItem>
                         <DropdownMenuItem>Log call disposition</DropdownMenuItem>
                         <DropdownMenuItem>Add task / reminder</DropdownMenuItem>
@@ -606,6 +621,16 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
           </TableBody>
         </Table>
       </div>
+      {detailLead && (
+        <LeadDetailModal
+          lead={detailLead}
+          onClose={() => setDetailLead(null)}
+          onNoteAdded={(leadId, note) => {
+            setNoteOverrides((prev) => ({ ...prev, [leadId]: note.body }));
+            setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, notes: [note, ...(dl.notes ?? [])] } : dl));
+          }}
+        />
+      )}
     </div>
   );
 }

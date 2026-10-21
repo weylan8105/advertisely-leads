@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
 import { localTimeForState } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -55,8 +55,11 @@ export function PipelineBoard({
   leads,
   setLeads,
   stages,
+  openLeadId,
 }: {
   leads: Lead[];
+  /** Open this lead's contact card on load (e.g. arriving from /leads/[id]). */
+  openLeadId?: string | null;
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   /** The board's columns — a user's customized set, or the defaults. */
   stages?: PipelineStage[];
@@ -83,6 +86,44 @@ export function PipelineBoard({
     try { if (id) localStorage.setItem(ACTIVE_KEY, id); else localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
   }
   const activeLead = activeId ? leads.find((l) => l.id === activeId) ?? null : null;
+  useEffect(() => {
+    if (!openLeadId) return;
+    const l = leads.find((x) => x.id === openLeadId);
+    if (l) { markActive(l.id); setDetailLead(l); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLeadId, leads]);
+
+  // Search: every word must match one of the lead's fields; phone matches on digits,
+  // so "214-555", "(214) 555" and "214555" all find the same number.
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // "/" jumps to search (unless you're already typing somewhere).
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (e.key === "/" && !(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const shown = useMemo(() => {
+    const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return leads;
+    return leads.filter((l) => {
+      const notes = (l.notes ?? []).map((n) => String((n as { body?: unknown }).body ?? "")).join(" ");
+      const hay = [l.name, l.email, l.phone, l.state, l.zip, l.occupation, l.leadTypeLabel, l.source, notes]
+        .filter(Boolean).join(" ").toLowerCase();
+      const phoneDigits = (l.phone || "").replace(/\D/g, "");
+      return words.every((w) => {
+        if (hay.includes(w)) return true;
+        const d = w.replace(/\D/g, "");
+        return d.length >= 3 && phoneDigits.includes(d);
+      });
+    });
+  }, [leads, query]);
 
   // Copy a phone/email to the clipboard from a card, with a brief ✓ confirmation.
   async function copyField(text: string, key: string) {
@@ -139,14 +180,32 @@ export function PipelineBoard({
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-semibold text-foreground">
           <Users className="h-4 w-4 text-brand-red" />
-          {leads.length}
+          {query ? `${shown.length} of ${leads.length}` : leads.length}
           <span className="font-normal text-muted-foreground">
-            {leads.length === 1 ? "lead" : "leads"} in pipeline
+            {query ? "match" + (shown.length === 1 ? "" : "es") : leads.length === 1 ? "lead in pipeline" : "leads in pipeline"}
           </span>
         </span>
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") { setQuery(""); (e.target as HTMLInputElement).blur(); } }}
+            placeholder="Search name, phone, email, state…  ( / )"
+            aria-label="Search leads in this pipeline"
+            className="h-8 w-full rounded-full border border-slate-200 bg-white pl-8 pr-8 text-sm placeholder:text-muted-foreground focus:border-brand-red/50 focus:outline-none focus:ring-2 focus:ring-brand-red/15"
+          />
+          {query && (
+            <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-slate-100 hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
         {activeLead && (
           <span className="inline-flex min-w-0 items-center gap-2 rounded-full border-2 border-brand-red bg-brand-red/[0.06] pl-3 pr-1 py-0.5 text-sm">
             <span className="h-2 w-2 shrink-0 rounded-full bg-brand-red animate-pulse" />
@@ -175,7 +234,7 @@ export function PipelineBoard({
       <div className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
           {cols.map((stage) => {
-            const colLeads = leads.filter((l) => {
+            const colLeads = shown.filter((l) => {
               const s = colIds.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
               return s === stage.id;
             });
@@ -220,7 +279,7 @@ export function PipelineBoard({
 
                 <div className="p-2 space-y-2 overflow-y-auto scrollbar-thin flex-1">
                   {colLeads.length === 0 && (
-                    <div className="text-[11px] text-muted-foreground text-center py-6">Drop leads here</div>
+                    <div className="text-[11px] text-muted-foreground text-center py-6">{query ? "No matches" : "Drop leads here"}</div>
                   )}
                   {colLeads.map((lead) => {
                     const cb = callbackStatus(lead.callbackAt, now);
