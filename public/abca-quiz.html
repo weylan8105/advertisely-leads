@@ -634,6 +634,7 @@ function render(){
         <label for="cName">Full name</label><input class="qinput" id="cName" autocomplete="name" placeholder="First and last name" value="${(answers.name||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mName" role="alert"></div>
         <label for="cPhone">Phone number (required)</label><input class="qinput" id="cPhone" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" value="${(answers.phone||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mPhone" role="alert"></div>
         <label for="cEmail">Email address</label><input class="qinput" id="cEmail" type="email" autocomplete="email" placeholder="you@email.com" value="${(answers.email||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mEmail" role="alert"></div>
+        <label for="cZip">ZIP code (required)</label><input class="qinput" id="cZip" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="5-digit ZIP" value="${(answers.zip||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mZip" role="alert"></div>
       </div>
       <label class="consent" id="consentBox"><input type="checkbox" id="cConsent" aria-label="Consent to be contacted">
         <span class="ct">Yes, have a licensed agent follow up with me about my quote request. By checking this box I agree to be contacted by phone, text, or email (including automated messages, even if my number is on a Do-Not-Call registry). Consent is not a condition of purchase. Message and data rates may apply. Privacy Policy and Terms apply.</span>
@@ -646,6 +647,8 @@ function render(){
     const phoneTen=(v)=>{ let d=(v||"").replace(/\D/g,''); if(d.length===11&&d[0]==='1')d=d.slice(1); return d.slice(0,10); };
     const fmtPhone=(d)=>{ if(d.length>6)return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`; if(d.length>3)return `(${d.slice(0,3)}) ${d.slice(3)}`; if(d.length>0)return `(${d}`; return ''; };
     pe.addEventListener('input',()=>{ pe.value=fmtPhone(phoneTen(pe.value)); });
+    const ze=document.getElementById('cZip');
+    if(ze) ze.addEventListener('input',()=>{ ze.value=(ze.value||'').replace(/\D/g,'').slice(0,5); });
     window._phoneTen=phoneTen; window._fmtPhone=fmtPhone;
   }
 }
@@ -673,10 +676,10 @@ function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'
 async function submitContact(){
   if(submitting) return;
   const nameEl=document.getElementById('cName'), phoneEl=document.getElementById('cPhone'),
-        emailEl=document.getElementById('cEmail'),
+        emailEl=document.getElementById('cEmail'), zipEl=document.getElementById('cZip'),
         consentEl=document.getElementById('cConsent');
-  [nameEl,phoneEl,emailEl].forEach(e=>e.classList.remove('err'));
-  ['mName','mPhone','mEmail'].forEach(id=>document.getElementById(id).textContent='');
+  [nameEl,phoneEl,emailEl,zipEl].forEach(e=>e&&e.classList.remove('err'));
+  ['mName','mPhone','mEmail','mZip'].forEach(id=>{const el=document.getElementById(id); if(el) el.textContent='';});
   document.getElementById('consentBox').classList.remove('err');
   document.getElementById('submitErr').hidden = true;
   let ok=true;
@@ -684,9 +687,12 @@ async function submitContact(){
   const pd=window._phoneTen(phoneEl.value);
   if(pd.length!==10){ setMsg(phoneEl,'mPhone','Enter a 10-digit phone number'); ok=false; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value)){ setMsg(emailEl,'mEmail','Enter a valid email'); ok=false; }
+  const zd=((zipEl&&zipEl.value)||'').replace(/\D/g,'');
+  if(zd.length!==5){ setMsg(zipEl,'mZip','Enter your 5-digit ZIP code'); ok=false; }
   if(!consentEl.checked){ ok=false; document.getElementById('consentBox').classList.add('err'); }
   if(!ok) return;
   answers.name=nameEl.value.trim(); answers.phone=window._fmtPhone(pd); answers.email=emailEl.value.trim();
+  answers.zip=zd; answers.state=zip3State(zd)||answers.state||'';
   await finish();
 }
 
