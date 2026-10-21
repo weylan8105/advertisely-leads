@@ -138,8 +138,21 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
+  // The lead you're working with right now — shared with the Pipeline view (same key),
+  // set when you copy their phone/email or open them. Outlined so you don't lose them.
+  const ACTIVE_KEY = "pipeline_active_lead";
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    try { setActiveId(localStorage.getItem(ACTIVE_KEY)); } catch { /* storage blocked */ }
+  }, []);
+  function markActive(id: string) {
+    setActiveId(id);
+    try { localStorage.setItem(ACTIVE_KEY, id); } catch { /* ignore */ }
+  }
+
   // Click-to-copy for phone / email cells (Google-Sheets-style quick copy).
-  async function copyText(text: string, label: string) {
+  async function copyText(text: string, label: string, leadId?: string) {
+    if (leadId) markActive(leadId);
     try {
       await navigator.clipboard.writeText(text);
       addToast("success", `${label} copied`);
@@ -405,7 +418,13 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
               const st = stageFor(lead);
               const styles = STAGE_TONE_STYLES[st?.tone ?? "slate"];
               return (
-              <TableRow key={lead.id} className={cn("transition-colors", styles.row, "hover:brightness-[0.97]")}>
+              <TableRow
+                key={lead.id}
+                className={cn(
+                  "transition-colors", styles.row, "hover:brightness-[0.97]",
+                  activeId === lead.id && "outline outline-2 outline-brand-red -outline-offset-2 relative z-[1]",
+                )}
+              >
                 {showBulk && (
                   <TableCell className={cn("sticky left-0 z-10", styles.row)}>
                     <Checkbox
@@ -417,16 +436,22 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
                 <TableCell className="py-1.5">
                   <Link
                     href={`/leads/${lead.id}`}
+                    onClick={() => markActive(lead.id)}
                     className="font-medium leading-tight hover:text-brand-red transition-colors"
                   >
                     {lead.name}
                   </Link>
+                  {activeId === lead.id && (
+                    <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-brand-red px-1.5 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide text-white">
+                      <span className="h-1 w-1 rounded-full bg-white animate-pulse" /> Current
+                    </span>
+                  )}
                 </TableCell>
                 {/* Phone — click to copy */}
                 <TableCell className="py-1.5">
                   <button
                     type="button"
-                    onClick={() => copyText(lead.phone, "Phone")}
+                    onClick={() => copyText(lead.phone, "Phone", lead.id)}
                     title="Click to copy number"
                     className="group inline-flex items-center gap-1.5 font-mono text-xs text-slate-700 hover:text-brand-red"
                   >
@@ -438,7 +463,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages }: L
                 <TableCell className="py-1.5">
                   <button
                     type="button"
-                    onClick={() => copyText(lead.email, "Email")}
+                    onClick={() => copyText(lead.email, "Email", lead.id)}
                     title="Click to copy email"
                     className="group inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-brand-red max-w-[240px]"
                   >

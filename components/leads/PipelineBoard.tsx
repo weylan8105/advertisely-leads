@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users } from "lucide-react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
 import { localTimeForState } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -70,8 +70,23 @@ export function PipelineBoard({
   const [now, setNow] = useState(() => Date.now());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // The lead you're working with right now (last one whose number/email you copied,
+  // card you opened, callback you set, or card you moved). Highlighted on the board and
+  // pinned at the top so you never lose who you're talking to. Remembered on reload.
+  const ACTIVE_KEY = "pipeline_active_lead";
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    try { setActiveId(localStorage.getItem(ACTIVE_KEY)); } catch { /* storage blocked */ }
+  }, []);
+  function markActive(id: string | null) {
+    setActiveId(id);
+    try { if (id) localStorage.setItem(ACTIVE_KEY, id); else localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
+  }
+  const activeLead = activeId ? leads.find((l) => l.id === activeId) ?? null : null;
+
   // Copy a phone/email to the clipboard from a card, with a brief ✓ confirmation.
   async function copyField(text: string, key: string) {
+    markActive(key.split("-")[0]);
     try {
       await navigator.clipboard.writeText(text);
       setCopiedKey(key);
@@ -102,6 +117,7 @@ export function PipelineBoard({
       premiumCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
     }
 
+    markActive(leadId);
     const prev = lead.pipelineStage;
     setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: stageId } : l)));
     try {
@@ -131,6 +147,30 @@ export function PipelineBoard({
             {leads.length === 1 ? "lead" : "leads"} in pipeline
           </span>
         </span>
+        {activeLead && (
+          <span className="inline-flex min-w-0 items-center gap-2 rounded-full border-2 border-brand-red bg-brand-red/[0.06] pl-3 pr-1 py-0.5 text-sm">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-brand-red animate-pulse" />
+            <span className="text-muted-foreground shrink-0">Talking to</span>
+            <button
+              type="button"
+              onClick={() => setDetailLead(activeLead)}
+              className="truncate font-semibold text-foreground hover:underline"
+              title="Open this lead"
+            >
+              {activeLead.name}
+            </button>
+            <span className="hidden sm:inline font-mono text-xs text-muted-foreground shrink-0">{activeLead.phone}</span>
+            <button
+              type="button"
+              onClick={() => markActive(null)}
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-white hover:text-foreground"
+              title="Clear"
+              aria-label="Clear current lead"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        )}
       </div>
       <div className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
@@ -192,7 +232,10 @@ export function PipelineBoard({
                       <div
                         key={lead.id}
                         draggable
-                        onClick={() => setDetailLead(lead)}
+                        onClick={() => {
+                          markActive(lead.id);
+                          setDetailLead(lead);
+                        }}
                         onDragStart={(e) => {
                           e.dataTransfer.setData("text/plain", lead.id);
                           e.dataTransfer.effectAllowed = "move";
@@ -204,10 +247,17 @@ export function PipelineBoard({
                         }}
                         className={cn(
                           "group rounded-lg border bg-white p-2.5 cursor-pointer shadow-sm hover:border-slate-300 transition-colors",
-                          cb?.due ? "border-rose-300 ring-1 ring-rose-200 animate-pulse" : "border-slate-200",
+                          activeId === lead.id
+                            ? "border-brand-red ring-2 ring-brand-red ring-offset-1 bg-brand-red/[0.04] shadow-md"
+                            : cb?.due ? "border-rose-300 ring-1 ring-rose-200 animate-pulse" : "border-slate-200",
                           draggingId === lead.id && "opacity-50",
                         )}
                       >
+                        {activeId === lead.id && (
+                          <div className="-mt-0.5 mb-1.5 inline-flex items-center gap-1 rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" /> Current
+                          </div>
+                        )}
                         <div className="flex items-start gap-1.5">
                           <GripVertical className="h-3.5 w-3.5 text-slate-300 mt-0.5 shrink-0 group-hover:text-slate-400 cursor-grab" />
                           <div className="min-w-0 flex-1">
@@ -216,6 +266,7 @@ export function PipelineBoard({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  markActive(lead.id);
                                   setCallbackLead(lead);
                                 }}
                                 title={lead.callbackAt ? "Edit callback reminder" : "Set a callback reminder"}
