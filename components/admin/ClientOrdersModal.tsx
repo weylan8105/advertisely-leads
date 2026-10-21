@@ -5,7 +5,7 @@ import { Loader2, X, Pencil, Check, Ban, RotateCcw, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { AVAILABLE_STATES } from "@/data/states";
+import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface AdminOrder {
@@ -152,6 +152,7 @@ export function ClientOrdersModal({
                             return (
                               <button
                                 key={code}
+                                title={stateName(code)}
                                 type="button"
                                 onClick={() =>
                                   setEditStates((e) => e && { ...e, states: on ? e.states.filter((s) => s !== code) : [...e.states, code] })
@@ -179,7 +180,7 @@ export function ClientOrdersModal({
                         <span className="text-muted-foreground">States:</span>
                         {o.filterStates.length ? (
                           o.filterStates.map((s) => (
-                            <span key={s} className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">{s}</span>
+                            <span key={s} title={stateName(s)} className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">{s}</span>
                           ))
                         ) : (
                           <span className="text-rose-600">none set — this order won&apos;t receive leads</span>

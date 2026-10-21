@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCart } from "@/context/CartContext";
 import { findPackage } from "@/data/packages";
-import { AVAILABLE_STATES } from "@/data/states";
+import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 import type { LeadPackageId } from "@/types";
@@ -246,7 +246,7 @@ export function CheckoutFlow({
                   {ACTIVE_STATES.map((s) => {
                     const count = inv[s.code] ?? 0;
                     return (
-                    <label key={s.code} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors select-none", selectedStates.includes(s.code) ? "border-red-500 bg-red-50 text-red-700 font-medium" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300")}>
+                    <label key={s.code} title={stateName(s.code)} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer text-sm transition-colors select-none", selectedStates.includes(s.code) ? "border-red-500 bg-red-50 text-red-700 font-medium" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300")}>
                       <Checkbox checked={selectedStates.includes(s.code)} onCheckedChange={() => toggleState(s.code)} className="h-3.5 w-3.5 shrink-0" />
                       <span>{s.code}</span>
                       {count > 0 ? (

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Check, AlertCircle } from "lucide-react";
-import { AVAILABLE_STATES } from "@/data/states";
+import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { cn } from "@/lib/utils";
 
 export function ProfileSettings() {
@@ -99,6 +99,7 @@ export function ProfileSettings() {
               return (
                 <button
                   key={s}
+                  title={stateName(s)}
                   type="button"
                   onClick={() => toggle(s)}
                   disabled={!loaded}

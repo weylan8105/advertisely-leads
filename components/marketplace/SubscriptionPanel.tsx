@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Check, Repeat, CalendarClock, Gauge, Lock, AlertCircle, LogIn } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AVAILABLE_STATES } from "@/data/states";
+import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface SubData {
@@ -292,7 +292,7 @@ export function SubscriptionPanel() {
               const on = states.includes(s);
               const count = inv[s] ?? 0;
               return (
-                <button key={s} onClick={() => toggleState(s)}
+                <button key={s} title={stateName(s)} onClick={() => toggleState(s)}
                   className={cn("rounded-lg border px-3 py-1.5 text-sm transition-colors inline-flex items-center gap-1.5",
                     on ? "border-brand-red bg-brand-red/[0.06] text-brand-red font-medium" : "border-slate-200 hover:border-slate-300")}>
                   {s}

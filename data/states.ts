@@ -46,6 +46,16 @@ const NAME_TO_CODE: Record<string, string> = {
   washington: "WA", "west virginia": "WV", wisconsin: "WI", wyoming: "WY",
 };
 
+const CODE_TO_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(NAME_TO_CODE).map(([name, code]) => [code, name.replace(/\b\w/g, (c) => c.toUpperCase())]),
+);
+CODE_TO_NAME.DC = "District of Columbia";
+
+/** Full state name for a 2-letter code ("NC" → "North Carolina"); the code itself if unknown. */
+export function stateName(code: string): string {
+  return CODE_TO_NAME[code.toUpperCase()] ?? code;
+}
+
 /** Normalize a state value (code or full name, possibly quoted) to a 2-letter code. */
 export function stateCode(raw?: string): string | undefined {
   if (!raw) return undefined;

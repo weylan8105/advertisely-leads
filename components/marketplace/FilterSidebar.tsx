@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { MapPin, ChevronDown, Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { US_STATES, AVAILABLE_STATES } from "@/data/states";
+import { US_STATES, AVAILABLE_STATES, stateName } from "@/data/states";
 import { cn } from "@/lib/utils";
 
 interface FilterSidebarProps {
@@ -80,10 +80,10 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
             const available = AVAILABLE_STATES.includes(s);
             const count = byState?.[s] ?? 0;
             const title = !available
-              ? `${s} — not available yet`
+              ? `${stateName(s)} (${s}) — not available yet`
               : count > 0
-                ? `${s} — ${count} fresh lead${count === 1 ? "" : "s"} ready now`
-                : `${s} — delivered in real time as generated`;
+                ? `${stateName(s)} (${s}) — ${count} fresh lead${count === 1 ? "" : "s"} ready now`
+                : `${stateName(s)} (${s}) — delivered in real time as generated`;
             return (
               <span
                 key={s}

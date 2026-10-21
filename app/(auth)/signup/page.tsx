@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
-import { AVAILABLE_STATES } from "@/data/states";
+import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { cn } from "@/lib/utils";
 
 const perks = [
@@ -257,6 +257,7 @@ export default function SignupPage() {
                 return (
                   <button
                     key={s}
+                    title={stateName(s)}
                     type="button"
                     onClick={() => toggleState(s)}
                     aria-pressed={on}

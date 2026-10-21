@@ -54,7 +54,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
-import { AVAILABLE_STATES, US_STATES } from "@/data/states";
+import { AVAILABLE_STATES, US_STATES, stateName } from "@/data/states";
 
 interface LeadTableProps {
   leads: Lead[];
@@ -364,6 +364,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                     <SelectItem
                       key={s}
                       value={s}
+                      title={stateName(s)}
                       disabled={!available}
                       className={!available ? "opacity-40" : ""}
                     >

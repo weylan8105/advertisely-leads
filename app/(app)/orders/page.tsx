@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
-import { AVAILABLE_STATES } from "@/data/states";
+import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Package, Truck, DollarSign, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -564,6 +564,7 @@ export default function OrdersPage() {
                                 return (
                                   <button
                                     key={code}
+                                    title={stateName(code)}
                                     type="button"
                                     onClick={() => toggleDraftState(code)}
                                     className={cn(
