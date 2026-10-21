@@ -255,7 +255,7 @@ export function LeadDetailModal({
   }
 
   // Lead replacement request (files to the admin Replacement queue).
-  const [rep, setRep] = useState<"idle" | "loading" | "done">("idle");
+  const [rep, setRep] = useState<"idle" | "loading" | "done" | "denied">("idle");
   const [repErr, setRepErr] = useState("");
   const [capExceeded, setCapExceeded] = useState(false);
   const [repOpen, setRepOpen] = useState(false);
@@ -272,7 +272,7 @@ export function LeadDetailModal({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) { setRep("done"); setRepOpen(false); }
-      else { setRep("idle"); setRepErr(data.error || "Could not submit the request."); setCapExceeded(!!data.capExceeded); setRepOpen(false); }
+      else { setRep(data.alreadyDenied ? "denied" : "idle"); setRepErr(data.error || "Could not submit the request."); setCapExceeded(!!data.capExceeded); setRepOpen(false); }
     } catch {
       setRep("idle");
       setRepErr("Could not submit the request.");
@@ -376,7 +376,7 @@ export function LeadDetailModal({
             {context !== "admin" && (
               <button
                 onClick={() => { setRepErr(""); setRepOpen(true); }}
-                disabled={rep === "loading" || rep === "done" || windowClosed}
+                disabled={rep === "loading" || rep === "done" || rep === "denied" || windowClosed}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
                   rep === "done"
@@ -396,7 +396,9 @@ export function LeadDetailModal({
                 )}
                 {rep === "done"
                   ? "Replacement requested"
-                  : windowClosed
+                  : rep === "denied"
+                    ? "Replacement denied"
+                    : windowClosed
                     ? "Replacement window closed"
                     : "Request replacement"}
               </button>

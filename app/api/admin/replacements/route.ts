@@ -153,6 +153,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // One shot per lead: once a request was denied, the same lead can't be
+  // re-submitted. (An admin can still Undo the denial from the queue.)
+  const denied = await prisma.replacementRequest.findFirst({
+    where: { leadId, status: "DENIED" },
+    select: { id: true },
+  });
+  if (denied) {
+    return NextResponse.json(
+      {
+        error: "A replacement for this lead was already reviewed and denied, so it can't be requested again.",
+        alreadyDenied: true,
+      },
+      { status: 409 },
+    );
+  }
+
   // Hard gate: the replacement window (72h from delivery) must still be open.
   const windowLead = await prisma.lead.findUnique({
     where: { id: leadId },
