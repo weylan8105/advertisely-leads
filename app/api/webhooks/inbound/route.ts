@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { normalizeInboundLead } from "@/lib/inboundLead";
-import { tryFulfillForNewLead } from "@/lib/fulfillment";
+import { createInboundLead } from "@/lib/inboundIntake";
 import { authenticateApiKey, hasScope } from "@/lib/apikey";
-import { fireMetaLeadEvent } from "@/lib/metaCapi";
-import { isTestLead } from "@/lib/testLeads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +19,8 @@ export const dynamic = "force-dynamic";
  * fulfillment pipeline (assignment -> delivery email -> Google Sheets).
  */
 
-// Allow the hosted quiz funnel (any domain) to POST directly from the browser.
+// Allow browser-based connectors to POST directly. (The ABCA quiz no longer
+// posts here — it uses the keyless /api/quiz/submit, so no key ships in a page.)
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -97,84 +96,28 @@ export async function POST(req: NextRequest) {
       continue;
     }
     const lead = normalizeInboundLead(item as Record<string, unknown>);
+    const outcome = await createInboundLead(lead, {
+      activityBody: `Lead received via inbound connector (${lead.source}).`,
+    });
 
-    // A lead we can't contact is worse than none — require a phone.
-    if (!lead.standardized.phone) {
-      skipped++;
-      errors.push("Skipped a lead with no phone number.");
-      continue;
-    }
-
-    // Idempotency when the connector supplies a stable id.
-    if (lead.externalId) {
-      const existing = await prisma.lead.findUnique({
-        where: { externalId: lead.externalId },
-      });
-      if (existing) {
+    switch (outcome.status) {
+      case "created":
+        created++;
+        if (outcome.error) {
+          skipped++;
+          errors.push(outcome.error);
+        }
+        break;
+      case "no-phone":
         skipped++;
-        continue;
-      }
-    }
-
-    try {
-      const record = await prisma.lead.create({
-        data: {
-          externalId: lead.externalId,
-          name: lead.standardized.name,
-          phone: lead.standardized.phone,
-          email: lead.standardized.email,
-          state: lead.standardized.state,
-          zip: lead.standardized.zip,
-          age: lead.standardized.age,
-          income: lead.standardized.income,
-          occupation: lead.standardized.occupation,
-          intentReason: lead.standardized.intentReason,
-          packageId: lead.packageId,
-          source: lead.source,
-          tags: lead.tags,
-          campaignName: lead.attribution.campaignName,
-          adsetId: lead.attribution.adsetId,
-          creativeId: lead.attribution.creativeId,
-          utmSource: lead.attribution.utmSource,
-          utmMedium: lead.attribution.utmMedium,
-          utmCampaign: lead.attribution.utmCampaign,
-          fbclid: lead.attribution.fbclid,
-          consentTime: new Date(),
-          consentIp: lead.raw["consent_ip"] || undefined,
-          rawFormData: lead.raw,
-          activity: {
-            create: {
-              type: "LEAD_RECEIVED",
-              body: `Lead received via inbound connector (${lead.source}).`,
-            },
-          },
-        },
-      });
-      // Auto-trash test/internal identities on intake — never deliver, count,
-      // or fire a conversion event for them.
-      if (isTestLead(record.name, record.email)) {
-        await prisma.lead.update({
-          where: { id: record.id },
-          data: { trashedAt: new Date() },
-        });
-        await prisma.leadActivity.create({
-          data: {
-            leadId: record.id,
-            type: "LEAD_RECEIVED",
-            body: "Auto-trashed on intake — test/internal identity.",
-          },
-        });
+        errors.push("Skipped a lead with no phone number.");
+        break;
+      case "failed":
         skipped++;
-        continue;
-      }
-      created++;
-      // Assign to an open order immediately (fires email + Sheets sync).
-      await tryFulfillForNewLead(record.id);
-      // Server-side Meta "Lead" event (deduped with the browser pixel).
-      await fireMetaLeadEvent(record);
-    } catch (err) {
-      skipped++;
-      errors.push((err as Error).message.slice(0, 200));
+        errors.push(outcome.error);
+        break;
+      default: // duplicate externalId, or a test identity auto-trashed on intake
+        skipped++;
     }
   }
 

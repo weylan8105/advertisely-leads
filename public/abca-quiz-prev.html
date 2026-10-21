@@ -316,7 +316,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 // Advertisely inbound webhook. Relative path = same origin when hosted on
 // advertisely.io; the endpoint also sends CORS headers so this page works
 // from any domain it's later served on. The key is a leads-write-only token.
-const WEBHOOK_URL = "/api/webhooks/inbound?key=adv_live_sk__G9rQOAZxsV_oFx0g3IdQmuMU1e9X2THv-dsy1eAX5w";
+const WEBHOOK_URL = "/api/quiz/submit";
 
 /* ---- First-party funnel tracking (page view, step reach, completion) ----
    Anonymous per-visit session id; no PII. Powers click-through + drop-off
@@ -635,6 +635,7 @@ function finish(){
   payload.intent      = answers.iul_interest;
   payload.source      = "early-retirement-quiz";
   payload.external_id = eventId;
+  payload.session_id = sessionId; payload.hp_check = ""; // keyless /api/quiz/submit
 
   // Browser pixel event — deduped against any server CAPI event via eventID
   if(window.fbq){ try{ fbq('track', META_EVENT, { lead_tier:tier }, { eventID:eventId }); }catch(e){} }

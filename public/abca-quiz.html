@@ -191,6 +191,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .cfields{margin-top:18px;display:flex;flex-direction:column}
   .cfields label{font-size:13px;color:var(--onnavy-dim);font-weight:600;margin-top:10px}
   .cfields .qinput,.cfields select{margin-top:6px}
+  .hpf{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
   select.qinput{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23AEBED0' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 15px center}
   .consent{margin-top:18px;display:flex;gap:12px;align-items:flex-start;background:var(--navy-panel);border:1px solid var(--navy-line);border-radius:12px;padding:14px}
   .consent.err{border-color:#E5484D}
@@ -482,9 +483,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <script>
 /* ============================================================
    American Blue Collar Advantage: IUL quote-request funnel (v4)
-   Posts leads to the Advertisely inbound endpoint (same-origin).
+   Posts leads to the keyless same-origin /api/quiz/submit route
+   (no API key in this page; the route enforces its own abuse checks).
    ============================================================ */
-const WEBHOOK_URL = "/api/webhooks/inbound?key=adv_live_sk__G9rQOAZxsV_oFx0g3IdQmuMU1e9X2THv-dsy1eAX5w";
+const WEBHOOK_URL = "/api/quiz/submit";
 
 /* ---- First-party funnel tracking (view / step / complete) ---- */
 const TRACK_URL = "/api/track";
@@ -635,6 +637,7 @@ function render(){
         <label for="cPhone">Phone number (required)</label><input class="qinput" id="cPhone" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" value="${(answers.phone||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mPhone" role="alert"></div>
         <label for="cEmail">Email address</label><input class="qinput" id="cEmail" type="email" autocomplete="email" placeholder="you@email.com" value="${(answers.email||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mEmail" role="alert"></div>
         <label for="cZip">ZIP code (required)</label><input class="qinput" id="cZip" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="5-digit ZIP" value="${(answers.zip||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mZip" role="alert"></div>
+        <div class="hpf" aria-hidden="true"><label for="cHp">Leave this field empty</label><input id="cHp" name="hp_check" type="text" tabindex="-1" autocomplete="off"></div>
       </div>
       <label class="consent" id="consentBox"><input type="checkbox" id="cConsent" aria-label="Consent to be contacted">
         <span class="ct">Yes, have a licensed agent follow up with me about my quote request. By checking this box I agree to be contacted by phone, text, or email (including automated messages, even if my number is on a Do-Not-Call registry). Consent is not a condition of purchase. Message and data rates may apply. Privacy Policy and Terms apply.</span>
@@ -717,6 +720,8 @@ async function finish(){
   };
   payload.name=answers.name; payload.age=answers.age;
   payload.intent=answers.iul_interest; payload.source="early-retirement-quiz"; payload.external_id=eventId;
+  payload.session_id=sessionId; // ties the lead to this visit's funnel beacons (checked server-side)
+  const hpEl=document.getElementById('cHp'); payload.hp_check=hpEl?hpEl.value:""; // honeypot: humans never fill it
 
   let ok=false;
   if(WEBHOOK_URL){
