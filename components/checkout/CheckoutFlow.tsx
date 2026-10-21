@@ -23,7 +23,8 @@ import { useCart } from "@/context/CartContext";
 import { findPackage } from "@/data/packages";
 import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
-import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
+import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE, REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
+import { priceCart, normalizeCode, REFERRAL_DISCOUNT_RATE } from "@/lib/referralPricing";
 import type { LeadPackageId } from "@/types";
 
 // Every state we currently sell leads in (single source of truth: data/states.ts).
@@ -57,6 +58,54 @@ export function CheckoutFlow({
   // Team delivery: an owner can send this purchase to a downline agent.
   const [downline, setDownline] = useState<{ userId: string; name: string | null; email: string }[]>([]);
   const [deliverToUserId, setDeliverToUserId] = useState<string>("me");
+
+  // Advertisely Bucks Marketing Campaign (draft): someone's referral code for
+  // 10% off fresh leads, and the buyer's own Bucks balance to spend.
+  const [codeInput, setCodeInput] = useState("");
+  const [appliedCode, setAppliedCode] = useState<{ code: string; ownerFirstName: string | null } | null>(null);
+  const [codeErr, setCodeErr] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [bucks, setBucks] = useState<number | null>(null); // null = can't use Bucks
+  const [useBucks, setUseBucks] = useState(false);
+
+  async function applyCode(raw: string) {
+    const code = normalizeCode(raw);
+    if (!code) return;
+    setCodeBusy(true);
+    setCodeErr(null);
+    try {
+      const d = await fetch(`/api/referral/validate?code=${encodeURIComponent(code)}`).then((r) => r.json());
+      if (d.valid) {
+        setAppliedCode({ code: d.code, ownerFirstName: d.ownerFirstName });
+        try { localStorage.setItem("adv_ref_code", d.code); } catch {}
+      } else {
+        setAppliedCode(null);
+        setCodeErr(d.error ?? "That code doesn't work.");
+      }
+    } catch {
+      setCodeErr("Couldn't check that code — try again.");
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
+  // Prefill from a ?ref=CODE link, or the last code this browser used.
+  useEffect(() => {
+    if (!REFERRAL_PROGRAM_ENABLED || !isAuthed) return;
+    let start = new URLSearchParams(window.location.search).get("ref") ?? "";
+    if (!start) { try { start = localStorage.getItem("adv_ref_code") ?? ""; } catch {} }
+    if (start) { setCodeInput(start); applyCode(start); }
+    fetch("/api/referral")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setBucks(d && d.bucksEnabled && d.bucksCents > 0 ? d.bucksCents : null))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthed]);
+
+  const priced = priceCart(
+    items.map((i) => ({ packageId: i.packageId, quantity: i.quantity })),
+    { codeApplied: REFERRAL_PROGRAM_ENABLED && !!appliedCode, bucksAvailableCents: bucks ?? 0, useBucks: useBucks && bucks !== null },
+  );
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -293,6 +342,8 @@ export function CheckoutFlow({
                   items={paymentItems}
                   filterStates={selectedStates}
                   deliverToUserId={deliverToUserId === "me" ? null : deliverToUserId}
+                  referralCode={REFERRAL_PROGRAM_ENABLED ? appliedCode?.code ?? null : null}
+                  useBucks={REFERRAL_PROGRAM_ENABLED && useBucks && bucks !== null}
                   onSuccess={() => {
                     clear();
                     setStep(3);
@@ -354,12 +405,71 @@ export function CheckoutFlow({
                   </div>
                 );
               })}
+              {REFERRAL_PROGRAM_ENABLED && priced.discountCents > 0 && (
+                <div className="flex justify-between gap-2 text-emerald-700">
+                  <span>Code {appliedCode?.code} ({Math.round(REFERRAL_DISCOUNT_RATE * 100)}% off fresh)</span>
+                  <span className="shrink-0">−{formatCurrency(priced.discountCents / 100)}</span>
+                </div>
+              )}
+              {REFERRAL_PROGRAM_ENABLED && priced.bucksAppliedCents > 0 && (
+                <div className="flex justify-between gap-2 text-emerald-700">
+                  <span>Advertisely Bucks</span>
+                  <span className="shrink-0">−{formatCurrency(priced.bucksAppliedCents / 100)}</span>
+                </div>
+              )}
               <div className="border-t border-slate-200 pt-3 flex justify-between text-base">
                 <span className="font-medium">Total</span>
-                <span className="font-semibold text-gradient">{formatCurrency(subtotalCents / 100)}</span>
+                <span className="font-semibold text-gradient">
+                  {formatCurrency((REFERRAL_PROGRAM_ENABLED ? priced.chargeCents : subtotalCents) / 100)}
+                </span>
               </div>
             </CardContent>
           </Card>
+          {REFERRAL_PROGRAM_ENABLED && isAuthed && step !== 3 && (
+            <Card className="p-4 space-y-3">
+              <div>
+                <label className="text-sm font-medium">Referral code</label>
+                <p className="text-[11px] text-muted-foreground">Have someone&apos;s code? Get {Math.round(REFERRAL_DISCOUNT_RATE * 100)}% off fresh leads.</p>
+              </div>
+              {appliedCode ? (
+                <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  <span>
+                    <span className="font-mono font-semibold">{appliedCode.code}</span>
+                    {appliedCode.ownerFirstName && <span className="text-xs"> · from {appliedCode.ownerFirstName}</span>}
+                  </span>
+                  <button
+                    className="text-xs underline"
+                    onClick={() => { setAppliedCode(null); setCodeInput(""); try { localStorage.removeItem("adv_ref_code"); } catch {} }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={codeInput}
+                    onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === "Enter") applyCode(codeInput); }}
+                    placeholder="ENTER CODE"
+                    className="h-9 flex-1 rounded-md border border-slate-300 px-3 font-mono text-sm uppercase focus:border-red-500 focus:outline-none"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => applyCode(codeInput)} disabled={codeBusy || !codeInput.trim()}>
+                    Apply
+                  </Button>
+                </div>
+              )}
+              {codeErr && <p className="text-[11px] text-rose-600">{codeErr}</p>}
+              {bucks !== null && (
+                <label className="flex items-center gap-2 border-t border-slate-100 pt-3 text-sm cursor-pointer select-none">
+                  <Checkbox checked={useBucks} onCheckedChange={(v) => setUseBucks(!!v)} className="h-4 w-4" />
+                  <span>
+                    Use my Advertisely Bucks{" "}
+                    <span className="font-semibold text-emerald-700">({formatCurrency(bucks / 100)} available)</span>
+                  </span>
+                </label>
+              )}
+            </Card>
+          )}
           <Card className="p-4">
             <div className="flex items-center gap-2">
               <Badge variant="success">Compliant</Badge>

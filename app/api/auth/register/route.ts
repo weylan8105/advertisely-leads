@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { AVAILABLE_STATES } from "@/data/states";
+import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
+import { ensureReferralCode } from "@/lib/referral";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AVAILABLE = new Set(AVAILABLE_STATES);
@@ -81,6 +83,11 @@ export async function POST(req: Request) {
     },
     select: { id: true },
   });
+
+  // Advertisely Bucks Marketing Campaign (draft): every new account gets its own code.
+  if (REFERRAL_PROGRAM_ENABLED) {
+    await ensureReferralCode(user.id).catch((e) => console.warn("referral code generation failed", e));
+  }
 
   // If this signup came from a valid downline invite for THIS email, join the
   // new agent to the inviter's organization (their upline) immediately, so

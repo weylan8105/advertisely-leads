@@ -3,28 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { leadPackages } from "@/data/packages";
-import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { ensureOrgContext, canManageTeam } from "@/lib/org";
-import { availableForPackage, GENERATED_TO_ORDER } from "@/lib/inventory";
+import { quoteCheckout, type CheckoutBody } from "@/lib/checkoutQuote";
 import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-interface CartLine {
-  packageId: string;
-  quantity: number;
-}
-interface CreateIntentBody {
-  // Multi-item cart checkout.
-  items?: CartLine[];
-  filterStates?: string[];
-  // Optional: deliver these leads to a downline agent on the buyer's team.
-  deliverToUserId?: string | null;
-  // Legacy single-item fields (still accepted).
-  packageId?: string;
-  quantity?: number;
-}
 
 /**
  * Create a Stripe PaymentIntent for a lead-package purchase.
@@ -51,107 +34,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: CreateIntentBody;
+  let body: CheckoutBody;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Normalize to a list of cart lines (accept the legacy single-item body too).
-  const rawLines: CartLine[] =
-    body.items && body.items.length > 0
-      ? body.items
-      : body.packageId
-        ? [{ packageId: body.packageId, quantity: Number(body.quantity) }]
-        : [];
-  if (rawLines.length === 0) {
-    return NextResponse.json({ error: "Your cart is empty" }, { status: 400 });
+  const buyer = { id: (session.user as any).id as string, role: (session.user as any).role as string | undefined };
+  const quote = await quoteCheckout(buyer, body);
+  if (!quote.ok) return NextResponse.json(quote.body, { status: quote.status });
+  const { validated, priced, deliverToUserId, referral } = quote;
+
+  // Bucks cover the whole order → no card payment; the client places it via
+  // /api/checkout/bucks-order instead.
+  if (priced.chargeCents === 0) {
+    return NextResponse.json({ coveredByBucks: true, priced });
   }
 
-  let amountCents = 0;
-  const validated: CartLine[] = [];
-  for (const line of rawLines) {
-    const pkg = leadPackages.find((p) => p.id === line.packageId && !p.hidden);
-    if (!pkg) {
-      return NextResponse.json({ error: `Unknown package: ${line.packageId}` }, { status: 400 });
-    }
-    if (!pkg.available) {
-      return NextResponse.json(
-        { error: `${pkg.name} is coming soon — pricing pending.` },
-        { status: 400 },
-      );
-    }
-    const qty = Number(line.quantity);
-    if (!Number.isInteger(qty) || qty < pkg.minimumOrder) {
-      return NextResponse.json(
-        { error: `${pkg.name}: minimum order is ${pkg.minimumOrder} leads.` },
-        { status: 400 },
-      );
-    }
-    amountCents += Math.round(qty * pkg.pricePerLead * 100);
-    validated.push({ packageId: pkg.id, quantity: qty });
-  }
-
-  // ── Inventory cap ────────────────────────────────────────────────
-  // Never let an order exceed what's actually available for the selected
-  // states. Fresh (<48h) is generated-to-order and exempt. Requested
-  // quantities are summed per tier in case a cart has the tier twice.
-  if (isDatabaseConfigured) {
-    const statesSel = (body.filterStates ?? []).map((s) => String(s).toUpperCase()).filter(Boolean);
-    const reqByPkg = new Map<string, number>();
-    for (const v of validated) reqByPkg.set(v.packageId, (reqByPkg.get(v.packageId) ?? 0) + v.quantity);
-    for (const [pid, qty] of reqByPkg) {
-      if (GENERATED_TO_ORDER.has(pid)) continue; // fresh: sellable ahead of stock
-      const avail = await availableForPackage(pid, statesSel);
-      if (qty > avail) {
-        const pkg = leadPackages.find((p) => p.id === pid);
-        const scope = statesSel.length ? ` in the selected states (${statesSel.join(", ")})` : "";
-        return NextResponse.json(
-          {
-            error:
-              avail > 0
-                ? `Only ${avail} ${pkg?.name ?? pid} lead${avail === 1 ? "" : "s"} are available${scope} right now. Lower that tier to ${avail} or fewer.`
-                : `${pkg?.name ?? pid} is out of stock${scope} right now. Remove it or pick another age tier.`,
-            packageId: pid,
-            available: avail,
-          },
-          { status: 409 },
-        );
-      }
-    }
-  }
-
-  // Compact line encoding for Stripe metadata (500-char/value limit).
-  const itemsMeta = JSON.stringify(validated.map((v) => ({ p: v.packageId, q: v.quantity })));
+  // Compact line encoding for Stripe metadata (500-char/value limit). `c` is the
+  // per-lead price actually charged (after any referral discount).
+  const itemsMeta = JSON.stringify(priced.lines.map((l) => ({ p: l.packageId, q: l.quantity, c: l.centsPerLead })));
   if (itemsMeta.length > 480) {
     return NextResponse.json(
       { error: "Too many line items in one order — please split it." },
       { status: 400 },
     );
-  }
-
-  // Optional: deliver to a downline agent. Directing an order to someone else is
-  // a team-management action, so require the buyer to be an OWNER/ADMIN, and the
-  // target must be a member of THEIR OWN team — one team can never direct leads
-  // into another team.
-  let deliverToUserId = "";
-  if (body.deliverToUserId && prisma) {
-    const ctx = await ensureOrgContext((session.user as any).id);
-    if (!ctx || !canManageTeam(ctx.role)) {
-      return NextResponse.json(
-        { error: "Only a team owner or admin can order for a downline agent." },
-        { status: 403 },
-      );
-    }
-    const member = await prisma.membership.findUnique({
-      where: { organizationId_userId: { organizationId: ctx.organizationId, userId: body.deliverToUserId } },
-      select: { id: true },
-    });
-    if (!member) {
-      return NextResponse.json({ error: "That agent isn't on your team." }, { status: 400 });
-    }
-    deliverToUserId = body.deliverToUserId;
   }
 
   const totalLeads = validated.reduce((s, v) => s + v.quantity, 0);
@@ -161,7 +69,7 @@ export async function POST(req: NextRequest) {
       : `${validated.length} lead tiers (${totalLeads} leads)`;
 
   const intent = await stripe.paymentIntents.create({
-    amount: amountCents,
+    amount: priced.chargeCents,
     currency: "usd",
     automatic_payment_methods: { enabled: true },
     receipt_email: session.user.email ?? undefined,
@@ -170,14 +78,21 @@ export async function POST(req: NextRequest) {
       userId: (session.user as any).id ?? "",
       userEmail: session.user.email ?? "",
       items: itemsMeta,
-      filterStates: (body.filterStates ?? []).join(","),
+      filterStates: quote.filterStates.join(","),
       deliverToUserId,
+      // Advertisely Bucks Marketing Campaign (draft) — empty/0 when not used.
+      referralCode: referral?.code ?? "",
+      referrerUserId: referral?.ownerId ?? "",
+      referrerEarnsCents: String(referral ? priced.referrerEarnsCents : 0),
+      discountCents: String(priced.discountCents),
+      bucksCents: String(priced.bucksAppliedCents),
     },
   });
 
   return NextResponse.json({
     clientSecret: intent.client_secret,
-    amount: amountCents,
+    amount: priced.chargeCents,
+    priced,
     paymentIntentId: intent.id,
   });
 }

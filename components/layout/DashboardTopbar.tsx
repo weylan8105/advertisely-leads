@@ -14,8 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/layout/Logo";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { BucksPill } from "@/components/layout/BucksPill";
 import { currentUser } from "@/data/user";
 import { initials } from "@/lib/utils";
+import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 
 export function DashboardTopbar() {
   const { data: session } = useSession();
@@ -40,6 +42,7 @@ export function DashboardTopbar() {
 
         <div className="flex items-center gap-3 ml-auto">
           <NotificationBell />
+          <BucksPill />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 rounded-md border border-slate-300 pl-1 pr-2.5 py-1 hover:bg-slate-100">
@@ -67,6 +70,11 @@ export function DashboardTopbar() {
               <DropdownMenuItem asChild>
                 <Link href="/orders">Billing & orders</Link>
               </DropdownMenuItem>
+              {REFERRAL_PROGRAM_ENABLED && (
+                <DropdownMenuItem asChild>
+                  <Link href="/rewards">My code & Bucks</Link>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => signOut({ callbackUrl: "/login" })}

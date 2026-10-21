@@ -49,6 +49,11 @@ model User {
   // Keys of one-time in-app announcements this user has already seen/dismissed
   // (see data/announcements.ts). Used to show each announcement exactly once.
   announcementsSeen String[] @default([])
+  // Advertisely Bucks Marketing Campaign (DRAFT — see lib/referral.ts, gated by REFERRAL_PROGRAM_ENABLED).
+  // The agent's own 10%-off code (stored uppercase; editable) and their
+  // Advertisely Bucks balance in cents (earned when others buy with the code).
+  referralCode  String?   @unique
+  bucksCents    Int       @default(0)
   createdAt     DateTime  @default(now())
 
   accounts              Account[]
@@ -67,6 +72,7 @@ model User {
   ownedOrganizations    Organization[] @relation("OrgOwner")
   memberships           Membership[]
   sentInvitations       Invitation[]   @relation("InvitedBy")
+  bucksTransactions     BucksTransaction[]
 }
 
 enum UserRole {
@@ -371,6 +377,12 @@ model Order {
   createdAt             DateTime      @default(now())
   fulfilledAt           DateTime?
   organizationId        String? // team that placed this order (Phase 1)
+  // Advertisely Bucks Marketing Campaign (DRAFT): code used at checkout, whose code it was, the
+  // discount it gave, and Advertisely Bucks spent on this order (all cents).
+  referralCode          String?
+  referrerUserId        String?
+  discountCents         Int           @default(0)
+  bucksAppliedCents     Int           @default(0)
   user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization          Organization? @relation(fields: [organizationId], references: [id])
   leads                 Lead[]
@@ -601,4 +613,23 @@ enum InvitationStatus {
 enum DistributionMode {
   MANUAL // all purchased leads go to the buyer/owner; reassign by hand
   ROUND_ROBIN // purchased leads are spread across in-rotation members
+}
+
+// Advertisely Bucks Marketing Campaign (DRAFT): every change to a user's Advertisely Bucks balance.
+// amountCents > 0 = earned (someone bought with their code), < 0 = spent.
+model BucksTransaction {
+  id              String   @id @default(cuid())
+  userId          String
+  amountCents     Int
+  kind            String // "EARN" | "SPEND" | "ADJUST"
+  note            String?
+  // EARN: the buyer who used the code. SPEND/EARN: the checkout it came from.
+  sourceUserId    String?
+  orderId         String?
+  paymentRef      String? // Stripe PaymentIntent id, or "bucks:<id>" for fully-Bucks orders
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentRef, userId, kind]) // idempotent per checkout
+  @@index([userId, createdAt])
 }

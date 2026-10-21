@@ -1,4 +1,5 @@
 import type { LeadPackage, ProductGroup } from "@/types";
+import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 
 // The IUL lead pool spans two historical packageId labels — `blue-collar-iul`
 // (what GHL intake stamps on new leads) and `aged-iul` (existing stock). They're
@@ -49,7 +50,8 @@ export const leadPackages: LeadPackage[] = [
     tagline: "Freshly generated, high-intent prospects — the highest contact and conversion rates on the platform.",
     description:
       "Blue-Collar IUL prospects, freshly generated and under 48 hours old. Highest contact and conversion rates.",
-    pricePerLead: 60,
+    // Referral program (draft): list price rises to $66; a referral code takes 10% off.
+    pricePerLead: REFERRAL_PROGRAM_ENABLED ? 66 : 60,
     minimumOrder: 25, // max(25, ceil(150/60)=3) = 25
     estimatedDelivery: "Fast delivery",
     badge: "Fresh",

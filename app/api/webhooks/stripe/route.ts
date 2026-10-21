@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { fulfillOrder } from "@/lib/fulfillment";
-import { findPackage } from "@/data/packages";
-import { ensureOrgContext } from "@/lib/org";
 import { processPaidInvoice, upsertLocalSubscription } from "@/lib/leadSubscription";
-import { sendOrderConfirmationEmail, sendThankYouEmail, isEmailConfigured } from "@/lib/email";
+import { placeCheckoutOrders, type PaidLine } from "@/lib/checkoutOrders";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -122,16 +119,15 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   // Optional team delivery target chosen at checkout (validated when the intent
   // was created). Empty string = deliver to the buyer. Re-validated against the
   // buyer's org below before it's stamped on any order.
-  let deliverToUserId = md.deliverToUserId && md.deliverToUserId.length > 0 ? md.deliverToUserId : null;
+  const deliverToUserId = md.deliverToUserId && md.deliverToUserId.length > 0 ? md.deliverToUserId : null;
 
   // Cart line items. New checkouts send `items` (JSON [{p,q}]); fall back to the
   // legacy single-item metadata for any older intents.
-  type Line = { packageId: string; quantity: number };
-  let lines: Line[] = [];
+  let lines: PaidLine[] = [];
   if (md.items) {
     try {
-      const parsed = JSON.parse(md.items) as { p: string; q: number }[];
-      lines = parsed.map((x) => ({ packageId: x.p, quantity: Number(x.q) }));
+      const parsed = JSON.parse(md.items) as { p: string; q: number; c?: number }[];
+      lines = parsed.map((x) => ({ packageId: x.p, quantity: Number(x.q), centsPerLead: x.c != null ? Number(x.c) : undefined }));
     } catch {
       console.error("Stripe webhook: bad items metadata on", intent.id, md.items);
     }
@@ -143,98 +139,18 @@ async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
     return;
   }
 
-  // One Order per cart line. Price + age window resolve from the package def so
-  // buckets keep their identity while fulfillment matches the underlying pool.
-  const createdOrders: { id: string; packageId: string }[] = [];
-  let totalQty = 0;
-  // Stamp the buyer's org on every order up front so leads always inherit it.
-  const buyerOrgId = (await ensureOrgContext(md.userId))?.organizationId ?? undefined;
-
-  // Defense in depth: re-validate the delivery target at fulfillment time. It
-  // must (still) be a member of the BUYER's own org, or we deliver to the buyer.
-  // This guarantees one team can never direct leads into another team, even if
-  // the target left the org between checkout and payment.
-  if (deliverToUserId) {
-    const member = buyerOrgId
-      ? await prisma.membership.findUnique({
-          where: { organizationId_userId: { organizationId: buyerOrgId, userId: deliverToUserId } },
-          select: { id: true },
-        })
-      : null;
-    if (!member) {
-      console.warn(
-        "Stripe webhook: deliverTo target not in buyer's org — delivering to buyer instead",
-        intent.id,
-        deliverToUserId,
-      );
-      deliverToUserId = null;
-    }
-  }
-
-  for (const line of lines) {
-    const pkg = findPackage(line.packageId);
-    if (!pkg) {
-      console.error("Stripe webhook: unknown package on", intent.id, line.packageId);
-      continue;
-    }
-    const cents = Math.round(pkg.pricePerLead * 100);
-    const order = await prisma.order.create({
-      data: {
-        userId: md.userId,
-        organizationId: buyerOrgId,
-        packageId: pkg.id, // bucket id, for display
-        quantity: line.quantity,
-        pricePerLeadCents: cents,
-        totalCents: cents * line.quantity,
-        filterStates,
-        filterAgeMinDays: pkg.ageMinDays,
-        filterAgeMaxDays: pkg.ageMaxDays,
-        deliverToUserId,
-        status: "PROCESSING",
-        stripePaymentIntentId: intent.id,
-      },
-    });
-    createdOrders.push({ id: order.id, packageId: order.packageId });
-    totalQty += line.quantity;
-    // Immediately try to fill each order from existing inventory.
-    await fulfillOrder(order.id);
-  }
-  if (createdOrders.length === 0) return;
-  const firstOrder = createdOrders[0];
-
-  // Send order confirmation + thank-you, summarized across the whole cart.
-  if (isEmailConfigured) {
-    try {
-      const user = await prisma?.user.findUnique({
-        where: { id: md.userId },
-        select: { email: true, name: true },
-      });
-      if (user?.email) {
-        const label =
-          createdOrders.length === 1
-            ? findPackage(createdOrders[0].packageId)?.name ?? createdOrders[0].packageId
-            : `${createdOrders.length} lead tiers`;
-        // Transactional receipt
-        await sendOrderConfirmationEmail({
-          agentEmail: user.email,
-          agentName: user.name ?? "Agent",
-          packageName: label,
-          quantity: totalQty,
-          totalCents: intent.amount,
-          orderId: firstOrder.id,
-        });
-        // Personal thank-you
-        await sendThankYouEmail({
-          clientEmail: user.email,
-          clientName: user.name ?? "Agent",
-          packageName: label,
-          quantity: totalQty,
-          totalCents: intent.amount,
-          orderId: firstOrder.id,
-        });
-      }
-    } catch (emailErr) {
-      console.warn("Order emails failed:", emailErr);
-    }
-  }
+  await placeCheckoutOrders({
+    userId: md.userId,
+    lines,
+    filterStates,
+    deliverToUserId,
+    paymentRef: intent.id,
+    stripePaymentIntentId: intent.id,
+    chargedCents: intent.amount,
+    referral: md.referralCode && md.referrerUserId
+      ? { code: md.referralCode, ownerId: md.referrerUserId, earnsCents: parseInt(md.referrerEarnsCents || "0", 10) || 0 }
+      : null,
+    discountCents: parseInt(md.discountCents || "0", 10) || 0,
+    bucksAppliedCents: parseInt(md.bucksCents || "0", 10) || 0,
+  });
 }

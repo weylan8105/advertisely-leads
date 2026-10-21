@@ -21,6 +21,9 @@ interface StripePaymentFormProps {
   items: { packageId: string; quantity: number }[];
   filterStates?: string[];
   deliverToUserId?: string | null;
+  // Advertisely Bucks Marketing Campaign (draft): a referral code + spend Bucks.
+  referralCode?: string | null;
+  useBucks?: boolean;
   onSuccess: () => void;
 }
 
@@ -30,6 +33,16 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
   const itemsKey = JSON.stringify(props.items);
   const statesKey = (props.filterStates ?? []).join(",");
   const deliverKey = props.deliverToUserId ?? "";
+  const promoKey = `${props.referralCode ?? ""}|${props.useBucks ? 1 : 0}`;
+  // Bucks cover the whole order → no card form; place it with Bucks instead.
+  const [coveredByBucks, setCoveredByBucks] = useState(false);
+  const checkoutBody = JSON.stringify({
+    items: props.items,
+    filterStates: props.filterStates,
+    deliverToUserId: props.deliverToUserId ?? null,
+    referralCode: props.referralCode || null,
+    useBucks: !!props.useBucks,
+  });
 
   useEffect(() => {
     if (!stripePromise) {
@@ -39,11 +52,12 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
       return;
     }
     setClientSecret(null);
+    setCoveredByBucks(false);
     setError(null);
     fetch("/api/checkout/create-payment-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: props.items, filterStates: props.filterStates, deliverToUserId: props.deliverToUserId ?? null }),
+      body: checkoutBody,
     })
       .then(async (r) => {
         if (!r.ok) {
@@ -52,10 +66,13 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
         }
         return r.json();
       })
-      .then((data) => setClientSecret(data.clientSecret))
+      .then((data) => {
+        if (data.coveredByBucks) setCoveredByBucks(true);
+        else setClientSecret(data.clientSecret);
+      })
       .catch((e) => setError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsKey, statesKey, deliverKey]);
+  }, [itemsKey, statesKey, deliverKey, promoKey]);
 
   if (error) {
     return (
@@ -67,6 +84,10 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
         </div>
       </div>
     );
+  }
+
+  if (coveredByBucks) {
+    return <BucksOnlyForm body={checkoutBody} onSuccess={props.onSuccess} />;
   }
 
   if (!clientSecret || !stripePromise) {
@@ -157,6 +178,55 @@ function InnerForm({ onSuccess }: { onSuccess: () => void }) {
           </>
         ) : (
           "Place order"
+        )}
+      </Button>
+    </div>
+  );
+}
+
+/** Advertisely Bucks Marketing Campaign (draft): the order is fully paid with Bucks. */
+function BucksOnlyForm({ body, onSuccess }: { body: string; onSuccess: () => void }) {
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function place() {
+    setProcessing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/checkout/bucks-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? "Couldn't place the order");
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+        Your Advertisely Bucks cover this whole order — no card needed.
+      </div>
+      {error && (
+        <p className="text-xs text-rose-600 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          {error}
+        </p>
+      )}
+      <Button onClick={place} disabled={processing} className="w-full" size="lg">
+        {processing ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Placing order…
+          </>
+        ) : (
+          "Place order with Bucks"
         )}
       </Button>
     </div>
