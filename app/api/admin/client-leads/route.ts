@@ -113,7 +113,8 @@ export async function GET(req: NextRequest) {
     totalOrders: orders.length,
     totalLeadsPurchased: orders.reduce((sum, o) => sum + o.quantity, 0),
     totalLeadsDelivered: leads.length,
-    lifetimeSpendCents: orders.reduce((sum, o) => sum + o.totalCents, 0),
+    // Cash only — anything paid with Advertisely Bucks isn't spend/revenue.
+    lifetimeSpendCents: orders.reduce((sum, o) => sum + Math.max(0, o.totalCents - o.bucksAppliedCents), 0),
     purchasedStates,
   };
 
@@ -131,6 +132,7 @@ export async function GET(req: NextRequest) {
       filterIncomeMin: o.filterIncomeMin,
       pricePerLeadCents: o.pricePerLeadCents,
       totalCents: o.totalCents,
+      bucksAppliedCents: o.bucksAppliedCents,
       stripePaymentIntentId: o.stripePaymentIntentId,
       createdAt: o.createdAt,
       fulfilledAt: o.fulfilledAt,

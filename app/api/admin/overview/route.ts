@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest) {
     prisma.lead.count({ where: { assignedUserId: null } }),
     prisma.lead.count({ where: { assignedUserId: { not: null } } }),
     prisma.order.findMany({
-      select: { userId: true, totalCents: true, status: true, createdAt: true },
+      select: { userId: true, totalCents: true, bucksAppliedCents: true, status: true, createdAt: true },
     }),
     prisma.user.findMany({
       select: { id: true, name: true, email: true, agency: true, role: true },
@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest) {
   const byUser = new Map<string, { spend: number; last: Date | null; delivered: boolean }>();
   for (const o of orders) {
     const cur = byUser.get(o.userId) ?? { spend: 0, last: null, delivered: false };
-    cur.spend += o.totalCents;
+    cur.spend += Math.max(0, o.totalCents - o.bucksAppliedCents); // cash only — Bucks aren't revenue
     if (!cur.last || o.createdAt > cur.last) cur.last = o.createdAt;
     if (o.status === "DELIVERED" || o.status === "DELIVERING") cur.delivered = true;
     byUser.set(o.userId, cur);

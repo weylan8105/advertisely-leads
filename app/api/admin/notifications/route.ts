@@ -56,7 +56,7 @@ export async function GET(_req: NextRequest) {
       id: `order_${o.id}`,
       type: "purchase" as const,
       title: "New lead purchase",
-      body: `${o.user?.agency || o.user?.name || o.user?.email || "A client"} ordered ${o.quantity}× ${pkgName(o.packageId)} (${money(o.totalCents)})`,
+      body: `${o.user?.agency || o.user?.name || o.user?.email || "A client"} ordered ${o.quantity}× ${pkgName(o.packageId)} (${money(Math.max(0, o.totalCents - o.bucksAppliedCents))}${o.bucksAppliedCents > 0 ? ` cash + ${money(o.bucksAppliedCents)} Bucks` : ""})`,
       at: o.createdAt,
       href: "/admin?tab=accounts",
     })),

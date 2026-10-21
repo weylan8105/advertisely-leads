@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
     take: 100,
     select: {
-      id: true, userId: true, deliverToUserId: true, packageId: true, quantity: true, totalCents: true,
+      id: true, userId: true, deliverToUserId: true, packageId: true, quantity: true, totalCents: true, bucksAppliedCents: true,
       status: true, filterStates: true, createdAt: true, fulfilledAt: true,
     },
   });

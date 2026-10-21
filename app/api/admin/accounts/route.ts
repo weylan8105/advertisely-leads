@@ -35,7 +35,7 @@ export async function GET() {
     // Total spend + most-recent order date (aggregated across all their orders).
     prisma.order.groupBy({
       by: ["userId"],
-      _sum: { totalCents: true },
+      _sum: { totalCents: true, bucksAppliedCents: true },
       _max: { createdAt: true },
     }),
     // Every order — the progress bar sums the COMBINED total across all of a
@@ -64,7 +64,8 @@ export async function GET() {
   const spendByUser: Record<string, number> = {};
   const lastOrderByUser: Record<string, Date | null> = {};
   for (const o of orderAgg) {
-    spendByUser[o.userId] = o._sum.totalCents ?? 0;
+    // Cash only — anything paid with Advertisely Bucks isn't revenue.
+    spendByUser[o.userId] = Math.max(0, (o._sum.totalCents ?? 0) - (o._sum.bucksAppliedCents ?? 0));
     lastOrderByUser[o.userId] = o._max.createdAt ?? null;
   }
   // ALL orders per user — progress is the COMBINED total across every order a

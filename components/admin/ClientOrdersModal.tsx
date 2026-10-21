@@ -14,6 +14,7 @@ interface AdminOrder {
   quantity: number;
   delivered: number;
   totalCents: number;
+  bucksAppliedCents: number;
   status: "PENDING" | "PROCESSING" | "DELIVERING" | "DELIVERED" | "REFUNDED";
   open: boolean;
   filterStates: string[];
@@ -128,7 +129,8 @@ export function ClientOrdersModal({
                       <div className="text-sm font-semibold">{o.packageName}</div>
                       <div className="text-[11px] text-muted-foreground">
                         {new Date(o.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                        {" · "}{formatCurrency(o.totalCents / 100)}
+                        {" · "}{formatCurrency(Math.max(0, o.totalCents - o.bucksAppliedCents) / 100)}
+                        {o.bucksAppliedCents > 0 && <> cash + {formatCurrency(o.bucksAppliedCents / 100)} Bucks</>}
                         {o.boughtBy && <> · bought by {o.boughtBy}</>}
                         {o.routedTo && <> · delivers to {o.routedTo}</>}
                         <span className="font-mono"> · #{o.id.slice(-6)}</span>
