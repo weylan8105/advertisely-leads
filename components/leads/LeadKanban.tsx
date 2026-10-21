@@ -4,6 +4,7 @@ import { Phone, Mail, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { Lead, LeadStatus } from "@/types";
 import { formatDate } from "@/lib/utils";
+import { stateName, stateCode } from "@/data/states";
 
 const COLUMNS: { id: LeadStatus; label: string; color: string }[] = [
   { id: "New", label: "New", color: "bg-brand-red/15 text-brand-red" },
@@ -38,7 +39,7 @@ export function LeadKanban({ leads }: { leads: Lead[] }) {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-medium text-sm leading-tight">{lead.name}</div>
-                      <span className="text-[10px] text-muted-foreground">{lead.state}</span>
+                      <span className="text-[10px] text-muted-foreground" title={lead.state ? stateName(stateCode(lead.state) ?? lead.state ?? "") : undefined}>{lead.state}</span>
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {lead.occupation}

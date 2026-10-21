@@ -54,7 +54,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
-import { AVAILABLE_STATES, US_STATES, stateName } from "@/data/states";
+import { AVAILABLE_STATES, US_STATES, stateName, stateCode } from "@/data/states";
 
 interface LeadTableProps {
   leads: Lead[];
@@ -103,7 +103,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
     return leads.filter((l) => {
       const matchesSearch =
         !search ||
-        [l.name, l.email, l.phone, l.state, l.occupation, l.id, ...(l.tags ?? [])]
+        [l.name, l.email, l.phone, l.state, l.state ? stateName(stateCode(l.state) ?? l.state) : "", l.occupation, l.id, ...(l.tags ?? [])]
           .join(" ")
           .toLowerCase()
           .includes(search.toLowerCase());
@@ -494,7 +494,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                     <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
                   </button>
                 </TableCell>
-                <TableCell className="py-1.5 text-sm whitespace-nowrap">{lead.state}{lead.zip ? ` ${lead.zip}` : ""}</TableCell>
+                <TableCell className="py-1.5 text-sm whitespace-nowrap" title={lead.state ? stateName(stateCode(lead.state) ?? lead.state ?? "") : undefined}>{lead.state}{lead.zip ? ` ${lead.zip}` : ""}</TableCell>
                 <TableCell className="py-1.5">
                   <span
                     className={cn(

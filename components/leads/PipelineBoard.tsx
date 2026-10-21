@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
-import { localTimeForState } from "@/data/states";
+import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
 
 // Compact money for stage totals / card value (e.g. $6,000 or $141,832).
@@ -114,7 +114,7 @@ export function PipelineBoard({
     if (!words.length) return leads;
     return leads.filter((l) => {
       const notes = (l.notes ?? []).map((n) => String((n as { body?: unknown }).body ?? "")).join(" ");
-      const hay = [l.name, l.email, l.phone, l.state, l.zip, l.occupation, l.leadTypeLabel, l.source, notes]
+      const hay = [l.name, l.email, l.phone, l.state, l.state ? stateName(stateCode(l.state) ?? l.state) : "", l.zip, l.occupation, l.leadTypeLabel, l.source, notes]
         .filter(Boolean).join(" ").toLowerCase();
       const phoneDigits = (l.phone || "").replace(/\D/g, "");
       return words.every((w) => {
@@ -403,7 +403,7 @@ export function PipelineBoard({
 
                             <div className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
                               <MapPin className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate">
+                              <span className="truncate" title={lead.state ? stateName(stateCode(lead.state) ?? lead.state ?? "") : undefined}>
                                 {lead.state}{lead.zip ? ` ${lead.zip}` : ""}
                                 {local ? ` · ${local}` : ""}
                               </span>

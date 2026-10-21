@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
-import { localTimeForState } from "@/data/states";
+import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
@@ -132,7 +132,7 @@ export function LeadDetailModal({
     [
       ["Phone", lead.phone],
       ["Email", lead.email],
-      ["State", lead.state],
+      ["State", lead.state ? `${stateName(stateCode(lead.state) ?? lead.state ?? "")} (${stateCode(lead.state) ?? lead.state})` : ""],
       ["ZIP", lead.zip || ""],
       ["Age", lead.ageRange || (lead.age ? String(lead.age) : "")],
       ["Income", lead.income ? formatCurrency(lead.income) : ""],
@@ -336,7 +336,8 @@ export function LeadDetailModal({
                   <Mail className="h-3.5 w-3.5" /> {lead.email} <CopyMark k="email" />
                 </button>
               )}
-              <button type="button" onClick={() => copy(place, "place")} title="Click to copy state/ZIP"
+              <button type="button" onClick={() => copy(place, "place")}
+                title={`${lead.state ? stateName(stateCode(lead.state) ?? lead.state ?? "") + " · " : ""}Click to copy state/ZIP`}
                 className="group/cp inline-flex items-center gap-1 rounded hover:text-brand-red">
                 <MapPin className="h-3.5 w-3.5" /> {place}
                 {local ? ` · ${local} local` : ""} <CopyMark k="place" />
