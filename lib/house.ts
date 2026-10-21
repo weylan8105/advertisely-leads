@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
-import { IUL_POOL_IDS } from "@/data/packages";
+import { IUL_POOL_IDS, findPackage } from "@/data/packages";
+import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -72,6 +73,34 @@ export async function assignOverflowLeadTo(
   await prisma.leadActivity.create({
     data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to admin CRM — ${reason}.` },
   });
+  // Email the admin the same lead-delivery email clients get, so round-robin
+  // leads don't land silently. Never block routing on an email failure.
+  if (isEmailConfigured) {
+    try {
+      const [full, admin] = await Promise.all([
+        prisma.lead.findUnique({
+          where: { id: leadId },
+          select: { name: true, phone: true, email: true, state: true, occupation: true, age: true, income: true, intentReason: true, packageId: true },
+        }),
+        prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } }),
+      ]);
+      if (full && admin?.email) {
+        await sendLeadDeliveryEmail({
+          agentEmail: admin.email,
+          agentName: admin.name ?? "there",
+          leadCount: 1,
+          packageName: findPackage(full.packageId)?.name ?? "IUL",
+          orderId: leadId,
+          leads: [{
+            name: full.name, phone: full.phone, email: full.email, state: full.state,
+            occupation: full.occupation, age: full.age, income: full.income, intentReason: full.intentReason,
+          }],
+        });
+      }
+    } catch (e) {
+      console.warn("Overflow lead email failed:", e);
+    }
+  }
   return true;
 }
 
