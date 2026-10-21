@@ -11,11 +11,13 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/pnl — the caller's Profit & Loss.
  * Owners/admins see their whole org; agents see their own book.
+ * ?scope=me forces the caller's own book (leads assigned to them, orders they
+ * bought) — used by the dashboard's "Your numbers", which is always personal.
  *
  * Net = commission (annual premium logged on sold policies) + buyback − lead spend.
  * Lead spend = what was paid for leads (order totals; $0 for free self-assigned).
  */
-export async function GET() {
+export async function GET(req: Request) {
   if (!isDatabaseConfigured || !prisma) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
@@ -23,8 +25,9 @@ export async function GET() {
   const userId = (session?.user as any)?.id;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const personal = new URL(req.url).searchParams.get("scope") === "me";
   const ctx = await ensureOrgContext(userId);
-  const manage = !!ctx && canManageTeam(ctx.role);
+  const manage = !personal && !!ctx && canManageTeam(ctx.role);
   const leadWhere = manage ? { organizationId: ctx!.organizationId } : { assignedUserId: userId };
   const orderWhere = manage ? { organizationId: ctx!.organizationId } : { userId };
 

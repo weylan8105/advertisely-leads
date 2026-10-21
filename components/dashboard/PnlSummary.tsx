@@ -23,7 +23,7 @@ export function PnlSummary() {
   const [s, setS] = useState<Summary | null>(null);
 
   useEffect(() => {
-    fetch("/api/pnl")
+    fetch("/api/pnl?scope=me")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setS(d.summary))
       .catch(() => {});
@@ -45,7 +45,7 @@ export function PnlSummary() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-[11px] font-semibold tracking-wide uppercase text-brand-red">Your numbers</div>
-          <p className="text-xs text-muted-foreground">All-time performance across every order.</p>
+          <p className="text-xs text-muted-foreground">Your personal all-time performance: leads assigned to you and orders you bought.</p>
         </div>
         <Link href="/pnl" className="text-sm text-brand-red hover:underline inline-flex items-center gap-1">
           Full P&amp;L <ArrowRight className="h-3.5 w-3.5" />
