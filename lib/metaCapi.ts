@@ -59,7 +59,9 @@ type EventOpts = {
   eventSourceUrl?: string;
 };
 
-async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<{ ok: boolean; skipped?: string; status?: number }> {
+type SendResult = { ok: boolean; skipped?: string; status?: number; error?: string };
+
+async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResult> {
   if (!isMetaCapiConfigured) return { ok: false, skipped: "META_CAPI_ACCESS_TOKEN not set" };
 
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
@@ -112,26 +114,49 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<{ ok: boo
       `https://graph.facebook.com/${GRAPH_VERSION}/${PIXEL_ID}/events?access_token=${encodeURIComponent(ACCESS_TOKEN)}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
     );
-    return { ok: res.ok, status: res.status };
-  } catch {
-    return { ok: false, skipped: "request failed" };
+    if (res.ok) return { ok: true, status: res.status };
+    // Keep Meta's reason (e.g. an expired token) — it was silently dropped before.
+    const body = await res.text().catch(() => "");
+    return { ok: false, status: res.status, error: body.slice(0, 300) };
+  } catch (e) {
+    return { ok: false, skipped: "request failed", error: (e as Error).message.slice(0, 300) };
   }
 }
 
-/** Fire the server-side "Lead" event for a freshly-created quiz lead. */
-export async function fireMetaLeadEvent(lead: LeadLike): Promise<void> {
-  if (!isMetaCapiConfigured) return;
+/**
+ * Fire the server-side "Lead" event for a freshly-created quiz lead, and record
+ * the outcome (internal FunnelEvent, source "meta-capi" — never shown in the
+ * UI or the funnel analytics) so we can see from the DB whether Meta got it.
+ */
+export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
     ? (lead.rawFormData as Record<string, string>)
     : {}) as Record<string, string>;
-  // Only worth sending for ad-sourced leads (need a click id / pixel cookie).
-  if (!lead.fbclid && !raw["fbc"] && !raw["fbp"]) return;
-  await sendMetaEvent(lead, {
-    eventName: raw["event_name"] || "Lead",
-    eventId: raw["event_id"] || `lead_${lead.id}`, // shared with the browser pixel = deduped
-    actionSource: "website",
-    eventSourceUrl: raw["landing_url"] || undefined,
-  }).catch(() => {});
+  let result: SendResult;
+  if (!lead.fbclid && !raw["fbc"] && !raw["fbp"]) {
+    // Only worth sending for ad-sourced leads (need a click id / pixel cookie).
+    result = { ok: false, skipped: "not an ad click (no fbclid/fbc/fbp)" };
+  } else {
+    result = await sendMetaEvent(lead, {
+      eventName: raw["event_name"] || "Lead",
+      eventId: raw["event_id"] || `lead_${lead.id}`, // shared with the browser pixel = deduped
+      actionSource: "website",
+      eventSourceUrl: raw["landing_url"] || undefined,
+    }).catch((e) => ({ ok: false, skipped: "exception", error: String(e).slice(0, 300) }));
+  }
+  if (!result.ok) console.warn(`[meta-capi] lead ${lead.id} not sent: ${result.skipped ?? ""} ${result.status ?? ""} ${result.error ?? ""}`);
+  await prisma?.funnelEvent
+    .create({
+      data: {
+        sessionId: raw["session_id"] || `lead:${lead.id}`,
+        type: "meta_capi",
+        source: "meta-capi",
+        step: result.status ?? 0,
+        cta: (result.ok ? `ok lead:${lead.id}` : `${result.skipped ?? "error"} lead:${lead.id} ${result.error ?? ""}`).slice(0, 190),
+      },
+    })
+    .catch(() => {});
+  return result;
 }
 
 /** Fire the server-side "Purchase" event when a lead is marked Issued PAID. */

@@ -91,11 +91,18 @@ export async function createInboundLead(
     return { status: "failed", error: (err as Error).message.slice(0, 200) };
   }
 
+  // Server-side Meta "Lead" event (deduped with the browser pixel). Sent first and
+  // on its own, so a failure in order assignment below can never stop Meta from
+  // hearing about the lead.
+  try {
+    await fireMetaLeadEvent(record);
+  } catch (err) {
+    console.warn(`[meta-capi] lead ${record.id}: ${(err as Error).message}`);
+  }
+
   try {
     // Assign to an open order immediately (fires email + Sheets sync).
     await tryFulfillForNewLead(record.id);
-    // Server-side Meta "Lead" event (deduped with the browser pixel).
-    await fireMetaLeadEvent(record);
   } catch (err) {
     return { status: "created", leadId: record.id, error: (err as Error).message.slice(0, 200) };
   }
