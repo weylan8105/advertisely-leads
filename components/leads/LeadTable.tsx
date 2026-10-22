@@ -18,6 +18,8 @@ import {
   X,
   Copy,
   Plus,
+  Gem,
+  Loader2,
 } from "lucide-react";
 import {
   Table,
@@ -97,7 +99,14 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d) { setMembers(d.members ?? []); setCanAssign(!!d.canManage); } })
       .catch(() => {});
+    fetch("/api/goldmine")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setGoldmineOn(!!(d && d.enabled && d.canManage)))
+      .catch(() => {});
   }, []);
+  // Team owners/admins with Goldmine on can move selected leads into it.
+  const [goldmineOn, setGoldmineOn] = useState(false);
+  const [movingGm, setMovingGm] = useState(false);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -267,6 +276,32 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
     }
   }
 
+  // Move every selected lead from my pipeline into the team's Goldmine.
+  async function moveSelectedToGoldmine() {
+    if (selected.size === 0) return;
+    const n = selected.size;
+    if (!window.confirm(`Move ${n} lead${n === 1 ? "" : "s"} into your team's Goldmine? Your team will be able to work them, and they start over at the first Goldmine stage. Sold leads are skipped.`)) return;
+    setMovingGm(true);
+    try {
+      const res = await fetch("/api/leads/move-to-goldmine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: selectedIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { addToast("error", data.error || "Could not move the selected leads."); return; }
+      const moved = data.count ?? n;
+      addToast("success", `${moved} lead${moved === 1 ? "" : "s"} moved to Goldmine.`);
+      if (data.skipped) addToast("error", `${data.skipped} skipped (sold, or not in your pipeline).`);
+      setSelected(new Set());
+      setTimeout(() => window.location.reload(), 800);
+    } catch {
+      addToast("error", "Failed to move the selected leads.");
+    } finally {
+      setMovingGm(false);
+    }
+  }
+
   // Bulk (re)assign every selected lead to a downline agent, or unassign them
   // all, in one request. Replacements are intentionally one-at-a-time only.
   async function assignBulk(userId: string | null, agentName: string) {
@@ -376,6 +411,18 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
             </Select>
           </div>
           <div className="flex gap-2">
+            {selected.size > 0 && goldmineOn && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={moveSelectedToGoldmine}
+                disabled={movingGm}
+                className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              >
+                {movingGm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gem className="h-4 w-4" />}
+                Move to Goldmine ({selected.size})
+              </Button>
+            )}
             {selected.size > 0 && canAssign && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

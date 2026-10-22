@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -185,6 +185,40 @@ export function LeadDetailModal({
       setAssignMsg({ ok: false, text: "Couldn't assign the lead." });
     } finally {
       setAssigning(false);
+    }
+  }
+
+  // Move this lead from my own pipeline into the team's shared Goldmine
+  // (team owners/admins, only when Goldmine is on, never for sold leads).
+  const [goldmineOn, setGoldmineOn] = useState(false);
+  const [movingGm, setMovingGm] = useState(false);
+  useEffect(() => {
+    if (context === "admin") return;
+    fetch("/api/goldmine")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setGoldmineOn(!!(d && d.enabled && d.canManage)))
+      .catch(() => {});
+  }, [context]);
+  const canMoveToGoldmine =
+    goldmineOn && context !== "admin" && lead.pipeline !== "goldmine" && lead.pipelineStage !== "issued-paid";
+  async function moveToGoldmine() {
+    if (!window.confirm(`Move ${lead.name} into your team's Goldmine? Your team will be able to work this lead, and it starts over at the first Goldmine stage.`)) return;
+    setMovingGm(true);
+    setAssignMsg(null);
+    try {
+      const res = await fetch("/api/leads/move-to-goldmine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: [lead.id] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setAssignMsg({ ok: false, text: data.error || "Couldn't move the lead to Goldmine." }); return; }
+      setAssignMsg({ ok: true, text: "Moved to Goldmine." });
+      onAssigned?.(lead.id, "", "Goldmine");
+    } catch {
+      setAssignMsg({ ok: false, text: "Couldn't move the lead to Goldmine." });
+    } finally {
+      setMovingGm(false);
     }
   }
 
@@ -390,6 +424,17 @@ export function LeadDetailModal({
                   <span className={cn("mt-1 text-[11px]", assignMsg.ok ? "text-emerald-600" : "text-rose-600")}>{assignMsg.text}</span>
                 )}
               </div>
+            )}
+            {canMoveToGoldmine && (
+              <button
+                onClick={moveToGoldmine}
+                disabled={movingGm}
+                title="Move this lead into your team's shared Goldmine pipeline"
+                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-60"
+              >
+                {movingGm ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gem className="h-3.5 w-3.5" />}
+                Move to Goldmine
+              </button>
             )}
             {context !== "admin" && (
               <button

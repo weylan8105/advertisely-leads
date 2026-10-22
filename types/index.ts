@@ -92,6 +92,8 @@ export interface Lead {
   status: LeadStatus;
   disposition?: LeadDisposition;
   pipelineStage: string;
+  /** "main" = the agent's own board; "goldmine" = the team-shared Goldmine pool. */
+  pipeline?: "main" | "goldmine";
   /** Opportunity value (in cents) the agent assigns; shown on the card + summed per stage. */
   valueCents?: number;
   source: string;
