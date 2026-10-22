@@ -21,7 +21,8 @@ export async function GET() {
   if (!callerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
-  const where = { assignedUserId: callerId, trashedAt: null } as const;
+  // Personal pipeline only — leads moved into the team Goldmine don't count here.
+  const where = { assignedUserId: callerId, trashedAt: null, pipeline: "main" } as const;
 
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

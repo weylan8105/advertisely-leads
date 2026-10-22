@@ -57,6 +57,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `No account found for "${emailParam}"` }, { status: 404 });
     }
     where.assignedUserId = target.id;
+    // Mirror what that user sees on their own board (Goldmine leads excluded).
+    where.pipeline = "main";
   } else if (pipelineParam === "goldmine") {
     // Goldmine is a team-shared pool: every member of the org sees the same
     // aged leads and can work them. No per-agent narrowing.

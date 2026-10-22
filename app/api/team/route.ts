@@ -33,7 +33,8 @@ export async function GET() {
   // Lead counts per member within this org (active = not REPLACED).
   const leadCounts = await prisma.lead.groupBy({
     by: ["assignedUserId"],
-    where: { organizationId: ctx.organizationId, assignedUserId: { not: null }, NOT: { status: "REPLACED" } },
+    // Leads in each member's own pipeline (Goldmine leads are the team's, not theirs).
+    where: { organizationId: ctx.organizationId, assignedUserId: { not: null }, pipeline: "main", NOT: { status: "REPLACED" } },
     _count: { _all: true },
   });
   const countByUser: Record<string, number> = {};
