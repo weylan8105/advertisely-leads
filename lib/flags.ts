@@ -35,7 +35,7 @@ export const LEAD_SUBSCRIPTIONS_PUBLIC = true;
 export const HOLDBACK_TAGS_TO_HOUSE = ["american income advantage"];
 
 /**
- * Advertisely Bucks Marketing Campaign — DRAFT, NOT LIVE.
+ * Advertisely Bucks Marketing Campaign — LIVE since Oct 22, 2026.
  *
  * When true:
  *  - Fresh leads list at $66.67. Entering anyone's referral code at checkout
@@ -45,7 +45,8 @@ export const HOLDBACK_TAGS_TO_HOUSE = ["american income advantage"];
  *  - Platform ADMINs neither earn nor spend Bucks.
  *  - The Bucks balance shows in the top bar; /rewards manages the code.
  *
- * Before flipping on: run prisma/sql/referral_program.sql on prod, then
- * scripts/backfill-referral-codes.mjs. See lib/referral.ts.
+ * Schema (prisma/sql/referral_program.sql) and code backfill
+ * (scripts/backfill-referral-codes.mjs) were applied at launch. Setting this
+ * back to false hides the program and restores the $60 list price.
  */
-export const REFERRAL_PROGRAM_ENABLED = false;
+export const REFERRAL_PROGRAM_ENABLED = true;
