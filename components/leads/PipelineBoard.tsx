@@ -67,6 +67,41 @@ export function PipelineBoard({
   const cols = stages && stages.length ? stages : PIPELINE_STAGES;
   const colIds = new Set(cols.map((s) => s.id));
   const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  // Edge auto-scroll while dragging a card: hold the pointer near (or past) the
+  // board's left/right edge — including over the sidebar or off the far side of
+  // the screen — and the board keeps scrolling that way, faster nearer the edge.
+  const boardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!draggingId) return;
+    const EDGE = 140; // px from the board's visible edge where scrolling starts
+    const MAX_SPEED = 28; // px per frame at the very edge
+    let x: number | null = null;
+    let raf = 0;
+    const onDragOver = (e: DragEvent) => {
+      if (e.clientX === 0 && e.clientY === 0) return; // spurious event some browsers fire at drag end
+      x = e.clientX;
+    };
+    const tick = () => {
+      const el = boardRef.current;
+      if (el && x !== null) {
+        const r = el.getBoundingClientRect();
+        const left = Math.max(r.left, 0);
+        const right = Math.min(r.right, window.innerWidth);
+        let dx = 0;
+        if (x < left + EDGE) dx = -MAX_SPEED * Math.min(1, (left + EDGE - x) / EDGE);
+        else if (x > right - EDGE) dx = MAX_SPEED * Math.min(1, (x - (right - EDGE)) / EDGE);
+        if (dx) el.scrollLeft += dx;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    document.addEventListener("dragover", onDragOver);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      document.removeEventListener("dragover", onDragOver);
+      cancelAnimationFrame(raf);
+    };
+  }, [draggingId]);
   const [overStage, setOverStage] = useState<string | null>(null);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [callbackLead, setCallbackLead] = useState<Lead | null>(null);
@@ -231,7 +266,7 @@ export function PipelineBoard({
           </span>
         )}
       </div>
-      <div className="overflow-x-auto pb-4 scrollbar-thin">
+      <div ref={boardRef} className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
           {cols.map((stage) => {
             const colLeads = shown.filter((l) => {
