@@ -200,6 +200,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .plinks{margin-top:8px;font-size:12.5px;color:var(--onnavy-dim)}
   .plinks a,footer .flinks a{text-decoration:underline;text-underline-offset:2px}
   .qnav{margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  /* Contact step: drop the repeated intro + tighten spacing so "Send My Quote Request"
+     sits on the first phone screen. (Consent box styling intentionally untouched.) */
+  #quiz.on-contact #qIntroH,#quiz.on-contact #qIntroB,#quiz.on-contact #qIntroR{display:none}
+  #quiz.on-contact .prog{margin-top:8px}
+  #quiz.on-contact .qstep{margin-top:16px}
+  #quiz.on-contact .qstep .qq{font-size:20px}
+  #quiz.on-contact .cfields{margin-top:6px}
+  #quiz.on-contact .cfields label{margin-top:6px}
+  /* Each box's placeholder says what goes in it; keep the labels for screen readers only. */
+  #quiz.on-contact .cfields>label,#quiz.on-contact #zipWrap>label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  #quiz.on-contact .cfields .qinput{margin-top:10px}
+  #quiz.on-contact .fieldmsg{min-height:0;margin-top:3px}
+  #quiz.on-contact .qzip{margin-top:10px}
+  #quiz.on-contact .qnav{margin-top:14px}
   .qback{background:none;border:1px solid var(--navy-line);color:var(--onnavy-dim);border-radius:10px;padding:12px 20px;font-family:var(--font-head);font-weight:700;cursor:pointer;font-size:14px;min-height:48px}
   .qback:hover{color:var(--onnavy);border-color:#3A4E66}
   .qcont{flex:1}
@@ -322,7 +336,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
    Runs before the hero paints (no flash). Ad visitors are bucketed by their click id, so the
    same ad click always sees the same version; others are bucketed once per tab session.
    QA override: add ?abv=A or ?abv=B to the URL. */
-var AB_SPLIT_B = 0.5;
+var AB_SPLIT_B = 1; // Oct 23, 2026: B won (14 vs 6 leads on ~268 ad visitors each) — test ended, everyone gets B.
 var AB_KEY = "abca_ab_tapfirst";
 // ABCA_AB_TAG is what the tracking beacons record: "A"/"B" only for randomly assigned visitors
 // while the test runs. Forced ?abv= (QA) visits send "QA" (stored as nothing), and nothing is
@@ -779,12 +793,19 @@ function heroZip(e, form){
   return false;
 }
 
+// Contact step: reveal the ZIP field when the visitor wants to change the ZIP shown.
+function showZipField(){
+  const k=document.getElementById('zipKnown'); if(k) k.style.display='none';
+  const w=document.getElementById('zipWrap'); if(w) w.style.display='flex';
+  const z=document.getElementById('cZip'); if(z){ z.focus(); try{ z.select(); }catch(e){} }
+}
 function render(){
   renderToken++;
   navLock=false;
   document.getElementById('progBar').style.width = Math.round(((step+1)/(STEPS.length+1))*100) + "%";
   const s = STEPS[step];
   const host = document.getElementById('qstep');
+  document.getElementById('quiz').classList.toggle('on-contact', !!s.contact);
   let html = `<div class="qq">${s.q}</div>` + (s.sub?`<div class="qsub">${s.sub}</div>`:"");
   // The screen right after the ZIP was entered shows it with an easy way back to fix it
   // (auto-advance moves on as soon as 5 digits are typed, typos included).
@@ -843,11 +864,14 @@ function render(){
     const ai=document.getElementById('ageInput'); ai.focus();
     ai.addEventListener('keydown',e=>{ if(e.key==='Enter') submitAge(); });
   } else if(s.contact){
+    // We already have a valid ZIP (hero or ZIP step) -> show it as a line, not a second field.
+    const zipKnown = /^\d{5}$/.test(answers.zip||"");
     html += `<div class="cfields">
         <label for="cName">Full name</label><input class="qinput" id="cName" autocomplete="name" placeholder="First and last name" value="${(answers.name||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mName" role="alert"></div>
         <label for="cPhone">Phone number (required)</label><input class="qinput" id="cPhone" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" value="${(answers.phone||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mPhone" role="alert"></div>
         <label for="cEmail">Email address</label><input class="qinput" id="cEmail" type="email" autocomplete="email" placeholder="you@email.com" value="${(answers.email||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mEmail" role="alert"></div>
-        <label for="cZip">ZIP code (required)</label><input class="qinput" id="cZip" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="5-digit ZIP" value="${(answers.zip||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mZip" role="alert"></div>
+        ${zipKnown ? `<div class="qzip" id="zipKnown">ZIP code: <b>${answers.zip}</b>${STATE_NAME[answers.state] ? " ("+STATE_NAME[answers.state]+")" : ""} <button type="button" class="qlink" onclick="showZipField()">Change</button></div>` : ""}
+        <div id="zipWrap" style="display:${zipKnown ? "none" : "flex"};flex-direction:column"><label for="cZip">ZIP code (required)</label><input class="qinput" id="cZip" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="5-digit ZIP" value="${(answers.zip||'').replace(/"/g,'&quot;')}"><div class="fieldmsg" id="mZip" role="alert"></div></div>
         <div class="hpf" aria-hidden="true"><label for="cHp">Leave this field empty</label><input id="cHp" name="hp_check" type="text" tabindex="-1" autocomplete="off"></div>
       </div>
       <label class="consent" id="consentBox"><input type="checkbox" id="cConsent" aria-label="Consent to be contacted">
