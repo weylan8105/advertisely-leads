@@ -44,12 +44,13 @@ export const ANNOUNCEMENTS: Announcement[] = [
     ? [
         {
           key: "advertisely-bucks-2026-10",
-          title: "Introducing Advertisely Bucks 💵",
-          body: "You now have your own referral code. Share it: your friends save on fresh leads, and you earn free leads.",
+          title: "Get free leads with Advertisely Bucks 💵",
+          body: "You now have your own referral code. Share it with other agents and earn free leads every time they order.",
           highlights: [
-            `Anyone who orders with your code gets ${pctOff}% off fresh leads: ${usd(freshWithCode)} per lead instead of ${usd(freshList)}.`,
-            `You earn $${perLeadEarn} in Advertisely Bucks for every fresh lead they buy. 25 leads = $${25 * perLeadEarn}.`,
-            "Spend your Bucks on your own lead orders. There's no limit on earning or spending.",
+            `Every fresh lead someone buys with your code puts $${perLeadEarn} in Advertisely Bucks in your account. One 25-lead order = $${25 * perLeadEarn} toward your next leads.`,
+            "Pay for your own lead orders with Bucks. Earn enough and your next order is free, no card needed.",
+            "No limit. The more agents you share your code with, the more free leads you get.",
+            `They win too: your code gets them ${pctOff}% off fresh leads (${usd(freshWithCode)} instead of ${usd(freshList)}).`,
           ],
           ctaLabel: "Get my code",
           ctaHref: "/rewards",

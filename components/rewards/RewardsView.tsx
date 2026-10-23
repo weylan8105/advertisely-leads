@@ -71,8 +71,8 @@ export function RewardsView() {
     <div>
       <PageHeader
         eyebrow="Advertisely Bucks"
-        title="Your code & Bucks"
-        description={`Anyone who orders with your code gets ${pct}% off fresh leads. You earn ${perLead} in Advertisely Bucks for every fresh lead they buy, and Bucks pay for your own lead orders. No limits on either.`}
+        title="Earn free leads"
+        description={`Share your code with other agents. Every fresh lead they buy with it earns you ${perLead} in Advertisely Bucks, and Bucks pay for your own lead orders, so you get leads for free. They get ${pct}% off fresh leads. No limits on earning or spending.`}
       />
 
       {error ? (
