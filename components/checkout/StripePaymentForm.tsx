@@ -9,6 +9,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { Lock, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/components/layout/ThemeToggle";
 
 // Initialize once outside the component (Stripe.js best practice).
 const stripePublishableKey =
@@ -28,6 +29,7 @@ interface StripePaymentFormProps {
 }
 
 export function StripePaymentForm(props: StripePaymentFormProps) {
+  const [theme] = useTheme();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const itemsKey = JSON.stringify(props.items);
@@ -105,13 +107,13 @@ export function StripePaymentForm(props: StripePaymentFormProps) {
       options={{
         clientSecret,
         appearance: {
-          theme: "stripe",
+          theme: theme === "dark" ? "night" : "stripe",
           variables: {
             colorPrimary: "#dc2626",
-            colorBackground: "#ffffff",
-            colorText: "#0f172a",
-            colorTextSecondary: "#64748b",
-            colorTextPlaceholder: "#94a3b8",
+            colorBackground: theme === "dark" ? "#111827" : "#ffffff",
+            colorText: theme === "dark" ? "#f1f5f9" : "#0f172a",
+            colorTextSecondary: theme === "dark" ? "#94a3b8" : "#64748b",
+            colorTextPlaceholder: theme === "dark" ? "#64748b" : "#94a3b8",
             colorDanger: "#dc2626",
             colorIconCardError: "#dc2626",
             borderRadius: "8px",

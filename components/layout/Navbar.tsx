@@ -7,6 +7,7 @@ import { Logo } from "./Logo";
 import { AccountMenu } from "./AccountMenu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 const navItems = [
   { href: "/marketplace", label: "Marketplace" },
@@ -42,6 +43,7 @@ export function Navbar() {
           </nav>
         </div>
         <div className="hidden md:flex items-center gap-3">
+          <ThemeToggle />
           {isAuthed ? (
             <>
               <Link href="/dashboard">
@@ -62,6 +64,7 @@ export function Navbar() {
             </>
           )}
         </div>
+        <ThemeToggle className="md:hidden ml-auto mr-1" />
         <button
           className="md:hidden p-2 text-foreground"
           onClick={() => setOpen(!open)}

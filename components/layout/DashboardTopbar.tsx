@@ -18,6 +18,7 @@ import { BucksPill } from "@/components/layout/BucksPill";
 import { currentUser } from "@/data/user";
 import { initials } from "@/lib/utils";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 export function DashboardTopbar() {
   const { data: session } = useSession();
@@ -41,6 +42,7 @@ export function DashboardTopbar() {
         </div>
 
         <div className="flex items-center gap-3 ml-auto">
+          <ThemeToggle />
           <NotificationBell />
           <BucksPill />
           <DropdownMenu>
