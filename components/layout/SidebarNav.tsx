@@ -14,7 +14,9 @@ import {
   Sparkles,
   LifeBuoy,
   Gem,
+  Coins,
 } from "lucide-react";
+import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +45,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
   {
     title: "Account",
     items: [
+      ...(REFERRAL_PROGRAM_ENABLED ? [{ href: "/rewards", label: "Rewards & Bucks", icon: Coins }] : []),
       { href: "/settings", label: "Settings & Integrations", icon: Settings },
     ],
   },

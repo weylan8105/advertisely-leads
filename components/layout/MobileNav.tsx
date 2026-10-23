@@ -18,7 +18,9 @@ import {
   Menu,
   X,
   LogOut,
+  Coins,
 } from "lucide-react";
+import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; adminOnly?: boolean };
@@ -40,6 +42,7 @@ const ALL: Item[] = [
   { href: "/orders", label: "Orders", icon: Package },
   { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },
   { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
+  ...(REFERRAL_PROGRAM_ENABLED ? [{ href: "/rewards", label: "Rewards & Bucks", icon: Coins }] : []),
   { href: "/settings", label: "Settings & Integrations", icon: Settings },
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
 ];
