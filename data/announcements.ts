@@ -5,12 +5,15 @@
 
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { findPackage } from "@/data/packages";
-import { BUCKS_PER_REFERRED_LEAD_CENTS, priceCart } from "@/lib/referralPricing";
+import { BUCKS_PER_REFERRED_LEAD_CENTS, REFERRAL_DISCOUNT_RATE, priceCart } from "@/lib/referralPricing";
 
 // Advertisely Bucks numbers come from the live pricing so the copy never drifts.
 const freshList = findPackage("iul-fresh")?.pricePerLead ?? 0;
 const freshWithCode = priceCart([{ packageId: "iul-fresh", quantity: 1 }], { codeApplied: true }).subtotalCents / 100;
 const perLeadEarn = BUCKS_PER_REFERRED_LEAD_CENTS / 100;
+const pctOff = Math.round(REFERRAL_DISCOUNT_RATE * 100);
+// "$67" for whole dollars, "$60.30" otherwise.
+const usd = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
 
 export interface Announcement {
   key: string;
@@ -44,7 +47,7 @@ export const ANNOUNCEMENTS: Announcement[] = [
           title: "Introducing Advertisely Bucks 💵",
           body: "You now have your own referral code. Share it: your friends save on fresh leads, and you earn free leads.",
           highlights: [
-            `Anyone who orders with your code pays $${freshWithCode} per fresh lead instead of $${freshList}.`,
+            `Anyone who orders with your code gets ${pctOff}% off fresh leads: ${usd(freshWithCode)} per lead instead of ${usd(freshList)}.`,
             `You earn $${perLeadEarn} in Advertisely Bucks for every fresh lead they buy. 25 leads = $${25 * perLeadEarn}.`,
             "Spend your Bucks on your own lead orders. There's no limit on earning or spending.",
           ],

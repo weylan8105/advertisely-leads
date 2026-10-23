@@ -39,7 +39,7 @@ export const HOLDBACK_TAGS_TO_HOUSE = ["american income advantage"];
  *
  * When true:
  *  - Fresh leads list at $67. Entering anyone's referral code at checkout
- *    takes 10% off fresh leads, rounded down to the dollar — exactly $60.
+ *    takes exactly 10% off fresh leads — $60.30.
  *  - The code's owner earns $12 in Advertisely Bucks per fresh lead bought with
  *    it (no cap). Bucks pay for future lead orders, no cap either.
  *  - Platform ADMINs neither earn nor spend Bucks.

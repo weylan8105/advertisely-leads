@@ -50,8 +50,8 @@ export function priceCart(
     if (!pkg) continue;
     const list = Math.round(pkg.pricePerLead * 100);
     const discounted = opts.codeApplied && REFERRAL_PACKAGE_IDS.has(pkg.id);
-    // 10% off, rounded DOWN to a whole dollar: $67 → $60.30 → $60.00 per lead.
-    const per = discounted ? Math.floor((list * (1 - REFERRAL_DISCOUNT_RATE)) / 100) * 100 : list;
+    // Exactly 10% off: $67.00 → $60.30 per lead.
+    const per = discounted ? Math.round(list * (1 - REFERRAL_DISCOUNT_RATE)) : list;
     lines.push({ packageId: pkg.id, quantity: it.quantity, listCentsPerLead: list, centsPerLead: per, discounted });
     listCents += list * it.quantity;
     subtotalCents += per * it.quantity;
