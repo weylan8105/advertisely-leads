@@ -53,6 +53,7 @@ export function serializeLead(l: any): Lead {
     pipelineStage: l.pipelineStage ?? "new-lead",
     pipeline: l.pipeline === "goldmine" ? "goldmine" : "main",
     valueCents: l.valueCents ?? undefined,
+    stageRank: l.stageRank ?? undefined,
     source: l.source,
     tags: Array.isArray(l.tags) ? l.tags : [],
     consent: {

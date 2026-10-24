@@ -173,6 +173,9 @@ model Lead {
   status          LeadStatus    @default(NEW)
   disposition     String?
   pipelineStage   String        @default("new-lead") // CRM kanban stage id (see data/pipeline.ts)
+  // Manual position within its pipeline column (lower = higher up). Null = never
+  // placed by hand; those show first, newest on top.
+  stageRank      Float?
   // Which pipeline this lead lives in: "main" (the agent's board) or "goldmine"
   // (the team-shared aged-lead board). Aged leads auto-move main → goldmine.
   pipeline        String        @default("main")

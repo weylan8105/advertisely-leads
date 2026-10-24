@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
@@ -178,9 +178,64 @@ export function PipelineBoard({
     return () => clearInterval(t);
   }, []);
 
-  async function move(leadId: string, stageId: string) {
+  // Column order: leads never placed by hand stay on top (newest first, as loaded);
+  // below them, the order the agent dragged cards into (stageRank ascending).
+  const stageOf = (l: Lead) => (colIds.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE);
+  function orderColumn(list: Lead[]): Lead[] {
+    const loose = list.filter((l) => l.stageRank == null);
+    const placed = list.filter((l) => l.stageRank != null).sort((a, b) => (a.stageRank ?? 0) - (b.stageRank ?? 0));
+    return [...loose, ...placed];
+  }
+
+  // Where in a column the dragged card would land: the index among the OTHER cards
+  // whose vertical midpoint is below the pointer.
+  const [dropAt, setDropAt] = useState<{ stage: string; index: number } | null>(null);
+  function dropIndexFor(colEl: HTMLElement, clientY: number, dragId: string | null): number {
+    const cards = Array.from(colEl.querySelectorAll<HTMLElement>("[data-lead-card]")).filter(
+      (c) => c.dataset.leadCard !== dragId,
+    );
+    const i = cards.findIndex((c) => {
+      const r = c.getBoundingClientRect();
+      return clientY < r.top + r.height / 2;
+    });
+    return i === -1 ? cards.length : i;
+  }
+
+  // Drop a card into a column at a position: change stage if needed, then save the
+  // column's new top-to-bottom order so it stays exactly as arranged.
+  async function placeCard(leadId: string, stageId: string, index: number) {
     const lead = leads.find((l) => l.id === leadId);
-    if (!lead || lead.pipelineStage === stageId) return;
+    if (!lead) return;
+    const sameStage = stageOf(lead) === stageId;
+    // While searching only part of the column is visible, so a position can't be
+    // trusted — just change the stage.
+    const canPlace = !query.trim();
+    const column = orderColumn(leads.filter((l) => l.id !== leadId && stageOf(l) === stageId));
+    const ordered = [...column.slice(0, index), lead, ...column.slice(index)];
+    if (sameStage) {
+      if (!canPlace) return;
+      const before = orderColumn(leads.filter((l) => stageOf(l) === stageId)).map((l) => l.id).join();
+      if (before === ordered.map((l) => l.id).join()) return; // dropped where it already was
+    }
+    const ok = sameStage ? true : await move(leadId, stageId);
+    if (!ok || !canPlace) return;
+    const rank = new Map(ordered.map((l, i) => [l.id, i + 1]));
+    setLeads((cur) =>
+      cur.map((l) =>
+        rank.has(l.id) ? { ...l, stageRank: rank.get(l.id), ...(l.id === leadId ? { pipelineStage: stageId } : {}) } : l,
+      ),
+    );
+    markActive(leadId);
+    fetch("/api/leads/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage: stageId, orderedIds: ordered.map((l) => l.id) }),
+    }).catch(() => {});
+  }
+
+  async function move(leadId: string, stageId: string): Promise<boolean> {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead || lead.pipelineStage === stageId) return false;
 
     let premiumCents: number | undefined;
     if (stageId === WON_STAGE_ID) {
@@ -188,7 +243,7 @@ export function PipelineBoard({
         "Policy sold! Enter the annual premium (AP) in dollars — this feeds your Profit & Loss:",
         "",
       );
-      if (input === null) return;
+      if (input === null) return false;
       const dollars = parseFloat(input.replace(/[^0-9.]/g, ""));
       premiumCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
     }
@@ -203,9 +258,11 @@ export function PipelineBoard({
         body: JSON.stringify({ stage: stageId, ...(premiumCents != null ? { premiumCents } : {}) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Move failed");
+      return true;
     } catch (e: any) {
       setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: prev } : l)));
       alert(e.message ?? "Could not move lead");
+      return false;
     }
   }
 
@@ -269,10 +326,9 @@ export function PipelineBoard({
       <div ref={boardRef} className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
           {cols.map((stage) => {
-            const colLeads = shown.filter((l) => {
-              const s = colIds.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
-              return s === stage.id;
-            });
+            const colLeads = orderColumn(shown.filter((l) => stageOf(l) === stage.id));
+            // Index (among the column's other cards) where the red drop line shows.
+            const lineAt = draggingId && dropAt?.stage === stage.id ? dropAt.index : -1;
             const isOver = overStage === stage.id;
             return (
               <div
@@ -280,6 +336,8 @@ export function PipelineBoard({
                 onDragOver={(e) => {
                   e.preventDefault();
                   if (overStage !== stage.id) setOverStage(stage.id);
+                  const index = dropIndexFor(e.currentTarget, e.clientY, draggingId);
+                  if (dropAt?.stage !== stage.id || dropAt.index !== index) setDropAt({ stage: stage.id, index });
                 }}
                 onDragLeave={(e) => {
                   if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverStage(null);
@@ -287,8 +345,10 @@ export function PipelineBoard({
                 onDrop={(e) => {
                   e.preventDefault();
                   const id = e.dataTransfer.getData("text/plain") || draggingId;
-                  if (id) move(id, stage.id);
+                  const index = dropIndexFor(e.currentTarget, e.clientY, id);
+                  if (id) placeCard(id, stage.id, index);
                   setOverStage(null);
+                  setDropAt(null);
                   setDraggingId(null);
                 }}
                 className={cn(
@@ -316,15 +376,20 @@ export function PipelineBoard({
                   {colLeads.length === 0 && (
                     <div className="text-[11px] text-muted-foreground text-center py-6">{query ? "No matches" : "Drop leads here"}</div>
                   )}
-                  {colLeads.map((lead) => {
+                  {colLeads.map((lead, ci) => {
+                    // Position of this card among the column's OTHER cards (the drop index space).
+                    const otherIdx = colLeads.slice(0, ci).filter((l) => l.id !== draggingId).length;
+                    const lineHere = lineAt >= 0 && lead.id !== draggingId && otherIdx === lineAt;
                     const cb = callbackStatus(lead.callbackAt, now);
                     const local = localTimeForState(lead.state);
                     const rf = (lead.rawFormData || {}) as Record<string, unknown>;
                     const qCoverage = typeof rf.quiz_coverage === "string" ? rf.quiz_coverage : "";
                     const qBeneficiary = typeof rf.quiz_beneficiary === "string" ? rf.quiz_beneficiary : "";
                     return (
+                      <Fragment key={lead.id}>
+                      {lineHere && <div className="h-0.5 rounded-full bg-brand-red" aria-hidden />}
                       <div
-                        key={lead.id}
+                        data-lead-card={lead.id}
                         draggable
                         onClick={() => {
                           markActive(lead.id);
@@ -338,6 +403,7 @@ export function PipelineBoard({
                         onDragEnd={() => {
                           setDraggingId(null);
                           setOverStage(null);
+                          setDropAt(null);
                         }}
                         className={cn(
                           "group rounded-lg border bg-white p-2.5 cursor-pointer shadow-sm hover:border-slate-300 transition-colors",
@@ -459,8 +525,12 @@ export function PipelineBoard({
                           </div>
                         </div>
                       </div>
+                      </Fragment>
                     );
                   })}
+                  {lineAt >= 0 && lineAt === colLeads.filter((l) => l.id !== draggingId).length && (
+                    <div className="h-0.5 rounded-full bg-brand-red" aria-hidden />
+                  )}
                 </div>
               </div>
             );

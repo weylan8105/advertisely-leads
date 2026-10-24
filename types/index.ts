@@ -96,6 +96,8 @@ export interface Lead {
   pipeline?: "main" | "goldmine";
   /** Opportunity value (in cents) the agent assigns; shown on the card + summed per stage. */
   valueCents?: number;
+  /** Manual position within its pipeline column (lower = higher up). */
+  stageRank?: number;
   source: string;
   tags: string[];
   consent: {
