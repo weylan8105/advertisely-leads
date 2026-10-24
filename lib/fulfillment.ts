@@ -491,9 +491,16 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
       buyerIds.push(rid);
     }
   }
-  const adminById = new Map(adminSlots.map((s) => [s.userId, s]));
+  // LICENSING GUARD for admin overflow: only admins licensed in THIS lead's
+  // state may take it as overflow (empty licensedStates = licensed everywhere,
+  // the same fallback buyers get). Without this, an admin's weekly overflow
+  // pulled leads in states they aren't licensed in.
+  const eligibleAdminSlots = adminSlots.filter(
+    (s) => s.licensedStates.length === 0 || s.licensedStates.includes(lead.state),
+  );
+  const adminById = new Map(eligibleAdminSlots.map((s) => [s.userId, s]));
   // An admin who is also a buyer stays a buyer slot (don't double-count).
-  const adminIds = adminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
+  const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
   const rotation = [...buyerIds, ...adminIds];
 
   if (rotation.length > 0) {

@@ -30,7 +30,9 @@ export async function getHouseAccount(): Promise<{ userId: string; organizationI
  * target they drop out (and overflow stays in the bank). Ordered by createdAt
  * so the rotation is stable.
  */
-export async function getEligibleAdminSlots(): Promise<{ userId: string; organizationId: string | null }[]> {
+export async function getEligibleAdminSlots(): Promise<
+  { userId: string; organizationId: string | null; licensedStates: string[] }[]
+> {
   if (!prisma) return [];
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", weeklyLeadTarget: { gt: 0 } },
@@ -38,17 +40,24 @@ export async function getEligibleAdminSlots(): Promise<{ userId: string; organiz
     select: {
       id: true,
       weeklyLeadTarget: true,
+      licensedStates: true,
       ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 },
     },
   });
   if (admins.length === 0) return [];
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-  const slots: { userId: string; organizationId: string | null }[] = [];
+  const slots: { userId: string; organizationId: string | null; licensedStates: string[] }[] = [];
   for (const a of admins) {
     const got = await prisma.lead.count({
       where: { assignedUserId: a.id, orderId: null, trashedAt: null, assignedAt: { gte: weekAgo } },
     });
-    if (got < (a.weeklyLeadTarget ?? 0)) slots.push({ userId: a.id, organizationId: a.ownedOrganizations[0]?.id ?? null });
+    if (got < (a.weeklyLeadTarget ?? 0)) {
+      slots.push({
+        userId: a.id,
+        organizationId: a.ownedOrganizations[0]?.id ?? null,
+        licensedStates: a.licensedStates ?? [],
+      });
+    }
   }
   return slots;
 }
