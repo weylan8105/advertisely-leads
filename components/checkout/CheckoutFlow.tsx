@@ -425,7 +425,7 @@ export function CheckoutFlow({
               </div>
             </CardContent>
           </Card>
-          {REFERRAL_PROGRAM_ENABLED && isAuthed && step !== 3 && (
+          {REFERRAL_PROGRAM_ENABLED && isAuthed && step === 2 && (
             <Card className="p-4 space-y-3">
               <div>
                 <label className="text-sm font-medium">Referral code</label>
