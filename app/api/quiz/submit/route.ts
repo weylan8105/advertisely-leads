@@ -189,6 +189,9 @@ export async function POST(req: NextRequest) {
     external_id: eventId,
     session_id: sessionId,
     server_ip: ip,
+    // Meta requires the browser's user agent on website Conversions API events.
+    // Internal only (hidden on the contact card; not part of the SignalDesk feed).
+    user_agent: (req.headers.get("user-agent") ?? "").slice(0, 400),
   });
 
   const lead = normalizeInboundLead(clean);

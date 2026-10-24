@@ -57,6 +57,9 @@ type LeadLike = {
   receivedAt?: Date | string | null;
   rawFormData?: unknown;
   source?: string | null;
+  name?: string | null;
+  state?: string | null;
+  zip?: string | null;
 };
 
 type EventOpts = {
@@ -91,6 +94,20 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
   if (lead.consentIp) userData.client_ip_address = lead.consentIp;
   const ua = raw["user_agent"] || raw["client_user_agent"];
   if (ua) userData.client_user_agent = ua;
+  // Extra match keys (Meta's normalization: lowercase, letters only for names,
+  // 2-letter state, 5-digit ZIP, ISO country; all SHA-256 like em/ph).
+  const parts = (lead.name ?? "").trim().split(/\s+/).filter(Boolean);
+  const letters = (v?: string) => (v ? v.toLowerCase().replace(/[^a-z]/g, "") : "");
+  const fn = hash(letters(parts[0]));
+  if (fn) userData.fn = [fn];
+  const ln = hash(letters(parts.length > 1 ? parts[parts.length - 1] : ""));
+  if (ln) userData.ln = [ln];
+  const st = hash(/^[A-Za-z]{2}$/.test(lead.state ?? "") ? lead.state! : "");
+  if (st) userData.st = [st];
+  const zp = hash((lead.zip ?? raw["zip"] ?? "").replace(/\D/g, "").slice(0, 5));
+  if (zp && (lead.zip ?? raw["zip"] ?? "").replace(/\D/g, "").length >= 5) userData.zp = [zp];
+  userData.country = [hash("us")];
+  userData.external_id = [hash(lead.id)];
 
   // Meta needs at least one identifier to match the event.
   if (Object.keys(userData).length === 0) {
