@@ -360,10 +360,17 @@ export function LeadDetailModal({
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <button type="button" onClick={() => copy(lead.phone, "phone")} title="Click to copy number"
-                className="group/cp inline-flex items-center gap-1 rounded hover:text-brand-red">
-                <Phone className="h-3.5 w-3.5" /> <span className="font-mono">{lead.phone}</span> <CopyMark k="phone" />
-              </button>
+              <span className="inline-flex items-center gap-1">
+                <Phone className="h-3.5 w-3.5" />
+                {telDigits ? (
+                  <a href={`tel:${telDigits}`} title="Tap to call" className="font-mono hover:text-brand-red">{lead.phone}</a>
+                ) : (
+                  <span className="font-mono">{lead.phone}</span>
+                )}
+                <button type="button" onClick={() => copy(lead.phone, "phone")} title="Copy number" className="rounded hover:text-brand-red">
+                  <CopyMark k="phone" />
+                </button>
+              </span>
               {lead.email && (
                 <button type="button" onClick={() => copy(lead.email, "email")} title="Click to copy email"
                   className="group/cp inline-flex items-center gap-1 rounded hover:text-brand-red">

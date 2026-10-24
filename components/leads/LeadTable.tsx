@@ -517,17 +517,25 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                     </span>
                   )}
                 </TableCell>
-                {/* Phone — click to copy */}
+                {/* Phone — tap the number to call, icon to copy */}
                 <TableCell className="py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => copyText(lead.phone, "Phone", lead.id)}
-                    title="Click to copy number"
-                    className="group inline-flex items-center gap-1.5 font-mono text-xs text-slate-700 hover:text-brand-red"
-                  >
-                    <span>{lead.phone}</span>
-                    <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
-                  </button>
+                  <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-700">
+                    <a
+                      href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}
+                      title="Tap to call"
+                      className="hover:text-brand-red"
+                    >
+                      {lead.phone}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => copyText(lead.phone, "Phone", lead.id)}
+                      title="Copy number"
+                      className="text-slate-400 hover:text-brand-red"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </span>
                 </TableCell>
                 {/* Email — click to copy */}
                 <TableCell className="py-1.5">

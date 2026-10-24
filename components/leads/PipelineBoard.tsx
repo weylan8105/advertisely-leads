@@ -444,23 +444,32 @@ export function PipelineBoard({
                             </div>
 
                             <div className="mt-1 flex flex-col gap-0.5 items-start">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  copyField(lead.phone, `${lead.id}-phone`);
-                                }}
-                                title="Click to copy number"
-                                className="group/c inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-red max-w-full"
-                              >
+                              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground max-w-full">
                                 <Phone className="h-2.5 w-2.5 shrink-0" />
-                                <span className="font-mono truncate">{lead.phone}</span>
-                                {copiedKey === `${lead.id}-phone` ? (
-                                  <Check className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
-                                ) : (
-                                  <Copy className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/c:opacity-60 transition-opacity" />
-                                )}
-                              </button>
+                                <a
+                                  href={`tel:${(lead.phone || "").replace(/[^\d+]/g, "")}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Tap to call"
+                                  className="font-mono truncate hover:text-brand-red"
+                                >
+                                  {lead.phone}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyField(lead.phone, `${lead.id}-phone`);
+                                  }}
+                                  title="Copy number"
+                                  className="shrink-0 hover:text-brand-red"
+                                >
+                                  {copiedKey === `${lead.id}-phone` ? (
+                                    <Check className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                                  ) : (
+                                    <Copy className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                                  )}
+                                </button>
+                              </span>
                               <button
                                 type="button"
                                 onClick={(e) => {
