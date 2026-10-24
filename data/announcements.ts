@@ -24,9 +24,27 @@ export interface Announcement {
   highlights?: string[];
   ctaLabel: string;
   ctaHref: string;
+  /**
+   * Who sees this. "all" (default) = every agent. "working_leads" = only agents
+   * who currently have leads to work (an open order or assigned leads) — resolved
+   * server-side in /api/announcements.
+   */
+  audience?: "all" | "working_leads";
 }
 
 export const ANNOUNCEMENTS: Announcement[] = [
+  {
+    key: "blue-collar-iul-script-2026-10",
+    title: "New: Blue-Collar IUL Calling Script 📄",
+    body: "A proven call script for working your Blue-Collar IUL leads — intro, discovery questions, golden statements, and objection handling.",
+    highlights: [
+      "Battle-tested flow: open the call, uncover the 'why', and stay assumptive through the close.",
+      "Always one click away — find it on your Lead CRM page under “Calling script” whenever you need it.",
+    ],
+    ctaLabel: "Open the script",
+    ctaHref: "/blue-collar-iul-script.pdf",
+    audience: "working_leads",
+  },
   {
     key: "goldmine-2026-10",
     title: "Introducing Goldmine 💎",

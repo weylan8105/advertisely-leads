@@ -46,7 +46,15 @@ export function AnnouncementModal() {
     } catch {
       /* ignore — worst case it reappears next login */
     }
-    if (navigateTo) router.push(navigateTo);
+    if (navigateTo) {
+      // External/static files (e.g. a hosted PDF) open in a new tab; in-app
+      // routes use the client router.
+      if (/^https?:\/\//.test(navigateTo) || /\.[a-z0-9]{2,4}$/i.test(navigateTo)) {
+        window.open(navigateTo, "_blank", "noopener,noreferrer");
+      } else {
+        router.push(navigateTo);
+      }
+    }
   }
 
   if (!item) return null;

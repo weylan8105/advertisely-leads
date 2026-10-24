@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { PlusCircle, Rows3, KanbanSquare, Loader2, Users, SlidersHorizontal } from "lucide-react";
+import { PlusCircle, Rows3, KanbanSquare, Loader2, Users, SlidersHorizontal, FileText } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
@@ -156,6 +156,12 @@ export default function LeadsPage() {
                 <Rows3 className="h-3.5 w-3.5" /> List
               </button>
             </div>
+            <a href="/blue-collar-iul-script.pdf" target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="outline">
+                <FileText className="h-4 w-4" />
+                Calling script
+              </Button>
+            </a>
             <Link href="/marketplace">
               <Button size="sm" variant="outline">
                 <PlusCircle className="h-4 w-4" />

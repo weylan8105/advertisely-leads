@@ -16,7 +16,25 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { announcementsSeen: true } });
   const seen = new Set(user?.announcementsSeen ?? []);
-  const pending = ANNOUNCEMENTS.filter((a) => !seen.has(a.key));
+  let pending = ANNOUNCEMENTS.filter((a) => !seen.has(a.key));
+
+  // Audience targeting: a "working_leads" announcement is shown only to agents who
+  // currently have leads to work — an open order (as buyer or recipient) or any
+  // assigned leads. Computed only when such an announcement is actually pending.
+  if (pending.some((a) => a.audience === "working_leads")) {
+    const [openOrders, assignedLeads] = await Promise.all([
+      prisma.order.count({
+        where: {
+          status: { in: ["PENDING", "PROCESSING", "DELIVERING"] },
+          OR: [{ userId }, { deliverToUserId: userId }],
+        },
+      }),
+      prisma.lead.count({ where: { assignedUserId: userId, trashedAt: null } }),
+    ]);
+    const workingLeads = openOrders > 0 || assignedLeads > 0;
+    if (!workingLeads) pending = pending.filter((a) => a.audience !== "working_leads");
+  }
+
   return NextResponse.json({ pending });
 }
 
