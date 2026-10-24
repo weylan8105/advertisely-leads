@@ -44,6 +44,7 @@ import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
 import { AdminAccounts } from "@/components/admin/AdminAccounts";
 import { AdminDownlineOrders } from "@/components/admin/AdminDownlineOrders";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
+import { AdCostTable } from "@/components/admin/AdCostTable";
 import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
@@ -872,6 +873,17 @@ function AdminPageInner() {
 
           <TabsContent value="funnel">
             <Card>
+              <CardHeader>
+                <CardTitle>Real cost per lead by ad</CardTitle>
+                <CardDescription>
+                  What each blue-collar ad actually costs per lead that reached your system, next to what Meta reports.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AdCostTable />
+              </CardContent>
+            </Card>
+            <Card className="mt-6">
               <CardHeader>
                 <CardTitle>Landing page funnel</CardTitle>
                 <CardDescription>

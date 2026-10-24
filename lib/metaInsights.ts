@@ -151,3 +151,77 @@ export async function getEnhancedWealthCpl(
     };
   }
 }
+
+export interface AbcaAdCostRow {
+  adId: string;
+  adName: string;
+  adsetName: string;
+  status: string | null;
+  spendCents: number;
+  landingPageViews: number;
+  /** Leads as Meta reports them (its attribution: includes view-through + the shared pixel). */
+  metaLeads: number;
+}
+
+const adCostCache = new Map<string, { at: number; rows: AbcaAdCostRow[] }>();
+
+/**
+ * Spend, landing-page views and Meta-reported leads per ad for the ABCA ad
+ * account over [sinceYmd, untilYmd] (account time zone). Paired with the leads
+ * that actually reached us (quiz leads carry the ad id in utm_content) to show
+ * the real cost per lead. 15-minute cache; inert until ABCA_AD_ACCOUNT_ID is set.
+ */
+export async function getAbcaAdCosts(
+  sinceYmd: string,
+  untilYmd: string,
+): Promise<{ configured: boolean; rows: AbcaAdCostRow[]; error?: string }> {
+  if (!TOKEN || !ABCA_ACCOUNT_RAW) return { configured: false, rows: [] };
+  const key = `${sinceYmd}:${untilYmd}`;
+  const cached = adCostCache.get(key);
+  if (cached && Date.now() - cached.at < 15 * 60 * 1000) return { configured: true, rows: cached.rows };
+
+  const account = ABCA_ACCOUNT_RAW.startsWith("act_") ? ABCA_ACCOUNT_RAW : `act_${ABCA_ACCOUNT_RAW}`;
+  try {
+    const timeRange = encodeURIComponent(JSON.stringify({ since: sinceYmd, until: untilYmd }));
+    const [insRes, adsRes] = await Promise.all([
+      fetch(
+        `${GRAPH}/${account}/insights?level=ad&fields=ad_id,ad_name,adset_name,spend,actions` +
+          `&time_range=${timeRange}&limit=500&access_token=${encodeURIComponent(TOKEN)}`,
+        { cache: "no-store" },
+      ),
+      fetch(`${GRAPH}/${account}/ads?fields=id,effective_status&limit=500&access_token=${encodeURIComponent(TOKEN)}`, {
+        cache: "no-store",
+      }),
+    ]);
+    const ins: any = await insRes.json().catch(() => ({}));
+    if (!insRes.ok || ins?.error) {
+      return { configured: true, rows: [], error: ins?.error?.message || `HTTP ${insRes.status}` };
+    }
+    const ads: any = await adsRes.json().catch(() => ({}));
+    const statusById = new Map<string, string>(
+      (Array.isArray(ads?.data) ? ads.data : []).map((a: any) => [String(a.id), String(a.effective_status)]),
+    );
+    const rows: AbcaAdCostRow[] = (Array.isArray(ins?.data) ? ins.data : []).map((r: any) => {
+      const acts: any[] = r?.actions ?? [];
+      const val = (t: string) => {
+        const a = acts.find((x) => x?.action_type === t);
+        return a ? parseInt(a.value, 10) || 0 : null;
+      };
+      // "lead" is Meta's rolled-up total; fall back to the pixel-lead type. Never sum both (double count).
+      const metaLeads = val("lead") ?? val("offsite_conversion.fb_pixel_lead") ?? 0;
+      return {
+        adId: String(r.ad_id),
+        adName: String(r.ad_name ?? r.ad_id),
+        adsetName: String(r.adset_name ?? ""),
+        status: statusById.get(String(r.ad_id)) ?? null,
+        spendCents: Math.round((parseFloat(r.spend ?? "0") || 0) * 100),
+        landingPageViews: val("landing_page_view") ?? 0,
+        metaLeads,
+      };
+    });
+    adCostCache.set(key, { at: Date.now(), rows });
+    return { configured: true, rows };
+  } catch (e) {
+    return { configured: true, rows: [], error: (e as Error).message };
+  }
+}
