@@ -19,6 +19,13 @@ import { prisma } from "./prisma";
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v20.0";
 const PIXEL_ID = process.env.META_PIXEL_ID || "717587103522110";
+// The ABCA quiz funnel has its own pixel ("American Blue Collar Advantage Pixel
+// Tracker") — the one the ABCA ad sets optimize on and the landing page's browser
+// pixel fires to. Its leads must go there (same event_id as the browser = deduped),
+// never to the Enhanced Wealth pixel above.
+const ABCA_PIXEL_ID = process.env.META_ABCA_PIXEL_ID || "1060042860173387";
+const ABCA_SOURCE = "early-retirement-quiz";
+const pixelFor = (lead: { source?: string | null }) => (lead.source === ABCA_SOURCE ? ABCA_PIXEL_ID : PIXEL_ID);
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || "";
 const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE || "";
 const PURCHASE_EVENT = process.env.META_PURCHASE_EVENT || "Purchase";
@@ -49,6 +56,7 @@ type LeadLike = {
   soldPremiumCents?: number | null;
   receivedAt?: Date | string | null;
   rawFormData?: unknown;
+  source?: string | null;
 };
 
 type EventOpts = {
@@ -111,7 +119,7 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
 
   try {
     const res = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${PIXEL_ID}/events?access_token=${encodeURIComponent(ACCESS_TOKEN)}`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${pixelFor(lead)}/events?access_token=${encodeURIComponent(ACCESS_TOKEN)}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
     );
     if (res.ok) return { ok: true, status: res.status };
