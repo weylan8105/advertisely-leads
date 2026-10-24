@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/layout/Logo";
 import { Card } from "@/components/ui/card";
@@ -129,6 +129,27 @@ export default async function CheckoutSuccessPage({
                 </>
               )}
             </div>
+
+            {(resolvedStatus === "success" || resolvedStatus === "processing") && (
+              <a
+                href="/blue-collar-iul-script.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left transition-colors hover:border-brand-red/40 hover:bg-brand-red/[0.03]"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-red/10 text-brand-red">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">
+                    While you wait — grab the calling script
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Our Blue-Collar IUL script: intro, discovery, and objection handling. Opens in a new tab.
+                  </span>
+                </span>
+              </a>
+            )}
           </Card>
         </div>
       </main>
