@@ -549,3 +549,81 @@ ${tableHtml}
 
   return sendEmail({ to: toEmail, subject, html });
 }
+
+/**
+ * Weekly house-lead invoice: what each admin owes for the overflow leads they
+ * took in the last 7 days, at the current blended CPL. See
+ * app/api/cron/house-lead-invoice/route.ts + lib/houseLeadInvoice.ts.
+ */
+export async function sendHouseLeadInvoiceEmail({
+  toEmail,
+  invoice,
+}: {
+  toEmail: string;
+  invoice: {
+    windowDays: number;
+    sinceIso: string;
+    untilIso: string;
+    cplCents: number | null;
+    cplSource: "meta" | "manual" | "none";
+    spendCents: number;
+    leadsGenerated: number;
+    lines: { name: string; email: string; houseLeads: number; owedCents: number }[];
+    totalHouseLeads: number;
+    totalOwedCents: number;
+  };
+}) {
+  const usd = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const cpl = invoice.cplCents != null ? usd(invoice.cplCents) : "—";
+  const window = `${day(invoice.sinceIso)}–${day(invoice.untilIso)}`;
+  const subject = `House-lead invoice — ${usd(invoice.totalOwedCents)} across ${invoice.totalHouseLeads} leads (${window})`;
+
+  const srcLabel =
+    invoice.cplSource === "meta"
+      ? `Live Meta spend ÷ leads generated: ${usd(invoice.spendCents)} ÷ ${invoice.leadsGenerated}`
+      : invoice.cplSource === "manual"
+        ? "Manual CPL (set in Admin → Sources & campaigns)"
+        : "No CPL available — set META_ADS_ACCESS_TOKEN + ad-account IDs in Vercel, or a manual CPL in Admin → Sources & campaigns.";
+
+  const rows = invoice.lines
+    .map(
+      (l) => `<tr style="border-bottom:1px solid #eef2f7;">
+<td style="padding:10px;font-size:13px;font-weight:600;color:#0f172a;">${escapeHtml(l.name)}<div style="font-size:11px;color:#94a3b8;font-weight:400;">${escapeHtml(l.email)}</div></td>
+<td style="padding:10px;font-size:13px;color:#0f172a;text-align:center;">${l.houseLeads}</td>
+<td style="padding:10px;font-size:13px;color:#0f172a;text-align:center;">${cpl}</td>
+<td style="padding:10px;font-size:13px;font-weight:700;color:#dc2626;text-align:right;">${invoice.cplCents != null ? usd(l.owedCents) : "—"}</td></tr>`,
+    )
+    .join("");
+
+  const tableHtml = invoice.lines.length
+    ? `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate;overflow:hidden;margin:6px 0 16px;">
+<thead><tr style="background:#0f172a;text-align:left;">
+<th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;">Admin</th>
+<th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;text-align:center;">House leads</th>
+<th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;text-align:center;">× CPL</th>
+<th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;text-align:right;">Owes</th>
+</tr></thead>
+<tbody>${rows}
+<tr style="background:#f8fafc;"><td style="padding:10px;font-size:13px;font-weight:700;color:#0f172a;">Total</td>
+<td style="padding:10px;font-size:13px;font-weight:700;color:#0f172a;text-align:center;">${invoice.totalHouseLeads}</td>
+<td style="padding:10px;"></td>
+<td style="padding:10px;font-size:14px;font-weight:800;color:#dc2626;text-align:right;">${invoice.cplCents != null ? usd(invoice.totalOwedCents) : "—"}</td></tr>
+</tbody></table>`
+    : `<p style="margin:0 0 16px;font-size:14px;color:#475569;">No house leads were taken in this window — nothing to settle.</p>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:#dc2626;padding:24px 32px;"><div style="color:#fff;font-size:20px;font-weight:700;">Advertisely</div><div style="color:#fca5a5;font-size:13px;margin-top:2px;">Weekly House-Lead Invoice</div></td></tr>
+<tr><td style="padding:28px 32px;">
+<p style="margin:0 0 6px;font-size:20px;font-weight:700;color:#0f172a;">Settle up — ${window}</p>
+<p style="margin:0 0 18px;font-size:14px;color:#475569;line-height:1.6;">Each admin reimburses Advertisely for the overflow (house) leads they took this week, at the current blended cost per lead: <strong>${cpl}/lead</strong>.</p>
+${tableHtml}
+<p style="margin:0 0 4px;font-size:12px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:14px;"><strong>CPL basis:</strong> ${escapeHtml(srcLabel)}.</p>
+<p style="margin:0;font-size:12px;color:#94a3b8;">CPL is recomputed every week, so the rate reflects current ad costs. "House leads" = leads routed to an admin's own pipeline (not tied to a paid client order).</p>
+</td></tr></table></td></tr></table></body></html>`;
+
+  return sendEmail({ to: toEmail, subject, html });
+}

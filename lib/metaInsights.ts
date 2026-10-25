@@ -225,3 +225,52 @@ export async function getAbcaAdCosts(
     return { configured: true, rows: [], error: (e as Error).message };
   }
 }
+
+// ─── Blended ad spend across BOTH ad accounts (house-lead invoice) ──────────
+export interface BlendedSpendSnapshot {
+  configured: boolean;
+  spendCents: number; // sum across configured accounts
+  accounts: { label: string; spendCents: number; error?: string }[];
+  windowDays: number;
+  fetchedAt: string;
+}
+
+async function fetchAccountSpendCents(accountRaw: string): Promise<{ spendCents: number; error?: string }> {
+  const account = accountRaw.startsWith("act_") ? accountRaw : `act_${accountRaw}`;
+  try {
+    const url = `${GRAPH}/${account}/insights?fields=spend&date_preset=last_7d&access_token=${encodeURIComponent(TOKEN!)}`;
+    const res = await fetch(url, { cache: "no-store" });
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) return { spendCents: 0, error: json?.error?.message || `HTTP ${res.status}` };
+    const row = Array.isArray(json?.data) ? json.data[0] : undefined;
+    return { spendCents: Math.round((parseFloat(row?.spend ?? "0") || 0) * 100) };
+  } catch (e) {
+    return { spendCents: 0, error: (e as Error).message };
+  }
+}
+
+/**
+ * Total last-7d ad spend across BOTH ad accounts (Enhanced Wealth + ABCA) — the
+ * numerator for the blended house-lead CPL. Inert (configured:false) until
+ * META_ADS_ACCESS_TOKEN plus at least one account id is set.
+ */
+export async function getBlendedAdSpend7d(): Promise<BlendedSpendSnapshot> {
+  const fetchedAt = new Date().toISOString();
+  const windowDays = 7;
+  if (!TOKEN || (!ACCOUNT_RAW && !ABCA_ACCOUNT_RAW)) {
+    return { configured: false, spendCents: 0, accounts: [], windowDays, fetchedAt };
+  }
+  const accounts: BlendedSpendSnapshot["accounts"] = [];
+  let total = 0;
+  if (ACCOUNT_RAW) {
+    const r = await fetchAccountSpendCents(ACCOUNT_RAW);
+    accounts.push({ label: "Enhanced Wealth", spendCents: r.spendCents, error: r.error });
+    total += r.spendCents;
+  }
+  if (ABCA_ACCOUNT_RAW) {
+    const r = await fetchAccountSpendCents(ABCA_ACCOUNT_RAW);
+    accounts.push({ label: "ABCA", spendCents: r.spendCents, error: r.error });
+    total += r.spendCents;
+  }
+  return { configured: true, spendCents: total, accounts, windowDays, fetchedAt };
+}

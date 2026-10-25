@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/stalled-leads",
       "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/cron/house-lead-invoice",
+      "schedule": "0 14 * * 1"
     }
   ]
 }
