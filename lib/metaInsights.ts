@@ -159,7 +159,7 @@ export interface AbcaAdCostRow {
   status: string | null;
   spendCents: number;
   landingPageViews: number;
-  /** Leads as Meta reports them (its attribution: includes view-through + the shared pixel). */
+  /** Leads as Meta reports them (its attribution: includes 1-day view-through and late-attributed conversions). */
   metaLeads: number;
 }
 

@@ -62,8 +62,8 @@ export function AdCostTable() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground max-w-2xl">
           <span className="font-medium text-foreground">Real cost/lead</span> = spend ÷ leads that actually reached your system.
-          Meta&apos;s own count includes people who only <em>saw</em> an ad and conversions from your other funnel on the shared
-          pixel, so it usually reads lower. Days are US Central, like the ad account.
+          Meta&apos;s own count also credits people who only <em>saw</em> an ad, and keeps adding late conversions to past days,
+          so it can read higher. Days are US Central, like the ad account.
         </p>
         <div className="inline-flex rounded-md border border-slate-200 p-0.5">
           {RANGES.map((r) => (
