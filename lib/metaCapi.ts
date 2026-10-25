@@ -25,7 +25,12 @@ const PIXEL_ID = process.env.META_PIXEL_ID || "717587103522110";
 // never to the Enhanced Wealth pixel above.
 const ABCA_PIXEL_ID = process.env.META_ABCA_PIXEL_ID || "1060042860173387";
 const ABCA_SOURCE = "early-retirement-quiz";
-const pixelFor = (lead: { source?: string | null }) => (lead.source === ABCA_SOURCE ? ABCA_PIXEL_ID : PIXEL_ID);
+// Healthcare Wealth Advantage funnel: its own pixel, set once it exists in Events
+// Manager. Until then its leads are skipped (never sent to another funnel's pixel).
+const HWA_PIXEL_ID = process.env.META_HWA_PIXEL_ID || "";
+const HWA_SOURCE = "healthcare-wealth-quiz";
+const pixelFor = (lead: { source?: string | null }) =>
+  lead.source === ABCA_SOURCE ? ABCA_PIXEL_ID : lead.source === HWA_SOURCE ? HWA_PIXEL_ID : PIXEL_ID;
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || "";
 const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE || "";
 const PURCHASE_EVENT = process.env.META_PURCHASE_EVENT || "Purchase";
@@ -74,6 +79,7 @@ type SendResult = { ok: boolean; skipped?: string; status?: number; error?: stri
 
 async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResult> {
   if (!isMetaCapiConfigured) return { ok: false, skipped: "META_CAPI_ACCESS_TOKEN not set" };
+  if (!pixelFor(lead)) return { ok: false, skipped: "no pixel set for this funnel (META_HWA_PIXEL_ID)" };
 
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
     ? (lead.rawFormData as Record<string, string>)

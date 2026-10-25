@@ -16,7 +16,7 @@ export const FUNNEL_LEAD_LABEL = "American Income Advantage Lead";
 export const IMPORT_LEAD_LABEL = "Enhanced Wealth Lead";
 
 // Substrings that mark a lead as coming from our own funnel.
-const FUNNEL_SOURCE_MARKERS = ["early-retirement-quiz", "abca-quiz", "abca", "american-blue-collar"];
+const FUNNEL_SOURCE_MARKERS = ["early-retirement-quiz", "abca-quiz", "abca", "american-blue-collar", "healthcare-wealth"];
 
 export function leadOrigin(
   source?: string | null,
@@ -39,9 +39,13 @@ export function leadOrigin(
 }
 
 /** Human title for the lead's origin, shown on the lead card and DB table. */
+export const HWA_LEAD_LABEL = "Healthcare Wealth Advantage Lead";
+
 export function leadOriginLabel(
   source?: string | null,
   rawFormData?: unknown,
 ): string {
+  const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
+  if (String(source ?? raw["lead_source"] ?? "").toLowerCase().includes("healthcare-wealth")) return HWA_LEAD_LABEL;
   return leadOrigin(source, rawFormData) === "funnel" ? FUNNEL_LEAD_LABEL : IMPORT_LEAD_LABEL;
 }

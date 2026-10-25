@@ -8,6 +8,7 @@ export type LeadStatus =
   | "Replaced";
 
 export type LeadPackageId =
+  | "healthcare-iul"
   | "blue-collar-iul"
   | "aged-iul"
   | "iul-fresh"

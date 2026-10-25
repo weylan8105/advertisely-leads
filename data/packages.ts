@@ -11,6 +11,23 @@ export const leadPackages: LeadPackage[] = [
   // ── Hidden pool entries (not sold directly; used for lead-label resolution
   //    and as the underlying pool the age tiers draw from) ──────────────
   {
+    // Healthcare Wealth Advantage funnel (nurses & medical workers). Its own
+    // pool: NOT in IUL_POOL_IDS, so these leads never fill Blue Collar orders,
+    // replacements, or the house sweep. Hidden until a product sells them.
+    id: "healthcare-iul",
+    name: "Healthcare IUL Leads",
+    tagline: "Nurses and healthcare workers asking about cash-value life insurance.",
+    description: "RNs, LPNs, CNAs and other medical workers from the Healthcare Wealth Advantage funnel.",
+    pricePerLead: 45,
+    minimumOrder: 25,
+    estimatedDelivery: "Within 24 hours",
+    available: true,
+    hidden: true,
+    features: [],
+    ideal: [],
+    niches: ["Registered Nurse", "LPN / LVN", "CNA", "Medical worker"],
+  },
+  {
     id: "blue-collar-iul",
     name: "Blue-Collar IUL Leads",
     tagline: "Working professionals who actually pick up.",

@@ -26,7 +26,14 @@ export const dynamic = "force-dynamic";
  * 'complete' beacon + pixel and redirects to /thank-you.html on 2xx.
  */
 
-const SOURCE = "early-retirement-quiz";
+// Each landing-page funnel posting here: its lead source tag, lead type, and the
+// label on the lead's activity. The page's own `source` picks the funnel; any
+// unknown value falls back to ABCA, so the page can't steer routing elsewhere.
+const FUNNELS: Record<string, { packageId?: string; label: string }> = {
+  "early-retirement-quiz": { label: "ABCA quiz" }, // default lead type (blue-collar-iul)
+  "healthcare-wealth-quiz": { packageId: "healthcare-iul", label: "Healthcare Wealth Advantage quiz" },
+};
+const DEFAULT_SOURCE = "early-retirement-quiz";
 const MAX_BODY_CHARS = 16_000;
 const BURST_LIMIT = 10; // requests per IP per instance per window
 const BURST_WINDOW_MS = 10 * 60_000;
@@ -41,7 +48,7 @@ const MAX_FIELD_LEN = 2_000;
 const ALLOWED_FIELDS = new Set([
   "first_name", "last_name", "full_name", "name", "phone", "email", "state", "zip",
   "age", "intent", "source", "lead_source", "external_id",
-  "quiz_beneficiary", "quiz_iul_interest", "quiz_age", "quiz_coverage", "quiz_lead_tier",
+  "quiz_beneficiary", "quiz_iul_interest", "quiz_age", "quiz_coverage", "quiz_lead_tier", "quiz_role",
   "consent_given", "consent_timestamp", "consent_language", "consent_ip",
   "event_name", "event_id", "fbc", "fbp", "fbclid",
   "utm_source", "utm_campaign", "utm_content", "landing_url", "submitted_at",
@@ -109,6 +116,8 @@ export async function POST(req: NextRequest) {
     return reject("honeypot", ip, { error: "Invalid submission." }, 400);
   }
 
+  const SOURCE = FUNNELS[str(body.source)] ? str(body.source) : DEFAULT_SOURCE;
+  const funnel = FUNNELS[SOURCE];
   const name = str(body.full_name) || str(body.name);
   let phoneDigits = str(body.phone).replace(/\D/g, "");
   if (phoneDigits.length === 11 && phoneDigits[0] === "1") phoneDigits = phoneDigits.slice(1);
@@ -189,6 +198,7 @@ export async function POST(req: NextRequest) {
     external_id: eventId,
     session_id: sessionId,
     server_ip: ip,
+    ...(funnel.packageId ? { package_id: funnel.packageId } : {}),
     // Meta requires the browser's user agent on website Conversions API events.
     // Internal only (hidden on the contact card; not part of the SignalDesk feed).
     user_agent: (req.headers.get("user-agent") ?? "").slice(0, 400),
@@ -196,7 +206,7 @@ export async function POST(req: NextRequest) {
 
   const lead = normalizeInboundLead(clean);
   const outcome = await createInboundLead(lead, {
-    activityBody: `Lead received via ABCA quiz (${SOURCE}).`,
+    activityBody: `Lead received via ${funnel.label} (${SOURCE}).`,
     // Prefer the browser-reported consent IP; fall back to the IP we observed.
     consentIp: clean.consent_ip || (ip !== "unknown" ? ip : undefined),
   });
