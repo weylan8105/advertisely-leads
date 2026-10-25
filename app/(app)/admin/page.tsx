@@ -47,6 +47,7 @@ import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
 import { AdCostTable } from "@/components/admin/AdCostTable";
 import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
+import { BusinessPnlPanel } from "@/components/admin/BusinessPnlPanel";
 import { TrashQueue } from "@/components/admin/TrashQueue";
 
 import { formatCurrency } from "@/lib/utils";
@@ -396,6 +397,8 @@ function AdminPageInner() {
           );
         }}
       />
+
+      <BusinessPnlPanel />
 
       {/* Client accounts + Replacement Queue — the day-to-day client management box. */}
       <Card id="client-box" className="mt-6 scroll-mt-4">

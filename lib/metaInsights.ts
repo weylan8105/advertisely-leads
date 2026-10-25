@@ -274,3 +274,33 @@ export async function getBlendedAdSpend7d(): Promise<BlendedSpendSnapshot> {
   }
   return { configured: true, spendCents: total, accounts, windowDays, fetchedAt };
 }
+
+// Spend for one account over an explicit [sinceYmd, untilYmd] window.
+async function fetchAccountSpendRange(accountRaw: string, sinceYmd: string, untilYmd: string): Promise<{ spendCents: number; error?: string }> {
+  const account = accountRaw.startsWith("act_") ? accountRaw : `act_${accountRaw}`;
+  try {
+    const timeRange = encodeURIComponent(JSON.stringify({ since: sinceYmd, until: untilYmd }));
+    const url = `${GRAPH}/${account}/insights?fields=spend&time_range=${timeRange}&access_token=${encodeURIComponent(TOKEN!)}`;
+    const res = await fetch(url, { cache: "no-store" });
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) return { spendCents: 0, error: json?.error?.message || `HTTP ${res.status}` };
+    const row = Array.isArray(json?.data) ? json.data[0] : undefined;
+    return { spendCents: Math.round((parseFloat(row?.spend ?? "0") || 0) * 100) };
+  } catch (e) {
+    return { spendCents: 0, error: (e as Error).message };
+  }
+}
+
+/** Total ad spend across BOTH accounts over an explicit date window (YYYY-MM-DD). */
+export async function getBlendedAdSpendRange(sinceYmd: string, untilYmd: string): Promise<BlendedSpendSnapshot> {
+  const fetchedAt = new Date().toISOString();
+  const windowDays = Math.max(1, Math.round((Date.parse(untilYmd) - Date.parse(sinceYmd)) / 86_400_000));
+  if (!TOKEN || (!ACCOUNT_RAW && !ABCA_ACCOUNT_RAW)) {
+    return { configured: false, spendCents: 0, accounts: [], windowDays, fetchedAt };
+  }
+  const accounts: BlendedSpendSnapshot["accounts"] = [];
+  let total = 0;
+  if (ACCOUNT_RAW) { const r = await fetchAccountSpendRange(ACCOUNT_RAW, sinceYmd, untilYmd); accounts.push({ label: "Enhanced Wealth", spendCents: r.spendCents, error: r.error }); total += r.spendCents; }
+  if (ABCA_ACCOUNT_RAW) { const r = await fetchAccountSpendRange(ABCA_ACCOUNT_RAW, sinceYmd, untilYmd); accounts.push({ label: "ABCA", spendCents: r.spendCents, error: r.error }); total += r.spendCents; }
+  return { configured: true, spendCents: total, accounts, windowDays, fetchedAt };
+}
