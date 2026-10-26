@@ -33,13 +33,15 @@ export async function sweepGoldmine(): Promise<{ moved: number; orgs: number }> 
     const candidates = await prisma.lead.findMany({
       where: {
         assignedUserId: org.ownerId,
-        organizationId: org.id,
+        // The owner's own leads in this team — plus any of theirs never stamped
+        // with a team (older imports), which the move adopts into this team.
+        OR: [{ organizationId: org.id }, { organizationId: null }],
         pipeline: "main",
         trashedAt: null,
         // Only Dialed / Contacted / Call Back — never live deals or untouched leads.
         pipelineStage: { in: [...GOLDMINE_ELIGIBLE_STAGE_IDS] },
         // A lead with an upcoming callback stays with its owner until it passes.
-        OR: [{ callbackAt: null }, { callbackAt: { lte: now } }],
+        AND: [{ OR: [{ callbackAt: null }, { callbackAt: { lte: now } }] }],
         assignedAt: { lte: cutoff }, // nulls don't satisfy lte, so they're excluded
       },
       select: { id: true },
@@ -51,7 +53,7 @@ export async function sweepGoldmine(): Promise<{ moved: number; orgs: number }> 
     await prisma.lead.updateMany({
       where: { id: { in: ids } },
       // Start fresh at the Goldmine intake stage so the team works them anew.
-      data: { pipeline: "goldmine", goldmineAt: now, pipelineStage: INTAKE_STAGE_ID },
+      data: { pipeline: "goldmine", goldmineAt: now, pipelineStage: INTAKE_STAGE_ID, organizationId: org.id },
     });
     await prisma.leadActivity.createMany({
       data: ids.map((leadId) => ({
