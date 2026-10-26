@@ -177,6 +177,10 @@ model Lead {
   // Manual position within its pipeline column (lower = higher up). Null = never
   // placed by hand; those show first, newest on top.
   stageRank      Float?
+  // Teammate actively working this lead (shown as initials on the card). Separate
+  // from assignedUserId (the owner) — Goldmine leads stay owned by the team owner
+  // while any teammate can claim them. Null = nobody claimed it.
+  workingUserId  String?
   // Which pipeline this lead lives in: "main" (the agent's board) or "goldmine"
   // (the team-shared aged-lead board). Aged leads auto-move main → goldmine.
   pipeline        String        @default("main")

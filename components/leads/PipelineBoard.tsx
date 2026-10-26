@@ -12,6 +12,7 @@ const money = (cents: number) =>
 import type { Lead } from "@/types";
 import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
 import { CallbackModal } from "@/components/leads/CallbackModal";
+import { WorkerBadge, WorkerPicker, type TeamMember } from "@/components/leads/WorkerBadge";
 
 const TONE_DOT: Record<string, string> = {
   slate: "bg-slate-400",
@@ -56,6 +57,7 @@ export function PipelineBoard({
   setLeads,
   stages,
   openLeadId,
+  showWorkers = true,
 }: {
   leads: Lead[];
   /** Open this lead's contact card on load (e.g. arriving from /leads/[id]). */
@@ -63,6 +65,8 @@ export function PipelineBoard({
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   /** The board's columns — a user's customized set, or the defaults. */
   stages?: PipelineStage[];
+  /** Show the "who's working this lead" badge (off where the viewer isn't on the lead's team). */
+  showWorkers?: boolean;
 }) {
   const cols = stages && stages.length ? stages : PIPELINE_STAGES;
   const colIds = new Set(cols.map((s) => s.id));
@@ -107,6 +111,44 @@ export function PipelineBoard({
   const [callbackLead, setCallbackLead] = useState<Lead | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Teammates who can be marked as working a lead (initials badge on each card).
+  // Only shown on a real team — a solo agent would just see their own initials.
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [picker, setPicker] = useState<{ leadId: string; anchor: DOMRect } | null>(null);
+  useEffect(() => {
+    if (!showWorkers) return;
+    let live = true;
+    fetch("/api/team")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => live && d?.members && setMembers(d.members))
+      .catch(() => {});
+    return () => { live = false; };
+  }, [showWorkers]);
+  const memberById = useMemo(() => new Map(members.map((m) => [m.userId, m])), [members]);
+  const workersOn = showWorkers && (members.length > 1 || leads.some((l) => l.workingUserId));
+
+  async function setWorker(leadId: string, userId: string | null) {
+    setPicker(null);
+    const prev = leads.find((l) => l.id === leadId)?.workingUserId;
+    const apply = (w: string | null | undefined) =>
+      setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, workingUserId: w ?? undefined } : l)));
+    apply(userId);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/worker`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) {
+        apply(prev);
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "Couldn't update who's working this lead.");
+      }
+    } catch {
+      apply(prev);
+    }
+  }
 
   // The lead you're working with right now (last one whose number/email you copied,
   // card you opened, callback you set, or card you moved). Highlighted on the board and
@@ -423,6 +465,18 @@ export function PipelineBoard({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-medium truncate">{lead.name}</span>
+                              <div className="flex shrink-0 items-center gap-1">
+                              {workersOn && (
+                                <WorkerBadge
+                                  member={lead.workingUserId ? memberById.get(lead.workingUserId) ?? null : null}
+                                  workingUserId={lead.workingUserId}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const anchor = e.currentTarget.getBoundingClientRect();
+                                    setPicker((p) => (p?.leadId === lead.id ? null : { leadId: lead.id, anchor }));
+                                  }}
+                                />
+                              )}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -441,6 +495,7 @@ export function PipelineBoard({
                               >
                                 <AlarmClock className="h-3.5 w-3.5" />
                               </button>
+                              </div>
                             </div>
 
                             <div className="mt-1 flex flex-col gap-0.5 items-start">
@@ -572,6 +627,15 @@ export function PipelineBoard({
             setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, valueCents: valueCents ?? undefined } : l)));
             setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, valueCents: valueCents ?? undefined } : dl));
           }}
+        />
+      )}
+      {picker && (
+        <WorkerPicker
+          anchor={picker.anchor}
+          members={members}
+          workingUserId={leads.find((l) => l.id === picker.leadId)?.workingUserId}
+          onPick={(uid) => setWorker(picker.leadId, uid)}
+          onClose={() => setPicker(null)}
         />
       )}
       {callbackLead && (

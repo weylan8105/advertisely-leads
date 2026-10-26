@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       where: { id: { in: ids } },
       // Into this team's pool (the Goldmine board lists by organization), fresh
       // at the intake stage so the team works them anew — same as the sweep.
-      data: { pipeline: "goldmine", goldmineAt: now, pipelineStage: INTAKE_STAGE_ID, organizationId: ctx.organizationId },
+      data: { pipeline: "goldmine", goldmineAt: now, pipelineStage: INTAKE_STAGE_ID, organizationId: ctx.organizationId, workingUserId: null },
     }),
     prisma.leadActivity.createMany({
       data: ids.map((leadId) => ({

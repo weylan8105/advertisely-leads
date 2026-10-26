@@ -53,7 +53,7 @@ export async function sweepGoldmine(): Promise<{ moved: number; orgs: number }> 
     await prisma.lead.updateMany({
       where: { id: { in: ids } },
       // Start fresh at the Goldmine intake stage so the team works them anew.
-      data: { pipeline: "goldmine", goldmineAt: now, pipelineStage: INTAKE_STAGE_ID, organizationId: org.id },
+      data: { pipeline: "goldmine", goldmineAt: now, pipelineStage: INTAKE_STAGE_ID, organizationId: org.id, workingUserId: null },
     });
     await prisma.leadActivity.createMany({
       data: ids.map((leadId) => ({

@@ -99,6 +99,8 @@ export interface Lead {
   valueCents?: number;
   /** Manual position within its pipeline column (lower = higher up). */
   stageRank?: number;
+  /** Teammate working this lead (initials badge on the card). */
+  workingUserId?: string;
   source: string;
   tags: string[];
   consent: {

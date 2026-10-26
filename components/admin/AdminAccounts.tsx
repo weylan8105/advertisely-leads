@@ -211,7 +211,7 @@ function AccountBoardModal({ account, onClose }: { account: Account; onClose: ()
               <Loader2 className="h-4 w-4 animate-spin" /> Loading {account.name ?? "account"}&apos;s pipeline…
             </div>
           ) : (
-            <PipelineBoard leads={leads} setLeads={setLeads} />
+            <PipelineBoard leads={leads} setLeads={setLeads} showWorkers={false} />
           )}
         </div>
       </div>
