@@ -3,8 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   EXPORT_HEADERS,
+  SCOPED_EXPORT_HEADERS,
   buildExportRows,
+  buildScopedExportRows,
   fetchExportLeads,
+  parseExportScope,
   toTSV,
 } from "@/lib/leadExport";
 
@@ -22,6 +25,7 @@ export const dynamic = "force-dynamic";
  * Optional query params:
  *   - leadIds: comma-separated list of lead IDs (defaults to all assigned leads)
  *   - status: filter by status
+ *   - scope: pipeline | goldmine | both (your board, the team Goldmine, or both)
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -35,9 +39,12 @@ export async function GET(req: NextRequest) {
     userId,
     searchParams.get("leadIds"),
     searchParams.get("status"),
+    parseExportScope(searchParams.get("scope")),
   );
 
-  const tsv = toTSV(EXPORT_HEADERS, buildExportRows(leads));
+  const tsv = searchParams.get("scope") && parseExportScope(searchParams.get("scope"))
+    ? toTSV(SCOPED_EXPORT_HEADERS, buildScopedExportRows(leads))
+    : toTSV(EXPORT_HEADERS, buildExportRows(leads));
 
   return new NextResponse(tsv, {
     status: 200,

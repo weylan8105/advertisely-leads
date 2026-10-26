@@ -3,8 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   EXPORT_HEADERS,
+  SCOPED_EXPORT_HEADERS,
   buildExportRows,
+  buildScopedExportRows,
   fetchExportLeads,
+  parseExportScope,
+  SCOPE_FILE_LABEL,
   toCSV,
 } from "@/lib/leadExport";
 
@@ -18,6 +22,7 @@ export const dynamic = "force-dynamic";
  * Optional query params:
  *   - leadIds: comma-separated list of lead IDs (defaults to all assigned leads)
  *   - status: filter by status
+ *   - scope: pipeline | goldmine | both (your board, the team Goldmine, or both)
  */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -31,10 +36,14 @@ export async function GET(req: NextRequest) {
     userId,
     searchParams.get("leadIds"),
     searchParams.get("status"),
+    parseExportScope(searchParams.get("scope")),
   );
 
-  const csvContent = toCSV(EXPORT_HEADERS, buildExportRows(leads));
-  const filename = `advertisely-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+  const csvContent = searchParams.get("scope") && parseExportScope(searchParams.get("scope"))
+    ? toCSV(SCOPED_EXPORT_HEADERS, buildScopedExportRows(leads))
+    : toCSV(EXPORT_HEADERS, buildExportRows(leads));
+  const scope = parseExportScope(searchParams.get("scope"));
+  const filename = `advertisely-${scope ? SCOPE_FILE_LABEL[scope] : "leads"}-${new Date().toISOString().slice(0, 10)}.csv`;
 
   return new NextResponse(csvContent, {
     status: 200,
@@ -42,6 +51,7 @@ export async function GET(req: NextRequest) {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store",
+      "X-Lead-Count": String(leads.length),
     },
   });
 }

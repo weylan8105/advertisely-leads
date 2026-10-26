@@ -179,6 +179,7 @@ export default function DashboardPage() {
             </Link>
             <ExportButton
               variant="default"
+              scopes
               onSuccess={(msg) => addToast("success", msg)}
               onError={(msg) => addToast("error", msg)}
             />
