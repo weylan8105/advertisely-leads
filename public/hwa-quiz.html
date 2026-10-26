@@ -56,7 +56,7 @@
 
   /* ---- Hero ---- */
   .hero{position:relative;background:radial-gradient(120% 90% at 85% 10%,rgba(14,138,130,.35) 0%,rgba(16,28,43,0) 55%),var(--navy);overflow:hidden}
-  .hero-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:68% 42%;z-index:0}
+  .hero-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:74% 20%;z-index:0}
   .hero-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(96deg,rgba(16,28,43,.97) 0%,rgba(16,28,43,.94) 32%,rgba(16,28,43,.6) 56%,rgba(16,28,43,.12) 82%,rgba(16,28,43,0) 100%)}
   .hero-in{position:relative;z-index:2}
   .hero-panel{max-width:560px;padding:58px 0 64px}
@@ -81,7 +81,7 @@
     /* Keep the photo as a full-bleed background; overlay a vertical scrim so the
        headline (top) and quote card (bottom) stay readable while the worker
        remains visible through the middle. */
-    .hero-photo{object-position:80% 28%}
+    .hero-photo{object-position:80% 18%}
     .hero-shade{background:linear-gradient(180deg,rgba(16,28,43,.9) 0%,rgba(16,28,43,.64) 38%,rgba(16,28,43,.74) 64%,rgba(16,28,43,.96) 100%)}
     .hero-panel{padding:36px 0 42px;max-width:none}
     .qcard{max-width:none}
@@ -283,10 +283,10 @@
   .qzip b{color:var(--onnavy)}
   .qlink{background:none;border:none;padding:6px 4px;margin-left:2px;color:#5FD0C6;font-weight:700;font-size:14px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-family:inherit}
   .qlink:hover{color:#F2A57E}
-  /* Mobile: let the hero background show through behind the hero (was ~90% covered),
+  /* Mobile: let the nurse photo show through behind the hero (was ~90% covered),
      with a soft shadow keeping the headline and lead readable over it. */
   @media(max-width:820px){
-    .hero-photo{object-position:74% 22%}
+    .hero-photo{object-position:80% 18%}
     .hero-shade{background:linear-gradient(180deg,rgba(16,28,43,.74) 0%,rgba(16,28,43,.42) 34%,rgba(16,28,43,.55) 60%,rgba(16,28,43,.9) 100%)}
     .hero .eyebrow,.hero h1,.hero .lead{text-shadow:0 2px 14px rgba(8,14,22,.85),0 1px 3px rgba(8,14,22,.6)}
   }
@@ -374,6 +374,10 @@ if (window.ABCA_AB === "B") document.documentElement.classList.add("ab-b");
 
   <!-- Hero -->
   <section class="hero" id="hero">
+    <img class="hero-photo" alt="Nurse in teal scrubs with a stethoscope in a hospital hallway at sunrise"
+      src="/assets/nurse-hero-1280.jpg"
+      srcset="/assets/nurse-hero-800.jpg 800w, /assets/nurse-hero-1280.jpg 1280w, /assets/nurse-hero-1672.jpg 1672w"
+      sizes="100vw" fetchpriority="high" width="1280" height="720">
     <div class="hero-shade"></div>
     <div class="hero-in wrap">
       <div class="hero-panel">
