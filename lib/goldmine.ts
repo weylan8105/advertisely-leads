@@ -3,10 +3,11 @@
 //
 // Rules (owner directive): only the OWNER's own leads move; a lead moves once
 // it's older than the team's threshold (default 30 days, adjustable), measured
-// from when it was assigned; SOLD leads (the won stage) never move.
+// from when it was assigned; only Dialed / Contacted / Call Back leads move, and
+// never one with an upcoming callback.
 
 import { prisma } from "./prisma";
-import { INTAKE_STAGE_ID, WON_STAGE_ID } from "@/data/pipeline";
+import { INTAKE_STAGE_ID, GOLDMINE_ELIGIBLE_STAGE_IDS } from "@/data/pipeline";
 
 /** Default days-until-Goldmine when a team hasn't set its own value. */
 export const GOLDMINE_DEFAULT_DAYS = 30;
@@ -35,7 +36,10 @@ export async function sweepGoldmine(): Promise<{ moved: number; orgs: number }> 
         organizationId: org.id,
         pipeline: "main",
         trashedAt: null,
-        pipelineStage: { not: WON_STAGE_ID },
+        // Only Dialed / Contacted / Call Back — never live deals or untouched leads.
+        pipelineStage: { in: [...GOLDMINE_ELIGIBLE_STAGE_IDS] },
+        // A lead with an upcoming callback stays with its owner until it passes.
+        OR: [{ callbackAt: null }, { callbackAt: { lte: now } }],
         assignedAt: { lte: cutoff }, // nulls don't satisfy lte, so they're excluded
       },
       select: { id: true },

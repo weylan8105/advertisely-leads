@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
-import { INTAKE_STAGE_ID, WON_STAGE_ID } from "@/data/pipeline";
+import { INTAKE_STAGE_ID, GOLDMINE_ELIGIBLE_STAGE_IDS } from "@/data/pipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,8 @@ const MAX_BULK = 1000;
  * Manually move leads from the caller's own pipeline into their team's shared
  * Goldmine — the same move the daily auto-sweep makes for aged leads, just on
  * demand. Same rules as the sweep: only a team owner/admin, only their OWN
- * main-pipeline leads, never sold ones; each lead restarts at the Goldmine
+ * main-pipeline leads in Dialed / Contacted / Call Back with no upcoming
+ * callback; each lead restarts at the Goldmine
  * intake stage. Leads that don't qualify are skipped (reported in `skipped`).
  */
 export async function POST(req: NextRequest) {
@@ -55,14 +56,15 @@ export async function POST(req: NextRequest) {
       assignedUserId: userId,
       pipeline: "main",
       trashedAt: null,
-      pipelineStage: { not: WON_STAGE_ID },
+      pipelineStage: { in: [...GOLDMINE_ELIGIBLE_STAGE_IDS] },
+      OR: [{ callbackAt: null }, { callbackAt: { lte: new Date() } }],
     },
     select: { id: true },
   });
   const ids = eligible.map((l) => l.id);
   if (ids.length === 0) {
     return NextResponse.json(
-      { error: "None of those leads can be moved. Only your own unsold leads in your pipeline can go to Goldmine." },
+      { error: "None of those leads can be moved. Only your own leads in Dialed, Contacted or Call Back (with no upcoming callback) can go to Goldmine." },
       { status: 400 },
     );
   }

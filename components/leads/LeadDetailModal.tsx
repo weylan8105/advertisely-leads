@@ -9,6 +9,7 @@ import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
 import { LeadMessages } from "@/components/leads/LeadMessages";
 import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
+import { isGoldmineEligibleStage } from "@/data/pipeline";
 
 function prettyKey(k: string) {
   return k
@@ -189,7 +190,8 @@ export function LeadDetailModal({
   }
 
   // Move this lead from my own pipeline into the team's shared Goldmine
-  // (team owners/admins, only when Goldmine is on, never for sold leads).
+  // (team owners/admins, only when Goldmine is on; Dialed / Contacted / Call Back
+  // only, and not while a callback is still upcoming).
   const [goldmineOn, setGoldmineOn] = useState(false);
   const [movingGm, setMovingGm] = useState(false);
   useEffect(() => {
@@ -200,7 +202,8 @@ export function LeadDetailModal({
       .catch(() => {});
   }, [context]);
   const canMoveToGoldmine =
-    goldmineOn && context !== "admin" && lead.pipeline !== "goldmine" && lead.pipelineStage !== "issued-paid";
+    goldmineOn && context !== "admin" && lead.pipeline !== "goldmine" && isGoldmineEligibleStage(lead.pipelineStage) &&
+    !(lead.callbackAt && new Date(lead.callbackAt).getTime() > Date.now());
   async function moveToGoldmine() {
     if (!window.confirm(`Move ${lead.name} into your team's Goldmine? Your team will be able to work this lead, and it starts over at the first Goldmine stage.`)) return;
     setMovingGm(true);

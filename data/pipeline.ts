@@ -49,6 +49,16 @@ export const CONVERSION_STAGE_IDS = ["underwriting", "approved", "issued-not-pai
 export const INTAKE_STAGE_ID = "new-lead";
 export const WON_STAGE_ID = "issued-paid";
 
+// Stages a lead may move from the owner's pipeline into the team Goldmine —
+// automatically after the team's day limit, or with "Move to Goldmine". Owner
+// directive (Oct 26, 2026): only Dialed, Contacted and Call Back. New leads,
+// presentations, underwriting, issued, DNC etc. always stay put; so does any
+// lead with an upcoming callback scheduled.
+export const GOLDMINE_ELIGIBLE_STAGE_IDS = ["aged-lead", "follow-up", "call-back"] as const;
+export function isGoldmineEligibleStage(id: string): boolean {
+  return (GOLDMINE_ELIGIBLE_STAGE_IDS as readonly string[]).includes(id);
+}
+
 // Stages that must ALWAYS exist and can't be deleted (intake + all conversion
 // stages). Conversion stages are additionally locked from renaming/recoloring.
 export const RESERVED_STAGE_IDS = [INTAKE_STAGE_ID, ...CONVERSION_STAGE_IDS] as const;

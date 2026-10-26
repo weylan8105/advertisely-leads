@@ -280,7 +280,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
   async function moveSelectedToGoldmine() {
     if (selected.size === 0) return;
     const n = selected.size;
-    if (!window.confirm(`Move ${n} lead${n === 1 ? "" : "s"} into your team's Goldmine? Your team will be able to work them, and they start over at the first Goldmine stage. Sold leads are skipped.`)) return;
+    if (!window.confirm(`Move ${n} lead${n === 1 ? "" : "s"} into your team's Goldmine? Your team will be able to work them, and they start over at the first Goldmine stage. Only leads in Dialed, Contacted or Call Back move; anything else, or with an upcoming callback, is skipped.`)) return;
     setMovingGm(true);
     try {
       const res = await fetch("/api/leads/move-to-goldmine", {
@@ -292,7 +292,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
       if (!res.ok) { addToast("error", data.error || "Could not move the selected leads."); return; }
       const moved = data.count ?? n;
       addToast("success", `${moved} lead${moved === 1 ? "" : "s"} moved to Goldmine.`);
-      if (data.skipped) addToast("error", `${data.skipped} skipped (sold, or not in your pipeline).`);
+      if (data.skipped) addToast("error", `${data.skipped} skipped (not in Dialed, Contacted or Call Back, or a callback is still upcoming).`);
       setSelected(new Set());
       setTimeout(() => window.location.reload(), 800);
     } catch {
