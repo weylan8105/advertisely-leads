@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Check, UserRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Search, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TeamMember {
@@ -65,7 +65,9 @@ export function WorkerBadge({
 
 /**
  * Dropdown of teammates, pinned to the badge with fixed positioning so a
- * column's scroll container can't clip it. Closes on outside click, Esc or scroll.
+ * column's scroll container can't clip it. Closes on outside click, Esc, or when
+ * the board/page scrolls (the badge moves away) — but scrolling the list itself
+ * keeps it open.
  */
 export function WorkerPicker({
   anchor,
@@ -81,6 +83,7 @@ export function WorkerPicker({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState("");
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
@@ -88,31 +91,64 @@ export function WorkerPicker({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
+    function onScroll(e: Event) {
+      if (ref.current && ref.current.contains(e.target as Node)) return; // scrolling the list
+      onClose();
+    }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onClose);
     };
   }, [onClose]);
 
-  const WIDTH = 224;
+  const WIDTH = 240;
   const left = Math.max(8, Math.min(anchor.right - WIDTH, window.innerWidth - WIDTH - 8));
   const below = anchor.bottom + 6;
-  const maxH = 300;
-  const flip = below + maxH > window.innerHeight && anchor.top > maxH;
-  const sorted = [...members].sort((a, b) => Number(!!b.isSelf) - Number(!!a.isSelf));
+  // Open downward unless there's clearly more room above; size to the room available.
+  const roomBelow = window.innerHeight - below - 12;
+  const roomAbove = anchor.top - 18;
+  const flip = roomBelow < 260 && roomAbove > roomBelow;
+  const maxH = Math.max(180, Math.min(420, flip ? roomAbove : roomBelow));
+  const searchable = members.length > 6;
+  const needle = q.trim().toLowerCase();
+  const sorted = [...members]
+    .sort((a, b) => Number(!!b.isSelf) - Number(!!a.isSelf) || (a.name || a.email || "").localeCompare(b.name || b.email || ""))
+    .filter((m) => !needle || `${m.name ?? ""} ${m.email ?? ""}`.toLowerCase().includes(needle));
 
   return (
     <div
       ref={ref}
       onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      draggable={false}
+      onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
       style={{ position: "fixed", left, width: WIDTH, maxHeight: maxH, ...(flip ? { bottom: window.innerHeight - anchor.top + 6 } : { top: below }) }}
-      className="z-50 overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+      className="z-50 flex flex-col rounded-lg border border-slate-200 bg-white shadow-lg"
     >
-      <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Who&apos;s working this lead?</div>
+      <div className="shrink-0 border-b border-slate-100 p-1.5">
+        <div className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Who&apos;s working this lead?</div>
+        {searchable && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && sorted.length === 1) onPick(sorted[0].userId); }}
+              placeholder="Find a teammate…"
+              className="h-7 w-full rounded-md border border-slate-200 bg-white pl-7 pr-2 text-sm focus:border-brand-red/50 focus:outline-none"
+            />
+          </div>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
+      {sorted.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">No one matches &ldquo;{q}&rdquo;</div>}
       {sorted.map((m) => (
         <button
           key={m.userId}
@@ -142,6 +178,7 @@ export function WorkerPicker({
         <span className="flex-1">Nobody</span>
         {!workingUserId && <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
       </button>
+      </div>
     </div>
   );
 }

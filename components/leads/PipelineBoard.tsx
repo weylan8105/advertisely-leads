@@ -161,7 +161,47 @@ export function PipelineBoard({
   function markActive(id: string | null) {
     setActiveId(id);
     try { if (id) localStorage.setItem(ACTIVE_KEY, id); else localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
+    reportTalking(id);
   }
+
+  // Share "Talking to" with the team so two people don't dial the same lead.
+  // Re-sent at most once a minute for the same lead (keeps it from going stale
+  // server-side while you keep working that card).
+  const lastReport = useRef<{ id: string | null; at: number }>({ id: null, at: 0 });
+  function reportTalking(id: string | null) {
+    if (!showWorkers) return;
+    const last = lastReport.current;
+    if (last.id === id && (id === null || Date.now() - last.at < 60_000)) return;
+    lastReport.current = { id, at: Date.now() };
+    fetch("/api/presence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadId: id }),
+    }).catch(() => {});
+  }
+  // Teammates' current calls, refreshed every 15s while the tab is visible.
+  const [talking, setTalking] = useState<{ userId: string; name: string | null; email: string | null; leadId: string; since: string }[]>([]);
+  useEffect(() => {
+    if (!showWorkers) return;
+    let live = true;
+    const load = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch("/api/presence")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => live && d?.talking && setTalking(d.talking))
+        .catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 15_000);
+    document.addEventListener("visibilitychange", load);
+    return () => { live = false; clearInterval(t); document.removeEventListener("visibilitychange", load); };
+  }, [showWorkers]);
+  const talkingByLead = useMemo(() => new Map(talking.map((t) => [t.leadId, t])), [talking]);
+  const firstName = (t: { name: string | null; email: string | null }) =>
+    (t.name || t.email?.split("@")[0] || "A teammate").split(" ")[0];
+  const teammateCalls = talking
+    .map((t) => ({ t, lead: leads.find((l) => l.id === t.leadId) }))
+    .filter((x): x is { t: (typeof talking)[number]; lead: Lead } => !!x.lead);
   const activeLead = activeId ? leads.find((l) => l.id === activeId) ?? null : null;
   useEffect(() => {
     if (!openLeadId) return;
@@ -364,6 +404,20 @@ export function PipelineBoard({
             </button>
           </span>
         )}
+        {teammateCalls.map(({ t, lead: l }) => (
+          <button
+            key={t.userId}
+            type="button"
+            onClick={() => setDetailLead(l)}
+            title={`${t.name || t.email} has been on ${l.name} since ${new Date(t.since).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-sm text-amber-900 hover:bg-amber-100"
+          >
+            <Phone className="h-3 w-3 shrink-0" />
+            <span className="shrink-0 font-medium">{firstName(t)}</span>
+            <span className="shrink-0 opacity-70">is talking to</span>
+            <span className="truncate font-semibold">{l.name}</span>
+          </button>
+        ))}
       </div>
       <div ref={boardRef} className="overflow-x-auto pb-4 scrollbar-thin">
         <div className="flex gap-3 min-w-max">
@@ -451,6 +505,8 @@ export function PipelineBoard({
                           "group rounded-lg border bg-white p-2.5 cursor-pointer shadow-sm hover:border-slate-300 transition-colors",
                           activeId === lead.id
                             ? "border-brand-red ring-2 ring-brand-red ring-offset-1 bg-brand-red/[0.04] shadow-md"
+                            : talkingByLead.has(lead.id)
+                              ? "border-amber-400 ring-2 ring-amber-300 bg-amber-50/60"
                             : cb?.due ? "border-rose-300 ring-1 ring-rose-200 animate-pulse" : "border-slate-200",
                           draggingId === lead.id && "opacity-50",
                         )}
@@ -458,6 +514,11 @@ export function PipelineBoard({
                         {activeId === lead.id && (
                           <div className="-mt-0.5 mb-1.5 inline-flex items-center gap-1 rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                             <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" /> Current
+                          </div>
+                        )}
+                        {talkingByLead.has(lead.id) && (
+                          <div className="-mt-0.5 mb-1.5 ml-1 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            <Phone className="h-2.5 w-2.5" /> {firstName(talkingByLead.get(lead.id)!)} is on this call
                           </div>
                         )}
                         <div className="flex items-start gap-1.5">
@@ -503,7 +564,15 @@ export function PipelineBoard({
                                 <Phone className="h-2.5 w-2.5 shrink-0" />
                                 <a
                                   href={`tel:${(lead.phone || "").replace(/[^\d+]/g, "")}`}
-                                  onClick={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const t = talkingByLead.get(lead.id);
+                                    if (t && !confirm(`${t.name || t.email} is talking to ${lead.name} right now. Call anyway?`)) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    markActive(lead.id);
+                                  }}
                                   title="Tap to call"
                                   className="font-mono truncate hover:text-brand-red"
                                 >

@@ -27,6 +27,10 @@ model User {
   // States the agent is licensed in (2-letter codes), chosen at signup. Used to
   // pre-fill the state selection on every order.
   licensedStates String[] @default([])
+  // The lead this user is on the phone with right now (pipeline "Talking to"),
+  // shown to teammates so two people don't call the same lead. Stale after 30 min.
+  talkingLeadId String?
+  talkingAt     DateTime?
   // Manually-entered Facebook cost-per-lead (cents) used for the fresh-lead price
   // floor when the Meta Marketing API isn't connected. Set by an admin; the
   // canonical (oldest) admin's value is the global one.
