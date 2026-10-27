@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   Gem,
   Coins,
+  Landmark,
 } from "lucide-react";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { Logo } from "./Logo";
@@ -54,6 +55,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
     adminOnly: true,
     items: [
       { href: "/admin", label: "Admin Console", icon: Shield, badge: "Admin" },
+      { href: "/business-pnl", label: "Business P&L", icon: Landmark },
     ],
   },
 ];

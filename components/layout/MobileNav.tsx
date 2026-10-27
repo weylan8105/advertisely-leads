@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Settings,
   Shield,
+  Landmark,
   LifeBuoy,
   Gem,
   Menu,
@@ -45,6 +46,7 @@ const ALL: Item[] = [
   ...(REFERRAL_PROGRAM_ENABLED ? [{ href: "/rewards", label: "Rewards & Bucks", icon: Coins }] : []),
   { href: "/settings", label: "Settings & Integrations", icon: Settings },
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
+  { href: "/business-pnl", label: "Business P&L", icon: Landmark, adminOnly: true },
 ];
 
 export function MobileNav() {
