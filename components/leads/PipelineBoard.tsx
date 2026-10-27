@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search } from "lucide-react";
-import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
+import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -58,6 +58,7 @@ export function PipelineBoard({
   stages,
   openLeadId,
   showWorkers = true,
+  sortMode = "newest",
 }: {
   leads: Lead[];
   /** Open this lead's contact card on load (e.g. arriving from /leads/[id]). */
@@ -67,6 +68,8 @@ export function PipelineBoard({
   stages?: PipelineStage[];
   /** Show the "who's working this lead" badge (off where the viewer isn't on the lead's team). */
   showWorkers?: boolean;
+  /** Card order within a column: newest lead on top (default), or where the agent dropped them. */
+  sortMode?: PipelineSort;
 }) {
   const cols = stages && stages.length ? stages : PIPELINE_STAGES;
   const colIds = new Set(cols.map((s) => s.id));
@@ -265,10 +268,13 @@ export function PipelineBoard({
     return () => clearInterval(t);
   }, []);
 
-  // Column order: leads never placed by hand stay on top (newest first, as loaded);
-  // below them, the order the agent dragged cards into (stageRank ascending).
+  // Column order. "newest": newest lead on top. "manual": leads never placed by
+  // hand stay on top (newest first, as loaded); below them, the order the agent
+  // dragged cards into (stageRank ascending).
+  const manualOrder = sortMode === "manual";
   const stageOf = (l: Lead) => (colIds.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE);
   function orderColumn(list: Lead[]): Lead[] {
+    if (!manualOrder) return [...list].sort((a, b) => (b.receivedAt ?? "").localeCompare(a.receivedAt ?? ""));
     const loose = list.filter((l) => l.stageRank == null);
     const placed = list.filter((l) => l.stageRank != null).sort((a, b) => (a.stageRank ?? 0) - (b.stageRank ?? 0));
     return [...loose, ...placed];
@@ -437,6 +443,7 @@ export function PipelineBoard({
                 onDragOver={(e) => {
                   e.preventDefault();
                   if (overStage !== stage.id) setOverStage(stage.id);
+                  if (!manualOrder) return;
                   const index = dropIndexFor(e.currentTarget, e.clientY, draggingId);
                   if (dropAt?.stage !== stage.id || dropAt.index !== index) setDropAt({ stage: stage.id, index });
                 }}
@@ -446,8 +453,10 @@ export function PipelineBoard({
                 onDrop={(e) => {
                   e.preventDefault();
                   const id = e.dataTransfer.getData("text/plain") || draggingId;
-                  const index = dropIndexFor(e.currentTarget, e.clientY, id);
-                  if (id) placeCard(id, stage.id, index);
+                  if (id) {
+                    if (manualOrder) placeCard(id, stage.id, dropIndexFor(e.currentTarget, e.clientY, id));
+                    else move(id, stage.id);
+                  }
                   setOverStage(null);
                   setDropAt(null);
                   setDraggingId(null);

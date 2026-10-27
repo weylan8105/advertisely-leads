@@ -98,6 +98,11 @@ export const STAGE_TONE_STYLES: Record<StageTone, { row: string; badge: string; 
   slate: { row: "bg-slate-50", badge: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" },
 };
 
+/** How cards stack inside a column: newest lead on top, or where the agent dropped them. */
+export type PipelineSort = "newest" | "manual";
+export const DEFAULT_PIPELINE_SORT: PipelineSort = "newest";
+export const parsePipelineSort = (v: unknown): PipelineSort => (v === "manual" ? "manual" : "newest");
+
 export const MIN_STAGES = 2;
 export const MAX_STAGES = 24;
 export const MAX_STAGE_LABEL_LEN = 48;

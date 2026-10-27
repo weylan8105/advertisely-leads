@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { PipelineEditor } from "@/components/leads/PipelineEditor";
-import { PIPELINE_STAGES, type PipelineStage } from "@/data/pipeline";
+import { PIPELINE_STAGES, DEFAULT_PIPELINE_SORT, parsePipelineSort, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBanner";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { AdminLeadVolumeCard } from "@/components/leads/AdminLeadVolumeCard";
@@ -34,6 +34,7 @@ export default function LeadsPage() {
   // The pipeline columns for the board currently shown (the caller's custom
   // set, or a downline agent's when viewing theirs). Starts at the defaults.
   const [stages, setStages] = useState<PipelineStage[]>(PIPELINE_STAGES);
+  const [sortMode, setSortMode] = useState<PipelineSort>(DEFAULT_PIPELINE_SORT);
   const [showEditor, setShowEditor] = useState(false);
   // ?open=<leadId> (old /leads/<id> links redirect here) opens that lead's contact card.
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export default function LeadsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (active && Array.isArray(d?.stages) && d.stages.length) setStages(d.stages);
+        if (active && d?.sort) setSortMode(parsePipelineSort(d.sort));
       })
       .catch(() => {});
     return () => {
@@ -260,7 +262,7 @@ export default function LeadsPage() {
               </Button>
             )}
           </div>
-          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} openLeadId={openLeadId} />
+          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} openLeadId={openLeadId} sortMode={sortMode} />
         </Card>
       )}
 
@@ -274,6 +276,8 @@ export default function LeadsPage() {
           stages={stages}
           onClose={() => setShowEditor(false)}
           onSaved={(next) => setStages(next)}
+          sort={sortMode}
+          onSortSaved={setSortMode}
         />
       )}
     </div>

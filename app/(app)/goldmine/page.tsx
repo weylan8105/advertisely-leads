@@ -5,7 +5,7 @@ import { Gem, Loader2, SlidersHorizontal, Lock } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { PipelineEditor } from "@/components/leads/PipelineEditor";
-import { PIPELINE_STAGES, type PipelineStage } from "@/data/pipeline";
+import { PIPELINE_STAGES, DEFAULT_PIPELINE_SORT, parsePipelineSort, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { Lead } from "@/types";
@@ -24,6 +24,15 @@ export default function GoldminePage() {
   const [loading, setLoading] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
   const [enabling, setEnabling] = useState(false);
+  // The viewer's own card-order preference (set in Customize stages on their pipeline).
+  const [sortMode, setSortMode] = useState<PipelineSort>(DEFAULT_PIPELINE_SORT);
+
+  useEffect(() => {
+    fetch("/api/pipeline/stages")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.sort && setSortMode(parsePipelineSort(d.sort)))
+      .catch(() => {});
+  }, []);
 
   async function loadConfig() {
     const r = await fetch("/api/goldmine");
@@ -123,7 +132,7 @@ export default function GoldminePage() {
               {config.afterDays ? ` Leads move here ${config.afterDays} days after they're assigned.` : ""}
             </p>
           </div>
-          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} />
+          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} sortMode={sortMode} />
         </Card>
       )}
 

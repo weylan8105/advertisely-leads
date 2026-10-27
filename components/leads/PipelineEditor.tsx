@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2, Plus, Trash2, ArrowUp, ArrowDown, Lock, RotateCcw, GripVertical } from "lucide-react";
+import { X, Loader2, Plus, Trash2, ArrowUp, ArrowDown, Lock, RotateCcw, GripVertical, Clock, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   STAGE_TONES,
@@ -12,6 +12,7 @@ import {
   MAX_STAGE_LABEL_LEN,
   PIPELINE_STAGES,
   type PipelineStage,
+  type PipelineSort,
   type StageTone,
 } from "@/data/pipeline";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,8 @@ export function PipelineEditor({
   onSaved,
   endpoint = "/api/pipeline/stages",
   title = "Customize your pipeline",
+  sort,
+  onSortSaved,
 }: {
   stages: PipelineStage[];
   onClose: () => void;
@@ -37,8 +40,12 @@ export function PipelineEditor({
   /** API to PUT { stages } to (and DELETE to reset). Defaults to the user's main pipeline. */
   endpoint?: string;
   title?: string;
+  /** The user's card-order preference. When set, the editor shows the "Card order" toggle. */
+  sort?: PipelineSort;
+  onSortSaved?: (sort: PipelineSort) => void;
 }) {
   const [rows, setRows] = useState<Row[]>(() => withKeys(initial));
+  const [sortMode, setSortMode] = useState<PipelineSort | undefined>(sort);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,11 +87,12 @@ export function PipelineEditor({
       const res = await fetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stages: cleaned }),
+        body: JSON.stringify({ stages: cleaned, ...(sortMode ? { sort: sortMode } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not save stages");
       onSaved(data.stages as PipelineStage[]);
+      if (sortMode && data.sort) onSortSaved?.(data.sort as PipelineSort);
       onClose();
     } catch (e: any) {
       setError(e.message ?? "Could not save stages");
@@ -144,6 +152,42 @@ export function PipelineEditor({
         </div>
 
         <div className="px-6 overflow-y-auto scrollbar-thin flex-1 space-y-2">
+          {sortMode && (
+            <div className="pb-3 mb-1 border-b border-slate-100">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                Card order in each column
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { value: "newest", icon: Clock, label: "Newest first", hint: "Newest lead always on top" },
+                    { value: "manual", icon: Hand, label: "Where I drop them", hint: "Cards stay where you drag them" },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setSortMode(o.value)}
+                    aria-pressed={sortMode === o.value}
+                    className={cn(
+                      "rounded-lg border p-2.5 text-left transition-colors",
+                      sortMode === o.value
+                        ? "border-brand-red bg-brand-red/5 ring-1 ring-brand-red/30"
+                        : "border-slate-200 hover:border-slate-300",
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5 text-sm font-medium">
+                      <o.icon className="h-3.5 w-3.5" /> {o.label}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">{o.hint}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {sortMode && (
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-1">Stages</div>
+          )}
           {rows.map((r, idx) => {
             const reserved = isReservedStage(r.id);
             const conversion = isConversionStage(r.id);

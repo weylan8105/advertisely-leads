@@ -41,6 +41,9 @@ model User {
   // (see data/pipeline.ts). The reserved anchor ids "new-lead" and
   // "issued-paid" are always present so P&L / conversions keep working.
   pipelineStages Json?
+  // How cards stack inside a pipeline column: null/"newest" = newest lead on top;
+  // "manual" = the order the agent dragged them into (Lead.stageRank).
+  pipelineSort   String?
   // Sendblue texting: the agent's assigned Sendblue line (E.164, the number
   // leads see) and optional seat id. Null = this agent can't text yet.
   sendblueNumber String?
