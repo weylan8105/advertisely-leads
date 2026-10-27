@@ -92,6 +92,9 @@ export async function GET(req: NextRequest) {
     where.pipeline = "main";
   }
 
+  // Trashed leads (replaced bad leads, recycle bin) never appear on a board.
+  where.trashedAt = null;
+
   const leads = await prisma.lead.findMany({
     where,
     orderBy: { receivedAt: "desc" },
