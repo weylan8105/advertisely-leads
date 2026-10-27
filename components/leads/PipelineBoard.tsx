@@ -197,6 +197,11 @@ export function PipelineBoard({
     return () => { live = false; clearInterval(t); document.removeEventListener("visibilitychange", load); };
   }, [showWorkers]);
   const talkingByLead = useMemo(() => new Map(talking.map((t) => [t.leadId, t])), [talking]);
+  // Warn before calling/copying a lead a teammate is already on the phone with.
+  function okToContact(lead: Lead, action: string): boolean {
+    const t = talkingByLead.get(lead.id);
+    return !t || confirm(`${t.name || t.email} is talking to ${lead.name} right now. ${action} anyway?`);
+  }
   const firstName = (t: { name: string | null; email: string | null }) =>
     (t.name || t.email?.split("@")[0] || "A teammate").split(" ")[0];
   const teammateCalls = talking
@@ -561,32 +566,34 @@ export function PipelineBoard({
 
                             <div className="mt-1 flex flex-col gap-0.5 items-start">
                               <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground max-w-full">
-                                <Phone className="h-2.5 w-2.5 shrink-0" />
+                                {/* Phone icon = call; the number itself = copy (most agents dial from another device). */}
                                 <a
                                   href={`tel:${(lead.phone || "").replace(/[^\d+]/g, "")}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const t = talkingByLead.get(lead.id);
-                                    if (t && !confirm(`${t.name || t.email} is talking to ${lead.name} right now. Call anyway?`)) {
+                                    if (!okToContact(lead, "Call")) {
                                       e.preventDefault();
                                       return;
                                     }
                                     markActive(lead.id);
                                   }}
-                                  title="Tap to call"
-                                  className="font-mono truncate hover:text-brand-red"
+                                  title="Call"
+                                  aria-label={`Call ${lead.name}`}
+                                  className="-m-1 shrink-0 rounded p-1 hover:bg-brand-red/10 hover:text-brand-red"
                                 >
-                                  {lead.phone}
+                                  <Phone className="h-2.5 w-2.5" />
                                 </a>
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!okToContact(lead, "Copy their number")) return;
                                     copyField(lead.phone, `${lead.id}-phone`);
                                   }}
-                                  title="Copy number"
-                                  className="shrink-0 hover:text-brand-red"
+                                  title="Click to copy number"
+                                  className="inline-flex min-w-0 items-center gap-1 hover:text-brand-red"
                                 >
+                                  <span className="font-mono truncate">{lead.phone}</span>
                                   {copiedKey === `${lead.id}-phone` ? (
                                     <Check className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
                                   ) : (

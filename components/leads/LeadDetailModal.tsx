@@ -363,15 +363,18 @@ export function LeadDetailModal({
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              {/* Phone icon = call; the number = copy. */}
               <span className="inline-flex items-center gap-1">
-                <Phone className="h-3.5 w-3.5" />
                 {telDigits ? (
-                  <a href={`tel:${telDigits}`} title="Tap to call" className="font-mono hover:text-brand-red">{lead.phone}</a>
+                  <a href={`tel:${telDigits}`} title="Call" aria-label="Call" className="-m-1 rounded p-1 hover:bg-brand-red/10 hover:text-brand-red">
+                    <Phone className="h-3.5 w-3.5" />
+                  </a>
                 ) : (
-                  <span className="font-mono">{lead.phone}</span>
+                  <Phone className="h-3.5 w-3.5" />
                 )}
-                <button type="button" onClick={() => copy(lead.phone, "phone")} title="Copy number" className="rounded hover:text-brand-red">
-                  <CopyMark k="phone" />
+                <button type="button" onClick={() => copy(lead.phone, "phone")} title="Click to copy number"
+                  className="group/cp inline-flex items-center gap-1 rounded font-mono hover:text-brand-red">
+                  {lead.phone} <CopyMark k="phone" />
                 </button>
               </span>
               {lead.email && (

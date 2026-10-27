@@ -517,23 +517,25 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                     </span>
                   )}
                 </TableCell>
-                {/* Phone — tap the number to call, icon to copy */}
+                {/* Phone — icon to call, click the number to copy */}
                 <TableCell className="py-1.5">
                   <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-700">
                     <a
                       href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}
-                      title="Tap to call"
-                      className="hover:text-brand-red"
+                      title="Call"
+                      aria-label={`Call ${lead.name}`}
+                      className="text-slate-400 hover:text-brand-red"
                     >
-                      {lead.phone}
+                      <Phone className="h-3 w-3" />
                     </a>
                     <button
                       type="button"
                       onClick={() => copyText(lead.phone, "Phone", lead.id)}
-                      title="Copy number"
-                      className="text-slate-400 hover:text-brand-red"
+                      title="Click to copy number"
+                      className="group/cp inline-flex items-center gap-1 hover:text-brand-red"
                     >
-                      <Copy className="h-3 w-3" />
+                      {lead.phone}
+                      <Copy className="h-3 w-3 text-slate-400 opacity-60 group-hover/cp:opacity-100" />
                     </button>
                   </span>
                 </TableCell>
