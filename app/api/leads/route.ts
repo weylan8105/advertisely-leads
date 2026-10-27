@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { serializeLead } from "@/lib/serialize";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { sweepGoldmineForOrg } from "@/lib/goldmine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,6 +65,8 @@ export async function GET(req: NextRequest) {
     // aged leads and can work them. No per-agent narrowing.
     const ctx = await ensureOrgContext(myId);
     if (!ctx) return NextResponse.json({ leads: [] });
+    // Move anything that just aged out before listing (throttled; cron is the backstop).
+    await sweepGoldmineForOrg(ctx.organizationId);
     where.organizationId = ctx.organizationId;
     where.pipeline = "goldmine";
   } else {
@@ -73,6 +76,8 @@ export async function GET(req: NextRequest) {
     // with ?agent=<id> (a read-only team overview), or the whole org with
     // ?scope=org (used by team-overview tooling), but the default is always mine.
     const ctx = await ensureOrgContext(myId);
+    // Aged leads leave the board as soon as they qualify, not at the nightly run.
+    if (ctx) await sweepGoldmineForOrg(ctx.organizationId);
     const scopeParam = searchParams.get("scope");
     const canManage = !!ctx && canManageTeam(ctx.role);
     if (canManage && agentParam) {

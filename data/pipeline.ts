@@ -51,10 +51,10 @@ export const WON_STAGE_ID = "issued-paid";
 
 // Stages a lead may move from the owner's pipeline into the team Goldmine —
 // automatically after the team's day limit, or with "Move to Goldmine". Owner
-// directive (Oct 26, 2026): only Dialed, Contacted and Call Back. New leads,
-// presentations, underwriting, issued, DNC etc. always stay put; so does any
-// lead with an upcoming callback scheduled.
-export const GOLDMINE_ELIGIBLE_STAGE_IDS = ["aged-lead", "follow-up", "call-back"] as const;
+// directive (Oct 26, 2026): only Dialed, Contacted and Call Back; extended
+// Oct 27, 2026 to untouched New Lead leads too. Presentations, underwriting,
+// issued, DNC etc. always stay put; so does any lead with an upcoming callback.
+export const GOLDMINE_ELIGIBLE_STAGE_IDS = ["new-lead", "aged-lead", "follow-up", "call-back"] as const;
 export function isGoldmineEligibleStage(id: string): boolean {
   return (GOLDMINE_ELIGIBLE_STAGE_IDS as readonly string[]).includes(id);
 }

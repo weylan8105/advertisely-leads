@@ -190,7 +190,7 @@ export function LeadDetailModal({
   }
 
   // Move this lead from my own pipeline into the team's shared Goldmine
-  // (team owners/admins, only when Goldmine is on; Dialed / Contacted / Call Back
+  // (team owners/admins, only when Goldmine is on; New Lead / Dialed / Contacted / Call Back
   // only, and not while a callback is still upcoming).
   const [goldmineOn, setGoldmineOn] = useState(false);
   const [movingGm, setMovingGm] = useState(false);

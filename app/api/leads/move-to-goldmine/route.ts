@@ -16,7 +16,7 @@ const MAX_BULK = 1000;
  * Manually move leads from the caller's own pipeline into their team's shared
  * Goldmine — the same move the daily auto-sweep makes for aged leads, just on
  * demand. Same rules as the sweep: only a team owner/admin, only their OWN
- * main-pipeline leads in Dialed / Contacted / Call Back with no upcoming
+ * main-pipeline leads in New Lead / Dialed / Contacted / Call Back with no upcoming
  * callback; each lead restarts at the Goldmine
  * intake stage. Leads that don't qualify are skipped (reported in `skipped`).
  */
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   const ids = eligible.map((l) => l.id);
   if (ids.length === 0) {
     return NextResponse.json(
-      { error: "None of those leads can be moved. Only your own leads in Dialed, Contacted or Call Back (with no upcoming callback) can go to Goldmine." },
+      { error: "None of those leads can be moved. Only your own leads in New Lead, Dialed, Contacted or Call Back (with no upcoming callback) can go to Goldmine." },
       { status: 400 },
     );
   }
