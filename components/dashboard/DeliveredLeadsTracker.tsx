@@ -10,6 +10,15 @@ const fmt = (d: Date) => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
 };
+// A picked YYYY-MM-DD as the start / end of that day in the viewer's timezone.
+const dayStart = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+};
+const dayEnd = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999);
+};
 
 /**
  * Small, admin-only indicator of how many leads were delivered to the current
@@ -28,7 +37,9 @@ export function DeliveredLeadsTracker() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    const qs = new URLSearchParams({ from, to });
+    // Send exact local-day boundaries so the range matches the dates picked
+    // (the server would otherwise read bare dates as UTC days).
+    const qs = new URLSearchParams({ from: dayStart(from).toISOString(), to: dayEnd(to).toISOString() });
     fetch(`/api/leads/delivered-count?${qs}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (active) { setCount(d?.count ?? 0); setTransferred(d?.transferredExcluded ?? 0); } })
@@ -63,6 +74,23 @@ export function DeliveredLeadsTracker() {
         className="h-8 w-[140px]"
         aria-label="Delivered to"
       />
+      <span className="inline-flex gap-1">
+        {(
+          [
+            ["Last 7 days", () => { const d = new Date(); d.setDate(d.getDate() - 6); return fmt(d); }],
+            ["This month", () => fmt(monthStart)],
+          ] as const
+        ).map(([label, start]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => { setFrom(start()); setTo(fmt(new Date())); }}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {label}
+          </button>
+        ))}
+      </span>
       {!loading && transferred > 0 && (
         <span className="text-xs text-muted-foreground">
           · {transferred.toLocaleString()} transferred from other agents not counted

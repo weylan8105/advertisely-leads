@@ -33,7 +33,9 @@ export async function GET(req: NextRequest) {
 
   const assignedAt: { gte?: Date; lte?: Date } = {};
   if (from) { const d = new Date(from); if (!isNaN(d.getTime())) assignedAt.gte = d; }
-  if (to) { const d = new Date(to); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); assignedAt.lte = d; } }
+  // `to` may be a full timestamp (the tracker sends the end of the local day) or a
+  // bare YYYY-MM-DD, which is treated as the end of that (UTC) day.
+  if (to) { const d = new Date(to); if (!isNaN(d.getTime())) { if (!to.includes("T")) d.setUTCHours(23, 59, 59, 999); assignedAt.lte = d; } }
 
   const gte = assignedAt.gte ?? null;
   const lte = assignedAt.lte ?? null;

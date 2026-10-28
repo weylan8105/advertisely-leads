@@ -3,13 +3,20 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gauge, Loader2, Check } from "lucide-react";
+import { Gauge, Loader2, Check, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Vol {
   target: number | null;
   received7d: number;
+  /** When at/over target: when enough leads age out of the rolling week to resume. */
+  pausedUntil?: string | null;
+  history?: { at: string; from: number | null; to: number | null; by: string | null }[];
 }
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const targetLabel = (n: number | null) => (n ? String(n) : "none");
 
 export function AdminLeadVolumeCard() {
   const [data, setData] = useState<Vol | null>(null);
@@ -107,12 +114,37 @@ export function AdminLeadVolumeCard() {
             </div>
           </div>
 
+          {atLimit && (
+            <p className="mt-2 text-xs text-amber-700">
+              {got > target! ? `${got - target!} over your target. ` : ""}
+              {data?.pausedUntil
+                ? `Back in the rotation ${when(data.pausedUntil)}, when enough of this week's leads age out of the rolling 7 days.`
+                : "Back in the rotation once enough of this week's leads age out of the rolling 7 days."}
+            </p>
+          )}
+
           {!!target && (
             <div className="mt-3 h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-100">
               <div
                 className={cn("h-full rounded-full transition-all", atLimit ? "bg-amber-400" : "bg-gradient-to-r from-brand-red to-brand-redDark")}
                 style={{ width: `${Math.min(100, Math.round((got / target) * 100))}%` }}
               />
+            </div>
+          )}
+
+          {!!data?.history?.length && (
+            <div className="mt-3 border-t border-slate-100 pt-2.5">
+              <div className="text-[11px] text-muted-foreground mb-1 flex items-center gap-1">
+                <History className="h-3 w-3" /> Target changes
+              </div>
+              <ul className="space-y-0.5 text-xs">
+                {data.history.map((h, i) => (
+                  <li key={i} className="tabular-nums">
+                    <span className="text-muted-foreground">{when(h.at)}</span> — {targetLabel(h.from)} → <b>{targetLabel(h.to)}</b>
+                    {h.by ? <span className="text-muted-foreground"> by {h.by}</span> : null}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </>

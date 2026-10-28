@@ -671,3 +671,17 @@ model HouseLeadSettlement {
   @@index([status])
   @@index([paidAt])
 }
+
+// Audit log of an admin's weekly overflow target (User.weeklyLeadTarget): who
+// changed it, when, and from/to what — shown on the weekly lead-volume card.
+// Prod table: see the CREATE TABLE in the commit that added this model.
+model WeeklyTargetChange {
+  id          String   @id @default(cuid())
+  userId      String // whose target changed
+  changedById String? // who changed it
+  oldTarget   Int?
+  newTarget   Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
