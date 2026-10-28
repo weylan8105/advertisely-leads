@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { canActOnLead } from "@/lib/leadAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export async function PATCH(
   // Verify the lead exists and belongs to this user (admins can update any lead)
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, assignedUserId: true, status: true },
+    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true, status: true },
   });
 
   if (!lead) {
@@ -79,7 +80,7 @@ export async function PATCH(
   }
 
   const isAdmin = role === "ADMIN";
-  if (!isAdmin && lead.assignedUserId !== userId) {
+  if (!(await canActOnLead(userId, isAdmin, lead))) {
     return NextResponse.json({ error: "Forbidden — this lead is not assigned to you" }, { status: 403 });
   }
 

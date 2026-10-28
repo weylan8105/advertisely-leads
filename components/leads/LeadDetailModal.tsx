@@ -251,9 +251,11 @@ export function LeadDetailModal({
   );
   const [valueSaving, setValueSaving] = useState(false);
   const [valueMsg, setValueMsg] = useState<"saved" | "error" | null>(null);
+  const [valueErr, setValueErr] = useState("");
   async function saveValue() {
     setValueSaving(true);
     setValueMsg(null);
+    setValueErr("");
     const trimmed = valueInput.replace(/[^0-9.]/g, "").trim();
     const valueCents = trimmed === "" ? null : Math.round(parseFloat(trimmed) * 100);
     try {
@@ -268,6 +270,7 @@ export function LeadDetailModal({
         onValueChanged?.(lead.id, data.valueCents ?? null);
         setValueInput(data.valueCents != null ? String(data.valueCents / 100) : "");
       } else {
+        setValueErr(data.error ?? "");
         setValueMsg("error");
       }
     } catch {
@@ -526,7 +529,7 @@ export function LeadDetailModal({
                 Save value
               </button>
               {valueMsg === "saved" && <span className="text-xs text-emerald-600">Saved</span>}
-              {valueMsg === "error" && <span className="text-xs text-rose-600">Couldn&apos;t save</span>}
+              {valueMsg === "error" && <span className="text-xs text-rose-600">{valueErr || "Couldn\u2019t save"}</span>}
             </div>
             <p className="mt-1.5 text-[11px] text-muted-foreground">Shown on the pipeline card and totaled at the top of each stage.</p>
           </div>
