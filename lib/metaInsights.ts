@@ -20,6 +20,14 @@ const ACCOUNT_RAW = process.env.ENHANCED_WEALTH_AD_ACCOUNT_ID;
 // sees. Inert until set.
 const ABCA_ACCOUNT_RAW = process.env.ABCA_AD_ACCOUNT_ID;
 
+// Healthcare Wealth Advantage campaigns run inside the Enhanced Wealth ad account
+// but are a different funnel (nurse leads, not Blue Collar). Any campaign whose
+// name contains "HWA" is left out of CPL / spend so it can't move the fresh-lead
+// price floor or the house-lead invoice.
+const EXCLUDE_HWA = `&filtering=${encodeURIComponent(
+  JSON.stringify([{ field: "campaign.name", operator: "NOT_CONTAIN", value: "HWA" }]),
+)}`;
+
 // Meta reports leads under several action types depending on how they're tracked
 // (Lead Ads vs pixel vs on-site). Sum all of them so the count matches reality.
 const LEAD_ACTION_TYPES = new Set([
@@ -124,7 +132,7 @@ export async function getEnhancedWealthCpl(
   try {
     const url =
       `${GRAPH}/${account}/insights` +
-      `?fields=spend,actions&date_preset=last_7d&access_token=${encodeURIComponent(TOKEN)}`;
+      `?fields=spend,actions&date_preset=last_7d${EXCLUDE_HWA}&access_token=${encodeURIComponent(TOKEN)}`;
     const res = await fetch(url, { cache: "no-store" });
     const json: any = await res.json().catch(() => ({}));
     if (!res.ok || json?.error) {
@@ -238,7 +246,7 @@ export interface BlendedSpendSnapshot {
 async function fetchAccountSpendCents(accountRaw: string): Promise<{ spendCents: number; error?: string }> {
   const account = accountRaw.startsWith("act_") ? accountRaw : `act_${accountRaw}`;
   try {
-    const url = `${GRAPH}/${account}/insights?fields=spend&date_preset=last_7d&access_token=${encodeURIComponent(TOKEN!)}`;
+    const url = `${GRAPH}/${account}/insights?fields=spend&date_preset=last_7d${EXCLUDE_HWA}&access_token=${encodeURIComponent(TOKEN!)}`;
     const res = await fetch(url, { cache: "no-store" });
     const json: any = await res.json().catch(() => ({}));
     if (!res.ok || json?.error) return { spendCents: 0, error: json?.error?.message || `HTTP ${res.status}` };
@@ -280,7 +288,7 @@ async function fetchAccountSpendRange(accountRaw: string, sinceYmd: string, unti
   const account = accountRaw.startsWith("act_") ? accountRaw : `act_${accountRaw}`;
   try {
     const timeRange = encodeURIComponent(JSON.stringify({ since: sinceYmd, until: untilYmd }));
-    const url = `${GRAPH}/${account}/insights?fields=spend&time_range=${timeRange}&access_token=${encodeURIComponent(TOKEN!)}`;
+    const url = `${GRAPH}/${account}/insights?fields=spend&time_range=${timeRange}${EXCLUDE_HWA}&access_token=${encodeURIComponent(TOKEN!)}`;
     const res = await fetch(url, { cache: "no-store" });
     const json: any = await res.json().catch(() => ({}));
     if (!res.ok || json?.error) return { spendCents: 0, error: json?.error?.message || `HTTP ${res.status}` };

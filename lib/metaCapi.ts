@@ -25,9 +25,11 @@ const PIXEL_ID = process.env.META_PIXEL_ID || "717587103522110";
 // never to the Enhanced Wealth pixel above.
 const ABCA_PIXEL_ID = process.env.META_ABCA_PIXEL_ID || "1060042860173387";
 const ABCA_SOURCE = "early-retirement-quiz";
-// Healthcare Wealth Advantage funnel: its own pixel, set once it exists in Events
-// Manager. Until then its leads are skipped (never sent to another funnel's pixel).
-const HWA_PIXEL_ID = process.env.META_HWA_PIXEL_ID || "";
+// Healthcare Wealth Advantage funnel: runs from the Enhanced Wealth Page + ad
+// account, so it fires to the Enhanced Wealth pixel (same id as the landing
+// page's browser pixel = deduped). Override with META_HWA_PIXEL_ID if it ever
+// gets its own pixel.
+const HWA_PIXEL_ID = process.env.META_HWA_PIXEL_ID || "717587103522110";
 const HWA_SOURCE = "healthcare-wealth-quiz";
 const pixelFor = (lead: { source?: string | null }) =>
   lead.source === ABCA_SOURCE ? ABCA_PIXEL_ID : lead.source === HWA_SOURCE ? HWA_PIXEL_ID : PIXEL_ID;
