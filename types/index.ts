@@ -97,6 +97,8 @@ export interface Lead {
   pipeline?: "main" | "goldmine";
   /** Opportunity value (in cents) the agent assigns; shown on the card + summed per stage. */
   valueCents?: number;
+  /** Upcoming initial-premium draft date, "YYYY-MM-DD". */
+  draftDate?: string;
   /** Manual position within its pipeline column (lower = higher up). */
   stageRank?: number;
   /** Teammate working this lead (initials badge on the card). */

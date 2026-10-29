@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem, CalendarClock } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -91,6 +91,7 @@ export function LeadDetailModal({
   onClose,
   onNoteAdded,
   onValueChanged,
+  onDraftDateChanged,
   onAssigned,
   context = "agent",
 }: {
@@ -98,6 +99,7 @@ export function LeadDetailModal({
   onClose: () => void;
   onNoteAdded?: (leadId: string, note: LeadNote) => void;
   onValueChanged?: (leadId: string, valueCents: number | null) => void;
+  onDraftDateChanged?: (leadId: string, draftDate: string | null) => void;
   /** Called after the lead is moved to another agent's pipeline. */
   onAssigned?: (leadId: string, userId: string, agentName: string) => void;
   /** "admin" opens the card from the leads database (hides agent-only actions). */
@@ -277,6 +279,37 @@ export function LeadDetailModal({
       setValueMsg("error");
     } finally {
       setValueSaving(false);
+    }
+  }
+
+  // Upcoming initial-premium draft date on a submitted deal ("YYYY-MM-DD").
+  const [draftInput, setDraftInput] = useState(lead.draftDate ?? "");
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftMsg, setDraftMsg] = useState<"saved" | "error" | null>(null);
+  const [draftErr, setDraftErr] = useState("");
+  async function saveDraftDate(next: string) {
+    setDraftSaving(true);
+    setDraftMsg(null);
+    setDraftErr("");
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/draft-date`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftDate: next || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setDraftMsg("saved");
+        setDraftInput(data.draftDate ?? "");
+        onDraftDateChanged?.(lead.id, data.draftDate ?? null);
+      } else {
+        setDraftErr(data.error ?? "");
+        setDraftMsg("error");
+      }
+    } catch {
+      setDraftMsg("error");
+    } finally {
+      setDraftSaving(false);
     }
   }
 
@@ -502,6 +535,7 @@ export function LeadDetailModal({
         )}
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">
+          <div className="flex flex-wrap gap-x-10 gap-y-5">
           {/* Opportunity value — editable; shows on the card + sums per stage. */}
           <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -532,6 +566,41 @@ export function LeadDetailModal({
               {valueMsg === "error" && <span className="text-xs text-rose-600">{valueErr || "Couldn\u2019t save"}</span>}
             </div>
             <p className="mt-1.5 text-[11px] text-muted-foreground">Shown on the pipeline card and totaled at the top of each stage.</p>
+          </div>
+
+          {/* When the initial premium drafts on a submitted deal — a reminder. */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <CalendarClock className="h-3.5 w-3.5" /> Upcoming draft date
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={draftInput}
+                onChange={(e) => { setDraftInput(e.target.value); setDraftMsg(null); }}
+                className="w-44 rounded-lg border border-slate-200 py-2 px-3 text-sm focus:border-brand-red focus:outline-none focus:ring-1 focus:ring-brand-red"
+              />
+              <button
+                onClick={() => saveDraftDate(draftInput)}
+                disabled={draftSaving || !draftInput}
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand-red px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-redDark disabled:opacity-50"
+              >
+                {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Save date
+              </button>
+              {draftInput && !draftSaving && (
+                <button
+                  onClick={() => saveDraftDate("")}
+                  className="text-xs text-muted-foreground hover:text-rose-600"
+                >
+                  Clear
+                </button>
+              )}
+              {draftMsg === "saved" && <span className="text-xs text-emerald-600">Saved</span>}
+              {draftMsg === "error" && <span className="text-xs text-rose-600">{draftErr || "Couldn\u2019t save"}</span>}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">When the initial premium drafts. Shown on the pipeline card.</p>
+          </div>
           </div>
 
           {/* Quiz answers — the highest-value sales data, surfaced first. */}

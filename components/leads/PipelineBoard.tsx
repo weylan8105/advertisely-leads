@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search } from "lucide-react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search, CalendarClock } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -635,6 +635,8 @@ export function PipelineBoard({
                               </div>
                             )}
 
+                            {lead.draftDate && <DraftDateTag date={lead.draftDate} />}
+
                             <div className="mt-1.5 flex flex-wrap gap-1">
                               <span className="text-[10px] bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
                                 {lead.leadTypeLabel}
@@ -712,6 +714,10 @@ export function PipelineBoard({
             setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, valueCents: valueCents ?? undefined } : l)));
             setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, valueCents: valueCents ?? undefined } : dl));
           }}
+          onDraftDateChanged={(leadId, draftDate) => {
+            setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, draftDate: draftDate ?? undefined } : l)));
+            setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, draftDate: draftDate ?? undefined } : dl));
+          }}
         />
       )}
       {picker && (
@@ -731,5 +737,30 @@ export function PipelineBoard({
         />
       )}
     </>
+  );
+}
+
+/** "Drafts Nov 12" on a card — amber within 3 days, red on the day, grey once past. */
+function DraftDateTag({ date }: { date: string }) {
+  const [y, m, d] = date.split("-").map(Number);
+  const draft = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((draft.getTime() - today.getTime()) / 86_400_000);
+  const label = draft.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const text = days === 0 ? "Drafts today" : days === 1 ? "Drafts tomorrow" : days < 0 ? `Drafted ${label}` : `Drafts ${label}`;
+  const tone =
+    days < 0
+      ? "bg-slate-100 text-slate-500"
+      : days === 0
+        ? "bg-rose-100 text-rose-700"
+        : days <= 3
+          ? "bg-amber-100 text-amber-800"
+          : "bg-sky-50 text-sky-700";
+  return (
+    <div className={`mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>
+      <CalendarClock className="h-2.5 w-2.5" />
+      {text}
+    </div>
   );
 }

@@ -195,6 +195,9 @@ model Lead {
   // Opportunity value the agent assigns to this lead (shown on the card + summed
   // per pipeline stage). Separate from soldPremiumCents (which powers P&L at close).
   valueCents      Int?
+  // Date the initial premium is scheduled to draft on a submitted deal (a
+  // reminder the agent sets; shown next to the value and on the card).
+  draftDate       DateTime?
   soldPremiumCents Int?         // annual premium (AP) logged when moved to Issued PAID — powers P&L
   soldAt          DateTime?
   callbackAt      DateTime?     // scheduled call-back reminder (card counts down / flashes when due)

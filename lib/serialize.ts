@@ -53,6 +53,7 @@ export function serializeLead(l: any): Lead {
     pipelineStage: l.pipelineStage ?? "new-lead",
     pipeline: l.pipeline === "goldmine" ? "goldmine" : "main",
     valueCents: l.valueCents ?? undefined,
+    draftDate: l.draftDate ? new Date(l.draftDate).toISOString().slice(0, 10) : undefined,
     stageRank: l.stageRank ?? undefined,
     workingUserId: l.workingUserId ?? undefined,
     source: l.source,
