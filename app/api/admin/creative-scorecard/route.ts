@@ -25,6 +25,8 @@ function funnelFor(account: string | null, campaignName: string, source: string 
   if (campaignName.includes("HWA") || source === "healthcare-wealth-quiz") return "HWA";
   if (account === "ABCA" || source === "early-retirement-quiz") return "ABCA";
   if (account === "Enhanced Wealth") return "Enhanced Wealth";
+  // Without Meta data: Facebook instant-form leads all come from the Enhanced Wealth account.
+  if (!account && source && !source.endsWith("-quiz")) return "Enhanced Wealth";
   return "Other";
 }
 
