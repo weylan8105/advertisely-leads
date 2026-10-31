@@ -312,3 +312,123 @@ export async function getBlendedAdSpendRange(sinceYmd: string, untilYmd: string)
   if (ABCA_ACCOUNT_RAW) { const r = await fetchAccountSpendRange(ABCA_ACCOUNT_RAW, sinceYmd, untilYmd); accounts.push({ label: "ABCA", spendCents: r.spendCents, error: r.error }); total += r.spendCents; }
   return { configured: true, spendCents: total, accounts, windowDays, fetchedAt };
 }
+
+// ─── Creative scorecard: spend + names per ad across BOTH ad accounts ────────
+// Unlike the CPL / blended-spend helpers above, HWA campaigns are INCLUDED here
+// (the scorecard ranks every ad). Account ids fall back to the known accounts so
+// the scorecard works with just the token set.
+const SCORECARD_ACCOUNTS: { label: "ABCA" | "Enhanced Wealth"; raw: string }[] = [
+  { label: "ABCA", raw: ABCA_ACCOUNT_RAW || "2126340781245705" },
+  { label: "Enhanced Wealth", raw: ACCOUNT_RAW || "2254810101392917" },
+];
+
+export interface ScorecardAd {
+  adId: string;
+  adName: string;
+  adsetId: string;
+  adsetName: string;
+  campaignName: string;
+  account: "ABCA" | "Enhanced Wealth";
+  status: string | null;
+  spendCents: number;
+}
+
+export interface ScorecardSpend {
+  configured: boolean;
+  ads: ScorecardAd[];
+  /** Ad set id → name, for older leads that only recorded their ad set. */
+  adsets: Record<string, string>;
+  errors: string[];
+}
+
+// Every status except DELETED, so paused/archived ads still get a name.
+const AD_STATUSES = [
+  "ACTIVE", "PAUSED", "ARCHIVED", "IN_PROCESS", "WITH_ISSUES", "PENDING_REVIEW", "DISAPPROVED",
+  "PREAPPROVED", "PENDING_BILLING_INFO", "CAMPAIGN_PAUSED", "ADSET_PAUSED",
+];
+
+const scorecardCache = new Map<string, { at: number; snap: ScorecardSpend }>();
+
+// Follow Graph API paging (capped) and return every row.
+async function fetchAllPages(url: string, maxPages = 8): Promise<{ rows: any[]; error?: string }> {
+  const rows: any[] = [];
+  let next: string | undefined = url;
+  for (let i = 0; next && i < maxPages; i++) {
+    const res: Response = await fetch(next, { cache: "no-store" });
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) return { rows, error: json?.error?.message || `HTTP ${res.status}` };
+    if (Array.isArray(json?.data)) rows.push(...json.data);
+    next = json?.paging?.next;
+  }
+  return { rows };
+}
+
+/**
+ * Spend per ad (plus names/status for every ad, spending or not) for the ABCA
+ * and Enhanced Wealth ad accounts. `sinceYmd` null = all time. 15-minute cache.
+ */
+export async function getScorecardSpend(sinceYmd: string | null, untilYmd: string): Promise<ScorecardSpend> {
+  if (!TOKEN) return { configured: false, ads: [], adsets: {}, errors: [] };
+  const key = `${sinceYmd ?? "all"}:${untilYmd}`;
+  const cached = scorecardCache.get(key);
+  if (cached && Date.now() - cached.at < 15 * 60 * 1000) return cached.snap;
+
+  const range = sinceYmd
+    ? `time_range=${encodeURIComponent(JSON.stringify({ since: sinceYmd, until: untilYmd }))}`
+    : "date_preset=maximum";
+  const tok = `access_token=${encodeURIComponent(TOKEN)}`;
+  const ads: ScorecardAd[] = [];
+  const adsets: Record<string, string> = {};
+  const errors: string[] = [];
+
+  await Promise.all(
+    SCORECARD_ACCOUNTS.map(async ({ label, raw }) => {
+      const account = raw.startsWith("act_") ? raw : `act_${raw}`;
+      const [ins, list] = await Promise.all([
+        fetchAllPages(`${GRAPH}/${account}/insights?level=ad&fields=ad_id,ad_name,adset_id,adset_name,campaign_name,spend&${range}&limit=500&${tok}`),
+        fetchAllPages(
+          `${GRAPH}/${account}/ads?fields=id,name,effective_status,adset{id,name},campaign{name}` +
+            `&effective_status=${encodeURIComponent(JSON.stringify(AD_STATUSES))}&limit=500&${tok}`,
+        ),
+      ]);
+      if (ins.error) errors.push(`${label}: ${ins.error}`);
+      if (list.error) errors.push(`${label} ad list: ${list.error}`);
+      const insById = new Map<string, any>(ins.rows.map((r) => [String(r.ad_id), r]));
+      const cents = (r: any) => Math.round((parseFloat(r?.spend ?? "0") || 0) * 100);
+      for (const a of list.rows) {
+        const adsetId = String(a.adset?.id ?? "");
+        if (adsetId) adsets[adsetId] = String(a.adset?.name ?? adsetId);
+        ads.push({
+          adId: String(a.id),
+          adName: String(a.name ?? a.id),
+          adsetId,
+          adsetName: String(a.adset?.name ?? ""),
+          campaignName: String(a.campaign?.name ?? ""),
+          account: label,
+          status: a.effective_status ? String(a.effective_status) : null,
+          spendCents: cents(insById.get(String(a.id))),
+        });
+        insById.delete(String(a.id));
+      }
+      // Spend on ads the list didn't return (deleted, or past the page cap).
+      for (const [adId, r] of insById) {
+        const adsetId = String(r.adset_id ?? "");
+        if (adsetId && !adsets[adsetId]) adsets[adsetId] = String(r.adset_name ?? adsetId);
+        ads.push({
+          adId,
+          adName: String(r.ad_name ?? adId),
+          adsetId,
+          adsetName: String(r.adset_name ?? ""),
+          campaignName: String(r.campaign_name ?? ""),
+          account: label,
+          status: null,
+          spendCents: cents(r),
+        });
+      }
+    }),
+  );
+
+  const snap: ScorecardSpend = { configured: true, ads, adsets, errors };
+  if (!errors.length) scorecardCache.set(key, { at: Date.now(), snap });
+  return snap;
+}

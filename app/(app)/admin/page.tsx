@@ -45,6 +45,7 @@ import { AdminAccounts } from "@/components/admin/AdminAccounts";
 import { AdminDownlineOrders } from "@/components/admin/AdminDownlineOrders";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
 import { AdCostTable } from "@/components/admin/AdCostTable";
+import { CreativeScorecard } from "@/components/admin/CreativeScorecard";
 import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
@@ -872,6 +873,18 @@ function AdminPageInner() {
           </TabsContent>
 
           <TabsContent value="funnel">
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Creative scorecard</CardTitle>
+                <CardDescription>
+                  Every ad across ABCA, Enhanced Wealth and HWA, ranked by what its leads turned into: applications,
+                  Issued PAID deals and premium, next to what the ad cost.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CreativeScorecard />
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Real cost per lead by ad</CardTitle>
