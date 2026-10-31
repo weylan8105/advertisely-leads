@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       const adsetName = meta.adsets[id.slice(3)];
       adName = adsetName ? `${adsetName} (ad set)` : `Ad set ${id.slice(3)}`;
       detail = "Older lead-form leads: only the ad set was recorded";
-    } else if (!a) {
+    } else if (!a && meta.configured) {
       detail = "Ad not found in either ad account";
     }
     return {
