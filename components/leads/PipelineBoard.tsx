@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search, CalendarClock } from "lucide-react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search, CalendarClock, ChevronDown } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -673,6 +673,27 @@ export function PipelineBoard({
                                 <Clock className="h-3 w-3" /> {cb.label}
                               </div>
                             )}
+
+                            {/* Change the stage straight from the card — a quick
+                                alternative to dragging (GHL-style). */}
+                            <div className="mt-2 relative" onClick={(e) => e.stopPropagation()}>
+                              <span className={cn("pointer-events-none absolute left-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full", TONE_DOT[stage.tone])} />
+                              <select
+                                value={stage.id}
+                                draggable={false}
+                                aria-label={`Move ${lead.name} to another stage`}
+                                title="Move to another stage"
+                                onClick={(e) => e.stopPropagation()}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onChange={(e) => { e.stopPropagation(); void move(lead.id, e.target.value); }}
+                                className="h-7 w-full cursor-pointer appearance-none rounded-md border border-slate-200 bg-white pl-5 pr-6 text-[11px] font-medium text-slate-600 hover:border-brand-red/40 focus:border-brand-red focus:outline-none focus:ring-1 focus:ring-brand-red/20"
+                              >
+                                {cols.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.label}</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -692,7 +713,13 @@ export function PipelineBoard({
       {detailLead && (
         <LeadDetailModal
           lead={detailLead}
+          stages={cols}
           onClose={() => setDetailLead(null)}
+          onStageChanged={(leadId, stage) => {
+            setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: stage } : l)));
+            setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, pipelineStage: stage } : dl));
+            markActive(leadId);
+          }}
           onAssigned={(leadId) => {
             // It now lives in someone else's pipeline — take it off this board.
             setTimeout(() => {

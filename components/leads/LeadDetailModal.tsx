@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem, CalendarClock } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem, CalendarClock, Workflow, ChevronDown } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -9,7 +9,18 @@ import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
 import { LeadMessages } from "@/components/leads/LeadMessages";
 import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
-import { isGoldmineEligibleStage } from "@/data/pipeline";
+import { isGoldmineEligibleStage, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
+
+// Colored dot for the pipeline-stage dropdown (mirrors the board's column dots).
+const STAGE_TONE_DOT: Record<string, string> = {
+  slate: "bg-slate-400",
+  red: "bg-brand-red",
+  amber: "bg-amber-500",
+  blue: "bg-blue-500",
+  indigo: "bg-indigo-500",
+  emerald: "bg-emerald-500",
+  rose: "bg-rose-500",
+};
 
 function prettyKey(k: string) {
   return k
@@ -92,6 +103,8 @@ export function LeadDetailModal({
   onNoteAdded,
   onValueChanged,
   onDraftDateChanged,
+  onStageChanged,
+  stages,
   onAssigned,
   context = "agent",
 }: {
@@ -100,6 +113,10 @@ export function LeadDetailModal({
   onNoteAdded?: (leadId: string, note: LeadNote) => void;
   onValueChanged?: (leadId: string, valueCents: number | null) => void;
   onDraftDateChanged?: (leadId: string, draftDate: string | null) => void;
+  /** Called after the lead's pipeline stage is changed from the card dropdown. */
+  onStageChanged?: (leadId: string, stage: string) => void;
+  /** Pipeline stages for the stage dropdown (owner's customized set, or defaults). Omit to hide the dropdown. */
+  stages?: PipelineStage[];
   /** Called after the lead is moved to another agent's pipeline. */
   onAssigned?: (leadId: string, userId: string, agentName: string) => void;
   /** "admin" opens the card from the leads database (hides agent-only actions). */
@@ -310,6 +327,50 @@ export function LeadDetailModal({
       setDraftMsg("error");
     } finally {
       setDraftSaving(false);
+    }
+  }
+
+  // Pipeline stage dropdown — change the opportunity's stage without dragging
+  // the card across the board (GHL-style). Uses the same endpoint as the drag.
+  const stageList = stages ?? [];
+  const [stageId, setStageId] = useState(lead.pipelineStage);
+  const [stageSaving, setStageSaving] = useState(false);
+  const [stageMsg, setStageMsg] = useState<"saved" | "error" | null>(null);
+  const currentStage = stageList.find((s) => s.id === stageId);
+  async function changeStage(next: string) {
+    if (!next || next === stageId) return;
+    // Marking a policy sold (the won stage) captures the annual premium for P&L.
+    let premiumCents: number | undefined;
+    if (next === WON_STAGE_ID) {
+      const input = window.prompt(
+        "Policy sold! Enter the annual premium (AP) in dollars — this feeds your Profit & Loss:",
+        "",
+      );
+      if (input === null) return; // cancelled — leave the stage as-is
+      const dollars = parseFloat(input.replace(/[^0-9.]/g, ""));
+      premiumCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+    }
+    const prev = stageId;
+    setStageId(next);
+    setStageSaving(true);
+    setStageMsg(null);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: next, ...(premiumCents != null ? { premiumCents } : {}) }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't change the stage.");
+      setStageMsg("saved");
+      setTimeout(() => setStageMsg((m) => (m === "saved" ? null : m)), 1600);
+      try { localStorage.setItem("pipeline_active_lead", lead.id); } catch { /* ignore */ }
+      onStageChanged?.(lead.id, next);
+    } catch (e: any) {
+      setStageId(prev); // roll back the dropdown
+      setStageMsg("error");
+      alert(e?.message ?? "Couldn't change the stage.");
+    } finally {
+      setStageSaving(false);
     }
   }
 
@@ -536,6 +597,47 @@ export function LeadDetailModal({
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">
           <div className="flex flex-wrap gap-x-10 gap-y-5">
+          {/* Pipeline stage — move the opportunity without dragging (GHL-style). */}
+          {stageList.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Workflow className="h-3.5 w-3.5" /> Pipeline stage
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full",
+                      STAGE_TONE_DOT[currentStage?.tone ?? "slate"],
+                    )}
+                  />
+                  <select
+                    value={stageId}
+                    disabled={stageSaving}
+                    onChange={(e) => changeStage(e.target.value)}
+                    aria-label="Pipeline stage"
+                    title="Move this lead to another pipeline stage"
+                    className="h-[42px] w-56 max-w-full appearance-none rounded-lg border border-slate-200 bg-white pl-7 pr-9 text-sm font-medium text-foreground hover:border-brand-red/40 focus:border-brand-red focus:outline-none focus:ring-1 focus:ring-brand-red disabled:opacity-60"
+                  >
+                    {stageList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  {stageSaving ? (
+                    <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  )}
+                </div>
+                {stageMsg === "saved" && <span className="text-xs text-emerald-600">Moved</span>}
+                {stageMsg === "error" && <span className="text-xs text-rose-600">Couldn&rsquo;t move</span>}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">Another way to move a lead — no dragging needed.</p>
+            </div>
+          )}
+
           {/* Opportunity value — editable; shows on the card + sums per stage. */}
           <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">

@@ -84,7 +84,11 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
   // default stage for unknown ids so a row always has a stage + tint.
   const stageList = stages && stages.length ? stages : PIPELINE_STAGES;
   const stageById = useMemo(() => new Map(stageList.map((s) => [s.id, s])), [stageList]);
-  const stageFor = (lead: Lead) => stageById.get(lead.pipelineStage) ?? stageById.get(DEFAULT_STAGE) ?? stageList[0];
+  // Stage changes made this session via the card dropdown, shown immediately on
+  // the row (the leads prop isn't refetched until the page reloads).
+  const [stageOverrides, setStageOverrides] = useState<Record<string, string>>({});
+  const stageIdOf = (lead: Lead) => stageOverrides[lead.id] ?? lead.pipelineStage;
+  const stageFor = (lead: Lead) => stageById.get(stageIdOf(lead)) ?? stageById.get(DEFAULT_STAGE) ?? stageList[0];
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   // Downline agents you can hand leads to (only owners/admins can reassign).
@@ -116,11 +120,12 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
           .join(" ")
           .toLowerCase()
           .includes(search.toLowerCase());
-      const stageId = stageById.has(l.pipelineStage) ? l.pipelineStage : DEFAULT_STAGE;
+      const effId = stageOverrides[l.id] ?? l.pipelineStage;
+      const stageId = stageById.has(effId) ? effId : DEFAULT_STAGE;
       const matchesStage = stageFilter === "all" || stageId === stageFilter;
       return matchesSearch && matchesStage;
     });
-  }, [leads, search, stageFilter, stageById]);
+  }, [leads, search, stageFilter, stageById, stageOverrides]);
 
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
@@ -687,6 +692,11 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
       {detailLead && (
         <LeadDetailModal
           lead={detailLead}
+          stages={stageList}
+          onStageChanged={(leadId, stage) => {
+            setStageOverrides((prev) => ({ ...prev, [leadId]: stage }));
+            setDetailLead((dl) => (dl && dl.id === leadId ? { ...dl, pipelineStage: stage } : dl));
+          }}
           onClose={() => setDetailLead(null)}
           onAssigned={() => setTimeout(() => window.location.reload(), 900)}
           onNoteAdded={(leadId, note) => {
