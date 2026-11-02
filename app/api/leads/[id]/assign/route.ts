@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, organizationId: true, assignedUserId: true, name: true, state: true, receivedAt: true, packageId: true },
+    select: { id: true, organizationId: true, assignedUserId: true, name: true, state: true, receivedAt: true, packageId: true, pipeline: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
@@ -48,21 +48,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
   }
 
-  const orgId = lead.organizationId ?? ctx?.organizationId ?? null;
+  let orgId = lead.organizationId ?? ctx?.organizationId ?? null;
+  // Platform admin handing the lead to someone outside its team: it moves into
+  // the target's own team (and out of any Goldmine) so the right managers see it.
+  let leaveGoldmine = false;
 
   // The target must be a member of the org (unless unassigning, or platform admin).
   let targetName: string | null = null;
   if (targetUserId) {
-    if (!isPlatformAdmin) {
-      const member = orgId
-        ? await prisma.membership.findUnique({
-            where: { organizationId_userId: { organizationId: orgId, userId: targetUserId } },
-            select: { id: true },
-          })
-        : null;
-      if (!member) {
+    const member = orgId
+      ? await prisma.membership.findUnique({
+          where: { organizationId_userId: { organizationId: orgId, userId: targetUserId } },
+          select: { id: true },
+        })
+      : null;
+    if (!member) {
+      if (!isPlatformAdmin) {
         return NextResponse.json({ error: "That agent isn't in your organization." }, { status: 400 });
       }
+      const targetCtx = await ensureOrgContext(targetUserId);
+      if (!targetCtx) return NextResponse.json({ error: "That account wasn't found." }, { status: 404 });
+      orgId = targetCtx.organizationId;
+      leaveGoldmine = lead.pipeline === "goldmine";
     }
     const u = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
     targetName = u?.name ?? null;
@@ -88,6 +95,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         assignedUserId: targetUserId,
         assignedAt: targetUserId ? new Date() : null,
         ...(orgId ? { organizationId: orgId } : {}),
+        // Goldmine stages are the old team's; start fresh in the new agent's pipeline.
+        ...(leaveGoldmine ? { pipeline: "main", pipelineStage: "new-lead", goldmineAt: null, workingUserId: null } : {}),
       },
     }),
     prisma.leadActivity.create({

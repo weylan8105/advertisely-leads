@@ -174,12 +174,21 @@ export function LeadDetailModal({
   const [canAssign, setCanAssign] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignMsg, setAssignMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Platform admins can hand a lead to ANY Advertisely account, not just their team.
+  const [allAccounts, setAllAccounts] = useState<{ userId: string; name: string | null; email: string }[]>([]);
   useEffect(() => {
     fetch("/api/team")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) { setCanAssign(!!d.canManage); setTeam(d.members ?? []); } })
+      .then((d) => { if (d) { if (d.canManage) setCanAssign(true); setTeam(d.members ?? []); } })
+      .catch(() => {});
+    fetch("/api/admin/assignees")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.accounts) { setCanAssign(true); setAllAccounts(d.accounts); } })
       .catch(() => {});
   }, []);
+  const teamIds = new Set(team.map((t) => t.userId));
+  const otherAccounts = allAccounts.filter((a) => !teamIds.has(a.userId));
+  const assignable = [...team, ...otherAccounts];
   async function assignTo(userId: string, agentName: string, force = false): Promise<void> {
     if (!force && !window.confirm(`Move ${lead.name} into ${agentName}'s pipeline?`)) return;
     setAssigning(true);
@@ -511,24 +520,43 @@ export function LeadDetailModal({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {canAssign && team.length > 1 && (
+            {canAssign && assignable.length > 1 && (
               <div className="flex flex-col items-end">
                 <select
                   value=""
                   disabled={assigning}
                   onChange={(e) => {
-                    const m = team.find((t) => t.userId === e.target.value);
-                    if (m) void assignTo(m.userId, m.isSelf ? "your" : m.name ?? m.email);
+                    const m = assignable.find((t) => t.userId === e.target.value);
+                    if (m) void assignTo(m.userId, "isSelf" in m && m.isSelf ? "your" : m.name ?? m.email);
                   }}
                   title="Move this lead into a downline agent's pipeline"
                   className="h-[30px] max-w-[11rem] rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-foreground hover:border-brand-red/40 focus:outline-none focus:ring-2 focus:ring-brand-red/15 disabled:opacity-60"
                 >
                   <option value="">{assigning ? "Assigning…" : "Assign to…"}</option>
-                  {team.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.isSelf ? "Me (my pipeline)" : m.name ?? m.email}
-                    </option>
-                  ))}
+                  {otherAccounts.length > 0 ? (
+                    <>
+                      <optgroup label="My team">
+                        {team.map((m) => (
+                          <option key={m.userId} value={m.userId}>
+                            {m.isSelf ? "Me (my pipeline)" : m.name ?? m.email}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="All Advertisely accounts">
+                        {otherAccounts.map((a) => (
+                          <option key={a.userId} value={a.userId}>
+                            {a.name ? `${a.name} · ${a.email}` : a.email}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </>
+                  ) : (
+                    team.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.isSelf ? "Me (my pipeline)" : m.name ?? m.email}
+                      </option>
+                    ))
+                  )}
                 </select>
                 {assignMsg && (
                   <span className={cn("mt-1 text-[11px]", assignMsg.ok ? "text-emerald-600" : "text-rose-600")}>{assignMsg.text}</span>
