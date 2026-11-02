@@ -169,20 +169,28 @@ export function AdminAccounts() {
                     </div>
                   </td>
                   <td className="py-2.5">
-                    {a.subscription && (
-                      <div className="w-32 mb-2">
+                    {a.subscription ? (
+                      // Subscribers get ONE bar — a distinct weekly "this week"
+                      // bar (indigo), never the one-off order bar. Manage orders
+                      // still shows any individual orders they've placed.
+                      <div className="w-32" title={`Weekly subscription — ${a.subscription.deliveredThisWeek} of ${a.subscription.leadsPerWeek} leads delivered this billing week`}>
                         <div className="flex items-center justify-between text-[11px] mb-1">
-                          <span className="inline-flex items-center gap-1 font-medium text-brand-red">
-                            <Repeat className="h-3 w-3" /> This week
+                          <span className="inline-flex items-center gap-1 font-medium text-indigo-600">
+                            <Repeat className="h-3 w-3" /> Subscription
                           </span>
                           <span className="tabular-nums text-muted-foreground">
                             {a.subscription.deliveredThisWeek}/{a.subscription.leadsPerWeek}
+                            <span className="opacity-60"> wk</span>
                           </span>
                         </div>
-                        <Progress value={a.subscription.progressPct} className="h-1.5" />
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-indigo-100">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+                            style={{ width: `${a.subscription.progressPct}%` }}
+                          />
+                        </div>
                       </div>
-                    )}
-                    {a.orderedQty > 0 ? (
+                    ) : a.orderedQty > 0 ? (
                       <div className="w-32">
                         <div className="flex items-center justify-between text-[11px] mb-1">
                           <span className="tabular-nums font-medium text-foreground">
@@ -199,7 +207,7 @@ export function AdminAccounts() {
                         </div>
                         <Progress value={a.orderProgressPct} className="h-1.5" />
                       </div>
-                    ) : a.subscription ? null : (
+                    ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </td>
@@ -243,7 +251,7 @@ export function AdminAccounts() {
         </table>
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1 font-medium text-brand-red"><Repeat className="h-3 w-3" /> This week</span> = fresh leads delivered this billing week ÷ the subscription&apos;s weekly allotment (shown for subscribers) · Order progress = leads delivered ÷ leads ordered across their open (incomplete) orders · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
+        <span className="inline-flex items-center gap-1 font-medium text-indigo-600"><Repeat className="h-3 w-3" /> Subscription</span> (indigo) = leads delivered this billing week ÷ the subscription&apos;s weekly allotment · Order progress (red) = leads delivered ÷ leads ordered across open (incomplete) orders, for non-subscription accounts · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
         <span className="font-medium">Manage orders</span> to change an order&apos;s states, quantity, or close/reopen it; <span className="font-medium">View CRM</span> to see their full pipeline.
       </p>
 
