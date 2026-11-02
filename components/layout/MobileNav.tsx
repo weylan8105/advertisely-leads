@@ -20,6 +20,7 @@ import {
   X,
   LogOut,
   Coins,
+  UploadCloud,
 } from "lucide-react";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ const ALL: Item[] = [
   { href: "/settings", label: "Settings & Integrations", icon: Settings },
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
   { href: "/business-pnl", label: "Business P&L", icon: Landmark, adminOnly: true },
+  { href: "/ad-uploader", label: "Ad Bulk Uploader", icon: UploadCloud, adminOnly: true },
 ];
 
 export function MobileNav() {
