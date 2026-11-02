@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({ prisma: null, isDatabaseConfigured: false }));
 process.env.META_ADS_MANAGE_TOKEN = "test-token";
+process.env.AD_UPLOADER_ACCOUNT_IDS = "123";
 
 type Call = { url: string; params: Record<string, string> };
 let calls: Call[] = [];
@@ -33,6 +34,14 @@ const ad = {
 };
 
 describe("metaAds", () => {
+  it("refuses ad accounts outside the allow-list without calling Meta", async () => {
+    const { createCampaign, isAllowedAccount } = await import("@/lib/metaAds");
+    expect(isAllowedAccount("act_123")).toBe(true);
+    expect(isAllowedAccount("act_2254810101392917")).toBe(false);
+    await expect(createCampaign({ ...ctx, accountId: "2254810101392917" }, { name: "C", objective: "OUTCOME_LEADS" } as any)).rejects.toThrow(/American Blue Collar Advantage/);
+    expect(calls).toHaveLength(0);
+  });
+
   it("creates campaigns paused with the financial special ad category", async () => {
     const { createCampaign } = await import("@/lib/metaAds");
     replies.push({ body: { id: "C1" } });

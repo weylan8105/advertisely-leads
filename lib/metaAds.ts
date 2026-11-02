@@ -9,6 +9,9 @@
 //                          Falls back to META_ADS_ACCESS_TOKEN if that token
 //                          has been granted the same scopes.
 //   META_GRAPH_VERSION     optional, defaults to v20.0 (same as metaInsights).
+//   AD_UPLOADER_ACCOUNT_IDS optional comma list of ad accounts the uploader may
+//                          touch. Defaults to ABCA only (ABCA_AD_ACCOUNT_ID or
+//                          2126340781245705) — no uploads to Enhanced Wealth.
 //
 // Everything this module creates is PAUSED — someone reviews in Ads Manager
 // before any money is spent.
@@ -32,9 +35,22 @@ export class MetaApiError extends Error {
   }
 }
 
+const ALLOWED_ACCOUNTS = new Set(
+  (process.env.AD_UPLOADER_ACCOUNT_IDS || process.env.ABCA_AD_ACCOUNT_ID || "2126340781245705")
+    .split(",")
+    .map((id) => id.replace(/^act_/, "").replace(/\D/g, ""))
+    .filter(Boolean),
+);
+
+export function isAllowedAccount(accountId: string): boolean {
+  return ALLOWED_ACCOUNTS.has(accountId.replace(/^act_/, "").replace(/\D/g, ""));
+}
+
+// Every Graph call against an ad account goes through here, so this is the lock.
 function actId(accountId: string): string {
   const digits = accountId.replace(/^act_/, "").replace(/\D/g, "");
   if (!digits) throw new MetaApiError("Invalid ad account id.");
+  if (!ALLOWED_ACCOUNTS.has(digits)) throw new MetaApiError("The bulk uploader only works with the American Blue Collar Advantage ad account.");
   return `act_${digits}`;
 }
 
@@ -100,6 +116,7 @@ export interface AdAccountOption {
 export async function listAdAccounts(): Promise<AdAccountOption[]> {
   const rows = await graphList<any>("me/adaccounts", { fields: "name,account_status,currency,business{name}" });
   return rows
+    .filter((a) => isAllowedAccount(String(a.id ?? "")))
     .map((a) => ({
       id: a.id,
       name: a.name ?? a.id,
