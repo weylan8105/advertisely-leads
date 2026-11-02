@@ -5,6 +5,7 @@ import { TrustStats } from "@/components/marketing/TrustStats";
 import { HowItWorks } from "@/components/marketing/HowItWorks";
 import { LeadQuality } from "@/components/marketing/LeadQuality";
 import { FeatureGrid } from "@/components/marketing/FeatureGrid";
+import { Advertisers } from "@/components/marketing/Advertisers";
 import { PricingPreview } from "@/components/marketing/PricingPreview";
 import { Compliance } from "@/components/marketing/Compliance";
 import { FAQ } from "@/components/marketing/FAQ";
@@ -20,6 +21,7 @@ export default function LandingPage() {
         <HowItWorks />
         <LeadQuality />
         <FeatureGrid />
+        <Advertisers />
         <PricingPreview />
         <Compliance />
         <FAQ />
