@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
-import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents } from "@/lib/leadSubscription";
+import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents, billingWeekWindow } from "@/lib/leadSubscription";
 import { LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 
 export const runtime = "nodejs";
@@ -46,11 +46,20 @@ export async function GET() {
   const totalDelivered = orders.reduce((s, o) => s + o.fulfilledCount, 0);
   const latest = orders[0] ?? null;
 
+  // Fresh leads delivered in the current billing week — resilient to a missing
+  // weekly Order (counts leads landed in the live billing-week window).
+  const { start, end } = billingWeekWindow(sub.currentPeriodEnd, sub.createdAt);
+  const deliveredThisWeek = await prisma.lead.count({
+    where: { assignedUserId: userId, trashedAt: null, assignedAt: { gte: start, lt: end } },
+  });
+
   return NextResponse.json({
     ...base,
     subscribed: true,
     weeklyCents: sub.weeklyCents,
     leadsPerWeek: leadsForCents(sub.weeklyCents).leads,
+    deliveredThisWeek,
+    weekEnd: end,
     status: sub.status,
     filterStates: sub.filterStates,
     weeksBilled: sub.weeksBilled,

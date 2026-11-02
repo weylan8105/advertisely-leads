@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { deliveredCounts } from "@/lib/orderProgress";
+import { billingWeekWindow, weeklyLeadAllotment } from "@/lib/leadSubscription";
 import { PIPELINE_STAGES } from "@/data/pipeline";
 
 export const runtime = "nodejs";
@@ -80,7 +81,35 @@ export async function GET() {
   const liveByOrder = await deliveredCounts(latestOrders.map((o) => o.id));
   const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
 
-  const ids = new Set<string>([...Object.keys(byUser), ...Object.keys(spendByUser)]);
+  // Active lead subscriptions → a weekly "this week's leads" progress bar that
+  // always shows for a subscriber (independent of whether a weekly Order row
+  // exists yet). Delivered-this-week = fresh leads assigned inside the current
+  // billing-week window.
+  const activeSubs = await prisma.leadSubscription.findMany({
+    where: { status: { not: "canceled" } },
+    select: { userId: true, status: true, weeklyCents: true, currentPeriodEnd: true, createdAt: true },
+  });
+  const subByUser: Record<
+    string,
+    { status: string; weeklyCents: number; leadsPerWeek: number; deliveredThisWeek: number; currentPeriodEnd: Date | null }
+  > = {};
+  await Promise.all(
+    activeSubs.map(async (s) => {
+      const { start, end } = billingWeekWindow(s.currentPeriodEnd, s.createdAt);
+      const deliveredThisWeek = await prisma!.lead.count({
+        where: { assignedUserId: s.userId, trashedAt: null, assignedAt: { gte: start, lt: end } },
+      });
+      subByUser[s.userId] = {
+        status: s.status,
+        weeklyCents: s.weeklyCents,
+        leadsPerWeek: weeklyLeadAllotment(s.weeklyCents),
+        deliveredThisWeek,
+        currentPeriodEnd: s.currentPeriodEnd,
+      };
+    }),
+  );
+
+  const ids = new Set<string>([...Object.keys(byUser), ...Object.keys(spendByUser), ...Object.keys(subByUser)]);
   const accounts = [...ids]
     .map((id) => {
       const u = (userMap[id] ?? {}) as any;
@@ -99,6 +128,15 @@ export async function GET() {
         apCents: apByUser[id] ?? 0,
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
+        subscription: subByUser[id]
+          ? {
+              ...subByUser[id],
+              progressPct:
+                subByUser[id].leadsPerWeek > 0
+                  ? Math.min(100, Math.round((subByUser[id].deliveredThisWeek / subByUser[id].leadsPerWeek) * 100))
+                  : 0,
+            }
+          : null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
         // Progress = combined total across this client's INCOMPLETE orders only
         // (still being fulfilled), from a LIVE lead count. Fully delivered orders
@@ -119,8 +157,9 @@ export async function GET() {
         })(),
       };
     })
-    // Only real client accounts (have leads, spent, or placed an order).
-    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0))
+    // Only real client accounts (have leads, spent, placed an order, or an
+    // active subscription — so brand-new subscribers show up right away).
+    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0 || a.subscription))
     .sort((a, b) => b.delivered - a.delivered);
 
   return NextResponse.json({

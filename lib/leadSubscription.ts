@@ -28,6 +28,33 @@ export function leadsForCents(cents: number): { leads: number; remainder: number
   return { leads, remainder: cents - leads * SUB_PRICE_PER_LEAD_CENTS };
 }
 
+/** Leads a weekly budget is expected to deliver (e.g. $500 → 9). */
+export function weeklyLeadAllotment(weeklyCents: number): number {
+  return leadsForCents(weeklyCents).leads;
+}
+
+/**
+ * The live 7-day billing-week window for a subscription, used to measure
+ * "leads delivered this week". Anchored at the Stripe current-period end and
+ * rolled to the 7-day window that contains `now`, so the progress reads
+ * correctly even when billing hasn't advanced the period (e.g. a missed
+ * invoice.paid webhook left currentPeriodEnd stale or null).
+ */
+export function billingWeekWindow(
+  currentPeriodEnd: Date | null | undefined,
+  createdAt?: Date | null,
+  now: Date = new Date(),
+): { start: Date; end: Date } {
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  const n = now.getTime();
+  let end = (currentPeriodEnd ?? createdAt ?? now).getTime();
+  // Roll forward until the period end is in the future (handles stale/past ends).
+  if (end <= n) end += Math.ceil((n - end + 1) / WEEK) * WEEK;
+  // Roll back so the window actually contains `now` (handles a far-future end).
+  while (end - WEEK > n) end -= WEEK;
+  return { start: new Date(end - WEEK), end: new Date(end) };
+}
+
 /** Find-or-create a weekly recurring Price for the given amount (one per amount). */
 export async function getWeeklyPriceId(weeklyCents: number): Promise<string> {
   if (!stripe) throw new Error("Stripe not configured");
@@ -98,8 +125,10 @@ export async function upsertLocalSubscription(sub: Stripe.Subscription) {
  * Handle a paid weekly invoice: create the week's fresh-lead order (budget +
  * rollover), fulfill it, and advance the subscription. Idempotent per invoice.
  */
-export async function processPaidInvoice(invoice: Stripe.Invoice) {
-  if (!stripe || !prisma) return;
+export async function processPaidInvoice(
+  invoice: Stripe.Invoice,
+): Promise<{ created: boolean; leads: number; orderId?: string } | null> {
+  if (!stripe || !prisma) return null;
   // The subscription reference has moved around across API versions — check the
   // known locations.
   const inv = invoice as any;
@@ -110,15 +139,15 @@ export async function processPaidInvoice(invoice: Stripe.Invoice) {
     inv.lines?.data?.find((l: any) => l.subscription)?.subscription ??
     null;
   const subId = typeof rawSub === "string" ? rawSub : rawSub?.id ?? null;
-  if (!subId) return; // not a subscription invoice
+  if (!subId) return null; // not a subscription invoice
 
   // Idempotency — one order per invoice.
   const already = await prisma.order.findUnique({ where: { stripeInvoiceId: invoice.id } });
-  if (already) return;
+  if (already) return { created: false, leads: already.quantity, orderId: already.id };
 
   const stripeSub = await stripe.subscriptions.retrieve(subId);
   const local = await upsertLocalSubscription(stripeSub);
-  if (!local) return;
+  if (!local) return null;
 
   // Lead budget = what they actually paid this cycle + any rollover. This picks
   // up each agent's own weekly amount automatically (it's just the invoice).
@@ -126,6 +155,7 @@ export async function processPaidInvoice(invoice: Stripe.Invoice) {
   const budget = amountPaid + local.rolloverCents;
   const { leads, remainder } = leadsForCents(budget);
 
+  let orderId: string | undefined;
   if (leads > 0) {
     const pkg = findPackage(SUB_PACKAGE_ID);
     const order = await prisma.order.create({
@@ -143,6 +173,7 @@ export async function processPaidInvoice(invoice: Stripe.Invoice) {
         stripeInvoiceId: invoice.id,
       },
     });
+    orderId = order.id;
     // Fill from existing inventory now; remaining quantity stays open for the
     // round-robin on fresh intake (like any order).
     await fulfillOrder(order.id);
@@ -157,4 +188,6 @@ export async function processPaidInvoice(invoice: Stripe.Invoice) {
       status: "active",
     },
   });
+
+  return { created: leads > 0, leads, orderId };
 }

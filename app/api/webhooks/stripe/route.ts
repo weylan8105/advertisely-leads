@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "invoice.paid":
+      case "invoice.payment_succeeded":
         // Each paid weekly invoice → that week's fresh-lead order (idempotent).
+        // Both event types are handled so the integration works whichever one
+        // the Stripe endpoint is subscribed to.
         await processPaidInvoice(event.data.object as Stripe.Invoice);
         break;
       case "customer.subscription.updated":

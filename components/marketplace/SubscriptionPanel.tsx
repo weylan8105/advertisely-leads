@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Check, Repeat, CalendarClock, Gauge, Lock, AlertCircle, LogIn } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -26,6 +27,8 @@ interface SubData {
   totalDelivered?: number;
   weeksDelivered?: number;
   thisWeek?: { quantity: number; fulfilled: number } | null;
+  deliveredThisWeek?: number;
+  weekEnd?: string | null;
 }
 
 const fmtDate = (iso?: string | null) =>
@@ -207,6 +210,25 @@ export function SubscriptionPanel() {
                 <div className="text-[11px] text-muted-foreground">weeks billed</div>
               </div>
             </div>
+            {/* This week's delivery progress against the weekly allotment. */}
+            {(() => {
+              const delivered = data.deliveredThisWeek ?? 0;
+              const pct = perWeek > 0 ? Math.min(100, Math.round((delivered / perWeek) * 100)) : 0;
+              return (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-sm mb-1.5">
+                    <span className="font-medium inline-flex items-center gap-1.5">
+                      <Repeat className="h-3.5 w-3.5 text-brand-red" /> This week&apos;s leads
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">{delivered}/{perWeek}</span>
+                  </div>
+                  <Progress value={pct} className="h-2" />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Fresh leads delivered this billing week{data.weekEnd ? ` · resets ${fmtDate(data.weekEnd)}` : ""}.
+                  </p>
+                </div>
+              );
+            })()}
             <div className="mt-4 text-sm">
               <span className="text-muted-foreground">States: </span>
               <span className="font-medium">{(data.filterStates ?? []).join(", ") || "—"}</span>

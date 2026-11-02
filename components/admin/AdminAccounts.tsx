@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, X, ArrowRight, Users, Package } from "lucide-react";
+import { Loader2, X, ArrowRight, Users, Package, Repeat, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -27,6 +27,14 @@ interface Account {
   orderedQty: number;
   fulfilledQty: number;
   orderProgressPct: number;
+  subscription: {
+    status: string;
+    weeklyCents: number;
+    leadsPerWeek: number;
+    deliveredThisWeek: number;
+    currentPeriodEnd: string | null;
+    progressPct: number;
+  } | null;
 }
 
 const money = (c: number) => formatCurrency(Math.round(c) / 100);
@@ -45,6 +53,28 @@ export function AdminAccounts() {
   const [viewing, setViewing] = useState<Account | null>(null);
   const [managing, setManaging] = useState<Account | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileMsg, setReconcileMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function reconcileSubscriptions() {
+    if (!window.confirm("Reconcile subscriptions with Stripe? This creates any missing weekly lead orders from paid invoices.")) return;
+    setReconciling(true);
+    setReconcileMsg(null);
+    try {
+      const res = await fetch("/api/admin/subscriptions/reconcile", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      setReconcileMsg({
+        ok: true,
+        text: `${d.ordersCreated ?? 0} weekly order${(d.ordersCreated ?? 0) === 1 ? "" : "s"} created across ${d.subscriptions ?? 0} subscription${(d.subscriptions ?? 0) === 1 ? "" : "s"}.`,
+      });
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      setReconcileMsg({ ok: false, text: e?.message ?? "Reconcile failed." });
+    } finally {
+      setReconciling(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/accounts")
@@ -61,8 +91,31 @@ export function AdminAccounts() {
       </div>
     );
 
+  const subCount = accounts.filter((a) => a.subscription).length;
+
   return (
     <>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-muted-foreground">
+          {subCount > 0 ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Repeat className="h-3.5 w-3.5 text-brand-red" />
+              {subCount} active subscription{subCount === 1 ? "" : "s"}
+            </span>
+          ) : (
+            "No active subscriptions"
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {reconcileMsg && (
+            <span className={cn("text-[11px]", reconcileMsg.ok ? "text-emerald-600" : "text-rose-600")}>{reconcileMsg.text}</span>
+          )}
+          <Button size="sm" variant="outline" onClick={reconcileSubscriptions} disabled={reconciling}>
+            {reconciling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Reconcile subscriptions
+          </Button>
+        </div>
+      </div>
       <div className="overflow-x-auto scrollbar-thin">
         <table className="w-full text-sm min-w-[960px]">
           <thead>
@@ -89,6 +142,20 @@ export function AdminAccounts() {
                       <Users className="h-3.5 w-3.5 text-brand-red shrink-0" />
                       {a.name ?? a.email.split("@")[0]}
                       {a.role === "ADMIN" && <Badge variant="muted" className="text-[9px]">Admin</Badge>}
+                      {a.subscription && (
+                        <Badge
+                          variant="muted"
+                          className={cn(
+                            "text-[9px] inline-flex items-center gap-0.5",
+                            a.subscription.status === "active"
+                              ? "border-brand-red/20 bg-brand-red/5 text-brand-red"
+                              : "border-amber-200 bg-amber-50 text-amber-700",
+                          )}
+                          title={`Weekly subscription · ${a.subscription.status}`}
+                        >
+                          <Repeat className="h-2.5 w-2.5" /> Sub
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">{a.email}{a.agency ? ` · ${a.agency}` : ""}</div>
                     <div className="text-xs text-muted-foreground">
@@ -102,6 +169,19 @@ export function AdminAccounts() {
                     </div>
                   </td>
                   <td className="py-2.5">
+                    {a.subscription && (
+                      <div className="w-32 mb-2">
+                        <div className="flex items-center justify-between text-[11px] mb-1">
+                          <span className="inline-flex items-center gap-1 font-medium text-brand-red">
+                            <Repeat className="h-3 w-3" /> This week
+                          </span>
+                          <span className="tabular-nums text-muted-foreground">
+                            {a.subscription.deliveredThisWeek}/{a.subscription.leadsPerWeek}
+                          </span>
+                        </div>
+                        <Progress value={a.subscription.progressPct} className="h-1.5" />
+                      </div>
+                    )}
                     {a.orderedQty > 0 ? (
                       <div className="w-32">
                         <div className="flex items-center justify-between text-[11px] mb-1">
@@ -119,7 +199,7 @@ export function AdminAccounts() {
                         </div>
                         <Progress value={a.orderProgressPct} className="h-1.5" />
                       </div>
-                    ) : (
+                    ) : a.subscription ? null : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </td>
@@ -163,7 +243,7 @@ export function AdminAccounts() {
         </table>
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        Order progress = leads delivered ÷ leads ordered across their open (incomplete) orders · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
+        <span className="inline-flex items-center gap-1 font-medium text-brand-red"><Repeat className="h-3 w-3" /> This week</span> = fresh leads delivered this billing week ÷ the subscription&apos;s weekly allotment (shown for subscribers) · Order progress = leads delivered ÷ leads ordered across their open (incomplete) orders · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
         <span className="font-medium">Manage orders</span> to change an order&apos;s states, quantity, or close/reopen it; <span className="font-medium">View CRM</span> to see their full pipeline.
       </p>
 
