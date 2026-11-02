@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { AVAILABLE_STATES } from "@/data/states";
-import { cleanLicenseFields } from "@/lib/licensedPartners";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +29,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id },
-    select: {
-      name: true, email: true, phone: true, agency: true, licensedStates: true, passwordHash: true,
-      licenseName: true, licenseResidentState: true, licenseNpn: true, licenseCaNumber: true, licenseTxNumber: true,
-    },
+    select: { name: true, email: true, phone: true, agency: true, licensedStates: true, passwordHash: true },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -43,16 +39,11 @@ export async function GET() {
     phone: user.phone ?? "",
     agency: user.agency ?? "",
     licensedStates: user.licensedStates ?? [],
-    licenseName: user.licenseName ?? "",
-    licenseResidentState: user.licenseResidentState ?? "",
-    licenseNpn: user.licenseNpn ?? "",
-    licenseCaNumber: user.licenseCaNumber ?? "",
-    licenseTxNumber: user.licenseTxNumber ?? "",
     hasPassword: !!user.passwordHash, // false for Google-only accounts
   });
 }
 
-/** POST /api/account/profile → update name / phone / agency / licensedStates / producer license. */
+/** POST /api/account/profile → update name / phone / agency / licensedStates. */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const id = (session?.user as any)?.id as string | undefined;
@@ -72,18 +63,11 @@ export async function POST(req: NextRequest) {
     data.phone = phone || null;
   }
   if (body.licensedStates !== undefined) data.licensedStates = cleanStates(body.licensedStates);
-  // Producer license (public on /licensed-partners while receiving funnel leads).
-  const license = cleanLicenseFields(body);
-  if (license.error) return NextResponse.json({ error: license.error }, { status: 400 });
-  Object.assign(data, license.data);
 
   const user = await prisma.user.update({
     where: { id },
     data,
-    select: {
-      name: true, email: true, phone: true, agency: true, licensedStates: true, passwordHash: true,
-      licenseName: true, licenseResidentState: true, licenseNpn: true, licenseCaNumber: true, licenseTxNumber: true,
-    },
+    select: { name: true, email: true, phone: true, agency: true, licensedStates: true, passwordHash: true },
   });
 
   return NextResponse.json({
@@ -93,11 +77,6 @@ export async function POST(req: NextRequest) {
     phone: user.phone ?? "",
     agency: user.agency ?? "",
     licensedStates: user.licensedStates ?? [],
-    licenseName: user.licenseName ?? "",
-    licenseResidentState: user.licenseResidentState ?? "",
-    licenseNpn: user.licenseNpn ?? "",
-    licenseCaNumber: user.licenseCaNumber ?? "",
-    licenseTxNumber: user.licenseTxNumber ?? "",
     hasPassword: !!user.passwordHash,
   });
 }
