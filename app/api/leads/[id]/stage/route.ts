@@ -74,8 +74,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       ...(creditCloser ? { assignedUserId: userId, assignedAt: new Date() } : {}),
     },
   });
+  // metadata.stage/actorId power the Activity Dashboard + leaderboards
+  // (lib/activityStats.ts): which funnel step this was, and who did it.
+  const label = labelForStage(stages, stage);
   await prisma.leadActivity.create({
-    data: { leadId: params.id, type: "STATUS_CHANGED", body: `Moved to "${labelForStage(stages, stage)}" in the pipeline.` },
+    data: {
+      leadId: params.id,
+      type: "STATUS_CHANGED",
+      author: session?.user?.name ?? null,
+      body: `Moved to "${label}" in the pipeline.`,
+      metadata: { stage, label, actorId: userId },
+    },
   });
 
   // Advancing to a high-intent stage (underwriting/approved/issued-not-paid/

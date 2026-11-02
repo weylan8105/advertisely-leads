@@ -21,6 +21,7 @@ import {
   LogOut,
   Coins,
   UploadCloud,
+  Trophy,
 } from "lucide-react";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ const ALL: Item[] = [
   { href: "/leads", label: "Lead CRM / Pipeline", icon: Users },
   { href: "/goldmine", label: "Goldmine", icon: Gem },
   { href: "/team", label: "Team", icon: UsersRound },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/orders", label: "Orders", icon: Package },
   { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },
   { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },

@@ -17,6 +17,7 @@ import {
   Coins,
   Landmark,
   UploadCloud,
+  Trophy,
 } from "lucide-react";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { Logo } from "./Logo";
@@ -39,6 +40,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
       { href: "/leads", label: "Lead CRM / Pipeline", icon: Users },
       { href: "/goldmine", label: "Goldmine", icon: Gem },
       { href: "/team", label: "Team", icon: UsersRound },
+      { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/pnl", label: "Profit & Loss", icon: TrendingUp },
       { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },

@@ -25,6 +25,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { PnlSummary } from "@/components/dashboard/PnlSummary";
+import { ActivityDashboard } from "@/components/dashboard/ActivityDashboard";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { ExportButton } from "@/components/leads/ExportButton";
@@ -226,6 +227,8 @@ export default function DashboardPage() {
           icon={<Trophy className="h-4 w-4" />}
         />
       </div>
+
+      <ActivityDashboard />
 
       <PnlSummary />
 
