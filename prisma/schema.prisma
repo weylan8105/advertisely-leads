@@ -27,6 +27,14 @@ model User {
   // States the agent is licensed in (2-letter codes), chosen at signup. Used to
   // pre-fill the state selection on every order.
   licensedStates String[] @default([])
+  // Producer license details, listed on the funnels' public Licensed Partners
+  // page (/licensed-partners) while the agent receives funnel leads. Shown
+  // only when name + resident state + NPN are all filled in (lib/licensedPartners).
+  licenseName          String? // name exactly as licensed (person or agency)
+  licenseResidentState String? // 2-letter resident state
+  licenseNpn           String? // National Producer Number (digits)
+  licenseCaNumber      String? // California license # (e.g. 0L12345)
+  licenseTxNumber      String? // Texas license #
   // The lead this user is on the phone with right now (pipeline "Talking to"),
   // shown to teammates so two people don't call the same lead. Stale after 30 min.
   talkingLeadId String?

@@ -541,8 +541,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <footer>
     <div class="wrap">
       <div class="brand"><span class="wm"><span class="l1">AMERICAN BLUE COLLAR</span><span class="l2">Advantage</span></span></div>
-      <p class="discl">Advertisement for insurance. American Blue Collar Advantage is operated by Advertisely, a marketing company. Advertisely is not an insurance company, agency, or producer and does not sell insurance. If you request a quote, your information will be shared with Enhanced Wealth and participating licensed insurance agencies and agents, who may contact you about your request. Coverage, benefits, premiums, and eligibility are determined by the insurer and are subject to underwriting and policy terms. Accelerated and living benefits are provided by riders that may have additional cost and are subject to eligibility and a qualifying event. Cash value growth is not guaranteed and is subject to policy charges, terms, and carrier performance. This is not tax, legal, or investment advice. There is no obligation to purchase.</p>
-      <div class="flinks"><a href="https://www.americanbluecollaradvantage.com/privacy">Privacy Policy</a><a href="https://www.americanbluecollaradvantage.com/terms">Terms of Use</a></div>
+      <p class="discl">Advertisement for insurance. American Blue Collar Advantage is operated by Advertisely Media LLC, a marketing company. Advertisely is not an insurance company, agency, or producer and does not sell insurance. If you request a quote, your information will be shared with Enhanced Wealth and participating licensed insurance agencies and agents, who may contact you about your request. Coverage, benefits, premiums, and eligibility are determined by the insurer and are subject to underwriting and policy terms. Accelerated and living benefits are provided by riders that may have additional cost and are subject to eligibility and a qualifying event. Cash value growth is not guaranteed and is subject to policy charges, terms, and carrier performance. This is not tax, legal, or investment advice. There is no obligation to purchase.</p>
+      <div class="flinks"><a href="https://www.americanbluecollaradvantage.com/privacy">Privacy Policy</a><a href="https://www.americanbluecollaradvantage.com/terms">Terms of Use</a><a href="https://www.americanbluecollaradvantage.com/licensed-partners">Licensed Partners</a></div>
       <p class="cpy">&copy; <span id="yr"></span> American Blue Collar Advantage. All rights reserved.</p>
     </div>
   </footer>
@@ -631,6 +631,7 @@ const tracking = (function(){
 const CONSENT_TEXT = "By checking here, I agree that Enhanced Wealth may share the information I provide with participating licensed insurance agencies, agents, brokers, carriers, or other insurance providers that may offer products or services matching my request. I understand that these companies may contact me by phone, text message, and email regarding insurance products and related services, including, where permitted by law, using automated technology or an artificial/prerecorded voice. My consent is not required as a condition of purchasing any product or service. Message and data rates may apply.";
 const PRIVACY_URL = "https://www.americanbluecollaradvantage.com/privacy";
 const TERMS_URL   = "https://www.americanbluecollaradvantage.com/terms";
+const PARTNERS_URL = "https://www.americanbluecollaradvantage.com/licensed-partners";
 
 document.getElementById('yr').textContent = new Date().getFullYear();
 
@@ -853,7 +854,7 @@ function render(){
       <label class="consent" id="consentBox"><input type="checkbox" id="cConsent" aria-label="Consent to be contacted">
         <span class="ct">${escapeHtml(CONSENT_TEXT)}</span>
       </label>
-      <div class="plinks">See our <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Privacy Policy</a> and <a href="${TERMS_URL}" target="_blank" rel="noopener">Terms of Use</a>.</div>
+      <div class="plinks">See our <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Privacy Policy</a>, <a href="${TERMS_URL}" target="_blank" rel="noopener">Terms of Use</a>, and <a href="${PARTNERS_URL}" target="_blank" rel="noopener">Licensed Partners</a>.</div>
       <div class="qerr" id="submitErr" role="alert" hidden></div>
       <div class="qnav"><button class="qback" type="button" onclick="back()">Back</button>
         <button class="btn qcont" type="button" id="submitBtn" onclick="submitContact()">Send My Quote Request</button></div>`;
