@@ -17,6 +17,7 @@ import {
   Link2,
   Clock,
   UserCheck,
+  CalendarRange,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,9 @@ interface Member {
   role: "OWNER" | "ADMIN" | "AGENT";
   inRotation: boolean;
   pendingApproval: boolean;
+  /** Leads/week under "Weekly amounts" (0 = none) and how many they got in the last 7 days. */
+  weeklyLeadQuota: number;
+  quotaThisWeek: number;
   leadCount: number;
   isSelf: boolean;
 }
@@ -63,7 +67,7 @@ interface Invitation {
   expiresAt: string;
 }
 interface TeamData {
-  organization: { id: string; name: string; distributionMode: "MANUAL" | "ROUND_ROBIN" };
+  organization: { id: string; name: string; distributionMode: DistributionMode };
   role: "OWNER" | "ADMIN" | "AGENT";
   canManage: boolean;
   /** The caller joined with an upline code and is waiting for approval. */
@@ -73,6 +77,8 @@ interface TeamData {
   teams: { id: string; name: string; role: string; pending: boolean }[];
   upline: { code: string | null; team: { id: string; name: string } | null };
 }
+
+type DistributionMode = "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA";
 
 const roleBadge: Record<string, "success" | "muted"> = {
   OWNER: "success",
@@ -93,6 +99,9 @@ export default function TeamPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [joinMsg, setJoinMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Weekly amount being typed per member (membershipId → text), saved on blur/Enter.
+  const [quotaDraft, setQuotaDraft] = useState<Record<string, string>>({});
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -118,7 +127,7 @@ export default function TeamPage() {
     load();
   }, [load]);
 
-  async function setMode(mode: "MANUAL" | "ROUND_ROBIN") {
+  async function setMode(mode: DistributionMode) {
     if (!data || data.organization.distributionMode === mode) return;
     setBusy("mode");
     await fetch("/api/team/settings", {
@@ -182,6 +191,31 @@ export default function TeamPage() {
     setBusy(m.membershipId);
     await fetch(`/api/team/members/${m.membershipId}`, { method: "DELETE" });
     setBusy(null);
+    load();
+  }
+
+  async function saveQuota(m: Member) {
+    const raw = quotaDraft[m.membershipId];
+    if (raw === undefined) return;
+    const next = raw.trim() === "" ? 0 : Number(raw);
+    if (next === m.weeklyLeadQuota) {
+      setQuotaDraft(({ [m.membershipId]: _, ...rest }) => rest);
+      return;
+    }
+    setBusy(m.membershipId);
+    setQuotaError(null);
+    const res = await fetch(`/api/team/members/${m.membershipId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weeklyLeadQuota: next }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) {
+      setQuotaError(body.error ?? "Could not save that amount");
+      return;
+    }
+    setQuotaDraft(({ [m.membershipId]: _, ...rest }) => rest);
     load();
   }
 
@@ -266,6 +300,9 @@ export default function TeamPage() {
 
   const { organization: org, canManage, members, invitations } = data;
   const rr = org.distributionMode === "ROUND_ROBIN";
+  const weekly = org.distributionMode === "WEEKLY_QUOTA";
+  const weeklyTotal = members.reduce((n, m) => n + (m.role === "OWNER" ? 0 : m.weeklyLeadQuota), 0);
+  const weeklySent = members.reduce((n, m) => n + (m.role === "OWNER" ? 0 : m.quotaThisWeek), 0);
   const inRotationCount = members.filter((m) => m.inRotation).length;
 
   return (
@@ -352,13 +389,34 @@ export default function TeamPage() {
               >
                 <Shuffle className="h-3.5 w-3.5" /> Round-robin
               </button>
+              <button
+                onClick={() => setMode("WEEKLY_QUOTA")}
+                disabled={busy === "mode"}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  weekly ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <CalendarRange className="h-3.5 w-3.5" /> Weekly amounts
+              </button>
             </div>
           ) : (
-            <Badge variant="muted">{rr ? "Round-robin" : "Manual"}</Badge>
+            <Badge variant="muted">{weekly ? "Weekly amounts" : rr ? "Round-robin" : "Manual"}</Badge>
           )}
         </div>
         <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm text-muted-foreground">
-          {rr ? (
+          {weekly ? (
+            <>
+              <span className="font-medium text-foreground">Weekly amounts is on.</span> Leads coming into the
+              owner&apos;s pipeline go to each agent up to their weekly number below, only in states they&apos;re
+              licensed in. Once everyone&apos;s full for the week, the rest stay with the owner.
+              {weeklyTotal > 0 && (
+                <span className="block mt-1.5 text-foreground">
+                  {weeklySent} of {weeklyTotal} sent to agents in the last 7 days.
+                </span>
+              )}
+            </>
+          ) : rr ? (
             <>
               <span className="font-medium text-foreground">Round-robin is on.</span> New purchased leads are
               spread evenly across the {inRotationCount} member{inRotationCount === 1 ? "" : "s"} in rotation
@@ -376,6 +434,12 @@ export default function TeamPage() {
       {/* Members */}
       <Card className="p-6">
         <h2 className="font-semibold tracking-tight mb-4">Members</h2>
+        {weekly && canManage && (
+          <p className="-mt-2 mb-4 text-sm text-muted-foreground">
+            Type how many leads each agent gets per week (0 for none), then press Enter.
+            {quotaError && <span className="block mt-1 text-rose-600">{quotaError}</span>}
+          </p>
+        )}
         <div className="space-y-2">
           {members.map((m) => (
             <div
@@ -408,26 +472,71 @@ export default function TeamPage() {
                 {m.leadCount} lead{m.leadCount === 1 ? "" : "s"}
               </div>
 
+              {/* Weekly amount (under "Weekly amounts"): leads/week + progress */}
+              {weekly && m.role !== "OWNER" && (
+                <div className="flex items-center gap-2">
+                  {canManage ? (
+                    <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={1000}
+                        aria-label={`Weekly leads for ${m.name ?? m.email}`}
+                        value={quotaDraft[m.membershipId] ?? String(m.weeklyLeadQuota || "")}
+                        placeholder="0"
+                        onChange={(e) => setQuotaDraft((d) => ({ ...d, [m.membershipId]: e.target.value }))}
+                        onBlur={() => saveQuota(m)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        }}
+                        disabled={busy === m.membershipId}
+                        className="h-8 w-16 px-2 text-sm tabular-nums"
+                      />
+                      /wk
+                    </label>
+                  ) : null}
+                  <div className="w-24">
+                    <div className="text-[11px] tabular-nums text-muted-foreground mb-1">
+                      {m.weeklyLeadQuota > 0
+                        ? `${m.quotaThisWeek} of ${m.weeklyLeadQuota} this week`
+                        : "No weekly leads"}
+                    </div>
+                    {m.weeklyLeadQuota > 0 && (
+                      <Progress
+                        value={Math.min(100, Math.round((m.quotaThisWeek / m.weeklyLeadQuota) * 100))}
+                        className="h-1.5"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+              {weekly && m.role === "OWNER" && (
+                <div className="text-xs text-muted-foreground whitespace-nowrap">Keeps the rest</div>
+              )}
+
               {/* Rotation toggle (only meaningful under round-robin) */}
-              <button
-                onClick={() => canManage && toggleRotation(m)}
-                disabled={!canManage || busy === m.membershipId}
-                title={m.inRotation ? "In rotation" : "Excluded from rotation"}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
-                  m.inRotation
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-slate-50 text-muted-foreground",
-                  !canManage && "opacity-70 cursor-default",
-                )}
-              >
-                {busy === m.membershipId ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : m.inRotation ? (
-                  <Check className="h-3 w-3" />
-                ) : null}
-                {m.inRotation ? "In rotation" : "Paused"}
-              </button>
+              {!weekly && (
+                <button
+                  onClick={() => canManage && toggleRotation(m)}
+                  disabled={!canManage || busy === m.membershipId}
+                  title={m.inRotation ? "In rotation" : "Excluded from rotation"}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
+                    m.inRotation
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-slate-50 text-muted-foreground",
+                    !canManage && "opacity-70 cursor-default",
+                  )}
+                >
+                  {busy === m.membershipId ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : m.inRotation ? (
+                    <Check className="h-3 w-3" />
+                  ) : null}
+                  {m.inRotation ? "In rotation" : "Paused"}
+                </button>
+              )}
 
               {canManage && !m.isSelf && (
                 <a href={`/checkout?for=${m.userId}`} title={`Order leads for ${m.name ?? m.email}`}>

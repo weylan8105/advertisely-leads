@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
 import { ensureReferralCode } from "@/lib/referral";
 import { uplineTeamFor } from "@/lib/upline";
+import { quotaCountsThisWeek } from "@/lib/teamQuota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,12 @@ export async function GET() {
   const countByUser: Record<string, number> = {};
   for (const r of leadCounts) if (r.assignedUserId) countByUser[r.assignedUserId] = r._count._all;
 
+  // Weekly amounts: leads each member got from the owner's flow in the last 7 days.
+  const quotaThisWeek = await quotaCountsThisWeek(
+    ctx.organizationId,
+    memberships.map((m) => m.userId),
+  );
+
   const members = memberships.map((m) => ({
     membershipId: m.id,
     userId: m.userId,
@@ -56,6 +63,8 @@ export async function GET() {
     role: m.role,
     inRotation: m.inRotation,
     pendingApproval: m.pendingApproval,
+    weeklyLeadQuota: m.weeklyLeadQuota ?? 0,
+    quotaThisWeek: quotaThisWeek.get(m.userId) ?? 0,
     leadCount: countByUser[m.userId] ?? 0,
     isSelf: m.userId === userId,
   }));

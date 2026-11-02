@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { MAX_WEEKLY_QUOTA } from "@/lib/teamQuota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,11 @@ async function guard(membershipId: string) {
   return { ctx, membership, userId };
 }
 
-/** PATCH /api/team/members/:id — { role?, inRotation?, approve? } (approve = let in an upline-code joiner) */
+/**
+ * PATCH /api/team/members/:id — { role?, inRotation?, approve?, weeklyLeadQuota? }
+ * approve = let in an upline-code joiner; weeklyLeadQuota = leads/week under
+ * WEEKLY_QUOTA distribution (0 or null = none).
+ */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isDatabaseConfigured || !prisma) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
@@ -33,8 +38,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const g = await guard(params.id);
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
 
-  const body = (await req.json().catch(() => ({}))) as { role?: string; inRotation?: boolean; approve?: boolean };
-  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; pendingApproval?: boolean } = {};
+  const body = (await req.json().catch(() => ({}))) as {
+    role?: string;
+    inRotation?: boolean;
+    approve?: boolean;
+    weeklyLeadQuota?: unknown;
+  };
+  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; pendingApproval?: boolean; weeklyLeadQuota?: number | null } = {};
+  if (body.weeklyLeadQuota !== undefined) {
+    const q = body.weeklyLeadQuota === null || body.weeklyLeadQuota === "" ? 0 : Number(body.weeklyLeadQuota);
+    if (!Number.isInteger(q) || q < 0 || q > MAX_WEEKLY_QUOTA) {
+      return NextResponse.json(
+        { error: `Weekly amount must be a whole number from 0 to ${MAX_WEEKLY_QUOTA}` },
+        { status: 400 },
+      );
+    }
+    data.weeklyLeadQuota = q > 0 ? q : null;
+  }
   if (body.role === "ADMIN" || body.role === "AGENT") data.role = body.role;
   if (typeof body.inRotation === "boolean") data.inRotation = body.inRotation;
   // Making a pending joiner an admin approves them too.
@@ -50,7 +70,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const updated = await prisma.membership.update({ where: { id: params.id }, data });
   return NextResponse.json({
     ok: true,
-    membership: { id: updated.id, role: updated.role, inRotation: updated.inRotation, pendingApproval: updated.pendingApproval },
+    membership: {
+      id: updated.id,
+      role: updated.role,
+      inRotation: updated.inRotation,
+      pendingApproval: updated.pendingApproval,
+      weeklyLeadQuota: updated.weeklyLeadQuota,
+    },
   });
 }
 

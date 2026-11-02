@@ -24,8 +24,11 @@ export async function PATCH(req: NextRequest) {
 
   const body = (await req.json().catch(() => ({}))) as { distributionMode?: string };
   const mode = body.distributionMode;
-  if (mode !== "MANUAL" && mode !== "ROUND_ROBIN") {
-    return NextResponse.json({ error: "distributionMode must be MANUAL or ROUND_ROBIN" }, { status: 400 });
+  if (mode !== "MANUAL" && mode !== "ROUND_ROBIN" && mode !== "WEEKLY_QUOTA") {
+    return NextResponse.json(
+      { error: "distributionMode must be MANUAL, ROUND_ROBIN or WEEKLY_QUOTA" },
+      { status: 400 },
+    );
   }
 
   await prisma.organization.update({

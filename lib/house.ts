@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { IUL_POOL_IDS, findPackage } from "@/data/packages";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
+import { quotaRecipientFor } from "./teamQuota";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -48,8 +49,19 @@ export async function getEligibleAdminSlots(): Promise<
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
   const slots: { userId: string; organizationId: string | null; licensedStates: string[] }[] = [];
   for (const a of admins) {
+    const orgId = a.ownedOrganizations[0]?.id;
     const got = await prisma.lead.count({
-      where: { assignedUserId: a.id, orderId: null, trashedAt: null, assignedAt: { gte: weekAgo } },
+      where: {
+        orderId: null,
+        trashedAt: null,
+        assignedAt: { gte: weekAgo },
+        // Overflow their team's weekly amounts handed to downline agents still
+        // counts toward the admin's own target.
+        OR: [
+          { assignedUserId: a.id },
+          ...(orgId ? [{ organizationId: orgId, quotaRoutedAt: { not: null } }] : []),
+        ],
+      },
     });
     if (got < (a.weeklyLeadTarget ?? 0)) {
       slots.push({
@@ -70,33 +82,48 @@ export async function assignOverflowLeadTo(
   reason: string,
 ): Promise<boolean> {
   if (!prisma) return false;
-  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { receivedAt: true } });
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { receivedAt: true, state: true } });
   if (!lead) return false;
   // Overflow is fresh-only (never aged) — an aged lead stays in the bank as stock.
   if ((Date.now() - lead.receivedAt.getTime()) / 86_400_000 > HOUSE_FRESH_DAYS) return false;
+  // If the admin's team hands out leads by weekly amounts, an agent with room gets it.
+  const agentId = await quotaRecipientFor(organizationId, userId, lead.state);
+  const recipientId = agentId ?? userId;
+  const now = new Date();
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
-    data: { assignedUserId: userId, assignedAt: new Date(), ...(organizationId ? { organizationId } : {}) },
+    data: {
+      assignedUserId: recipientId,
+      assignedAt: now,
+      ...(organizationId ? { organizationId } : {}),
+      ...(agentId ? { quotaRoutedAt: now } : {}),
+    },
   });
   if (res.count === 0) return false;
   await prisma.leadActivity.create({
-    data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to admin CRM — ${reason}.` },
+    data: {
+      leadId,
+      type: "LEAD_ASSIGNED",
+      body: agentId
+        ? `Routed to a team member by weekly amounts — ${reason}.`
+        : `Routed to admin CRM — ${reason}.`,
+    },
   });
-  // Email the admin the same lead-delivery email clients get, so round-robin
-  // leads don't land silently. Never block routing on an email failure.
+  // Email whoever got it (the admin, or their agent) the same lead-delivery
+  // email clients get, so round-robin leads don't land silently. Never block routing on an email failure.
   if (isEmailConfigured) {
     try {
-      const [full, admin] = await Promise.all([
+      const [full, recipient] = await Promise.all([
         prisma.lead.findUnique({
           where: { id: leadId },
           select: { name: true, phone: true, email: true, state: true, occupation: true, age: true, income: true, intentReason: true, packageId: true },
         }),
-        prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } }),
+        prisma.user.findUnique({ where: { id: recipientId }, select: { email: true, name: true } }),
       ]);
-      if (full && admin?.email) {
+      if (full && recipient?.email) {
         await sendLeadDeliveryEmail({
-          agentEmail: admin.email,
-          agentName: admin.name ?? "there",
+          agentEmail: recipient.email,
+          agentName: recipient.name ?? "there",
           leadCount: 1,
           packageName: findPackage(full.packageId)?.name ?? "IUL",
           orderId: leadId,

@@ -6,7 +6,7 @@ export interface OrgContext {
   organizationId: string;
   organizationName: string;
   role: OrgRole;
-  distributionMode: "MANUAL" | "ROUND_ROBIN";
+  distributionMode: "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA";
   // Joined with an upline code and awaiting a manager's approval (see lib/upline.ts).
   pending: boolean;
 }

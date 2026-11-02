@@ -9,6 +9,7 @@ import { getHouseAccount, getEligibleAdminSlots, assignOverflowLeadTo } from "@/
 import { tryReplacementForFreshLead } from "@/lib/replacement";
 import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 import { isRecognizedUsLocation } from "@/lib/leadImport";
+import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -86,6 +87,8 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
   // Decide who each lead goes to. MANUAL (default) → the buyer/owner, exactly
   // as before. ROUND_ROBIN → spread evenly across the org's in-rotation members
   // using a persisted cursor so the rotation stays fair across separate runs.
+  // WEEKLY_QUOTA → each agent gets up to their weekly amount (lib/teamQuota.ts);
+  // whatever nobody has room for stays with the owner.
   let orgId = order.organizationId as string | null;
   // Orders created before Phase 1 (or before stamping) may have no org — resolve
   // and persist the buyer's org so distribution + scoping work.
@@ -96,7 +99,7 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
       await prisma.order.update({ where: { id: order.id }, data: { organizationId: orgId } });
     }
   }
-  let mode: "MANUAL" | "ROUND_ROBIN" = "MANUAL";
+  let mode: "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA" = "MANUAL";
   let rotation: string[] = [];
   let rrCursor = 0;
   let orgOwnerId: string | null = null;
@@ -129,14 +132,23 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
   // An order routed to a specific downline agent (deliverToUserId) always goes
   // entirely to that agent — never round-robined or split.
   const routedTo = order.deliverToUserId ?? null;
-  const useRR =
-    !routedTo && mode === "ROUND_ROBIN" && rotation.length > 0 && order.userId === orgOwnerId;
+  const ownersOwnOrder = !routedTo && order.userId === orgOwnerId;
+  const useRR = ownersOwnOrder && mode === "ROUND_ROBIN" && rotation.length > 0;
+  const quotaSlots =
+    ownersOwnOrder && mode === "WEEKLY_QUOTA" && orgId ? await loadQuotaSlots(orgId, order.userId) : [];
 
   // leadId → assigned userId. Default recipient is the routed agent, else the buyer.
   const defaultRecipient = routedTo ?? order.userId;
   const assigneeOf = new Map<string, string>();
+  const quotaRouted = new Set<string>(); // leadIds handed out by weekly amounts
   candidates.forEach((l, i) => {
-    assigneeOf.set(l.id, useRR ? rotation[(rrCursor + i) % rotation.length] : defaultRecipient);
+    if (useRR) {
+      assigneeOf.set(l.id, rotation[(rrCursor + i) % rotation.length]);
+      return;
+    }
+    const agent = quotaSlots.length > 0 ? takeQuotaSlot(quotaSlots, l.state) : null;
+    if (agent) quotaRouted.add(l.id);
+    assigneeOf.set(l.id, agent ?? defaultRecipient);
   });
   // Group ids by assignee for batched updates.
   const idsByAssignee = new Map<string, string[]>();
@@ -157,6 +169,8 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
           assignedAt: now,
           orderId: order.id,
           ...(orgId ? { organizationId: orgId } : {}),
+          // The owner never has a weekly amount, so an agent's batch is all quota-routed.
+          ...(quotaRouted.has(ids[0]) ? { quotaRoutedAt: now } : {}),
         },
       });
     }
@@ -192,7 +206,9 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
         type: "LEAD_ASSIGNED" as const,
         body: useRR
           ? `Lead routed to a team member via round-robin (order ${order.id}).`
-          : `Lead assigned to customer via order ${order.id}.`,
+          : quotaRouted.has(l.id)
+            ? `Lead routed to a team member by weekly amounts (order ${order.id}).`
+            : `Lead assigned to customer via order ${order.id}.`,
       })),
     });
   });
