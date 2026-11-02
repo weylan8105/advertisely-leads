@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { deliveredCounts } from "@/lib/orderProgress";
-import { billingWeekWindow, weeklyLeadAllotment } from "@/lib/leadSubscription";
+import { weeklyLeadAllotment } from "@/lib/leadSubscription";
 import { PIPELINE_STAGES } from "@/data/pipeline";
 
 export const runtime = "nodejs";
@@ -81,33 +81,52 @@ export async function GET() {
   const liveByOrder = await deliveredCounts(latestOrders.map((o) => o.id));
   const userMap = Object.fromEntries(users.map((u) => [u.id, u]));
 
-  // Active lead subscriptions → a weekly "this week's leads" progress bar that
-  // always shows for a subscriber (independent of whether a weekly Order row
-  // exists yet). Delivered-this-week = fresh leads assigned inside the current
-  // billing-week window.
+  // Active lead subscriptions → a single "Subscription" progress bar driven by
+  // the subscriber's weekly Order(s), so it reflects exactly what they paid for
+  // and can NEVER read over their paid amount (orders cap delivery at quantity).
+  // We sum the subscription orders from the current cycle (created in the last
+  // 8 days); if none exist yet, we fall back to the weekly allotment as the
+  // denominator so a brand-new subscriber still shows a 0/allotment bar.
+  const SUB_ORDER_WINDOW_MS = 8 * 86_400_000;
   const activeSubs = await prisma.leadSubscription.findMany({
     where: { status: { not: "canceled" } },
-    select: { userId: true, status: true, weeklyCents: true, currentPeriodEnd: true, createdAt: true },
+    select: { userId: true, status: true, weeklyCents: true },
   });
+  const subUserIds = activeSubs.map((s) => s.userId);
+  const recentSubOrders = subUserIds.length
+    ? await prisma.order.findMany({
+        where: {
+          userId: { in: subUserIds },
+          stripeInvoiceId: { not: null },
+          status: { notIn: ["REFUNDED"] },
+          createdAt: { gte: new Date(Date.now() - SUB_ORDER_WINDOW_MS) },
+        },
+        select: { id: true, userId: true, quantity: true },
+      })
+    : [];
+  const subOrderLive = await deliveredCounts(recentSubOrders.map((o) => o.id));
+  const subOrdersByUser: Record<string, { ordered: number; delivered: number }> = {};
+  for (const o of recentSubOrders) {
+    const agg = (subOrdersByUser[o.userId] ??= { ordered: 0, delivered: 0 });
+    agg.ordered += o.quantity;
+    agg.delivered += Math.min(subOrderLive[o.id] ?? 0, o.quantity);
+  }
   const subByUser: Record<
     string,
-    { status: string; weeklyCents: number; leadsPerWeek: number; deliveredThisWeek: number; currentPeriodEnd: Date | null }
+    { status: string; weeklyCents: number; leadsPerWeek: number; deliveredThisWeek: number; progressPct: number }
   > = {};
-  await Promise.all(
-    activeSubs.map(async (s) => {
-      const { start, end } = billingWeekWindow(s.currentPeriodEnd, s.createdAt);
-      const deliveredThisWeek = await prisma!.lead.count({
-        where: { assignedUserId: s.userId, trashedAt: null, assignedAt: { gte: start, lt: end } },
-      });
-      subByUser[s.userId] = {
-        status: s.status,
-        weeklyCents: s.weeklyCents,
-        leadsPerWeek: weeklyLeadAllotment(s.weeklyCents),
-        deliveredThisWeek,
-        currentPeriodEnd: s.currentPeriodEnd,
-      };
-    }),
-  );
+  for (const s of activeSubs) {
+    const agg = subOrdersByUser[s.userId];
+    const ordered = agg?.ordered || weeklyLeadAllotment(s.weeklyCents);
+    const delivered = agg?.delivered || 0;
+    subByUser[s.userId] = {
+      status: s.status,
+      weeklyCents: s.weeklyCents,
+      leadsPerWeek: ordered,
+      deliveredThisWeek: delivered,
+      progressPct: ordered > 0 ? Math.min(100, Math.round((delivered / ordered) * 100)) : 0,
+    };
+  }
 
   const ids = new Set<string>([...Object.keys(byUser), ...Object.keys(spendByUser), ...Object.keys(subByUser)]);
   const accounts = [...ids]
@@ -128,15 +147,7 @@ export async function GET() {
         apCents: apByUser[id] ?? 0,
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
-        subscription: subByUser[id]
-          ? {
-              ...subByUser[id],
-              progressPct:
-                subByUser[id].leadsPerWeek > 0
-                  ? Math.min(100, Math.round((subByUser[id].deliveredThisWeek / subByUser[id].leadsPerWeek) * 100))
-                  : 0,
-            }
-          : null,
+        subscription: subByUser[id] ?? null,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
         // Progress = combined total across this client's INCOMPLETE orders only
         // (still being fulfilled), from a LIVE lead count. Fully delivered orders

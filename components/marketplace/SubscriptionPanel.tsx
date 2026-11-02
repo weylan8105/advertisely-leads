@@ -224,7 +224,7 @@ export function SubscriptionPanel() {
                   </div>
                   <Progress value={pct} className="h-2" />
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Fresh leads delivered this billing week{data.weekEnd ? ` · resets ${fmtDate(data.weekEnd)}` : ""}.
+                    Leads delivered on this cycle&apos;s subscription order.
                   </p>
                 </div>
               );

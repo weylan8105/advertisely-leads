@@ -32,7 +32,6 @@ interface Account {
     weeklyCents: number;
     leadsPerWeek: number;
     deliveredThisWeek: number;
-    currentPeriodEnd: string | null;
     progressPct: number;
   } | null;
 }

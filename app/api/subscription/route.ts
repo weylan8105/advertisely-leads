@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
-import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents, billingWeekWindow } from "@/lib/leadSubscription";
+import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents } from "@/lib/leadSubscription";
 import { LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 
 export const runtime = "nodejs";
@@ -46,20 +46,27 @@ export async function GET() {
   const totalDelivered = orders.reduce((s, o) => s + o.fulfilledCount, 0);
   const latest = orders[0] ?? null;
 
-  // Fresh leads delivered in the current billing week — resilient to a missing
-  // weekly Order (counts leads landed in the live billing-week window).
-  const { start, end } = billingWeekWindow(sub.currentPeriodEnd, sub.createdAt);
-  const deliveredThisWeek = await prisma.lead.count({
-    where: { assignedUserId: userId, trashedAt: null, assignedAt: { gte: start, lt: end } },
+  // This-cycle progress from the subscription Order(s) created in the last 8
+  // days — order-capped, so it reflects exactly what was paid and never reads
+  // over the allotment. Falls back to the weekly allotment before any order.
+  const cycleOrders = await prisma.order.findMany({
+    where: {
+      userId,
+      stripeInvoiceId: { not: null },
+      status: { notIn: ["REFUNDED"] },
+      createdAt: { gte: new Date(Date.now() - 8 * 86_400_000) },
+    },
+    select: { quantity: true, fulfilledCount: true },
   });
+  const orderedThisCycle = cycleOrders.reduce((s, o) => s + o.quantity, 0) || leadsForCents(sub.weeklyCents).leads;
+  const deliveredThisWeek = cycleOrders.reduce((s, o) => s + Math.min(o.fulfilledCount, o.quantity), 0);
 
   return NextResponse.json({
     ...base,
     subscribed: true,
     weeklyCents: sub.weeklyCents,
-    leadsPerWeek: leadsForCents(sub.weeklyCents).leads,
+    leadsPerWeek: orderedThisCycle,
     deliveredThisWeek,
-    weekEnd: end,
     status: sub.status,
     filterStates: sub.filterStates,
     weeksBilled: sub.weeksBilled,
