@@ -22,7 +22,7 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const ctx = await getOrgContext(userId);
-  if (!ctx) return NextResponse.json({ talking: [] });
+  if (!ctx || ctx.pending) return NextResponse.json({ talking: [] });
   const rows = await prisma.membership.findMany({
     where: {
       organizationId: ctx.organizationId,

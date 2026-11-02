@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
+import { UPLINE_COOKIE } from "@/lib/uplineCookie";
 
 const providers: NextAuthOptions["providers"] = [];
 
@@ -63,6 +64,22 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
+  },
+  events: {
+    // "Sign up with Google" with an upline code: the signup page leaves the
+    // code in a short-lived cookie; join their team once the account exists.
+    async createUser({ user }) {
+      try {
+        const { cookies } = await import("next/headers");
+        const code = cookies().get(UPLINE_COOKIE)?.value;
+        if (!code || !user.id) return;
+        const { joinUplineTeam } = await import("@/lib/upline");
+        await joinUplineTeam(user.id, decodeURIComponent(code));
+        cookies().delete(UPLINE_COOKIE);
+      } catch (e) {
+        console.warn("[auth] upline join after Google signup failed", e);
+      }
+    },
   },
   callbacks: {
     async redirect({ url, baseUrl }) {

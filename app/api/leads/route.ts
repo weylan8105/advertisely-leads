@@ -64,7 +64,8 @@ export async function GET(req: NextRequest) {
     // Goldmine is a team-shared pool: every member of the org sees the same
     // aged leads and can work them. No per-agent narrowing.
     const ctx = await ensureOrgContext(myId);
-    if (!ctx) return NextResponse.json({ leads: [] });
+    // Upline-code joiners see the shared pool once a manager approves them.
+    if (!ctx || ctx.pending) return NextResponse.json({ leads: [] });
     // Move anything that just aged out before listing (throttled; cron is the backstop).
     await sweepGoldmineForOrg(ctx.organizationId);
     where.organizationId = ctx.organizationId;

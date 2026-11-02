@@ -1,0 +1,128 @@
+import { prisma } from "@/lib/prisma";
+import { normalizeCode } from "@/lib/referralPricing";
+import { canManageTeam, ensureOwnedOrganization, getOrgContext, personalOrgName } from "@/lib/org";
+import { isEmailConfigured, sendUplineJoinEmail } from "@/lib/email";
+
+/**
+ * Upline codes. An agent's Advertisely code (User.referralCode, the same code
+ * that takes 10% off at checkout) also puts a new agent on that person's team:
+ * entered at signup ("Do you have an upline?") or later on the Team page.
+ *
+ * The code joins the team its owner runs: their active team when they manage it
+ * (OWNER/ADMIN), else the team they own (created on first use). Because these
+ * codes are shared publicly as discount codes, a code join starts as
+ * pendingApproval: the agent is on the team right away, but the team's shared
+ * Goldmine, round-robin rotation and roster stay closed until a manager
+ * approves them on the Team page.
+ */
+
+export interface UplineTeam {
+  code: string;
+  uplineUserId: string;
+  uplineName: string | null;
+  /** null = the upline doesn't own a team yet; one is created on the first join. */
+  organizationId: string | null;
+  teamName: string;
+}
+
+export type JoinResult =
+  | { status: "joined"; organizationId: string; teamName: string; uplineName: string | null }
+  | { status: "already-member"; organizationId: string; teamName: string; uplineName: string | null }
+  | { status: "own-code" }
+  | { status: "invalid" };
+
+/** The team a user's code recruits into: their active team if they manage it, else the team they own. */
+export async function uplineTeamFor(userId: string): Promise<{ id: string; name: string } | null> {
+  if (!prisma) return null;
+  const ctx = await getOrgContext(userId);
+  if (ctx && canManageTeam(ctx.role)) return { id: ctx.organizationId, name: ctx.organizationName };
+  return prisma.organization.findFirst({
+    where: { ownerId: userId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true },
+  });
+}
+
+/** Look up an upline code. Null when no account has it. */
+export async function resolveUplineCode(raw: unknown): Promise<UplineTeam | null> {
+  if (!prisma || typeof raw !== "string") return null;
+  const code = normalizeCode(raw);
+  if (!code || code.length > 20) return null;
+  const owner = await prisma.user.findUnique({
+    where: { referralCode: code },
+    select: { id: true, name: true, email: true, agency: true },
+  });
+  if (!owner) return null;
+  const team = await uplineTeamFor(owner.id);
+  return {
+    code,
+    uplineUserId: owner.id,
+    uplineName: owner.name,
+    organizationId: team?.id ?? null,
+    teamName: team?.name ?? personalOrgName(owner),
+  };
+}
+
+/**
+ * Put `userId` on the team behind an upline code (pending approval) and make
+ * it their active team. Already on that team → nothing changes.
+ */
+export async function joinUplineTeam(userId: string, raw: unknown): Promise<JoinResult> {
+  if (!prisma) return { status: "invalid" };
+  const up = await resolveUplineCode(raw);
+  if (!up) return { status: "invalid" };
+  if (up.uplineUserId === userId) return { status: "own-code" };
+
+  const team = up.organizationId
+    ? { id: up.organizationId, name: up.teamName }
+    : await ensureOwnedOrganization(up.uplineUserId);
+  if (!team) return { status: "invalid" };
+
+  const already = { status: "already-member" as const, organizationId: team.id, teamName: team.name, uplineName: up.uplineName };
+  const existing = await prisma.membership.findUnique({
+    where: { organizationId_userId: { organizationId: team.id, userId } },
+    select: { id: true },
+  });
+  if (existing) return already;
+
+  try {
+    await prisma.$transaction([
+      prisma.membership.create({
+        data: { organizationId: team.id, userId, role: "AGENT", inRotation: false, pendingApproval: true },
+      }),
+      prisma.user.update({ where: { id: userId }, data: { defaultOrganizationId: team.id } }),
+    ]);
+  } catch (e: any) {
+    if (e?.code === "P2002") return already; // joined concurrently
+    throw e;
+  }
+
+  await notifyUplineOfJoin(team.id, up.uplineUserId, userId).catch((e) =>
+    console.warn("[upline] join notification failed", e),
+  );
+  return { status: "joined", organizationId: team.id, teamName: team.name, uplineName: up.uplineName };
+}
+
+/** Email the code's owner (and the team owner, if someone else) that an agent joined and needs approval. */
+async function notifyUplineOfJoin(organizationId: string, uplineUserId: string, joinerUserId: string) {
+  if (!prisma || !isEmailConfigured) return;
+  const [org, joiner] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, ownerId: true } }),
+    prisma.user.findUnique({ where: { id: joinerUserId }, select: { name: true, email: true } }),
+  ]);
+  if (!org || !joiner) return;
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: [...new Set([uplineUserId, org.ownerId])] } },
+    select: { email: true },
+  });
+  const teamUrl = `${process.env.NEXTAUTH_URL ?? "https://advertisely.io"}/team`;
+  for (const r of recipients) {
+    await sendUplineJoinEmail({
+      toEmail: r.email,
+      teamName: org.name,
+      joinerName: joiner.name || joiner.email.split("@")[0],
+      joinerEmail: joiner.email,
+      teamUrl,
+    });
+  }
+}

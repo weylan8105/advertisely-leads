@@ -14,6 +14,9 @@ import {
   ShieldCheck,
   ShoppingCart,
   PackageCheck,
+  Link2,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,7 @@ interface Member {
   email: string;
   role: "OWNER" | "ADMIN" | "AGENT";
   inRotation: boolean;
+  pendingApproval: boolean;
   leadCount: number;
   isSelf: boolean;
 }
@@ -62,8 +66,12 @@ interface TeamData {
   organization: { id: string; name: string; distributionMode: "MANUAL" | "ROUND_ROBIN" };
   role: "OWNER" | "ADMIN" | "AGENT";
   canManage: boolean;
+  /** The caller joined with an upline code and is waiting for approval. */
+  pending: boolean;
   members: Member[];
   invitations: Invitation[];
+  teams: { id: string; name: string; role: string; pending: boolean }[];
+  upline: { code: string | null; team: { id: string; name: string } | null };
 }
 
 const roleBadge: Record<string, "success" | "muted"> = {
@@ -83,6 +91,8 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState<"AGENT" | "ADMIN">("AGENT");
   const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinMsg, setJoinMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -175,6 +185,60 @@ export default function TeamPage() {
     load();
   }
 
+  async function approveMember(m: Member) {
+    setBusy(m.membershipId);
+    await fetch(`/api/team/members/${m.membershipId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approve: true }),
+    });
+    setBusy(null);
+    load();
+  }
+
+  async function switchTeam(organizationId: string) {
+    setBusy("switch");
+    await fetch("/api/team/active", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId }),
+    });
+    setBusy(null);
+    load();
+  }
+
+  async function joinTeam(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy("join");
+    setJoinMsg(null);
+    const res = await fetch("/api/team/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: joinCode }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) {
+      setJoinMsg({ ok: false, text: body.error ?? "Could not join that team" });
+      return;
+    }
+    setJoinCode("");
+    setJoinMsg({
+      ok: true,
+      text:
+        body.status === "already-member"
+          ? `You're already on ${body.teamName}.`
+          : `You joined ${body.teamName}. Your upline will approve you to unlock the team's shared leads.`,
+    });
+    load();
+  }
+
+  function copyText(text: string, key: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
   async function revokeInvite(id: string) {
     setBusy(id);
     await fetch(`/api/team/invitations/${id}`, { method: "DELETE" });
@@ -213,11 +277,49 @@ export default function TeamPage() {
             <UsersRound className="h-6 w-6 text-brand-red" /> {org.name}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {members.length} {members.length === 1 ? "member" : "members"} ·
-            You&apos;re {data.role === "AGENT" ? "an agent" : `an ${data.role.toLowerCase()}`}
+            {data.pending ? (
+              "Waiting for approval"
+            ) : (
+              <>
+                {members.length} {members.length === 1 ? "member" : "members"} ·
+                You&apos;re {data.role === "AGENT" ? "an agent" : `an ${data.role.toLowerCase()}`}
+              </>
+            )}
           </p>
         </div>
+        {data.teams.length > 1 && (
+          <div className="space-y-1">
+            <Label htmlFor="active-team" className="text-xs text-muted-foreground">
+              Active team
+            </Label>
+            <select
+              id="active-team"
+              value={org.id}
+              onChange={(e) => switchTeam(e.target.value)}
+              disabled={busy === "switch"}
+              className="h-9 max-w-[220px] rounded-md border border-slate-200 bg-white px-3 text-sm"
+            >
+              {data.teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.role === "OWNER" ? " (yours)" : t.pending ? " (pending)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
+      {data.pending && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            You joined <span className="font-semibold">{org.name}</span> with your upline&apos;s code. Your upline
+            can already send leads to your CRM. Once they approve you, you&apos;ll also see the rest of the team
+            and its shared leads.
+          </div>
+        </div>
+      )}
 
       {/* Distribution */}
       <Card className="p-6">
@@ -291,6 +393,12 @@ export default function TeamPage() {
                 <div className="text-xs text-muted-foreground truncate">{m.email}</div>
               </div>
 
+              {m.pendingApproval && (
+                <Badge variant="muted" className="text-[10px] border-amber-200 bg-amber-50 text-amber-800">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Needs approval
+                </Badge>
+              )}
               <Badge variant={roleBadge[m.role]} className="text-[10px]">
                 {m.role === "OWNER" && <ShieldCheck className="h-3 w-3 mr-1" />}
                 {m.role}
@@ -327,6 +435,12 @@ export default function TeamPage() {
                     <ShoppingCart className="h-3.5 w-3.5" /> Order leads
                   </Button>
                 </a>
+              )}
+
+              {canManage && m.pendingApproval && (
+                <Button size="sm" onClick={() => approveMember(m)} disabled={busy === m.membershipId}>
+                  <UserCheck className="h-3.5 w-3.5" /> Approve
+                </Button>
               )}
 
               {canManage && m.role !== "OWNER" && (
@@ -472,6 +586,76 @@ export default function TeamPage() {
           )}
         </Card>
       )}
+
+      {/* Upline code: share it to recruit (everyone has one) */}
+      {data.upline.code && (
+        <Card className="p-6">
+          <h2 className="font-semibold tracking-tight flex items-center gap-2">
+            <Link2 className="h-4 w-4" /> Grow your team with your code
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground max-w-xl">
+            Agents who enter your code when they create their Advertisely account join{" "}
+            <span className="font-medium text-foreground">{data.upline.team?.name ?? "your team"}</span> right
+            away. You approve each one here before they see the team&apos;s shared leads. It&apos;s the same code
+            that gives 10% off at checkout.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm font-semibold tracking-wider">
+              {data.upline.code}
+            </div>
+            <Button size="sm" variant="outline" onClick={() => copyText(data.upline.code!, "code")}>
+              {copied === "code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              Copy code
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                copyText(`${window.location.origin}/signup?upline=${encodeURIComponent(data.upline.code!)}`, "link")
+              }
+            >
+              {copied === "link" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Link2 className="h-3.5 w-3.5" />}
+              Copy signup link
+            </Button>
+            {data.upline.team &&
+              data.upline.team.id !== org.id &&
+              data.teams.some((t) => t.id === data.upline.team!.id) && (
+                <Button size="sm" variant="ghost" onClick={() => switchTeam(data.upline.team!.id)}>
+                  View {data.upline.team.name}
+                </Button>
+              )}
+          </div>
+        </Card>
+      )}
+
+      {/* Existing accounts: join an upline's team with their code */}
+      <Card className="p-6">
+        <h2 className="font-semibold tracking-tight flex items-center gap-2">
+          <UsersRound className="h-4 w-4" /> Have an upline?
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">Enter their code to join their team.</p>
+        <form onSubmit={joinTeam} className="mt-4 flex gap-2 flex-wrap items-end">
+          <div className="flex-1 min-w-[200px] max-w-xs space-y-1.5">
+            <Label htmlFor="join-code">Upline code</Label>
+            <Input
+              id="join-code"
+              required
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 20))}
+              placeholder="e.g. RYAN7K"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <Button type="submit" variant="outline" disabled={busy === "join" || !joinCode.trim()}>
+            {busy === "join" ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            Join team
+          </Button>
+        </form>
+        {joinMsg && (
+          <p className={cn("mt-3 text-sm", joinMsg.ok ? "text-emerald-600" : "text-rose-600")}>{joinMsg.text}</p>
+        )}
+      </Card>
     </div>
   );
 }

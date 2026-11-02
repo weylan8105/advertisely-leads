@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/password";
 import { AVAILABLE_STATES } from "@/data/states";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { ensureReferralCode } from "@/lib/referral";
+import { joinUplineTeam, resolveUplineCode } from "@/lib/upline";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AVAILABLE = new Set(AVAILABLE_STATES);
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
   const phone = typeof data.phone === "string" ? data.phone.trim() : "";
   const licensedStates = cleanStates(data.licensedStates);
   const inviteToken = typeof data.inviteToken === "string" ? data.inviteToken.trim() : "";
+  const uplineCode = typeof data.uplineCode === "string" ? data.uplineCode.trim() : "";
 
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json(
@@ -68,6 +70,15 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "An account with this email already exists. Try signing in." },
       { status: 409 },
+    );
+  }
+
+  // "Do you have an upline?" — check the code before creating anything, so a
+  // typo is fixed on the form instead of leaving them off the team.
+  if (uplineCode && !inviteToken && !(await resolveUplineCode(uplineCode))) {
+    return NextResponse.json(
+      { error: "We couldn't find that upline code. Check it with your upline, or leave it blank." },
+      { status: 400 },
     );
   }
 
@@ -114,5 +125,18 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, joinedTeam }, { status: 201 });
+  // Otherwise an upline code puts them on their upline's team (pending approval).
+  let uplineTeam: string | null = null;
+  if (!joinedTeam && uplineCode) {
+    const joined = await joinUplineTeam(user.id, uplineCode).catch((e) => {
+      console.error("[register] upline join failed", e);
+      return null;
+    });
+    if (joined?.status === "joined") {
+      joinedTeam = true;
+      uplineTeam = joined.teamName;
+    }
+  }
+
+  return NextResponse.json({ ok: true, joinedTeam, uplineTeam }, { status: 201 });
 }

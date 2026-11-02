@@ -25,7 +25,7 @@ async function guard(membershipId: string) {
   return { ctx, membership, userId };
 }
 
-/** PATCH /api/team/members/:id — { role?, inRotation? } */
+/** PATCH /api/team/members/:id — { role?, inRotation?, approve? } (approve = let in an upline-code joiner) */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isDatabaseConfigured || !prisma) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
@@ -33,16 +33,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const g = await guard(params.id);
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
 
-  const body = (await req.json().catch(() => ({}))) as { role?: string; inRotation?: boolean };
-  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean } = {};
+  const body = (await req.json().catch(() => ({}))) as { role?: string; inRotation?: boolean; approve?: boolean };
+  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; pendingApproval?: boolean } = {};
   if (body.role === "ADMIN" || body.role === "AGENT") data.role = body.role;
   if (typeof body.inRotation === "boolean") data.inRotation = body.inRotation;
+  // Making a pending joiner an admin approves them too.
+  if ((body.approve === true || data.role === "ADMIN") && g.membership.pendingApproval) {
+    // Approved: same footing as an emailed invite (shared leads + rotation).
+    data.pendingApproval = false;
+    if (data.inRotation === undefined) data.inRotation = true;
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const updated = await prisma.membership.update({ where: { id: params.id }, data });
-  return NextResponse.json({ ok: true, membership: { id: updated.id, role: updated.role, inRotation: updated.inRotation } });
+  return NextResponse.json({
+    ok: true,
+    membership: { id: updated.id, role: updated.role, inRotation: updated.inRotation, pendingApproval: updated.pendingApproval },
+  });
 }
 
 /** DELETE /api/team/members/:id — remove a seat; their active leads revert to the owner. */

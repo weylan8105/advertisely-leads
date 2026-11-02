@@ -14,6 +14,12 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { cn } from "@/lib/utils";
+import { UPLINE_COOKIE } from "@/lib/uplineCookie";
+
+type UplineCheck =
+  | { state: "idle" | "checking" }
+  | { state: "valid"; code: string; teamName: string; uplineFirstName: string | null }
+  | { state: "invalid"; error: string };
 
 const perks = [
   "Blue-Collar IUL leads delivered within 24 hours of your order",
@@ -38,6 +44,54 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState("");
   const [inviteOrg, setInviteOrg] = useState<string | null>(null);
+  // "Do you have an upline?" — their Advertisely code puts this agent on their team.
+  const [uplineCode, setUplineCode] = useState("");
+  const [upline, setUpline] = useState<UplineCheck>({ state: "idle" });
+
+  // Prefill from a shared signup link (?upline=CODE).
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("upline");
+    if (c) setUplineCode(c.toUpperCase().slice(0, 20));
+  }, []);
+
+  // Check the code as they type, so they see whose team they're joining.
+  useEffect(() => {
+    const code = uplineCode.trim();
+    if (!code) {
+      setUpline({ state: "idle" });
+      return;
+    }
+    setUpline({ state: "checking" });
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/team/code?code=${encodeURIComponent(code)}`, { signal: ctrl.signal })
+        .then((r) => r.json())
+        .then((b) =>
+          setUpline(
+            b?.valid
+              ? { state: "valid", code: b.code, teamName: b.teamName, uplineFirstName: b.uplineFirstName ?? null }
+              : { state: "invalid", error: b?.error ?? "We couldn't find that code." },
+          ),
+        )
+        .catch((e) => {
+          if (e?.name !== "AbortError") setUpline({ state: "idle" });
+        });
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [uplineCode]);
+
+  // Google signup leaves the page, so carry the code in a short-lived cookie
+  // that the server reads when the account is created (lib/auth.ts).
+  function rememberUplineForGoogle() {
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie =
+      upline.state === "valid" && !inviteToken
+        ? `${UPLINE_COOKIE}=${encodeURIComponent(upline.code)}; Max-Age=1800; Path=/; SameSite=Lax${secure}`
+        : `${UPLINE_COOKIE}=; Max-Age=0; Path=/`;
+  }
 
   // If the signup link carries a downline invite (?invite=<token>), fetch its
   // details, lock the email to the invited address, and auto-join on submit.
@@ -84,13 +138,26 @@ export default function SignupPage() {
       setError("Please agree to the Terms and TCPA outreach policy.");
       return;
     }
+    if (!inviteToken && upline.state === "invalid") {
+      setError("That upline code wasn't found. Fix it or leave it blank.");
+      return;
+    }
 
     setLoading(true);
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, password, agency: agencyName, licensedStates, inviteToken }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          password,
+          agency: agencyName,
+          licensedStates,
+          inviteToken,
+          uplineCode: inviteToken ? "" : uplineCode.trim(),
+        }),
       });
 
       if (!res.ok) {
@@ -158,7 +225,7 @@ export default function SignupPage() {
 
         {/* Google sign-up */}
         <div className="mt-6">
-          <GoogleSignInButton label="Sign up with Google" />
+          <GoogleSignInButton label="Sign up with Google" onBeforeSignIn={rememberUplineForGoogle} />
         </div>
 
         <div className="mt-5 relative">
@@ -240,6 +307,47 @@ export default function SignupPage() {
               onChange={(e) => setAgencyName(e.target.value)}
             />
           </div>
+
+          {!inviteToken && (
+            <div className="space-y-1.5">
+              <Label htmlFor="upline">
+                Do you have an upline? <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="upline"
+                placeholder="Enter their code here"
+                value={uplineCode}
+                onChange={(e) => setUplineCode(e.target.value.toUpperCase().slice(0, 20))}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-describedby="upline-help"
+              />
+              <p
+                id="upline-help"
+                className={cn(
+                  "text-[11px]",
+                  upline.state === "valid"
+                    ? "text-emerald-700"
+                    : upline.state === "invalid"
+                      ? "text-rose-600"
+                      : "text-muted-foreground",
+                )}
+              >
+                {upline.state === "valid"
+                  ? `You'll join ${upline.teamName}${
+                      upline.uplineFirstName && !upline.teamName.includes(upline.uplineFirstName)
+                        ? ` as ${upline.uplineFirstName}'s downline`
+                        : ""
+                    }.`
+                  : upline.state === "invalid"
+                    ? upline.error
+                    : upline.state === "checking"
+                      ? "Checking code…"
+                      : "Their Advertisely code puts you on their team as soon as your account is created."}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">

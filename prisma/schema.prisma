@@ -585,6 +585,9 @@ model Membership {
   role           MembershipRole @default(AGENT)
   // Whether this member receives leads under ROUND_ROBIN distribution.
   inRotation     Boolean        @default(true)
+  // Joined with the upline's code (lib/upline.ts) and not yet approved by a
+  // team manager: on the team, but no shared Goldmine / rotation / roster yet.
+  pendingApproval Boolean       @default(false)
   createdAt      DateTime       @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

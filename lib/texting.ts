@@ -11,7 +11,7 @@ export async function canUseTexting(userId: string, isPlatformAdmin: boolean): P
   if (isPlatformAdmin) return true;
   if (!prisma) return false;
   const membership = await prisma.membership.findFirst({
-    where: { userId, organization: { goldmineEnabled: true } },
+    where: { userId, pendingApproval: false, organization: { goldmineEnabled: true } },
     select: { id: true },
   });
   return !!membership;

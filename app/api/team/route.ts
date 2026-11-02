@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { ensureReferralCode } from "@/lib/referral";
+import { uplineTeamFor } from "@/lib/upline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +13,9 @@ export const dynamic = "force-dynamic";
  * GET /api/team
  * Returns the caller's organization, their role, members (with lead counts),
  * and pending invitations. Agents get a read-only view; owners/admins see
- * everything and can manage seats.
+ * everything and can manage seats. An agent who joined with an upline code and
+ * isn't approved yet sees only themselves and the owner. Also returns the
+ * caller's teams (for switching) and their upline code.
  */
 export async function GET() {
   if (!isDatabaseConfigured || !prisma) {
@@ -25,7 +29,10 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "No organization" }, { status: 404 });
 
   const memberships = await prisma.membership.findMany({
-    where: { organizationId: ctx.organizationId },
+    where: {
+      organizationId: ctx.organizationId,
+      ...(ctx.pending ? { OR: [{ userId }, { role: "OWNER" as const }] } : {}),
+    },
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -48,6 +55,7 @@ export async function GET() {
     image: m.user.image,
     role: m.role,
     inRotation: m.inRotation,
+    pendingApproval: m.pendingApproval,
     leadCount: countByUser[m.userId] ?? 0,
     isSelf: m.userId === userId,
   }));
@@ -61,6 +69,16 @@ export async function GET() {
       })
     : [];
 
+  const [myTeams, myCode, myCodeTeam] = await Promise.all([
+    prisma.membership.findMany({
+      where: { userId },
+      select: { role: true, pendingApproval: true, organization: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    ensureReferralCode(userId).catch(() => null),
+    uplineTeamFor(userId),
+  ]);
+
   return NextResponse.json({
     organization: {
       id: ctx.organizationId,
@@ -69,7 +87,17 @@ export async function GET() {
     },
     role: ctx.role,
     canManage: manage,
+    pending: ctx.pending,
     members,
     invitations,
+    teams: myTeams.map((t) => ({
+      id: t.organization.id,
+      name: t.organization.name,
+      role: t.role,
+      pending: t.pendingApproval,
+    })),
+    // The caller's own upline code + the team it recruits into (null = their
+    // own team, created when the first agent joins with it).
+    upline: { code: myCode, team: myCodeTeam },
   });
 }

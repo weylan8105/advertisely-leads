@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 interface GoogleSignInButtonProps {
   label?: string;
   callbackUrl?: string;
+  /** Runs just before redirecting to Google (e.g. to stash signup details). */
+  onBeforeSignIn?: () => void;
 }
 
 export function GoogleSignInButton({
   label = "Continue with Google",
   callbackUrl = "/dashboard",
+  onBeforeSignIn,
 }: GoogleSignInButtonProps) {
   return (
     <Button
@@ -17,7 +20,10 @@ export function GoogleSignInButton({
       variant="outline"
       className="w-full"
       size="lg"
-      onClick={() => signIn("google", { callbackUrl })}
+      onClick={() => {
+        onBeforeSignIn?.();
+        signIn("google", { callbackUrl });
+      }}
     >
       <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
         <path
