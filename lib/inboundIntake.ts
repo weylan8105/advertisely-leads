@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { NormalizedInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
+import { deliverLeadToOwner, assignLeadToHouse } from "@/lib/house";
 import { fireMetaLeadEvent } from "@/lib/metaCapi";
 import { isTestLead } from "@/lib/testLeads";
 
@@ -89,6 +90,41 @@ export async function createInboundLead(
     }
   } catch (err) {
     return { status: "failed", error: (err as Error).message.slice(0, 200) };
+  }
+
+  // Advertiser-exclusive routing: when the connector tags this lead with an
+  // owner, it belongs solely to that advertiser. Deliver it straight into their
+  // CRM and skip BOTH marketplace distribution and our funnel's Meta pixel event
+  // (these are the advertiser's own leads, not ours). If an owner was specified
+  // but can't be resolved, hold the lead with the house — never let an exclusive
+  // lead fall through into the sellable marketplace pool.
+  const ownerSpecified = lead.ownerUserId || lead.ownerEmail;
+  if (ownerSpecified) {
+    let ownerId = lead.ownerUserId || null;
+    if (!ownerId && lead.ownerEmail) {
+      const owner = await prisma.user.findUnique({
+        where: { email: lead.ownerEmail.trim().toLowerCase() },
+        select: { id: true },
+      });
+      ownerId = owner?.id ?? null;
+    }
+    try {
+      if (ownerId) {
+        await deliverLeadToOwner(
+          record.id,
+          ownerId,
+          "Delivered to advertiser (inbound form owner) — not distributed to buyers.",
+        );
+      } else {
+        await assignLeadToHouse(
+          record.id,
+          `inbound owner "${lead.ownerEmail ?? lead.ownerUserId}" not found — held, not sold`,
+        );
+      }
+    } catch (err) {
+      return { status: "created", leadId: record.id, error: (err as Error).message.slice(0, 200) };
+    }
+    return { status: "created", leadId: record.id };
   }
 
   // Server-side Meta "Lead" event (deduped with the browser pixel). Sent first and

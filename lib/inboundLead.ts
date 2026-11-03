@@ -27,6 +27,11 @@ const ALIASES: Record<string, string[]> = {
   intentReason: ["intent", "intent_reason", "reason", "why", "interest", "interested", "why_interested"],
   packageId: ["packageid", "package_id", "package"],
   source: ["source", "form", "form_name"],
+  // Advertiser-exclusive routing: when a connector tags a lead with an owner,
+  // that lead is delivered ONLY to that Advertisely user and never sold on the
+  // marketplace. Set one of these in the advertiser's own Make/Zapier scenario.
+  ownerEmail: ["owner_email", "deliver_to_email", "advertiser_email", "deliver_to"],
+  ownerUserId: ["owner_user_id", "owner_id", "advertiser_user_id"],
   externalId: ["externalid", "external_id", "lead_id", "leadgen_id", "id", "contact_id"],
   // Ad attribution — captured into dedicated columns so the Conversions API can
   // return them for Meta/Google server-side matching (fbclid + UTMs).
@@ -63,6 +68,10 @@ export interface NormalizedInboundLead {
   packageId: string;
   source: string;
   externalId?: string;
+  // Advertiser-exclusive routing (see ALIASES). When set, the lead goes only to
+  // this user's CRM — never the marketplace. ownerUserId wins if both are given.
+  ownerEmail?: string;
+  ownerUserId?: string;
   raw: Record<string, string>;
   tags: string[];
 }
@@ -168,6 +177,8 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
     // pipe lead (no source field) still reads cleanly as "Facebook instant form".
     source: lookup["form"] || lookup["form_name"] || lookup["lead_source"] || lookup["source"] || DEFAULT_SOURCE,
     externalId: pick("externalId") || undefined,
+    ownerEmail: pick("ownerEmail") || undefined,
+    ownerUserId: pick("ownerUserId") || undefined,
     raw,
     // GHL contacts carry tags (top-level, either a comma-joined string or an
     // array). Capture them so a lead-type badge like "American Income Advantage
