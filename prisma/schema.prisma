@@ -61,6 +61,12 @@ model User {
   // Advertisely Bucks balance in cents (earned when others buy with the code).
   referralCode  String?   @unique
   bucksCents    Int       @default(0)
+  // Advertiser account: this user runs their own ad campaign through Advertisely
+  // and receives their campaign's leads EXCLUSIVELY (owner-delivery), rather than
+  // buying from the marketplace. Auto-set the first time a lead is owner-delivered
+  // to them (see deliverLeadToOwner); surfaces them as a distinct segment on the
+  // admin Client-accounts tab. Does not block them from also placing orders.
+  isAdvertiser  Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
   accounts              Account[]

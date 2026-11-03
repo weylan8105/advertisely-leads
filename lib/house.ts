@@ -240,6 +240,13 @@ export async function deliverLeadToOwner(
     data: { leadId, type: "LEAD_ASSIGNED", body: reason },
   });
 
+  // Mark the account as an advertiser the first time one of their exclusive leads
+  // lands, so the admin Client-accounts tab segments them without manual setup.
+  await prisma.user.updateMany({
+    where: { id: ownerUserId, isAdvertiser: false },
+    data: { isAdvertiser: true },
+  });
+
   // Notify the advertiser with the same delivery email buyers get, so their own
   // leads don't land silently. Never block delivery on an email failure.
   if (isEmailConfigured && owner.email) {

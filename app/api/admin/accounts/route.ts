@@ -45,7 +45,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       select: { id: true, userId: true, quantity: true },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true, isAdvertiser: true } }),
   ]);
 
   const byUser: Record<string, { delivered: number; byStage: Record<string, number> }> = {};
@@ -128,7 +128,15 @@ export async function GET() {
     };
   }
 
-  const ids = new Set<string>([...Object.keys(byUser), ...Object.keys(spendByUser), ...Object.keys(subByUser)]);
+  // Advertisers appear even before any lead has landed, so they're visible as a
+  // segment the moment they're flagged.
+  const advertiserIds = users.filter((u) => u.isAdvertiser).map((u) => u.id);
+  const ids = new Set<string>([
+    ...Object.keys(byUser),
+    ...Object.keys(spendByUser),
+    ...Object.keys(subByUser),
+    ...advertiserIds,
+  ]);
   const accounts = [...ids]
     .map((id) => {
       const u = (userMap[id] ?? {}) as any;
@@ -148,6 +156,7 @@ export async function GET() {
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
         subscription: subByUser[id] ?? null,
+        isAdvertiser: u.isAdvertiser ?? false,
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
         // Progress = combined total across this client's INCOMPLETE orders only
         // (still being fulfilled), from a LIVE lead count. Fully delivered orders
@@ -170,7 +179,7 @@ export async function GET() {
     })
     // Only real client accounts (have leads, spent, placed an order, or an
     // active subscription — so brand-new subscribers show up right away).
-    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0 || a.subscription))
+    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0 || a.subscription || a.isAdvertiser))
     .sort((a, b) => b.delivered - a.delivered);
 
   return NextResponse.json({

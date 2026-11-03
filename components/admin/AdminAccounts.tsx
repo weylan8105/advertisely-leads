@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, X, ArrowRight, Users, Package, Repeat, RefreshCw } from "lucide-react";
+import { Loader2, X, ArrowRight, Users, Package, Repeat, RefreshCw, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -34,6 +34,15 @@ interface Account {
     deliveredThisWeek: number;
     progressPct: number;
   } | null;
+  isAdvertiser: boolean;
+}
+
+/** Which kind of account this is — drives the segment filter + badge. */
+type Segment = "advertisers" | "subs" | "orders";
+function segmentOf(a: Account): Segment {
+  if (a.isAdvertiser) return "advertisers";
+  if (a.subscription) return "subs";
+  return "orders";
 }
 
 const money = (c: number) => formatCurrency(Math.round(c) / 100);
@@ -52,6 +61,7 @@ export function AdminAccounts() {
   const [viewing, setViewing] = useState<Account | null>(null);
   const [managing, setManaging] = useState<Account | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [segment, setSegment] = useState<"all" | Segment>("all");
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -90,19 +100,57 @@ export function AdminAccounts() {
       </div>
     );
 
-  const subCount = accounts.filter((a) => a.subscription).length;
+  const counts = {
+    all: accounts.length,
+    orders: accounts.filter((a) => segmentOf(a) === "orders").length,
+    subs: accounts.filter((a) => segmentOf(a) === "subs").length,
+    advertisers: accounts.filter((a) => segmentOf(a) === "advertisers").length,
+  };
+  const filtered = segment === "all" ? accounts : accounts.filter((a) => segmentOf(a) === segment);
+
+  const SEGMENTS: { key: "all" | Segment; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "orders", label: "Lead orders" },
+    { key: "subs", label: "Subscriptions" },
+    { key: "advertisers", label: "Advertisers" },
+  ];
 
   return (
     <>
+      {/* Segment the box into the three account types: one-off lead-order buyers,
+          weekly subscribers, and advertisers (exclusive owner-delivery). */}
+      <div className="mb-3 inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
+        {SEGMENTS.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => setSegment(s.key)}
+            className={cn(
+              "rounded-md px-3 py-1 text-xs font-medium transition-colors inline-flex items-center gap-1.5",
+              segment === s.key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {s.key === "subs" && <Repeat className="h-3 w-3" />}
+            {s.key === "advertisers" && <Megaphone className="h-3 w-3" />}
+            {s.label}
+            <span className="tabular-nums opacity-60">{counts[s.key]}</span>
+          </button>
+        ))}
+      </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
-          {subCount > 0 ? (
+          {counts.subs > 0 ? (
             <span className="inline-flex items-center gap-1.5">
               <Repeat className="h-3.5 w-3.5 text-brand-red" />
-              {subCount} active subscription{subCount === 1 ? "" : "s"}
+              {counts.subs} active subscription{counts.subs === 1 ? "" : "s"}
             </span>
           ) : (
             "No active subscriptions"
+          )}
+          {counts.advertisers > 0 && (
+            <span className="inline-flex items-center gap-1.5 ml-3">
+              <Megaphone className="h-3.5 w-3.5 text-sky-600" />
+              {counts.advertisers} advertiser{counts.advertisers === 1 ? "" : "s"}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -132,7 +180,7 @@ export function AdminAccounts() {
             </tr>
           </thead>
           <tbody>
-            {accounts.map((a) => {
+            {filtered.map((a) => {
               const m = metrics(a);
               return (
                 <tr key={a.userId} className="border-b border-slate-100 hover:bg-slate-50">
@@ -153,6 +201,15 @@ export function AdminAccounts() {
                           title={`Weekly subscription · ${a.subscription.status}`}
                         >
                           <Repeat className="h-2.5 w-2.5" /> Sub
+                        </Badge>
+                      )}
+                      {a.isAdvertiser && (
+                        <Badge
+                          variant="muted"
+                          className="text-[9px] inline-flex items-center gap-0.5 border-sky-200 bg-sky-50 text-sky-700"
+                          title="Advertiser — runs their own campaign; receives their leads exclusively"
+                        >
+                          <Megaphone className="h-2.5 w-2.5" /> Advertiser
                         </Badge>
                       )}
                     </div>
@@ -206,6 +263,15 @@ export function AdminAccounts() {
                         </div>
                         <Progress value={a.orderProgressPct} className="h-1.5" />
                       </div>
+                    ) : a.isAdvertiser ? (
+                      // Advertisers don't buy orders — their leads arrive via
+                      // exclusive owner-delivery, so show that instead of a bar.
+                      <div className="text-[11px]" title="Receives their own campaign's leads exclusively">
+                        <span className="inline-flex items-center gap-1 font-medium text-sky-600">
+                          <Megaphone className="h-3 w-3" /> Advertiser
+                        </span>
+                        <div className="text-muted-foreground tabular-nums">{a.delivered} exclusive lead{a.delivered === 1 ? "" : "s"}</div>
+                      </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -239,10 +305,16 @@ export function AdminAccounts() {
                 </tr>
               );
             })}
-            {accounts.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={10} className="text-center text-sm text-muted-foreground py-10">
-                  No client accounts with leads or orders yet.
+                  {segment === "advertisers"
+                    ? "No advertiser accounts yet."
+                    : segment === "subs"
+                      ? "No subscription accounts yet."
+                      : segment === "orders"
+                        ? "No lead-order accounts yet."
+                        : "No client accounts with leads or orders yet."}
                 </td>
               </tr>
             )}
