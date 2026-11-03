@@ -16,37 +16,57 @@ const US_STATES: Record<string, string> = {
 };
 const VALID_STATES = new Set(Object.values(US_STATES));
 
-/** "FL" → "Florida" (title case). Empty string for an unknown code. */
-export function stateNameForCode(code: string): string {
-  const name = Object.keys(US_STATES).find((n) => US_STATES[n] === code.toUpperCase());
-  return name ? name.replace(/\b\w/g, (m) => m.toUpperCase()) : "";
-}
-
-// Common colloquial / newspaper abbreviations and short forms that aren't the
-// full name and aren't the 2-letter code (so the exact matches miss them).
-// Facebook lead forms produce these constantly (free-text state field).
+// Common colloquial / newspaper (AP-style) abbreviations and short forms that
+// aren't the full name and aren't the 2-letter code (so the exact matches miss
+// them). Facebook lead forms produce these constantly (free-text state field).
+//
+// Coverage is intentionally ALL 50 states — not just the ones we currently sell
+// leads in. An advertiser running their own campaign can produce a lead from any
+// state, and we must map it to the right code regardless of whether it's on the
+// marketplace. (Sellability is enforced separately by AVAILABLE_STATES on the
+// checkout/order surfaces — it never limits what we can recognize at intake.)
+//
+// Keys are lowercase, letters-only (punctuation already stripped by the caller),
+// so "N.H." → "nh" resolves via the 2-letter path and isn't listed here. Only
+// genuinely ambiguous or prefix-colliding forms need an explicit entry; the rest
+// are included for deterministic, self-documenting coverage.
 const STATE_ABBREV: Record<string, string> = {
-  ca: "CA", cal: "CA", cali: "CA", calif: "CA",
-  fl: "FL", fla: "FL", flo: "FL",
-  mass: "MA",
-  penn: "PA", penna: "PA",
-  conn: "CT",
-  tenn: "TN", tennvia: "TN",
-  ariz: "AZ",
+  // "Ala"/"Alas" both prefix-collide (alabama vs alaska) — pin them explicitly.
+  ala: "AL", alab: "AL", alas: "AK",
+  ariz: "AZ", ari: "AZ",
+  ark: "AR", arkan: "AR",
+  cal: "CA", cali: "CA", calif: "CA", califor: "CA",
   colo: "CO",
-  wash: "WA",
-  wis: "WI", wisc: "WI",
+  conn: "CT",
+  dela: "DE", del: "DE",
+  fla: "FL", flo: "FL",
+  haw: "HI",
+  ida: "ID",
+  ill: "IL", illin: "IL",
+  ind: "IN", indi: "IN",
+  kan: "KS", kans: "KS",
+  ken: "KY", kent: "KY",
+  lou: "LA", loui: "LA",
+  mass: "MA",
+  mary: "MD",
   mich: "MI",
   minn: "MN",
-  nev: "NV",
-  okla: "OK",
-  ore: "OR", oreg: "OR",
-  kan: "KS", kans: "KS",
-  neb: "NE", nebr: "NE",
-  dela: "DE",
+  // "Miss" prefix-collides (mississippi vs missouri) — AP "Miss." is Mississippi.
+  miss: "MS", missi: "MS", missou: "MO", missour: "MO",
   mont: "MT",
+  neb: "NE", nebr: "NE",
+  nev: "NV",
+  okla: "OK", okl: "OK",
+  ore: "OR", oreg: "OR",
+  penn: "PA", penna: "PA", penns: "PA",
+  tenn: "TN", tenne: "TN", tennvia: "TN",
+  tex: "TX", texa: "TX",
+  // "Virg" is Virginia (West Virginia's forms start with "west"/"w").
+  virg: "VA", virgi: "VA",
+  wash: "WA",
+  wis: "WI", wisc: "WI",
+  wva: "WV", wvirginia: "WV", wvir: "WV",
   wyo: "WY",
-  wva: "WV", wvirginia: "WV",
 };
 
 function levenshtein(a: string, b: string): number {
