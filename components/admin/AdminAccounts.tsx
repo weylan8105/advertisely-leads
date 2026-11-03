@@ -64,6 +64,29 @@ export function AdminAccounts() {
   const [segment, setSegment] = useState<"all" | Segment>("all");
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  async function toggleAdvertiser(a: Account) {
+    const next = !a.isAdvertiser;
+    if (!next && !window.confirm(`Remove advertiser status from ${a.name ?? a.email}? They'll move back to Lead orders / Subscriptions and lose the all-50-states exemption.`)) return;
+    setTogglingId(a.userId);
+    // Optimistic — flip locally so the badge/segment update immediately.
+    setAccounts((prev) => prev?.map((x) => (x.userId === a.userId ? { ...x, isAdvertiser: next } : x)) ?? prev);
+    try {
+      const res = await fetch("/api/admin/accounts/advertiser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: a.userId, isAdvertiser: next }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    } catch (e: any) {
+      // Roll back on failure.
+      setAccounts((prev) => prev?.map((x) => (x.userId === a.userId ? { ...x, isAdvertiser: a.isAdvertiser } : x)) ?? prev);
+      window.alert(e?.message ?? "Couldn't update advertiser status.");
+    } finally {
+      setTogglingId(null);
+    }
+  }
 
   async function reconcileSubscriptions() {
     if (!window.confirm("Reconcile subscriptions with Stripe? This creates any missing weekly lead orders from paid invoices.")) return;
@@ -299,6 +322,27 @@ export function AdminAccounts() {
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => setViewing(a)}>
                         View CRM <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => toggleAdvertiser(a)}
+                        disabled={togglingId === a.userId}
+                        title={
+                          a.isAdvertiser
+                            ? "Remove advertiser status"
+                            : "Mark as advertiser — exclusive owner-delivery + all-50-states exemption"
+                        }
+                        className={cn(
+                          a.isAdvertiser ? "text-sky-600 hover:text-sky-700" : "text-muted-foreground",
+                        )}
+                      >
+                        {togglingId === a.userId ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Megaphone className="h-3.5 w-3.5" />
+                        )}
+                        {a.isAdvertiser ? "Advertiser ✓" : "Make advertiser"}
                       </Button>
                     </div>
                   </td>

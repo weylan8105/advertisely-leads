@@ -69,14 +69,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   // Licensing: the recipient (the agent who gets the leads) must be licensed in
   // every selected state, when they've set a licensing list. Platform admins are
-  // exempt (they may be fixing data).
+  // exempt (they may be fixing data), and so are advertisers — they run their own
+  // campaigns and may request all 50 states regardless of a licensing list.
   const recipientId = order.deliverToUserId ?? order.userId;
   const recipient = await prisma.user.findUnique({
     where: { id: recipientId },
-    select: { licensedStates: true },
+    select: { licensedStates: true, isAdvertiser: true },
   });
   const licensed = recipient?.licensedStates ?? [];
-  if (!isPlatformAdmin && licensed.length > 0) {
+  if (!isPlatformAdmin && !recipient?.isAdvertiser && licensed.length > 0) {
     const unlicensed = states.filter((s) => !licensed.includes(s));
     if (unlicensed.length) {
       const who = order.deliverToUserId && order.deliverToUserId !== callerId ? "The agent isn't" : "You're not";
