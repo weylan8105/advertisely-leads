@@ -154,6 +154,11 @@ model MetaFormMapping {
   packageId        String // matches LeadPackageId in TypeScript
   pageConnectionId String
   enabled          Boolean            @default(true)
+  // Advertiser-owned form: when set, every lead this form produces is delivered
+  // straight into THIS user's CRM and is NEVER offered to the marketplace or any
+  // buyer order (the form-scoped exclusive path — e.g. a client running their own
+  // Meta campaign through Advertisely). Null = normal marketplace distribution.
+  ownerUserId      String?
   // Mapping from Meta form question key → our standardized field name.
   // E.g. {"what_state_do_you_live_in?": "state", "your_occupation?": "occupation"}
   fieldMapping     Json               @default("{}")

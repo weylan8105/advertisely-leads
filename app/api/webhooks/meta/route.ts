@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
           flat,
           fieldMapping,
           packageId: formMapping.packageId,
+          ownerUserId: formMapping.ownerUserId,
           source: `Meta - ${formMapping.formName}`,
           meta: {
             campaignId: detail.campaign_id,

@@ -41,7 +41,28 @@ export async function GET() {
       formMappings: true,
     },
   });
-  return NextResponse.json({ pages });
+
+  // Attach each exclusive form's owner (email + name) so the UI can show who a
+  // form delivers to. One lookup for all owners across every page.
+  const ownerIds = [
+    ...new Set(
+      pages.flatMap((p) => p.formMappings.map((m) => m.ownerUserId).filter((x): x is string => !!x)),
+    ),
+  ];
+  const owners = ownerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const ownerById = Object.fromEntries(owners.map((u) => [u.id, u]));
+  const pagesWithOwners = pages.map((p) => ({
+    ...p,
+    formMappings: p.formMappings.map((m) => ({
+      ...m,
+      ownerEmail: m.ownerUserId ? ownerById[m.ownerUserId]?.email ?? null : null,
+      ownerName: m.ownerUserId ? ownerById[m.ownerUserId]?.name ?? null : null,
+    })),
+  }));
+
+  return NextResponse.json({ pages: pagesWithOwners });
 }
 
 export async function POST(req: NextRequest) {

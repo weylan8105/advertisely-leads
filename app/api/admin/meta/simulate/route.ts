@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   let packageId = body.packageId;
   let fieldMapping: Record<string, string> = {};
   let source = "Simulated test lead";
+  let ownerUserId: string | null = null;
 
   if (body.formId) {
     const mapping = await prisma.metaFormMapping.findUnique({
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
     packageId = mapping.packageId;
     fieldMapping = (mapping.fieldMapping as Record<string, string>) ?? {};
     source = `Simulated - ${mapping.formName}`;
+    // Honor an advertiser-owned form so admins can test exclusive routing too.
+    ownerUserId = mapping.ownerUserId;
   }
 
   if (!packageId) {
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest) {
     flat,
     fieldMapping,
     packageId,
+    ownerUserId,
     source,
     activityBody: "Simulated test lead injected from admin panel.",
   });
@@ -123,7 +127,9 @@ export async function POST(req: NextRequest) {
     result,
     delivered: result.assigned === true,
     message: result.assigned
-      ? "Lead ingested and delivered to a matching order (check the customer's email/Sheet)."
+      ? ownerUserId
+        ? "Lead ingested and delivered directly to the form's advertiser (exclusive — not distributed to buyers)."
+        : "Lead ingested and delivered to a matching order (check the customer's email/Sheet)."
       : "Lead ingested but no open order matched its package/state — it's sitting unassigned in the pool.",
   });
 }

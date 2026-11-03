@@ -382,6 +382,8 @@ function FormMappingList({
   const [formId, setFormId] = useState("");
   const [formName, setFormName] = useState("");
   const [packageId, setPackageId] = useState<string>(leadPackages[0].id);
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [configForm, setConfigForm] = useState<any | null>(null);
 
   return (
@@ -423,13 +425,26 @@ function FormMappingList({
               </SelectContent>
             </Select>
           </div>
+          <Input
+            value={ownerEmail}
+            onChange={(e) => setOwnerEmail(e.target.value)}
+            placeholder="Deliver only to (advertiser email) — leave blank to sell on the marketplace"
+            className="text-xs"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Set an advertiser email to make this form <strong>exclusive</strong>: every lead goes
+            straight to that user&apos;s CRM and is never distributed to buyers. Leave blank for
+            normal marketplace distribution.
+          </p>
+          {saveError && <p className="text-[11px] text-red-600">{saveError}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShow(false)}>
+            <Button variant="outline" size="sm" onClick={() => { setShow(false); setSaveError(null); }}>
               Cancel
             </Button>
             <Button
               size="sm"
               onClick={async () => {
+                setSaveError(null);
                 const res = await fetch("/api/admin/meta/forms", {
                   method: "POST",
                   body: JSON.stringify({
@@ -437,12 +452,17 @@ function FormMappingList({
                     formId,
                     formName,
                     packageId,
+                    ownerEmail: ownerEmail.trim() || null,
                   }),
                 });
                 if (res.ok) {
                   const { mapping } = await res.json();
                   setMappings([...mappings, mapping]);
                   setShow(false);
+                  setOwnerEmail("");
+                } else {
+                  const data = await res.json().catch(() => null);
+                  setSaveError(data?.error ?? "Could not map the form.");
                 }
               }}
             >
@@ -479,6 +499,11 @@ function FormMappingList({
                       </Badge>
                     );
                   })()}
+                  {m.ownerUserId && (
+                    <Badge variant="success" className="text-[10px]">
+                      Exclusive → {m.ownerName || m.ownerEmail || "advertiser"}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button

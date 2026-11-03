@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { mapLeadFields } from "./meta";
 import { tryFulfillForNewLead } from "./fulfillment";
+import { deliverLeadToOwner } from "./house";
 import { isTestLead } from "./testLeads";
 
 export interface IngestResult {
@@ -22,6 +23,9 @@ export async function ingestLeadFromFields(opts: {
   flat: Record<string, string>;
   fieldMapping: Record<string, string>;
   packageId: string;
+  // When set (from the form mapping's ownerUserId), the lead is delivered
+  // straight to this user's CRM and NEVER distributed to the marketplace.
+  ownerUserId?: string | null;
   source: string;
   meta?: {
     campaignId?: string;
@@ -98,6 +102,18 @@ export async function ingestLeadFromFields(opts: {
       },
     });
     return { status: "ingested", leadId: created.id, assigned: false, orderId: null };
+  }
+
+  // Advertiser-owned form: this lead belongs solely to the form's owner. Deliver
+  // it straight into their CRM and skip marketplace distribution entirely — it
+  // can never land in the sellable bank or on any buyer's order.
+  if (opts.ownerUserId) {
+    const delivered = await deliverLeadToOwner(
+      created.id,
+      opts.ownerUserId,
+      `Delivered to advertiser (owns form "${opts.source}") — not distributed to buyers.`,
+    );
+    return { status: "ingested", leadId: created.id, assigned: delivered, orderId: null };
   }
 
   // Try to immediately assign to an open order (sends email + Sheets sync).

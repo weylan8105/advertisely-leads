@@ -200,6 +200,78 @@ export async function assignLeadToHouse(leadId: string, reason: string): Promise
 }
 
 /**
+ * Direct-to-advertiser delivery. An advertiser (a client running their own Meta
+ * campaign through Advertisely) owns every lead their form produces — those leads
+ * go straight into THAT user's CRM and are never offered to the marketplace or any
+ * buyer order. Keyed off MetaFormMapping.ownerUserId at ingest, this is the
+ * form-scoped sibling of assignLeadToHouse: assign to one owner, log, notify.
+ * No age gate — the advertiser owns the lead regardless of its age. Guarded on
+ * assignedUserId:null so it never collides with anything else.
+ */
+export async function deliverLeadToOwner(
+  leadId: string,
+  ownerUserId: string,
+  reason: string,
+): Promise<boolean> {
+  if (!prisma) return false;
+  const owner = await prisma.user.findUnique({
+    where: { id: ownerUserId },
+    select: {
+      email: true,
+      name: true,
+      defaultOrganizationId: true,
+      ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 },
+    },
+  });
+  if (!owner) return false;
+  const organizationId = owner.ownedOrganizations[0]?.id ?? owner.defaultOrganizationId ?? null;
+
+  const res = await prisma.lead.updateMany({
+    where: { id: leadId, assignedUserId: null, trashedAt: null },
+    data: {
+      assignedUserId: ownerUserId,
+      assignedAt: new Date(),
+      ...(organizationId ? { organizationId } : {}),
+    },
+  });
+  if (res.count === 0) return false;
+
+  await prisma.leadActivity.create({
+    data: { leadId, type: "LEAD_ASSIGNED", body: reason },
+  });
+
+  // Notify the advertiser with the same delivery email buyers get, so their own
+  // leads don't land silently. Never block delivery on an email failure.
+  if (isEmailConfigured && owner.email) {
+    try {
+      const full = await prisma.lead.findUnique({
+        where: { id: leadId },
+        select: {
+          name: true, phone: true, email: true, state: true,
+          occupation: true, age: true, income: true, intentReason: true, packageId: true,
+        },
+      });
+      if (full) {
+        await sendLeadDeliveryEmail({
+          agentEmail: owner.email,
+          agentName: owner.name ?? "there",
+          leadCount: 1,
+          packageName: findPackage(full.packageId)?.name ?? "Your campaign",
+          orderId: leadId,
+          leads: [{
+            name: full.name, phone: full.phone, email: full.email, state: full.state,
+            occupation: full.occupation, age: full.age, income: full.income, intentReason: full.intentReason,
+          }],
+        });
+      }
+    } catch (e) {
+      console.warn("Advertiser lead email failed:", e);
+    }
+  }
+  return true;
+}
+
+/**
  * Backfill: sweep every unassigned pool lead whose state no open order covers
  * into the house CRM. Leaves states with active demand alone (their inventory
  * still serves those orders + the aged store). Returns what moved.
