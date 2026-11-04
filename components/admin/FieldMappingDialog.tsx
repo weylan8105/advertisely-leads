@@ -32,7 +32,7 @@ interface Question {
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  mapping: { id: string; formId: string; formName: string; packageId: string; pageConnectionId: string };
+  mapping: { id: string; formId: string; formName: string; packageId: string; pageConnectionId: string; ownerUserId?: string | null };
 }
 
 export function FieldMappingDialog({ open, onOpenChange, mapping }: Props) {
@@ -67,10 +67,12 @@ export function FieldMappingDialog({ open, onOpenChange, mapping }: Props) {
   }, [open, mapping.formId]);
 
   // Live required-field validation (name/phone/state from built-ins + selections).
+  // An advertiser's exclusive form skips state — it only drives marketplace matching.
   const covered = new Set<string>();
   for (const q of questions) if (q.autoField) covered.add(q.autoField);
   for (const [, f] of Object.entries(sel)) if (f && f !== "__ignore") covered.add(f);
-  const missing = ["name", "phone", "state"].filter((f) => !covered.has(f));
+  const required = mapping.ownerUserId ? ["name", "phone"] : ["name", "phone", "state"];
+  const missing = required.filter((f) => !covered.has(f));
   const custom = questions.filter((q) => !q.builtIn);
   const builtIns = questions.filter((q) => q.builtIn && q.autoField);
 

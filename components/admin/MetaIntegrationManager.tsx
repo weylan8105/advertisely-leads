@@ -534,6 +534,7 @@ function FormMappingList({
             formName: configForm.formName,
             packageId: configForm.packageId,
             pageConnectionId,
+            ownerUserId: configForm.ownerUserId,
           }}
         />
       )}

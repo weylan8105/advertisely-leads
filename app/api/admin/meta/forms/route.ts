@@ -32,7 +32,9 @@ export async function POST(req: NextRequest) {
     fieldMapping?: Record<string, string>;
     // Optional advertiser email. When provided, this form becomes EXCLUSIVE —
     // every lead it produces is delivered straight to that user's CRM and never
-    // enters marketplace distribution. Empty/omitted clears it (back to shared).
+    // enters marketplace distribution. Empty string or null clears it (back to
+    // shared); omitted leaves an existing mapping's owner untouched, so saving
+    // field mappings can't silently strip exclusivity.
     ownerEmail?: string | null;
   };
 
@@ -67,8 +69,8 @@ export async function POST(req: NextRequest) {
     update: {
       formName: body.formName,
       packageId: body.packageId,
-      fieldMapping: body.fieldMapping ?? {},
-      ownerUserId,
+      ...(body.fieldMapping !== undefined ? { fieldMapping: body.fieldMapping } : {}),
+      ...(body.ownerEmail !== undefined ? { ownerUserId } : {}),
       enabled: true,
     },
     create: {
@@ -82,6 +84,12 @@ export async function POST(req: NextRequest) {
   });
 
   // Hand the UI the owner's display info so the "Exclusive" badge renders at once.
+  if (!ownerUser && mapping.ownerUserId) {
+    ownerUser = await prisma.user.findUnique({
+      where: { id: mapping.ownerUserId },
+      select: { id: true, name: true, email: true },
+    });
+  }
   return NextResponse.json({
     mapping: {
       ...mapping,
