@@ -98,9 +98,20 @@ export async function createInboundLead(
   // (these are the advertiser's own leads, not ours). If an owner was specified
   // but can't be resolved, hold the lead with the house — never let an exclusive
   // lead fall through into the sellable marketplace pool.
-  const ownerSpecified = lead.ownerUserId || lead.ownerEmail;
+  // A lead from an advertiser's own Meta form (matched by form id, e.g. GHL's
+  // attribution) is exclusive to that advertiser even without an owner tag.
+  let formOwnerId: string | null = null;
+  if (!lead.ownerUserId && !lead.ownerEmail && lead.formId) {
+    const mapping = await prisma.metaFormMapping.findUnique({
+      where: { formId: lead.formId },
+      select: { ownerUserId: true, enabled: true },
+    });
+    if (mapping?.enabled && mapping.ownerUserId) formOwnerId = mapping.ownerUserId;
+  }
+
+  const ownerSpecified = lead.ownerUserId || lead.ownerEmail || formOwnerId;
   if (ownerSpecified) {
-    let ownerId = lead.ownerUserId || null;
+    let ownerId = lead.ownerUserId || formOwnerId || null;
     if (!ownerId && lead.ownerEmail) {
       const owner = await prisma.user.findUnique({
         where: { email: lead.ownerEmail.trim().toLowerCase() },
@@ -113,7 +124,9 @@ export async function createInboundLead(
         await deliverLeadToOwner(
           record.id,
           ownerId,
-          "Delivered to advertiser (inbound form owner) — not distributed to buyers.",
+          formOwnerId
+            ? `Delivered to advertiser (owns Meta form ${lead.formId}) — not distributed to buyers.`
+            : "Delivered to advertiser (inbound form owner) — not distributed to buyers.",
         );
       } else {
         await assignLeadToHouse(

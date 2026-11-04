@@ -72,8 +72,33 @@ export interface NormalizedInboundLead {
   // this user's CRM — never the marketplace. ownerUserId wins if both are given.
   ownerEmail?: string;
   ownerUserId?: string;
+  // The Meta instant form the lead came from (GHL forwards it in its attribution).
+  // A form mapped to an advertiser routes the lead to them like ownerUserId does.
+  formId?: string;
   raw: Record<string, string>;
   tags: string[];
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  let obj = value;
+  if (typeof value === "string") {
+    try { obj = JSON.parse(value); } catch { return null; }
+  }
+  return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : null;
+}
+
+/**
+ * The Meta form a GHL lead came from. GHL's `attributionSource` is the contact's
+ * FIRST touch; `lastAttributionSource` is the submission that triggered this
+ * webhook, so a repeat contact routes by the form they just filled out.
+ */
+function ghlFormId(body: Record<string, unknown>): string {
+  const contact = asObject(body?.contact);
+  for (const src of [body?.lastAttributionSource, contact?.lastAttributionSource, body?.attributionSource, contact?.attributionSource]) {
+    const id = asObject(src)?.formId;
+    if (id) return String(id).trim();
+  }
+  return "";
 }
 
 function toStringValue(v: unknown): string {
@@ -179,6 +204,7 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
     externalId: pick("externalId") || undefined,
     ownerEmail: pick("ownerEmail") || undefined,
     ownerUserId: pick("ownerUserId") || undefined,
+    formId: ghlFormId(body) || lookup["form_id"] || lookup["leadgen_form_id"] || undefined,
     raw,
     // GHL contacts carry tags (top-level, either a comma-joined string or an
     // array). Capture them so a lead-type badge like "American Income Advantage

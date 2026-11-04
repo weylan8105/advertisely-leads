@@ -11,10 +11,10 @@ export const maxDuration = 60;
 /**
  * GET /api/cron/meta-leads — pull recent leads for every mapped Meta form.
  *
- * Meta won't let the app's leadgen webhook be enabled until leads_retrieval has
- * Advanced Access, so an external scheduler (e.g. cron-job.org, every 5 min)
- * calls this with `Authorization: Bearer <CRON_SECRET>`; vercel.json adds a
- * daily run as a backstop. Signed-in admins can also run it by hand, and
+ * Not scheduled: advertiser form leads arrive through GHL and are routed by form
+ * id (lib/inboundIntake.ts). Running this alongside GHL would store each lead
+ * twice (leadgen id vs GHL contact id). It stays as a manual tool — callable
+ * with `Authorization: Bearer <CRON_SECRET>` or by a signed-in admin, and
  * `?dryRun=1` lists what would be ingested (ids only) without writing anything.
  */
 export async function GET(req: NextRequest) {

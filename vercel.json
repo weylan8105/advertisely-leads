@@ -11,10 +11,6 @@
     {
       "path": "/api/cron/house-lead-invoice",
       "schedule": "0 14 * * 1"
-    },
-    {
-      "path": "/api/cron/meta-leads",
-      "schedule": "0 12 * * *"
     }
   ]
 }
