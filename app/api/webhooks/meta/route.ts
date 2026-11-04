@@ -3,10 +3,9 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import {
   verifyMetaSignature,
   fetchMetaLeadDetail,
-  flattenMetaFields,
   type MetaLeadgenWebhookPayload,
 } from "@/lib/meta";
-import { ingestLeadFromFields } from "@/lib/leadIngest";
+import { ingestMetaLead } from "@/lib/metaLeadPoll";
 
 // Force this route to run in Node.js runtime (not Edge) — Prisma requires Node.
 export const runtime = "nodejs";
@@ -108,25 +107,7 @@ export async function POST(req: NextRequest) {
           event.leadgen_id,
           formMapping.pageConnection.pageAccessToken,
         );
-        const flat = flattenMetaFields(detail.field_data);
-        const fieldMapping =
-          (formMapping.fieldMapping as Record<string, string>) ?? {};
-
-        const result = await ingestLeadFromFields({
-          externalId: event.leadgen_id,
-          flat,
-          fieldMapping,
-          packageId: formMapping.packageId,
-          ownerUserId: formMapping.ownerUserId,
-          source: `Meta - ${formMapping.formName}`,
-          meta: {
-            campaignId: detail.campaign_id,
-            adsetId: detail.adset_id,
-            adId: detail.ad_id,
-            createdTime: new Date(detail.created_time),
-          },
-          activityBody: `Lead received from Meta form "${formMapping.formName}".`,
-        });
+        const result = await ingestMetaLead(formMapping, detail);
 
         if (result.status === "ingested") {
           ingested.push(event.leadgen_id);
