@@ -16,6 +16,12 @@ const US_STATES: Record<string, string> = {
 };
 const VALID_STATES = new Set(Object.values(US_STATES));
 
+/** "FL" → "Florida" (title case). Empty string for an unknown code. */
+export function stateNameForCode(code: string): string {
+  const name = Object.keys(US_STATES).find((n) => US_STATES[n] === code.toUpperCase());
+  return name ? name.replace(/\b\w/g, (m) => m.toUpperCase()) : "";
+}
+
 // Common colloquial / newspaper (AP-style) abbreviations and short forms that
 // aren't the full name and aren't the 2-letter code (so the exact matches miss
 // them). Facebook lead forms produce these constantly (free-text state field).
