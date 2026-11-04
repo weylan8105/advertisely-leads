@@ -5,6 +5,7 @@ import { AVAILABLE_STATES } from "@/data/states";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { ensureReferralCode } from "@/lib/referral";
 import { joinUplineTeam, resolveUplineCode } from "@/lib/upline";
+import { isAdvertiserInviteToken } from "@/lib/advertiserInvite";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AVAILABLE = new Set(AVAILABLE_STATES);
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
   const licensedStates = cleanStates(data.licensedStates);
   const inviteToken = typeof data.inviteToken === "string" ? data.inviteToken.trim() : "";
   const uplineCode = typeof data.uplineCode === "string" ? data.uplineCode.trim() : "";
+  // Signed up through the advertiser invite link → advertiser account.
+  const isAdvertiser = isAdvertiserInviteToken(typeof data.advertiserToken === "string" ? data.advertiserToken : "");
 
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json(
@@ -91,6 +94,7 @@ export async function POST(req: Request) {
       phone: phone || null,
       licensedStates,
       passwordHash,
+      ...(isAdvertiser ? { isAdvertiser: true } : {}),
     },
     select: { id: true },
   });

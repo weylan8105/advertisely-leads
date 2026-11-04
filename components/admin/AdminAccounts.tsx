@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, X, ArrowRight, Users, Package, Repeat, RefreshCw, Megaphone, Link2 as LinkIcon } from "lucide-react";
+import { Loader2, X, ArrowRight, Users, Package, Repeat, RefreshCw, Megaphone, Link2 as LinkIcon, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -70,6 +70,25 @@ export function AdminAccounts() {
   const [advEmail, setAdvEmail] = useState("");
   const [addingAdv, setAddingAdv] = useState(false);
   const [advMsg, setAdvMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Advertiser invite link — anyone who signs up through it becomes an advertiser.
+  const [inviteCopied, setInviteCopied] = useState(false);
+  async function copyAdvertiserInvite() {
+    try {
+      const res = await fetch("/api/admin/advertiser-invite");
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.url) throw new Error(d.error || `HTTP ${res.status}`);
+      try {
+        await navigator.clipboard.writeText(d.url);
+        setInviteCopied(true);
+        setTimeout(() => setInviteCopied(false), 2000);
+      } catch {
+        window.prompt("Copy the advertiser invite link:", d.url);
+      }
+    } catch (e: any) {
+      window.alert(e?.message ?? "Couldn't get the invite link.");
+    }
+  }
 
   // Mark any account an advertiser by email — including brand-new signups that
   // aren't in this list yet (no leads/orders).
@@ -211,6 +230,15 @@ export function AdminAccounts() {
           {advMsg && (
             <span className={cn("text-[11px]", advMsg.ok ? "text-emerald-600" : "text-rose-600")}>{advMsg.text}</span>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={copyAdvertiserInvite}
+            title="Anyone who creates an account through this link is set up as an advertiser"
+          >
+            {inviteCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+            {inviteCopied ? "Link copied" : "Copy advertiser invite link"}
+          </Button>
           <form
             onSubmit={(e) => { e.preventDefault(); void addAdvertiser(); }}
             className="flex items-center gap-1.5"

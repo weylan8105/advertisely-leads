@@ -5,6 +5,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { UPLINE_COOKIE } from "@/lib/uplineCookie";
+import { ADVERTISER_COOKIE, isAdvertiserInviteToken } from "@/lib/advertiserInvite";
 
 const providers: NextAuthOptions["providers"] = [];
 
@@ -69,6 +70,17 @@ export const authOptions: NextAuthOptions = {
     // "Sign up with Google" with an upline code: the signup page leaves the
     // code in a short-lived cookie; join their team once the account exists.
     async createUser({ user }) {
+      // Same for the advertiser invite link: mark the new account an advertiser.
+      try {
+        const { cookies } = await import("next/headers");
+        const adv = cookies().get(ADVERTISER_COOKIE)?.value;
+        if (adv && user.id && prisma && isAdvertiserInviteToken(decodeURIComponent(adv))) {
+          await prisma.user.update({ where: { id: user.id }, data: { isAdvertiser: true } });
+        }
+        if (adv) cookies().delete(ADVERTISER_COOKIE);
+      } catch (e) {
+        console.warn("[auth] advertiser flag after Google signup failed", e);
+      }
       try {
         const { cookies } = await import("next/headers");
         const code = cookies().get(UPLINE_COOKIE)?.value;

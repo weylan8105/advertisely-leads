@@ -14,7 +14,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { cn } from "@/lib/utils";
-import { UPLINE_COOKIE } from "@/lib/uplineCookie";
+import { UPLINE_COOKIE, ADVERTISER_COOKIE } from "@/lib/uplineCookie";
 
 type UplineCheck =
   | { state: "idle" | "checking" }
@@ -91,7 +91,22 @@ export default function SignupPage() {
       upline.state === "valid" && !inviteToken
         ? `${UPLINE_COOKIE}=${encodeURIComponent(upline.code)}; Max-Age=1800; Path=/; SameSite=Lax${secure}`
         : `${UPLINE_COOKIE}=; Max-Age=0; Path=/`;
+    document.cookie = advertiserToken
+      ? `${ADVERTISER_COOKIE}=${encodeURIComponent(advertiserToken)}; Max-Age=1800; Path=/; SameSite=Lax${secure}`
+      : `${ADVERTISER_COOKIE}=; Max-Age=0; Path=/`;
   }
+
+  // Advertiser invite link (?advertiser=<token>): the new account is created as
+  // an advertiser (checked server-side again on create).
+  const [advertiserToken, setAdvertiserToken] = useState("");
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("advertiser");
+    if (!t) return;
+    fetch(`/api/advertiser-invite?token=${encodeURIComponent(t)}`)
+      .then((r) => r.json())
+      .then((b) => { if (b?.valid) setAdvertiserToken(t); })
+      .catch(() => {});
+  }, []);
 
   // If the signup link carries a downline invite (?invite=<token>), fetch its
   // details, lock the email to the invited address, and auto-join on submit.
@@ -157,6 +172,7 @@ export default function SignupPage() {
           licensedStates,
           inviteToken,
           uplineCode: inviteToken ? "" : uplineCode.trim(),
+          advertiserToken,
         }),
       });
 
@@ -215,6 +231,13 @@ export default function SignupPage() {
         <p className="text-sm text-muted-foreground mt-1">
           You'll be browsing the marketplace in under 60 seconds.
         </p>
+
+        {advertiserToken && (
+          <div className="mt-4 rounded-md border border-sky-300 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
+            You&apos;re creating an <span className="font-semibold">Advertiser account</span>. Leads from your own ad
+            campaign will go straight to your CRM.
+          </div>
+        )}
 
         {inviteOrg && (
           <div className="mt-4 rounded-md border border-brand-red/30 bg-brand-red/[0.06] px-3 py-2.5 text-sm">
