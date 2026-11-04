@@ -128,18 +128,18 @@ export function MetaIntegrationManager() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Page Access Token (long-lived)</Label>
+                <Label>Page Access Token (optional)</Label>
                 <Input
                   type="password"
                   value={pageToken}
                   onChange={(e) => setPageToken(e.target.value)}
-                  placeholder="EAA…"
+                  placeholder="Leave blank to use the Advertisely Uploader system user"
                   className="font-mono text-xs"
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Generate via Graph API Explorer or Token Debugger →{" "}
-                  <code>pages_read_engagement</code>, <code>leads_retrieval</code>,
-                  <code>pages_show_list</code> scopes.
+                  Blank works for any Page assigned to the Advertisely Uploader system user. Otherwise
+                  paste a long-lived token with <code>pages_read_engagement</code>,{" "}
+                  <code>leads_retrieval</code>, <code>pages_manage_metadata</code> scopes.
                 </p>
               </div>
               <div className="flex justify-end gap-2">

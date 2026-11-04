@@ -52,10 +52,13 @@ export async function ingestLeadFromFields(opts: {
 
   const { standardized, raw } = mapLeadFields(opts.flat, opts.fieldMapping);
 
+  // State only matters for matching marketplace orders. An advertiser's own form
+  // often doesn't ask it, and those leads go straight to the owner, so don't
+  // drop them for lacking one.
   const missing: string[] = [];
   if (!standardized.name) missing.push("name");
   if (!standardized.phone) missing.push("phone");
-  if (!standardized.state) missing.push("state");
+  if (!standardized.state && !opts.ownerUserId) missing.push("state");
   if (missing.length > 0) {
     return { status: "missing_fields", missing };
   }
@@ -66,7 +69,7 @@ export async function ingestLeadFromFields(opts: {
       name: standardized.name!,
       phone: standardized.phone!,
       email: standardized.email ?? "",
-      state: standardized.state!,
+      state: standardized.state ?? "",
       age: standardized.age,
       income: standardized.income,
       occupation: standardized.occupation,

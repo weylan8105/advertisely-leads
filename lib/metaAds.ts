@@ -150,17 +150,29 @@ export async function listPixels(accountId: string): Promise<PageOption[]> {
 }
 
 /**
+ * A Page token minted from the System User token, or null when the System User
+ * has no access to the Page. System-User Page tokens don't expire, so this is
+ * also what Meta lead ingestion stores when a Page is connected without a
+ * pasted token.
+ */
+export async function systemUserPageToken(pageId: string): Promise<string | null> {
+  if (!TOKEN) return null;
+  try {
+    const p = await graphGet<{ access_token?: string }>(encodeURIComponent(pageId), { fields: "access_token" });
+    return p.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Instant forms live on the Page and need a Page token. Ask Meta for one with
  * the System User token first; fall back to a token saved under Meta ingestion
  * (MetaPageConnection) for pages connected the older way.
  */
 async function pageToken(pageId: string): Promise<string | null> {
-  try {
-    const p = await graphGet<{ access_token?: string }>(encodeURIComponent(pageId), { fields: "access_token" });
-    if (p.access_token) return p.access_token;
-  } catch {
-    // fall through to the stored token
-  }
+  const fromSystemUser = await systemUserPageToken(pageId);
+  if (fromSystemUser) return fromSystemUser;
   if (isDatabaseConfigured && prisma) {
     const row = await prisma.metaPageConnection.findUnique({ where: { pageId }, select: { pageAccessToken: true } });
     if (row?.pageAccessToken) return row.pageAccessToken;
