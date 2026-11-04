@@ -38,7 +38,7 @@ describe("metaAds", () => {
     const { createCampaign, isAllowedAccount } = await import("@/lib/metaAds");
     expect(isAllowedAccount("act_123")).toBe(true);
     expect(isAllowedAccount("act_2254810101392917")).toBe(false);
-    await expect(createCampaign({ ...ctx, accountId: "2254810101392917" }, { name: "C", objective: "OUTCOME_LEADS" } as any)).rejects.toThrow(/American Blue Collar Advantage/);
+    await expect(createCampaign({ ...ctx, accountId: "2254810101392917" }, { name: "C", objective: "OUTCOME_LEADS" } as any)).rejects.toThrow(/only works with/);
     expect(calls).toHaveLength(0);
   });
 

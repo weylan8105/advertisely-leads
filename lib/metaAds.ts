@@ -10,8 +10,9 @@
 //                          has been granted the same scopes.
 //   META_GRAPH_VERSION     optional, defaults to v20.0 (same as metaInsights).
 //   AD_UPLOADER_ACCOUNT_IDS optional comma list of ad accounts the uploader may
-//                          touch. Defaults to ABCA only (ABCA_AD_ACCOUNT_ID or
-//                          2126340781245705) — no uploads to Enhanced Wealth.
+//                          touch. Defaults to ABCA (ABCA_AD_ACCOUNT_ID or
+//                          2126340781245705) and Enhanced Wealth
+//                          (ENHANCED_WEALTH_AD_ACCOUNT_ID or 2254810101392917).
 //
 // Everything this module creates is PAUSED — someone reviews in Ads Manager
 // before any money is spent.
@@ -36,7 +37,13 @@ export class MetaApiError extends Error {
 }
 
 const ALLOWED_ACCOUNTS = new Set(
-  (process.env.AD_UPLOADER_ACCOUNT_IDS || process.env.ABCA_AD_ACCOUNT_ID || "2126340781245705")
+  (
+    process.env.AD_UPLOADER_ACCOUNT_IDS ||
+    [
+      process.env.ABCA_AD_ACCOUNT_ID || "2126340781245705",
+      process.env.ENHANCED_WEALTH_AD_ACCOUNT_ID || "2254810101392917",
+    ].join(",")
+  )
     .split(",")
     .map((id) => id.replace(/^act_/, "").replace(/\D/g, ""))
     .filter(Boolean),
@@ -50,7 +57,7 @@ export function isAllowedAccount(accountId: string): boolean {
 function actId(accountId: string): string {
   const digits = accountId.replace(/^act_/, "").replace(/\D/g, "");
   if (!digits) throw new MetaApiError("Invalid ad account id.");
-  if (!ALLOWED_ACCOUNTS.has(digits)) throw new MetaApiError("The bulk uploader only works with the American Blue Collar Advantage ad account.");
+  if (!ALLOWED_ACCOUNTS.has(digits)) throw new MetaApiError("The bulk uploader only works with the American Blue Collar Advantage and Enhanced Wealth ad accounts.");
   return `act_${digits}`;
 }
 
