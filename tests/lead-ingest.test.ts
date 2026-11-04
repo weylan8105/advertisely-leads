@@ -52,4 +52,11 @@ describe("ingestLeadFromFields", () => {
     expect(r).toMatchObject({ status: "missing_fields", missing: ["state"] });
     expect(created).toHaveLength(0);
   });
+
+  it("keeps a Meta ZIP answer and derives the state from it", async () => {
+    const { ingestLeadFromFields } = await import("@/lib/leadIngest");
+    const r = await ingestLeadFromFields({ ...base, flat: { ...base.flat, zip_code: "33101-1234" }, externalId: "lg3" });
+    expect(r.status).toBe("ingested");
+    expect(created[0]).toMatchObject({ zip: "33101", state: "FL" });
+  });
 });

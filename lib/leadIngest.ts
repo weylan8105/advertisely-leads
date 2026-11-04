@@ -70,6 +70,7 @@ export async function ingestLeadFromFields(opts: {
       phone: standardized.phone!,
       email: standardized.email ?? "",
       state: standardized.state ?? "",
+      zip: standardized.zip,
       age: standardized.age,
       income: standardized.income,
       occupation: standardized.occupation,

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { normalizeState, ageFromAnswer } from "./leadImport";
+import { stateFromZip, normalizeZip } from "./zipState";
 
 const META_GRAPH_API = "https://graph.facebook.com/v20.0";
 
@@ -215,6 +216,7 @@ export function mapLeadFields(
     email?: string;
     phone?: string;
     state?: string;
+    zip?: string;
     age?: number;
     income?: number;
     occupation?: string;
@@ -232,6 +234,9 @@ export function mapLeadFields(
   // Meta can send full names ("Florida"), mixed case, or codes — all must
   // resolve to "FL", or the lead silently matches no order and never delivers.
   if (flat.state) standardized.state = normalizeState(flat.state).code;
+  // Meta's prefilled ZIP question arrives as zip_code (post_code outside the US).
+  const zip = normalizeZip(flat.zip_code || flat.post_code || flat.zip || flat.postal_code);
+  if (zip) standardized.zip = zip;
 
   // Apply custom mapping for non-standard form questions.
   for (const [metaKey, ourField] of Object.entries(fieldMapping)) {
@@ -242,7 +247,15 @@ export function mapLeadFields(
       standardized.income = parseInt(v.replace(/[^0-9]/g, ""), 10) || undefined!;
     // Many IUL forms ask state as a custom question — normalize it too.
     else if (ourField === "state") standardized.state = normalizeState(v).code;
+    else if (ourField === "zip") { const z = normalizeZip(v); if (z) standardized.zip = z; }
     else standardized[ourField] = v;
+  }
+
+  // A form that asks ZIP but not state still gets a state (needed for order
+  // matching and licensed-state routing).
+  if (!standardized.state && standardized.zip) {
+    const st = stateFromZip(String(standardized.zip));
+    if (st) standardized.state = st;
   }
 
   // Fallback: if no field was explicitly mapped to age, derive it from any
