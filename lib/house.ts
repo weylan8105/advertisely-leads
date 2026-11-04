@@ -3,6 +3,7 @@ import { IUL_POOL_IDS, findPackage } from "@/data/packages";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { quotaRecipientFor } from "./teamQuota";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
+import { advertiserTeamRecipient } from "./advertiserVolume";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -227,18 +228,35 @@ export async function deliverLeadToOwner(
   if (!owner) return false;
   const organizationId = owner.ownedOrganizations[0]?.id ?? owner.defaultOrganizationId ?? null;
 
+  // Past their weekly keep amount (lib/advertiserVolume.ts), the lead goes to
+  // someone on the advertiser's team instead; otherwise they keep it.
+  const leadState = (await prisma.lead.findUnique({ where: { id: leadId }, select: { state: true } }))?.state ?? "";
+  const teamPick = await advertiserTeamRecipient(ownerUserId, organizationId, leadState);
+  const recipientId = teamPick?.userId ?? ownerUserId;
+  const now = new Date();
+
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
     data: {
-      assignedUserId: ownerUserId,
-      assignedAt: new Date(),
+      assignedUserId: recipientId,
+      assignedAt: now,
       ...(organizationId ? { organizationId } : {}),
+      ...(teamPick?.byQuota ? { quotaRoutedAt: now } : {}),
     },
   });
   if (res.count === 0) return false;
 
+  const recipient = teamPick
+    ? await prisma.user.findUnique({ where: { id: recipientId }, select: { email: true, name: true } })
+    : null;
   await prisma.leadActivity.create({
-    data: { leadId, type: "LEAD_ASSIGNED", body: reason },
+    data: {
+      leadId,
+      type: "LEAD_ASSIGNED",
+      body: teamPick
+        ? `${reason} Routed to ${recipient?.name ?? recipient?.email ?? "a team member"} on the advertiser's team (past the advertiser's weekly keep amount).`
+        : reason,
+    },
   });
 
   // Mark the account as an advertiser the first time one of their exclusive leads
@@ -253,7 +271,8 @@ export async function deliverLeadToOwner(
   // Advertisely CRM. Keyed off a per-user RINGY Integration; never block delivery
   // on a forward failure — log the outcome either way.
   try {
-    const ringy = await prisma.integration.findUnique({
+    // Only leads the advertiser keeps go to their own dialer.
+    const ringy = teamPick ? null : await prisma.integration.findUnique({
       where: { userId_type: { userId: ownerUserId, type: "RINGY" } },
       select: { enabled: true, config: true, id: true },
     });
@@ -283,7 +302,8 @@ export async function deliverLeadToOwner(
 
   // Notify the advertiser with the same delivery email buyers get, so their own
   // leads don't land silently. Never block delivery on an email failure.
-  if (isEmailConfigured && owner.email) {
+  const notify = teamPick ? recipient : owner;
+  if (isEmailConfigured && notify?.email) {
     try {
       const full = await prisma.lead.findUnique({
         where: { id: leadId },
@@ -294,10 +314,10 @@ export async function deliverLeadToOwner(
       });
       if (full) {
         await sendLeadDeliveryEmail({
-          agentEmail: owner.email,
-          agentName: owner.name ?? "there",
+          agentEmail: notify.email,
+          agentName: notify.name ?? "there",
           leadCount: 1,
-          packageName: findPackage(full.packageId)?.name ?? "Your campaign",
+          packageName: findPackage(full.packageId)?.name ?? (teamPick ? "Your team's campaign" : "Your campaign"),
           orderId: leadId,
           leads: [{
             name: full.name, phone: full.phone, email: full.email, state: full.state,

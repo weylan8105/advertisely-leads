@@ -67,6 +67,10 @@ model User {
   // to them (see deliverLeadToOwner); surfaces them as a distinct segment on the
   // admin Client-accounts tab. Does not block them from also placing orders.
   isAdvertiser  Boolean   @default(false)
+  // How many of their own campaign leads an advertiser keeps per rolling 7 days;
+  // the rest go to their team (see lib/advertiserVolume.ts). null = keep every
+  // lead (default), 0 = the team gets all of them.
+  advertiserWeeklyKeep Int?
   createdAt     DateTime  @default(now())
 
   accounts              Account[]
