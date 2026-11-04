@@ -23,14 +23,18 @@ export async function GET(req: NextRequest) {
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
+  // Trim both sides: a space or newline pasted into Vercel with the value is the
+  // usual reason Meta reports "couldn't be validated".
+  const expected = process.env.META_VERIFY_TOKEN?.trim();
+  const provided = token?.trim();
 
-  if (
-    mode === "subscribe" &&
-    token === process.env.META_VERIFY_TOKEN &&
-    challenge
-  ) {
+  if (mode === "subscribe" && expected && provided === expected && challenge) {
     return new NextResponse(challenge, { status: 200 });
   }
+  // Lengths only — never log the token itself.
+  console.warn(
+    `Meta webhook verify rejected: mode=${mode} challenge=${!!challenge} expectedSet=${!!expected} expectedLen=${expected?.length ?? 0} providedLen=${provided?.length ?? 0}`,
+  );
   return new NextResponse("Forbidden", { status: 403 });
 }
 
