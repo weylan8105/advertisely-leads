@@ -108,6 +108,32 @@ describe("metaAds", () => {
     expect(calls[1].params).toMatchObject({ adset_id: "S1", status: "PAUSED", creative: '{"creative_id":"CR1"}' });
   });
 
+  it("checks a Drive video is shared before handing it to Meta", async () => {
+    const { uploadVideoFromUrl } = await import("@/lib/metaAds");
+    const drive = "https://drive.usercontent.google.com/download?id=1AbCdEfGhIjKlMnOpQrStUvWxYz012345&export=download&confirm=t";
+    const respond = (status: number, type: string) => {
+      const urls: string[] = [];
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        urls.push(url.split("?")[0]);
+        return url.startsWith("https://drive.")
+          ? ({ ok: status < 400, status, headers: new Headers({ "content-type": type }), body: null } as unknown as Response)
+          : ({ ok: true, status: 200, json: async () => ({ id: "V1" }) } as Response);
+      }));
+      return urls;
+    };
+
+    let urls = respond(200, "text/html; charset=utf-8"); // sign-in page: not shared
+    await expect(uploadVideoFromUrl("123", drive, "v")).rejects.toThrow(/Anyone with the link/);
+    expect(urls).toHaveLength(1);
+
+    respond(206, "image/png");
+    await expect(uploadVideoFromUrl("123", drive, "v")).rejects.toThrow(/Set media_type to image/);
+
+    urls = respond(206, "video/mp4");
+    expect(await uploadVideoFromUrl("123", drive, "v")).toBe("V1");
+    expect(urls[1]).toMatch(/\/act_123\/advideos$/);
+  });
+
   it("surfaces Meta's user-facing error text", async () => {
     const { createAd } = await import("@/lib/metaAds");
     replies.push({ ok: false, body: { error: { message: "Invalid parameter", error_user_title: "Form archived", error_user_msg: "Pick an active form." } } });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAdSheet, adSheetTemplate, mediaTypeFor } from "@/lib/adBulkSheet";
+import { parseAdSheet, adSheetTemplate, mediaTypeFor, driveFileId, driveDownloadUrl } from "@/lib/adBulkSheet";
 
 // Pure unit tests for the Ad Bulk Uploader sheet parser — no network, no Meta.
 
@@ -96,6 +96,41 @@ describe("parseAdSheet", () => {
   it("parses its own template without errors (files unchecked)", () => {
     const r = parseAdSheet(adSheetTemplate(), { financialCategory: false, uploadedFiles: null });
     expect(r.issues.filter((i) => i.level === "error")).toEqual([]);
+    expect(r.adCount).toBe(2);
+  });
+});
+
+describe("Google Drive links", () => {
+  const ID = "1AbCdEfGhIjKlMnOpQrStUvWxYz012345";
+  const DIRECT = `https://drive.usercontent.google.com/download?id=${ID}&export=download&confirm=t`;
+
+  it("finds the file ID in every Drive link shape", () => {
+    expect(driveFileId(`https://drive.google.com/file/d/${ID}/view?usp=sharing`)).toBe(ID);
+    expect(driveFileId(`https://drive.google.com/file/d/${ID}/view?usp=drive_link`)).toBe(ID);
+    expect(driveFileId(`https://drive.google.com/open?id=${ID}`)).toBe(ID);
+    expect(driveFileId(`https://drive.google.com/uc?export=download&id=${ID}`)).toBe(ID);
+    expect(driveFileId(`https://docs.google.com/uc?id=${ID}`)).toBe(ID);
+    expect(driveFileId(DIRECT)).toBe(ID);
+    expect(driveFileId(`https://drive.google.com/drive/folders/${ID}`)).toBeNull();
+    expect(driveFileId("https://cdn.example.com/file/d/abc/view")).toBeNull();
+    expect(driveFileId("a.jpg")).toBeNull();
+  });
+
+  it("swaps share links for the direct download and treats them as video unless told otherwise", () => {
+    const H = `${HEADER},media_type`;
+    const r = parseAdSheet(
+      [
+        H,
+        `Camp,LEADS,Set,50,FORM,111,,,,Ad 1,https://drive.google.com/file/d/${ID}/view?usp=sharing,Copy,,,,`,
+        `Camp,LEADS,Set,50,FORM,111,,,,Ad 2,https://drive.google.com/open?id=${ID}x,Copy,,,,image`,
+        `Camp,LEADS,Set,50,FORM,111,,,,Ad 3,https://drive.google.com/drive/folders/${ID},Copy,,,,`,
+      ].join("\n"),
+      opts,
+    );
+    const ads = r.campaigns[0].adsets[0].ads;
+    expect(ads[0]).toMatchObject({ media: DIRECT, mediaType: "video", mediaIsUrl: true });
+    expect(ads[1]).toMatchObject({ media: driveDownloadUrl(`${ID}x`), mediaType: "image", mediaIsUrl: true });
+    expect(r.issues.find((i) => i.row === 4)?.message).toMatch(/isn't a Drive file link/);
     expect(r.adCount).toBe(2);
   });
 });

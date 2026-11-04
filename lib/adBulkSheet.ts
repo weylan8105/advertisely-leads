@@ -38,8 +38,8 @@ export const SHEET_COLUMNS: { key: string; required?: boolean; help: string }[] 
   { key: "age_max", help: "18–65 (65 means 65+). Ignored under the Financial products category." },
   { key: "start_date", help: "Optional YYYY-MM-DD. Blank = starts when you turn it on." },
   { key: "ad_name", required: true, help: "Name of the ad in Ads Manager." },
-  { key: "media", required: true, help: "File name of an uploaded image, or an https:// link to an image or video." },
-  { key: "media_type", help: "image or video. Only needed when a link has no file extension." },
+  { key: "media", required: true, help: "File name of an uploaded image, or an https:// link to an image or video (Google Drive share links work; share them as \"Anyone with the link\")." },
+  { key: "media_type", help: "image or video. Only needed when a link has no file extension. Google Drive links count as video unless this says image." },
   { key: "primary_text", required: true, help: "The main ad copy." },
   { key: "headline", help: "Headline under the creative." },
   { key: "description", help: "Short line under the headline." },
@@ -112,6 +112,33 @@ function normHeader(h: string): string {
 
 function stripUrlQuery(u: string): string {
   return u.split(/[?#]/)[0];
+}
+
+const DRIVE_HOSTS = new Set(["drive.google.com", "docs.google.com", "drive.usercontent.google.com"]);
+
+function driveUrl(link: string): URL | null {
+  try {
+    const u = new URL(link);
+    return DRIVE_HOSTS.has(u.hostname.toLowerCase()) ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+/** File ID from a Google Drive share/download link, or null when it isn't one. */
+export function driveFileId(link: string): string | null {
+  const u = driveUrl(link);
+  if (!u) return null;
+  const id = u.pathname.match(/\/file\/d\/([\w-]+)/)?.[1] ?? u.searchParams.get("id");
+  return id && /^[\w-]{10,}$/.test(id) ? id : null;
+}
+
+/**
+ * Direct download for a Drive file that both our server and Meta can fetch.
+ * confirm=t skips the "can't scan this file for viruses" page Drive shows for big videos.
+ */
+export function driveDownloadUrl(id: string): string {
+  return `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`;
 }
 
 export function mediaTypeFor(media: string, explicit: string): MediaType | null {
@@ -258,10 +285,14 @@ export function parseAdSheet(text: string, opts: ParseOptions): ParsedSheet {
     if (!adName) fail("ad_name is empty.");
     else if (adNames.has(`${adsetKey}\u0000${adName}`)) warn(row, `Duplicate ad name "${adName}" in this ad set.`);
 
-    const media = get("media");
+    // Google Drive share links open a viewer page, so swap in the file's direct download.
+    let media = get("media");
+    const driveId = driveFileId(media);
+    if (driveId) media = driveDownloadUrl(driveId);
     const mediaIsUrl = /^https?:\/\//i.test(media);
-    const mediaType = media ? mediaTypeFor(media, get("media_type")) : null;
+    const mediaType = !media ? null : driveId ? (mediaTypeFor("", get("media_type")) ?? "video") : mediaTypeFor(media, get("media_type"));
     if (!media) fail("media is empty.");
+    else if (!driveId && driveUrl(media)) fail(`"${media}" isn't a Drive file link. Link each file (Share → Copy link), not a folder.`);
     else if (/^http:\/\//i.test(media)) fail("Media links must use https://.");
     else if (!mediaType) fail(`Can't tell if "${media}" is an image or video; set media_type.`);
     else if (!mediaIsUrl && mediaType === "video") {

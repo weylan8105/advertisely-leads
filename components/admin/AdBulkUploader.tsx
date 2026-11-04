@@ -456,7 +456,7 @@ export function AdBulkUploader() {
             <label className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-center hover:border-slate-400", running && "pointer-events-none opacity-60")}>
               <ImagePlus className="h-6 w-6 text-brand-red" />
               <span className="text-sm font-medium">{files.size ? `${files.size} image${files.size === 1 ? "" : "s"} added` : "Add image files"}</span>
-              <span className="text-xs text-muted-foreground">File names must match the sheet&apos;s media column. Videos go in as https:// links.</span>
+              <span className="text-xs text-muted-foreground">File names must match the sheet&apos;s media column. Videos go in as https:// or Google Drive links.</span>
               <input type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { onImages(e.target.files); e.target.value = ""; }} />
             </label>
           </div>

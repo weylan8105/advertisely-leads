@@ -19,7 +19,7 @@
 
 import { prisma, isDatabaseConfigured } from "./prisma";
 import { stateNameForCode } from "./leadImport";
-import type { SheetAd, SheetAdSet, SheetCampaign } from "./adBulkSheet";
+import { driveFileId, type MediaType, type SheetAd, type SheetAdSet, type SheetCampaign } from "./adBulkSheet";
 
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
 const TOKEN = process.env.META_ADS_MANAGE_TOKEN || process.env.META_ADS_ACCESS_TOKEN;
@@ -198,6 +198,25 @@ export async function uploadImage(accountId: string, name: string, base64: strin
   return first.hash;
 }
 
+/**
+ * Google Drive answers with a sign-in or error page instead of the file unless
+ * it's shared as "Anyone with the link". Check that (one byte, not the whole
+ * file) so the admin gets a fix-it message instead of Meta's generic failure.
+ */
+async function checkDriveFile(url: string, want: MediaType): Promise<void> {
+  if (!driveFileId(url)) return;
+  const res = await fetch(url, { cache: "no-store", redirect: "follow", headers: { Range: "bytes=0-0" } });
+  const type = (res.headers.get("content-type") ?? "").toLowerCase();
+  await res.body?.cancel().catch(() => {});
+  if (!res.ok || type.startsWith("text/html")) {
+    throw new MetaApiError(
+      'Google Drive won\'t share this file. In Drive, open it → Share → General access → "Anyone with the link", then run it again.',
+    );
+  }
+  if (want === "video" && type.startsWith("image/")) throw new MetaApiError("This Drive file is an image. Set media_type to image for this row.");
+  if (want === "image" && type.startsWith("video/")) throw new MetaApiError("This Drive file is a video. Clear media_type (or set it to video) for this row.");
+}
+
 /** Download an https image and upload it. Used for image links in the sheet. */
 export async function uploadImageFromUrl(accountId: string, url: string): Promise<string> {
   let host: string;
@@ -212,18 +231,21 @@ export async function uploadImageFromUrl(accountId: string, url: string): Promis
   if (/^(localhost|.*\.local|.*\.internal)$/i.test(host) || /^[\d.]+$|^\[/.test(host)) {
     throw new MetaApiError(`${url} must be a public https:// link.`);
   }
+  await checkDriveFile(url, "image");
   const res = await fetch(url, { cache: "no-store", redirect: "follow" });
   if (!res.ok) throw new MetaApiError(`Couldn't download ${url} (HTTP ${res.status}).`);
   const type = res.headers.get("content-type") ?? "";
   if (type && !type.startsWith("image/")) throw new MetaApiError(`${url} isn't an image (got ${type}).`);
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length > 30 * 1024 * 1024) throw new MetaApiError(`${url} is larger than 30 MB.`);
-  const name = decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() || "image");
+  const driveId = driveFileId(url);
+  const name = driveId ? `drive-${driveId}` : decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() || "image");
   return uploadImage(accountId, name, buf.toString("base64"));
 }
 
 /** Have Meta fetch a video from an https link. Processing is async — poll videoStatus(). */
 export async function uploadVideoFromUrl(accountId: string, url: string, name: string): Promise<string> {
+  await checkDriveFile(url, "video");
   const data = await graphPost<{ id: string }>(`${actId(accountId)}/advideos`, { file_url: url, name });
   if (!data.id) throw new MetaApiError("Meta didn't return a video id.");
   return data.id;
