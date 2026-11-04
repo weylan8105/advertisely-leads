@@ -15,7 +15,9 @@ export const dynamic = "force-dynamic";
  * an account before any lead arrives, so a new advertiser shows in the
  * Advertisers segment of the Client-accounts tab from the moment they're set up.
  *
- * Body: { userId: string, isAdvertiser: boolean }
+ * Body: { userId?: string, email?: string, isAdvertiser: boolean }
+ * (email lets an admin mark an account that isn't listed yet — e.g. a brand-new
+ * signup with no leads or orders.)
  */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -26,10 +28,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { userId?: string; isAdvertiser?: boolean };
-  const userId = String(body.userId ?? "").trim();
+  const body = (await req.json().catch(() => ({}))) as { userId?: string; email?: string; isAdvertiser?: boolean };
+  const email = String(body.email ?? "").trim().toLowerCase();
+  let userId = String(body.userId ?? "").trim();
+  if (!userId && email) {
+    const u = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (!u) return NextResponse.json({ error: `No Advertisely account uses ${email}.` }, { status: 404 });
+    userId = u.id;
+  }
   if (!userId) {
-    return NextResponse.json({ error: "userId is required" }, { status: 400 });
+    return NextResponse.json({ error: "userId or email is required" }, { status: 400 });
   }
   const isAdvertiser = body.isAdvertiser === true;
 

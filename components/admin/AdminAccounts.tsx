@@ -67,6 +67,35 @@ export function AdminAccounts() {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [advEmail, setAdvEmail] = useState("");
+  const [addingAdv, setAddingAdv] = useState(false);
+  const [advMsg, setAdvMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Mark any account an advertiser by email — including brand-new signups that
+  // aren't in this list yet (no leads/orders).
+  async function addAdvertiser() {
+    const email = advEmail.trim();
+    if (!email) return;
+    setAddingAdv(true);
+    setAdvMsg(null);
+    try {
+      const res = await fetch("/api/admin/accounts/advertiser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, isAdvertiser: true }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      setAdvMsg({ ok: true, text: `${email} is now an advertiser.` });
+      setAdvEmail("");
+      setSegment("advertisers");
+      setReloadKey((k) => k + 1);
+    } catch (e: any) {
+      setAdvMsg({ ok: false, text: e?.message ?? "Couldn't mark that account." });
+    } finally {
+      setAddingAdv(false);
+    }
+  }
 
   async function toggleAdvertiser(a: Account) {
     const next = !a.isAdvertiser;
@@ -178,7 +207,26 @@ export function AdminAccounts() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {advMsg && (
+            <span className={cn("text-[11px]", advMsg.ok ? "text-emerald-600" : "text-rose-600")}>{advMsg.text}</span>
+          )}
+          <form
+            onSubmit={(e) => { e.preventDefault(); void addAdvertiser(); }}
+            className="flex items-center gap-1.5"
+          >
+            <input
+              type="email"
+              value={advEmail}
+              onChange={(e) => setAdvEmail(e.target.value)}
+              placeholder="Account email"
+              className="h-8 w-48 rounded-md border border-slate-200 px-2.5 text-xs focus:border-brand-red focus:outline-none"
+            />
+            <Button size="sm" variant="outline" type="submit" disabled={addingAdv || !advEmail.trim()}>
+              {addingAdv ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Megaphone className="h-3.5 w-3.5" />}
+              Add advertiser
+            </Button>
+          </form>
           {reconcileMsg && (
             <span className={cn("text-[11px]", reconcileMsg.ok ? "text-emerald-600" : "text-rose-600")}>{reconcileMsg.text}</span>
           )}
