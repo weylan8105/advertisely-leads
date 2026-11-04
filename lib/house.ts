@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { IUL_POOL_IDS, findPackage } from "@/data/packages";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { quotaRecipientFor } from "./teamQuota";
+import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -246,6 +247,39 @@ export async function deliverLeadToOwner(
     where: { id: ownerUserId, isAdvertiser: false },
     data: { isAdvertiser: true },
   });
+
+  // Forward to the advertiser's own CRM (Ringy) when they've connected one, so
+  // their exclusive leads flow straight into their dialer in addition to their
+  // Advertisely CRM. Keyed off a per-user RINGY Integration; never block delivery
+  // on a forward failure — log the outcome either way.
+  try {
+    const ringy = await prisma.integration.findUnique({
+      where: { userId_type: { userId: ownerUserId, type: "RINGY" } },
+      select: { enabled: true, config: true, id: true },
+    });
+    const cfg = ringy?.config as Partial<RingyConfig> | undefined;
+    if (ringy?.enabled && isRingyConfigured(cfg)) {
+      const full = await prisma.lead.findUnique({
+        where: { id: leadId },
+        select: { name: true, phone: true, email: true, state: true, age: true, occupation: true, income: true },
+      });
+      if (full) {
+        const result = await forwardLeadToRingy(full, cfg);
+        await prisma.leadActivity.create({
+          data: {
+            leadId,
+            type: "LEAD_RECEIVED",
+            body: result.ok
+              ? `Forwarded to advertiser's Ringy CRM${result.vendorResponseId ? ` (ref ${result.vendorResponseId})` : ""}.`
+              : `Ringy forward failed — ${result.error ?? "unknown error"}.`,
+          },
+        });
+        await prisma.integration.update({ where: { id: ringy.id }, data: { lastUsedAt: new Date() } });
+      }
+    }
+  } catch (e) {
+    console.warn("Ringy forward failed:", e);
+  }
 
   // Notify the advertiser with the same delivery email buyers get, so their own
   // leads don't land silently. Never block delivery on an email failure.

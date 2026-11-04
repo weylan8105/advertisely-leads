@@ -464,6 +464,7 @@ enum IntegrationType {
   SALESFORCE
   HUBSPOT
   ZAPIER
+  RINGY
 }
 
 // ─── Programmatic API keys ────────────────────────────────────────────

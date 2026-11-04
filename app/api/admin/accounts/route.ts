@@ -23,7 +23,7 @@ export async function GET() {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const [leadGroups, soldLeads, orderAgg, latestOrders, users] = await Promise.all([
+  const [leadGroups, soldLeads, orderAgg, latestOrders, users, ringyIntegrations] = await Promise.all([
     prisma.lead.groupBy({
       by: ["assignedUserId", "pipelineStage"],
       where: { assignedUserId: { not: null } },
@@ -46,7 +46,10 @@ export async function GET() {
       select: { id: true, userId: true, quantity: true },
     }),
     prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true, isAdvertiser: true } }),
+    // Ringy lead-forwarding, so advertiser rows can show connected/not.
+    prisma.integration.findMany({ where: { type: "RINGY", enabled: true }, select: { userId: true } }),
   ]);
+  const ringyConnectedIds = new Set(ringyIntegrations.map((r) => r.userId));
 
   const byUser: Record<string, { delivered: number; byStage: Record<string, number> }> = {};
   for (const g of leadGroups) {
@@ -157,6 +160,7 @@ export async function GET() {
         lastOrderAt: lastOrderByUser[id] ?? null,
         subscription: subByUser[id] ?? null,
         isAdvertiser: u.isAdvertiser ?? false,
+        ringyConnected: ringyConnectedIds.has(id),
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
         // Progress = combined total across this client's INCOMPLETE orders only
         // (still being fulfilled), from a LIVE lead count. Fully delivered orders
