@@ -4,6 +4,7 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { quotaRecipientFor } from "./teamQuota";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
 import { advertiserTeamRecipient } from "./advertiserVolume";
+import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -228,18 +229,26 @@ export async function deliverLeadToOwner(
   if (!owner) return false;
   const organizationId = owner.ownedOrganizations[0]?.id ?? owner.defaultOrganizationId ?? null;
 
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { state: true, rawFormData: true } });
+
   // Past their weekly keep amount (lib/advertiserVolume.ts), the lead goes to
   // someone on the advertiser's team instead; otherwise they keep it.
-  const leadState = (await prisma.lead.findUnique({ where: { id: leadId }, select: { state: true } }))?.state ?? "";
-  const teamPick = await advertiserTeamRecipient(ownerUserId, organizationId, leadState);
+  const teamPick = await advertiserTeamRecipient(ownerUserId, organizationId, lead?.state ?? "");
   const recipientId = teamPick?.userId ?? ownerUserId;
   const now = new Date();
+
+  // Stamp the client's name so the lead card reads "<Client> Lead", not one of
+  // our own funnels — even when a teammate receives it.
+  const raw = lead?.rawFormData && typeof lead.rawFormData === "object" && !Array.isArray(lead.rawFormData)
+    ? lead.rawFormData
+    : {};
 
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
     data: {
       assignedUserId: recipientId,
       assignedAt: now,
+      rawFormData: { ...raw, [ADVERTISER_NAME_KEY]: owner.name?.trim() || owner.email },
       ...(organizationId ? { organizationId } : {}),
       ...(teamPick?.byQuota ? { quotaRoutedAt: now } : {}),
     },

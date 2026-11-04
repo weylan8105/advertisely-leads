@@ -5,7 +5,7 @@ import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2,
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
-import { FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
+import { ADVERTISER_NAME_KEY, FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
 import { LeadMessages } from "@/components/leads/LeadMessages";
 import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
@@ -62,6 +62,8 @@ const HIDDEN_KEYS = new Set(
     "ad_id", "ad_name", "adgroup_id", "creative", "creative_id", "page_id",
     "form_id", "form_name", "leadgen_id", "created_time", "platform", "is_organic",
     "partner_name", "user_agent", "client_user_agent", "external_id", "id", "lead_id",
+    // shown as the title badge in the header
+    ADVERTISER_NAME_KEY,
     // GoHighLevel / inbound-webhook plumbing — internal only, never shown to
     // ANYONE (agents, customers, or admins). Scalar keys here; nested-object
     // blobs (location, workflow, customData, attribution, trigger data) are also

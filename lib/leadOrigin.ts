@@ -9,11 +9,18 @@
 // funnel leads carry a funnel `source`/`lead_source`, a quiz_* answer, or a
 // landing_url on our funnel domain. Everything else is treated as a manual
 // Enhanced Wealth import.
+//
+// Leads delivered to an advertiser are the exception: they carry the client's
+// name (stamped by deliverLeadToOwner) and are titled "<Client> Lead", whatever
+// their source says.
 
 export type LeadOriginKind = "funnel" | "import";
 
 export const FUNNEL_LEAD_LABEL = "American Income Advantage Lead";
 export const IMPORT_LEAD_LABEL = "Enhanced Wealth Lead";
+// rawFormData key holding the advertiser's name. Kept on the lead so the title
+// survives the lead being reassigned to someone on the client's team.
+export const ADVERTISER_NAME_KEY = "advertiser_name";
 
 // Substrings that mark a lead as coming from our own funnel.
 const FUNNEL_SOURCE_MARKERS = ["early-retirement-quiz", "abca-quiz", "abca", "american-blue-collar", "healthcare-wealth"];
@@ -46,6 +53,8 @@ export function leadOriginLabel(
   rawFormData?: unknown,
 ): string {
   const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
+  const advertiser = String(raw[ADVERTISER_NAME_KEY] ?? "").trim();
+  if (advertiser) return `${advertiser} Lead`;
   if (String(source ?? raw["lead_source"] ?? "").toLowerCase().includes("healthcare-wealth")) return HWA_LEAD_LABEL;
   return leadOrigin(source, rawFormData) === "funnel" ? FUNNEL_LEAD_LABEL : IMPORT_LEAD_LABEL;
 }
