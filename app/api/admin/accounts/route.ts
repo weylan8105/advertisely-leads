@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { deliveredCounts } from "@/lib/orderProgress";
 import { weeklyLeadAllotment } from "@/lib/leadSubscription";
 import { PIPELINE_STAGES } from "@/data/pipeline";
+import { compareAccounts } from "@/lib/adminAccountSort";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,9 +44,9 @@ export async function GET() {
     // client's orders (a client can place several at once, e.g. a 50 + a 25).
     prisma.order.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, userId: true, quantity: true },
+      select: { id: true, userId: true, quantity: true, status: true },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true, isAdvertiser: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true, isAdvertiser: true, createdAt: true } }),
     // Ringy lead-forwarding, so advertiser rows can show connected/not.
     prisma.integration.findMany({ where: { type: "RINGY", enabled: true }, select: { userId: true } }),
   ]);
@@ -77,6 +78,8 @@ export async function GET() {
   // latest. (Luke places two at once; both must be visible.)
   const ordersByUser: Record<string, { id: string; quantity: number }[]> = {};
   for (const o of latestOrders) {
+    // A refunded order is closed, however many leads it delivered.
+    if (o.status === "REFUNDED") continue;
     (ordersByUser[o.userId] ??= []).push({ id: o.id, quantity: o.quantity });
   }
   // LIVE delivered count per order (non-trashed leads) so the bar reflects
@@ -131,14 +134,14 @@ export async function GET() {
     };
   }
 
-  // Advertisers appear even before any lead has landed, so they're visible as a
-  // segment the moment they're flagged.
-  const advertiserIds = users.filter((u) => u.isAdvertiser).map((u) => u.id);
+  // Every non-admin account appears from signup, whether or not they've bought
+  // anything, so advertisers and their shared clients are visible right away.
+  const clientIds = users.filter((u) => u.isAdvertiser || u.role !== "ADMIN").map((u) => u.id);
   const ids = new Set<string>([
     ...Object.keys(byUser),
     ...Object.keys(spendByUser),
     ...Object.keys(subByUser),
-    ...advertiserIds,
+    ...clientIds,
   ]);
   const accounts = [...ids]
     .map((id) => {
@@ -158,6 +161,8 @@ export async function GET() {
         apCents: apByUser[id] ?? 0,
         leadSpendCents: spendByUser[id] ?? 0,
         lastOrderAt: lastOrderByUser[id] ?? null,
+        hasOrder: !!lastOrderByUser[id],
+        joinedAt: u.createdAt ?? null,
         subscription: subByUser[id] ?? null,
         isAdvertiser: u.isAdvertiser ?? false,
         ringyConnected: ringyConnectedIds.has(id),
@@ -181,10 +186,9 @@ export async function GET() {
         })(),
       };
     })
-    // Only real client accounts (have leads, spent, placed an order, or an
-    // active subscription — so brand-new subscribers show up right away).
-    .filter((a) => a.email && (a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0 || a.subscription || a.isAdvertiser))
-    .sort((a, b) => b.delivered - a.delivered);
+    // Admins only show here once they've taken leads or bought something.
+    .filter((a) => a.email && (a.role !== "ADMIN" || a.delivered > 0 || a.leadSpendCents > 0 || a.orderedQty > 0 || a.subscription || a.isAdvertiser))
+    .sort(compareAccounts);
 
   return NextResponse.json({
     accounts,

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { ClientOrdersModal } from "@/components/admin/ClientOrdersModal";
 import type { Lead } from "@/types";
 
@@ -23,6 +23,8 @@ interface Account {
   apCents: number;
   leadSpendCents: number;
   lastOrderAt: string | null;
+  hasOrder: boolean;
+  joinedAt: string | null;
   conversionPct: number;
   orderedQty: number;
   fulfilledQty: number;
@@ -40,9 +42,11 @@ interface Account {
 
 /** Which kind of account this is — drives the segment filter + badge. */
 type Segment = "advertisers" | "subs" | "orders";
-function segmentOf(a: Account): Segment {
+function segmentOf(a: Account): Segment | null {
   if (a.isAdvertiser) return "advertisers";
   if (a.subscription) return "subs";
+  // Signed up but never ordered: only listed under All.
+  if (!a.hasOrder && a.role !== "ADMIN") return null;
   return "orders";
 }
 
@@ -90,8 +94,8 @@ export function AdminAccounts() {
     }
   }
 
-  // Mark any account an advertiser by email — including brand-new signups that
-  // aren't in this list yet (no leads/orders).
+  // Mark any account an advertiser by email, without hunting for its row in the
+  // list.
   async function addAdvertiser() {
     const email = advEmail.trim();
     if (!email) return;
@@ -384,8 +388,13 @@ export function AdminAccounts() {
                           {a.ringyConnected ? "Ringy ✓" : "Link Ringy"}
                         </button>
                       </div>
-                    ) : (
+                    ) : a.hasOrder || !a.joinedAt ? (
                       <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground">
+                        <div className="font-medium">No orders yet</div>
+                        <div>Joined {formatDate(a.joinedAt)}</div>
+                      </div>
                     )}
                   </td>
                   <td className="py-2.5 text-right tabular-nums">{a.delivered}</td>

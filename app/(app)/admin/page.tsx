@@ -420,7 +420,7 @@ function AdminPageInner() {
           <CardContent>
             <TabsContent value="accounts" className="mt-0">
               <p className="mb-3 text-sm text-muted-foreground">
-                Every client with leads or orders. Manage their lead orders or open their CRM.
+                Every client account, open orders first. Manage their lead orders or open their CRM.
               </p>
               <AdminAccounts />
             </TabsContent>
