@@ -2,8 +2,7 @@ import { prisma } from "./prisma";
 import { flattenMetaFields, type MetaLeadDetail } from "./meta";
 import { ingestLeadFromFields, type IngestResult } from "./leadIngest";
 import { systemUserPageToken } from "./metaAds";
-
-const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
+import { listFormLeads } from "./metaLeadId";
 
 // How far back each poll looks. Re-reading leads we already have is free
 // (ingest is idempotent on the leadgen id), and the overlap lets a missed or
@@ -40,30 +39,6 @@ export function ingestMetaLead(mapping: MappingWithPage, detail: MetaLeadDetail)
     },
     activityBody: `Lead received from Meta form "${mapping.formName}".`,
   });
-}
-
-/** Every lead on a form created after `since`, following pagination. */
-async function listFormLeads(formId: string, token: string, since: Date): Promise<MetaLeadDetail[]> {
-  const qs = new URLSearchParams({
-    fields: "id,created_time,ad_id,adset_id,campaign_id,form_id,field_data",
-    filtering: JSON.stringify([
-      { field: "time_created", operator: "GREATER_THAN", value: Math.floor(since.getTime() / 1000) },
-    ]),
-    limit: "100",
-    access_token: token,
-  });
-  let url: string | null = `${GRAPH}/${encodeURIComponent(formId)}/leads?${qs}`;
-  const out: MetaLeadDetail[] = [];
-  while (url && out.length < 2000) {
-    const res: Response = await fetch(url, { cache: "no-store" });
-    const data: any = await res.json().catch(() => ({}));
-    if (!res.ok || data?.error) {
-      throw new Error(data?.error?.message ?? `Graph API ${res.status}`);
-    }
-    out.push(...(data.data ?? []));
-    url = data.paging?.next ?? null;
-  }
-  return out;
 }
 
 export interface FormPollResult {

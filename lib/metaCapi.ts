@@ -1,15 +1,22 @@
 import crypto from "crypto";
 import { prisma } from "./prisma";
+import { instantFormContext, type InstantFormContext } from "./metaLeadId";
 
 /**
  * Meta Conversions API (server-side) — fires events to Meta so the ad account
  * can optimize on real outcomes and match them back to the click.
  *
- * Two events:
- *   • "Lead"     — when a quiz lead is created (deduped with the browser pixel
- *                  via the quiz's event_id).
- *   • "Purchase" — when a lead is marked Issued PAID (carries the premium as
- *                  value, deduped per-lead via conv_<leadId>).
+ * Events:
+ *   • "Lead"            — when a quiz lead is created (deduped with the browser
+ *                         pixel via the quiz's event_id).
+ *   • "InstantFormLead" — when an instant form lead is created. Meta already counts
+ *                         the submission; this is the first stage of its CRM funnel.
+ *   • Stage events      — see STAGE_EVENTS. "Purchase" (Issued PAID) carries the
+ *                         premium as value, deduped per-lead via conv_<leadId>.
+ *
+ * Instant form leads go out in Meta's Conversion Leads format (CRM labels plus
+ * Meta's lead id when known), which is what lets it optimize those forms on lead
+ * quality. Every send's outcome is kept as a FunnelEvent, source "meta-capi".
  *
  * Config (env): META_CAPI_ACCESS_TOKEN (required to fire), META_PIXEL_ID
  * (defaults to the Enhanced Wealth pixel), META_TEST_EVENT_CODE (optional, for
@@ -36,6 +43,13 @@ const pixelFor = (lead: { source?: string | null }) =>
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || "";
 const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE || "";
 const PURCHASE_EVENT = process.env.META_PURCHASE_EVENT || "Purchase";
+// A custom name on purpose: a plain "Lead" here would also count as a pixel Lead
+// for website ad sets optimizing on this pixel.
+const INSTANT_FORM_LEAD_EVENT = "InstantFormLead";
+const CRM_NAME = "Advertisely";
+// A new lead waits on this lookup before it's delivered, so keep it short. Stage
+// moves can afford the default, and retry when this one comes up empty.
+const INTAKE_LOOKUP_MS = 3000;
 
 export const isMetaCapiConfigured = Boolean(ACCESS_TOKEN);
 
@@ -75,9 +89,17 @@ type EventOpts = {
   actionSource?: string;
   valueCents?: number | null;
   eventSourceUrl?: string;
+  crm?: InstantFormContext | null;
 };
 
-type SendResult = { ok: boolean; skipped?: string; status?: number; error?: string };
+type SendResult = {
+  ok: boolean;
+  skipped?: string;
+  status?: number;
+  error?: string;
+  received?: number;
+  warning?: string;
+};
 
 async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResult> {
   if (!isMetaCapiConfigured) return { ok: false, skipped: "META_CAPI_ACCESS_TOKEN not set" };
@@ -116,6 +138,7 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
   if (zp && (lead.zip ?? raw["zip"] ?? "").replace(/\D/g, "").length >= 5) userData.zp = [zp];
   userData.country = [hash("us")];
   userData.external_id = [hash(lead.id)];
+  if (opts.crm?.leadId) userData.lead_id = opts.crm.leadId;
 
   // Meta needs at least one identifier to match the event.
   if (Object.keys(userData).length === 0) {
@@ -128,6 +151,10 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
     customData.currency = "USD";
   }
   if (raw["quiz_lead_tier"]) customData.lead_tier = raw["quiz_lead_tier"];
+  if (opts.crm) {
+    customData.event_source = "crm";
+    customData.lead_event_source = CRM_NAME;
+  }
 
   const event: Record<string, unknown> = {
     event_name: opts.eventName,
@@ -145,9 +172,22 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
   try {
     const res = await fetch(
       `https://graph.facebook.com/${GRAPH_VERSION}/${pixelFor(lead)}/events?access_token=${encodeURIComponent(ACCESS_TOKEN)}`,
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Meta wants lead_id as a number, but 15-17 digits don't survive as a JS one.
+        body: JSON.stringify(payload).replace(/"lead_id":"(\d+)"/, '"lead_id":$1'),
+      },
     );
-    if (res.ok) return { ok: true, status: res.status };
+    if (res.ok) {
+      const reply = await res.json().catch(() => null);
+      return {
+        ok: true,
+        status: res.status,
+        received: reply?.events_received,
+        warning: reply?.messages?.length ? JSON.stringify(reply.messages).slice(0, 120) : undefined,
+      };
+    }
     // Keep Meta's reason (e.g. an expired token) — it was silently dropped before.
     const body = await res.text().catch(() => "");
     return { ok: false, status: res.status, error: body.slice(0, 300) };
@@ -156,28 +196,18 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
   }
 }
 
+const sendFailed = (e: unknown): SendResult => ({ ok: false, skipped: "exception", error: String(e).slice(0, 300) });
+
 /**
- * Fire the server-side "Lead" event for a freshly-created quiz lead, and record
- * the outcome (internal FunnelEvent, source "meta-capi" — never shown in the
- * UI or the funnel analytics) so we can see from the DB whether Meta got it.
+ * Record a send's outcome (internal FunnelEvent, source "meta-capi" — never shown
+ * in the UI or the funnel analytics) so we can see from the DB whether Meta got it.
  */
-export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
+async function recordCapiResult(lead: LeadLike, eventName: string, result: SendResult, note?: string): Promise<void> {
+  if (!result.ok) console.warn(`[meta-capi] ${eventName} for lead ${lead.id} not sent: ${result.skipped ?? ""} ${result.status ?? ""} ${result.error ?? ""}`);
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
     ? (lead.rawFormData as Record<string, string>)
     : {}) as Record<string, string>;
-  let result: SendResult;
-  if (!lead.fbclid && !raw["fbc"] && !raw["fbp"]) {
-    // Only worth sending for ad-sourced leads (need a click id / pixel cookie).
-    result = { ok: false, skipped: "not an ad click (no fbclid/fbc/fbp)" };
-  } else {
-    result = await sendMetaEvent(lead, {
-      eventName: raw["event_name"] || "Lead",
-      eventId: raw["event_id"] || `lead_${lead.id}`, // shared with the browser pixel = deduped
-      actionSource: "website",
-      eventSourceUrl: raw["landing_url"] || undefined,
-    }).catch((e) => ({ ok: false, skipped: "exception", error: String(e).slice(0, 300) }));
-  }
-  if (!result.ok) console.warn(`[meta-capi] lead ${lead.id} not sent: ${result.skipped ?? ""} ${result.status ?? ""} ${result.error ?? ""}`);
+  const outcome = result.ok ? `ok ${eventName} rcvd:${result.received ?? "?"}` : `${result.skipped ?? "error"} ${eventName}`;
   await prisma?.funnelEvent
     .create({
       data: {
@@ -185,10 +215,40 @@ export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
         type: "meta_capi",
         source: "meta-capi",
         step: result.status ?? 0,
-        cta: (result.ok ? `ok lead:${lead.id}` : `${result.skipped ?? "error"} lead:${lead.id} ${result.error ?? ""}`).slice(0, 190),
+        cta: [outcome, note, `lead:${lead.id}`, result.error ?? result.warning].filter(Boolean).join(" ").slice(0, 190),
       },
     })
     .catch(() => {});
+}
+
+/** Fire the server-side event for a freshly-created lead and record the outcome. */
+export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
+  const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
+    ? (lead.rawFormData as Record<string, string>)
+    : {}) as Record<string, string>;
+  const clicked = lead.fbclid || raw["fbc"] || raw["fbp"];
+  const crm = clicked ? null : await instantFormContext(lead, INTAKE_LOOKUP_MS).catch(() => null);
+  const eventName = clicked ? raw["event_name"] || "Lead" : crm ? INSTANT_FORM_LEAD_EVENT : "Lead";
+  let result: SendResult;
+  if (clicked) {
+    result = await sendMetaEvent(lead, {
+      eventName,
+      eventId: raw["event_id"] || `lead_${lead.id}`, // shared with the browser pixel = deduped
+      actionSource: "website",
+      eventSourceUrl: raw["landing_url"] || undefined,
+    }).catch(sendFailed);
+  } else if (crm) {
+    result = await sendMetaEvent(lead, {
+      eventName,
+      eventId: `lead_${lead.id}`,
+      actionSource: "system_generated",
+      crm,
+    }).catch(sendFailed);
+  } else {
+    // Only worth sending for ad-sourced leads (need a click id / pixel cookie).
+    result = { ok: false, skipped: "not an ad click (no fbclid/fbc/fbp)" };
+  }
+  await recordCapiResult(lead, eventName, result, crm?.note);
   return result;
 }
 
@@ -197,12 +257,15 @@ export async function fireMetaPurchaseEvent(leadId: string, valueCents?: number 
   if (!isMetaCapiConfigured || !prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) return;
-  await sendMetaEvent(lead, {
+  const crm = await instantFormContext(lead).catch(() => null);
+  const result = await sendMetaEvent(lead, {
     eventName: PURCHASE_EVENT,
     eventId: `conv_${lead.id}`, // stable per lead = deduped if it fires twice
     actionSource: "system_generated",
     valueCents: valueCents ?? lead.soldPremiumCents ?? null,
-  }).catch(() => {});
+    crm,
+  }).catch(sendFailed);
+  await recordCapiResult(lead, PURCHASE_EVENT, result, crm?.note);
 }
 
 /**
@@ -290,10 +353,13 @@ export async function fireMetaStageEvent(
   // Issued-paid shares the "Purchase" event id used by the partner Conversions
   // API so the sale is never double-counted; other stages dedupe per stage.
   const eventId = stage === "issued-paid" ? `conv_${lead.id}` : `${stage}_${lead.id}`;
-  await sendMetaEvent(lead, {
+  const crm = await instantFormContext(lead).catch(() => null);
+  const result = await sendMetaEvent(lead, {
     eventName: cfg.event,
     eventId,
     actionSource: "system_generated",
     valueCents: cfg.withValue ? (valueCents ?? lead.soldPremiumCents ?? null) : null,
-  }).catch(() => {});
+    crm,
+  }).catch(sendFailed);
+  await recordCapiResult(lead, cfg.event, result, crm?.note);
 }

@@ -180,6 +180,32 @@ async function pageToken(pageId: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Page tokens that may be able to read an instant form's leads: the form's own
+ * Page through the System User, then every Page connected under Meta ingestion
+ * (a form on a Page the System User can't see is invisible to it).
+ */
+export async function leadFormTokens(formId: string): Promise<string[]> {
+  const tokens: string[] = [];
+  try {
+    const form = await graphGet<{ page?: { id?: string } }>(encodeURIComponent(formId), { fields: "page" });
+    const token = form.page?.id ? await pageToken(form.page.id) : null;
+    if (token) tokens.push(token);
+  } catch {
+    // No System User access to this form; a connected Page may still own it.
+  }
+  if (isDatabaseConfigured && prisma) {
+    const pages = await prisma.metaPageConnection.findMany({
+      where: { enabled: true },
+      select: { pageAccessToken: true },
+    });
+    for (const { pageAccessToken } of pages) {
+      if (pageAccessToken && !tokens.includes(pageAccessToken)) tokens.push(pageAccessToken);
+    }
+  }
+  return tokens;
+}
+
 export interface LeadFormOption {
   id: string;
   name: string;

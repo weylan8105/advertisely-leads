@@ -92,7 +92,7 @@ function asObject(value: unknown): Record<string, unknown> | null {
  * FIRST touch; `lastAttributionSource` is the submission that triggered this
  * webhook, so a repeat contact routes by the form they just filled out.
  */
-function ghlFormId(body: Record<string, unknown>): string {
+export function ghlFormId(body: Record<string, unknown>): string {
   const contact = asObject(body?.contact);
   for (const src of [body?.lastAttributionSource, contact?.lastAttributionSource, body?.attributionSource, contact?.attributionSource]) {
     const id = asObject(src)?.formId;
