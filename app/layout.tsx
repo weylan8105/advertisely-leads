@@ -3,6 +3,7 @@ import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { CartProvider } from "@/context/CartContext";
+import { UserModeBanner } from "@/components/admin/UserModeToggle";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-background text-foreground font-sans">
         <AuthProvider>
           <CartProvider>{children}</CartProvider>
+          <UserModeBanner />
         </AuthProvider>
       </body>
     </html>

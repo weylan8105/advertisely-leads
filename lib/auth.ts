@@ -6,6 +6,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { UPLINE_COOKIE } from "@/lib/uplineCookie";
 import { ADVERTISER_COOKIE, isAdvertiserInviteToken } from "@/lib/advertiserInvite";
+import { USER_MODE_COOKIE, isUserModeActive } from "@/lib/userMode";
 
 const providers: NextAuthOptions["providers"] = [];
 
@@ -128,6 +129,19 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).id = token.id ?? token.sub;
         (session.user as any).role = token.role;
         if (token.picture) session.user.image = token.picture as string;
+        // Admin user mode: every role check reads this session, so reporting a
+        // client role here makes the whole app treat them as one.
+        if (token.role === "ADMIN") {
+          try {
+            const { cookies } = await import("next/headers");
+            if (isUserModeActive(token.role, cookies().get(USER_MODE_COOKIE)?.value)) {
+              (session.user as any).role = "AGENT";
+              (session.user as any).userMode = true;
+            }
+          } catch (e) {
+            console.warn("[auth] user mode check failed", e);
+          }
+        }
       }
       return session;
     },

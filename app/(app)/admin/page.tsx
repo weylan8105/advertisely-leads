@@ -49,6 +49,7 @@ import { CreativeScorecard } from "@/components/admin/CreativeScorecard";
 import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
+import { UserModeToggle } from "@/components/admin/UserModeToggle";
 
 import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -314,6 +315,7 @@ function AdminPageInner() {
         description="Manage the entire lead pipeline — inbound from Meta, dispersal to agents, replacement queue, and source attribution."
         actions={
           <>
+            <UserModeToggle />
             <AdminImportLeadsButton />
             <Button size="sm">
               <Sparkles className="h-4 w-4" /> Open auto-distribution
