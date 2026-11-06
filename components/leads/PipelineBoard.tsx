@@ -5,6 +5,7 @@ import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, User
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
+import { reportDial } from "@/lib/dials";
 
 // Compact money for stage totals / card value (e.g. $6,000 or $141,832).
 const money = (cents: number) =>
@@ -252,7 +253,9 @@ export function PipelineBoard({
 
   // Copy a phone/email to the clipboard from a card, with a brief ✓ confirmation.
   async function copyField(text: string, key: string) {
-    markActive(key.split("-")[0]);
+    const leadId = key.split("-")[0];
+    markActive(leadId);
+    if (key.endsWith("-phone")) reportDial(leadId, "copy");
     try {
       await navigator.clipboard.writeText(text);
       setCopiedKey(key);
@@ -503,6 +506,7 @@ export function PipelineBoard({
                         draggable
                         onClick={() => {
                           markActive(lead.id);
+                          reportDial(lead.id, "talking");
                           setDetailLead(lead);
                         }}
                         onDragStart={(e) => {
@@ -585,6 +589,7 @@ export function PipelineBoard({
                                       return;
                                     }
                                     markActive(lead.id);
+                                    reportDial(lead.id, "call");
                                   }}
                                   title="Call"
                                   aria-label={`Call ${lead.name}`}

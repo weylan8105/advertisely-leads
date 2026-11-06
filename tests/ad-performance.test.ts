@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addDays, costPer, dayStart, dealsByAgent, emptyCounts, eventRows, isApplicationMove, perfEvents, rangeDays, summarize, tally,
-  campaignKeyOf, type PerfLead, type PerfMove,
+  campaignKeyOf, type PerfDial, type PerfLead, type PerfMove,
 } from "../lib/adPerformance";
 
 const lead = (over: Partial<PerfLead> = {}): PerfLead => ({
@@ -13,8 +13,9 @@ const move = (label: string, at: string, leadId = "L1"): PerfMove => ({
   leadId, body: `Moved to "${label}" in the pipeline.`, metadata: {}, createdAt: new Date(at),
 });
 const WINDOW: [Date, Date] = [new Date("2026-11-01T00:00:00Z"), new Date("2026-11-08T00:00:00Z")];
-const total = (leads: PerfLead[], moves: PerfMove[], since = WINDOW[0], until = WINDOW[1]) =>
-  tally(perfEvents(leads, moves), since, until, () => "all").get("all") ?? emptyCounts();
+const total = (leads: PerfLead[], moves: PerfMove[], since = WINDOW[0], until = WINDOW[1], dials: PerfDial[] = []) =>
+  tally(perfEvents(leads, moves, dials), since, until, () => "all").get("all") ?? emptyCounts();
+const dial = (at: string, leadId = "L1"): PerfDial => ({ leadId, createdAt: new Date(at) });
 
 describe("applications", () => {
   it("counts each of the four stages as an application", () => {
@@ -59,20 +60,20 @@ describe("funnel counts", () => {
     expect(total([lead({ receivedAt: new Date("2026-10-01T15:00:00Z") })], []).leads).toBe(0);
   });
 
-  it("counts dialed and contacted once per lead", () => {
+  it("counts a lead moved with no logged dial as one dial, and contacted once per lead", () => {
     const moves = [
       move("Dialed", "2026-11-02T15:00:00Z"),
       move("Contacted", "2026-11-02T16:00:00Z"),
       move("Contacted", "2026-11-03T16:00:00Z"),
     ];
     const c = total([lead()], moves);
-    expect(c.dialed).toBe(1);
+    expect(c.dials).toBe(1);
     expect(c.contacted).toBe(1);
   });
 
   it("counts a dialed lead that was never reached as dialed only", () => {
     const c = total([lead()], [move("Dialed", "2026-11-02T15:00:00Z")]);
-    expect(c.dialed).toBe(1);
+    expect(c.dials).toBe(1);
     expect(c.contacted).toBe(0);
   });
 
@@ -144,6 +145,56 @@ describe("campaign matching", () => {
 
   it("leaves a lead with no campaign unmatched", () => {
     expect(campaignKeyOf(lead(), ids)).toBeNull();
+  });
+});
+
+describe("dials", () => {
+  const AFTER = [new Date("2026-11-07T00:00:00Z"), new Date("2026-11-20T00:00:00Z")] as const;
+  const counts = (leads: PerfLead[], moves: PerfMove[], dials: PerfDial[]) => total(leads, moves, AFTER[0], AFTER[1], dials);
+
+  it("counts every dial, and the lead once", () => {
+    const c = counts([lead()], [], [dial("2026-11-08T15:00:00Z"), dial("2026-11-08T19:00:00Z"), dial("2026-11-09T15:00:00Z")]);
+    expect(c.dials).toBe(3);
+    expect(c.leadsDialed).toBe(1);
+  });
+
+  it("doesn't add a dial for the stage move when dials were logged", () => {
+    const c = counts([lead()], [move("Dialed", "2026-11-08T15:01:00Z")], [dial("2026-11-08T15:00:00Z"), dial("2026-11-08T19:00:00Z")]);
+    expect(c.dials).toBe(2);
+    expect(c.leadsDialed).toBe(1);
+  });
+
+  it("only counts dials in the window", () => {
+    expect(counts([lead()], [], [dial("2026-11-06T23:00:00Z"), dial("2026-11-08T15:00:00Z")]).dials).toBe(1);
+  });
+
+  it("averages the dials leads took before they were contacted", () => {
+    const leads = [lead({ id: "A" }), lead({ id: "B" })];
+    const moves = [move("Contacted", "2026-11-09T15:00:00Z", "A"), move("Contacted", "2026-11-09T15:00:00Z", "B")];
+    const dials = [
+      dial("2026-11-07T15:00:00Z", "A"), dial("2026-11-08T15:00:00Z", "A"), dial("2026-11-09T14:59:00Z", "A"),
+      dial("2026-11-09T14:59:00Z", "B"),
+    ];
+    const c = counts(leads, moves, dials);
+    expect([c.reached, c.dialsToReach]).toEqual([2, 4]);
+    expect(summarize(c, []).dialsPerContact).toBe(2);
+  });
+
+  it("ignores dials after the first contact", () => {
+    const moves = [move("Contacted", "2026-11-09T15:00:00Z"), move("Call Back", "2026-11-12T15:00:00Z")];
+    expect(counts([lead()], moves, [dial("2026-11-09T14:00:00Z"), dial("2026-11-11T15:00:00Z")]).dialsToReach).toBe(1);
+  });
+
+  it("counts at least one dial for a lead contacted with none logged", () => {
+    expect(counts([lead()], [move("Contacted", "2026-11-09T15:00:00Z")], []).dialsToReach).toBe(1);
+  });
+
+  it("doesn't measure a lead that was being worked before dials were logged", () => {
+    const moves = [move("Dialed", "2026-11-03T15:00:00Z"), move("Contacted", "2026-11-09T15:00:00Z")];
+    const c = counts([lead()], moves, [dial("2026-11-09T14:00:00Z")]);
+    expect(c.contacted).toBe(1);
+    expect(c.reached).toBe(0);
+    expect(summarize(c, []).dialsPerContact).toBeNull();
   });
 });
 

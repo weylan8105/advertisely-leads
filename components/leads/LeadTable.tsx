@@ -40,6 +40,7 @@ import {
   type PipelineStage,
 } from "@/data/pipeline";
 import { cn } from "@/lib/utils";
+import { reportDial } from "@/lib/dials";
 import {
   Select,
   SelectContent,
@@ -183,6 +184,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
   // Click-to-copy for phone / email cells (Google-Sheets-style quick copy).
   async function copyText(text: string, label: string, leadId?: string) {
     if (leadId) markActive(leadId);
+    if (leadId && label === "Phone") reportDial(leadId, "copy");
     try {
       await navigator.clipboard.writeText(text);
       addToast("success", `${label} copied`);
@@ -510,7 +512,10 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                 <TableCell className="py-1.5">
                   <button
                     type="button"
-                    onClick={() => openCard(lead)}
+                    onClick={() => {
+                      reportDial(lead.id, "talking");
+                      openCard(lead);
+                    }}
                     title="Open contact card"
                     className="font-medium leading-tight text-left hover:text-brand-red hover:underline transition-colors"
                   >
@@ -527,6 +532,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                   <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-700">
                     <a
                       href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`}
+                      onClick={() => reportDial(lead.id, "call")}
                       title="Call"
                       aria-label={`Call ${lead.name}`}
                       className="text-slate-400 hover:text-brand-red"
@@ -589,7 +595,10 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                   <div className="inline-flex items-center gap-1">
                     <a
                       href={`tel:${lead.phone.replace(/\D/g, "")}`}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        reportDial(lead.id, "call");
+                      }}
                       title="Call"
                       className="h-7 w-7 grid place-items-center rounded-md border border-slate-300 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-600 transition-colors"
                     >
@@ -618,7 +627,12 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openCard(lead)}>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            reportDial(lead.id, "talking");
+                            openCard(lead);
+                          }}
+                        >
                           View details <ChevronRight className="h-3 w-3 ml-auto" />
                         </DropdownMenuItem>
                         <DropdownMenuItem>Log call disposition</DropdownMenuItem>

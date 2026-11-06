@@ -2,8 +2,12 @@
 // became in the CRM, for one window.
 //
 //   New leads      leads received in the window
-//   Dialed         leads moved out of New Lead in the window (see lib/activityStats.ts)
+//   Dials          every dial logged in the window (lib/dials.ts), so one lead can
+//                  count many times. A lead moved out of New Lead with no logged dial
+//                  counts as one, which is all the days before DIALS_TRACKED_FROM have.
 //   Contacted      leads moved to Contacted or further in the window
+//   Dials per      average dials a lead took before it first reached Contacted, for
+//   contact        leads first worked since DIALS_TRACKED_FROM
 //   Applications   leads that FIRST reached Underwriting, Approved, Issued Not Paid
 //                  or Issued PAID in the window. Once per lead, and a later decline
 //                  doesn't undo it: the application was still submitted.
@@ -30,6 +34,9 @@ const TREND_DAYS = 14;
 // Meta keeps pixel stats for 28 days.
 const PIXEL_STATS_DAYS = 27;
 const ABCA_SOURCE = "early-retirement-quiz";
+// When dials started being logged. A lead worked before this had dials we never
+// saw, so measuring it would make dials per contact read too low.
+export const DIALS_TRACKED_FROM = new Date("2026-11-06T18:30:00Z");
 
 export function parsePerfRange(raw: string | null | undefined): PerfRange {
   return (PERF_RANGES as readonly string[]).includes(raw ?? "") ? (raw as PerfRange) : "today";
@@ -86,25 +93,35 @@ export interface PerfMove {
   createdAt: Date;
 }
 
+export interface PerfDial {
+  leadId: string;
+  createdAt: Date;
+}
+
 export interface PerfCounts {
   leads: number;
-  dialed: number;
+  dials: number;
+  leadsDialed: number;
   contacted: number;
+  // Contacts measured for dials per contact, and the dials they took.
+  reached: number;
+  dialsToReach: number;
   applications: number;
   issuedPaid: number;
   premiumCents: number;
 }
 
-export type PerfKind = "lead" | "dialed" | "contacted" | "application" | "paid";
+export type PerfKind = "lead" | "dial" | "moved" | "contacted" | "reached" | "application" | "paid";
 export interface PerfEvent {
   leadId: string;
   kind: PerfKind;
   at: Date;
   premiumCents?: number;
+  dials?: number;
 }
 
 export const emptyCounts = (): PerfCounts => ({
-  leads: 0, dialed: 0, contacted: 0, applications: 0, issuedPaid: 0, premiumCents: 0,
+  leads: 0, dials: 0, leadsDialed: 0, contacted: 0, reached: 0, dialsToReach: 0, applications: 0, issuedPaid: 0, premiumCents: 0,
 });
 
 export const funnelOf = (lead: { source?: string | null }): PerfFunnel => (lead.source === ABCA_SOURCE ? "abca" : "ew");
@@ -121,10 +138,16 @@ export function isApplicationMove(body: string | null | undefined, metadata: unk
 }
 
 /** Everything that happened to these leads, as dated events. */
-export function perfEvents(leads: PerfLead[], moves: PerfMove[]): PerfEvent[] {
+export function perfEvents(leads: PerfLead[], moves: PerfMove[], dials: PerfDial[] = []): PerfEvent[] {
   const known = new Set(leads.map((l) => l.id));
   const events: PerfEvent[] = [];
   const firstApplication = new Map<string, Date>();
+  const firstWorked = new Map<string, Date>();
+  const firstContact = new Map<string, Date>();
+  const earliest = (map: Map<string, Date>, leadId: string, at: Date) => {
+    const first = map.get(leadId);
+    if (!first || at < first) map.set(leadId, at);
+  };
   for (const l of leads) {
     events.push({ leadId: l.id, kind: "lead", at: l.receivedAt });
     if (l.pipelineStage === WON_STAGE_ID && l.soldAt) {
@@ -134,18 +157,34 @@ export function perfEvents(leads: PerfLead[], moves: PerfMove[]): PerfEvent[] {
   for (const m of moves) {
     if (!known.has(m.leadId)) continue;
     const level = moveLevel(m.body, m.metadata);
-    if (level >= 1) events.push({ leadId: m.leadId, kind: "dialed", at: m.createdAt });
-    if (level >= 2) events.push({ leadId: m.leadId, kind: "contacted", at: m.createdAt });
-    if (isApplicationMove(m.body, m.metadata)) {
-      const first = firstApplication.get(m.leadId);
-      if (!first || m.createdAt < first) firstApplication.set(m.leadId, m.createdAt);
+    if (level >= 1) {
+      events.push({ leadId: m.leadId, kind: "moved", at: m.createdAt });
+      earliest(firstWorked, m.leadId, m.createdAt);
     }
+    if (level >= 2) {
+      events.push({ leadId: m.leadId, kind: "contacted", at: m.createdAt });
+      earliest(firstContact, m.leadId, m.createdAt);
+    }
+    if (isApplicationMove(m.body, m.metadata)) earliest(firstApplication, m.leadId, m.createdAt);
   }
   for (const [leadId, at] of firstApplication) events.push({ leadId, kind: "application", at });
+
+  const dialTimes = new Map<string, Date[]>();
+  for (const d of dials) {
+    if (!known.has(d.leadId)) continue;
+    events.push({ leadId: d.leadId, kind: "dial", at: d.createdAt });
+    dialTimes.set(d.leadId, [...(dialTimes.get(d.leadId) ?? []), d.createdAt]);
+  }
+  for (const [leadId, at] of firstContact) {
+    if ((firstWorked.get(leadId) ?? at) < DIALS_TRACKED_FROM) continue;
+    // Reaching Contacted took at least one call, logged or not.
+    const before = (dialTimes.get(leadId) ?? []).filter((t) => t <= at).length;
+    events.push({ leadId, kind: "reached", at, dials: Math.max(before, 1) });
+  }
   return events;
 }
 
-/** Counts per key for a window; each lead counts once per kind. */
+/** Counts per key for a window; each lead counts once per kind, except dials. */
 export function tally(
   events: PerfEvent[],
   since: Date,
@@ -154,18 +193,28 @@ export function tally(
 ): Map<string, PerfCounts> {
   const out = new Map<string, PerfCounts>();
   const seen = new Set<string>();
-  for (const e of events) {
-    if (e.at < since || e.at >= until) continue;
+  const inWindow = events.filter((e) => e.at >= since && e.at < until);
+  const logged = new Set(inWindow.filter((e) => e.kind === "dial").map((e) => e.leadId));
+  for (const e of inWindow) {
+    // A stage move only stands in for a dial when none was logged.
+    if (e.kind === "moved" && logged.has(e.leadId)) continue;
     const key = keyOf(e.leadId);
+    let c = out.get(key);
+    if (!c) out.set(key, (c = emptyCounts()));
+    if (e.kind === "dial") c.dials++;
     const once = `${key}\u0000${e.kind}\u0000${e.leadId}`;
     if (seen.has(once)) continue;
     seen.add(once);
-    let c = out.get(key);
-    if (!c) out.set(key, (c = emptyCounts()));
     if (e.kind === "lead") c.leads++;
-    else if (e.kind === "dialed") c.dialed++;
-    else if (e.kind === "contacted") c.contacted++;
-    else if (e.kind === "application") c.applications++;
+    else if (e.kind === "dial") c.leadsDialed++;
+    else if (e.kind === "moved") {
+      c.dials++;
+      c.leadsDialed++;
+    } else if (e.kind === "contacted") c.contacted++;
+    else if (e.kind === "reached") {
+      c.reached++;
+      c.dialsToReach += e.dials ?? 1;
+    } else if (e.kind === "application") c.applications++;
     else {
       c.issuedPaid++;
       c.premiumCents += e.premiumCents ?? 0;
@@ -185,6 +234,7 @@ export interface PerfSummary extends PerfCounts {
   linkClicks: number;
   metaLeads: number;
   activeBudgetCents: number;
+  dialsPerContact: number | null;
   cplCents: number | null;
   cpaCents: number | null;
   cacCents: number | null;
@@ -207,6 +257,7 @@ export function summarize(counts: PerfCounts, campaigns: CampaignPerf[], spendKn
     linkClicks: sum((c) => c.linkClicks),
     metaLeads: sum((c) => c.metaLeads),
     activeBudgetCents: sum((c) => c.dailyBudgetCents ?? 0),
+    dialsPerContact: counts.reached > 0 ? Math.round((counts.dialsToReach / counts.reached) * 10) / 10 : null,
     cplCents: spendKnown ? costPer(spendCents, counts.leads) : null,
     cpaCents: spendKnown ? costPer(spendCents, counts.applications) : null,
     cacCents: spendKnown ? costPer(spendCents, counts.issuedPaid) : null,
@@ -217,8 +268,11 @@ export function summarize(counts: PerfCounts, campaigns: CampaignPerf[], spendKn
 
 export const addCounts = (a: PerfCounts, b: PerfCounts): PerfCounts => ({
   leads: a.leads + b.leads,
-  dialed: a.dialed + b.dialed,
+  dials: a.dials + b.dials,
+  leadsDialed: a.leadsDialed + b.leadsDialed,
   contacted: a.contacted + b.contacted,
+  reached: a.reached + b.reached,
+  dialsToReach: a.dialsToReach + b.dialsToReach,
   applications: a.applications + b.applications,
   issuedPaid: a.issuedPaid + b.issuedPaid,
   premiumCents: a.premiumCents + b.premiumCents,
@@ -352,7 +406,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
   const pixelCutoff = new Date(now.getTime() - PIXEL_STATS_DAYS * 86_400_000);
   const pixelWindow = { since: since < pixelCutoff ? pixelCutoff : since, until: until > now ? now : until };
 
-  const [meta, leads, moves, sends, users] = await Promise.all([
+  const [meta, leads, moves, sends, users, dials] = await Promise.all([
     getMetaPerformance(
       `${range}:${today}`,
       (tz) => rangeDays(range, ymdInTz(now, tz)),
@@ -374,10 +428,11 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
       select: { cta: true },
     }),
     prisma.user.findMany({ select: { id: true, name: true, email: true } }),
+    prisma.leadActivity.findMany({ where: { type: "CALL_MADE" }, select: { leadId: true, createdAt: true } }),
   ]);
 
   const leadById = new Map(leads.map((l) => [l.id, l]));
-  const events = perfEvents(leads, moves);
+  const events = perfEvents(leads, moves, dials);
   const userById = new Map(users.map((u) => [u.id, u]));
   const agentName = (id: string) => userById.get(id)?.name?.trim() || userById.get(id)?.email || "Unknown agent";
   const funnelKey = (id: string) => funnelOf(leadById.get(id) ?? { source: null });

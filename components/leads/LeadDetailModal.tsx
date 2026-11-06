@@ -9,6 +9,7 @@ import { ADVERTISER_NAME_KEY, FUNNEL_LEAD_LABEL } from "@/lib/leadOrigin";
 import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDialog";
 import { LeadMessages } from "@/components/leads/LeadMessages";
 import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
+import { reportDial } from "@/lib/dials";
 import { isGoldmineEligibleStage, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
 
 // Colored dot for the pipeline-stage dropdown (mirrors the board's column dots).
@@ -260,6 +261,7 @@ export function LeadDetailModal({
   const [copied, setCopied] = useState<string | null>(null);
   async function copy(text: string, key: string) {
     if (!text) return;
+    if (key === "phone") reportDial(lead.id, "copy");
     try {
       await navigator.clipboard.writeText(text);
       setCopied(key);
@@ -474,7 +476,7 @@ export function LeadDetailModal({
               {/* Phone icon = call; the number = copy. */}
               <span className="inline-flex items-center gap-1">
                 {telDigits ? (
-                  <a href={`tel:${telDigits}`} title="Call" aria-label="Call" className="-m-1 rounded p-1 hover:bg-brand-red/10 hover:text-brand-red">
+                  <a href={`tel:${telDigits}`} onClick={() => reportDial(lead.id, "call")} title="Call" aria-label="Call" className="-m-1 rounded p-1 hover:bg-brand-red/10 hover:text-brand-red">
                     <Phone className="h-3.5 w-3.5" />
                   </a>
                 ) : (
@@ -501,7 +503,7 @@ export function LeadDetailModal({
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {telDigits && (
                 <>
-                  <a href={`tel:${telDigits}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">
+                  <a href={`tel:${telDigits}`} onClick={() => reportDial(lead.id, "call")} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">
                     <Phone className="h-3.5 w-3.5" /> Call
                   </a>
                   <a href={`sms:${telDigits}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium hover:border-brand-red/40 hover:text-brand-red">

@@ -163,8 +163,9 @@ function DayChart({
 const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string }[] = [
   { label: "Ad spend", value: (s) => (s.spendKnown ? money(s.spendCents) : "—") },
   { label: "New leads", value: (s) => count(s.leads) },
-  { label: "Dialed", value: (s) => count(s.dialed) },
+  { label: "Dials", value: (s) => count(s.dials) },
   { label: "Contacted", value: (s) => count(s.contacted) },
+  { label: "Dials per contact", value: (s) => s.dialsPerContact?.toFixed(1) ?? "—" },
   { label: "Applications", value: (s) => count(s.applications) },
   { label: "Issued PAID", value: (s) => count(s.issuedPaid) },
   { label: "Premium", value: (s) => money(s.premiumCents) },
@@ -284,10 +285,15 @@ export function AdPerformanceDashboard() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Tile label="New leads" value={count(s.leads)} />
-            <Tile label="Dialed" value={count(s.dialed)} hint={share(s.dialed, s.leads, "new leads")} />
-            <Tile label="Contacted" value={count(s.contacted)} hint={share(s.contacted, s.dialed, "dialed")} />
+            <Tile label="Dials" value={count(s.dials)} hint={`${count(s.leadsDialed)} leads dialed`} />
+            <Tile label="Contacted" value={count(s.contacted)} hint={share(s.contacted, s.dials, "dials")} />
+            <Tile
+              label="Dials per contact"
+              value={s.dialsPerContact?.toFixed(1) ?? "—"}
+              hint={s.reached > 0 ? `Across ${count(s.reached)} contacts` : "Measured from Nov 6"}
+            />
             <Tile label="Applications" value={count(s.applications)} hint={share(s.applications, s.contacted, "contacted")} />
             <Tile label="Issued PAID" value={count(s.issuedPaid)} hint={share(s.issuedPaid, s.applications, "applications")} />
           </div>
@@ -532,7 +538,9 @@ export function AdPerformanceDashboard() {
               <li>CPA is ad spend divided by applications. CAC is ad spend divided by Issued PAID.</li>
               <li>Everything counts on the day it happened, so a sale today can come from an older lead. Short windows swing a lot; use 30 days or longer to judge CAC.</li>
               <li>The tiles only count what happened in the dates you pick. Client Accounts shows every deal ever, by its stage now. Deals by agent shows that same all-time view, so use it to check the two against each other.</li>
-              <li>Dialed means a lead was moved out of New Lead, and Contacted means it reached Contacted or further. Calls themselves aren&apos;t tracked.</li>
+              <li>A dial is logged each time someone copies a lead&apos;s number, taps Call or clicks the lead. Clicking the lead and then copying its number is one dial, and so is clicking it again within 30 minutes. Copying the number again counts as a new dial once 30 seconds have passed.</li>
+              <li>Dials weren&apos;t logged before Nov 6, so those days show one dial per lead moved out of New Lead, and their contact rate reads high.</li>
+              <li>Contacted means a lead reached Contacted or further. Dials per contact is the average number of dials a lead took before that, for leads first worked since Nov 6.</li>
               <li>Days run on Central time in Advertisely. Meta uses each ad account&apos;s own timezone: Pacific for Enhanced Wealth, Central for ABCA.</li>
               <li>Client campaigns and their leads aren&apos;t included. Leads moved to the trash aren&apos;t counted either, so Advertisely can read a little below Meta.</li>
             </ul>
