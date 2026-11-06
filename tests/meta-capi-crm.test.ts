@@ -36,7 +36,7 @@ vi.mock("../lib/prisma", () => {
 });
 
 import { fireMetaLeadEvent, fireMetaStageEvent, fireMetaPurchaseEvent } from "../lib/metaCapi";
-import { instantFormContext } from "../lib/metaLeadId";
+import { instantFormContext, adColumnsToFill, fillLeadAd } from "../lib/metaLeadId";
 
 const FORM = "1721027025846342";
 const META_ID = "1234567890123456789".slice(0, 17);
@@ -70,7 +70,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 let sent: { url: string; text: string; body: any }[];
-let graph: { pageAccess: boolean; formLeads: any[]; hang: boolean; capi: () => Response };
+let graph: { pageAccess: boolean; formLeads: any[]; leadAd: any; hang: boolean; capi: () => Response };
 
 beforeEach(() => {
   leads.clear();
@@ -82,6 +82,7 @@ beforeEach(() => {
   graph = {
     pageAccess: true,
     formLeads: [formLead()],
+    leadAd: { campaign_id: "120245300016060396", campaign_name: "Blue Collar ER", adset_id: "2200", ad_id: "3300" },
     hang: false,
     capi: () => json({ events_received: 1, messages: [], fbtrace_id: "x" }),
   };
@@ -95,6 +96,9 @@ beforeEach(() => {
       }
       if (graph.hang) return new Promise(() => {});
       if (url.includes(`/${FORM}/leads`)) return json({ data: graph.formLeads });
+      if (url.includes(`/${META_ID}?`)) {
+        return graph.leadAd ? json(graph.leadAd) : json({ error: { message: "no ad access" } }, 400);
+      }
       if (url.includes(`/${FORM}?`)) {
         return graph.pageAccess ? json({ page: { id: "PAGE" } }) : json({ error: { message: "no access" } }, 400);
       }
@@ -105,6 +109,70 @@ beforeEach(() => {
 });
 
 const event = () => sent[0].body.data[0];
+
+describe("campaign and ad details from Meta", () => {
+  const stored = (over: Record<string, unknown> = {}) =>
+    instantLead({ rawFormData: { attributionSource: attribution, leadgen_id: META_ID }, ...over });
+
+  it("fills the blanks GHL left when it finds the lead", async () => {
+    await fireMetaLeadEvent(instantLead());
+    expect(updates[0].data).toMatchObject({
+      campaignName: "Blue Collar ER",
+      utmCampaign: "Blue Collar ER",
+      adsetId: "2200",
+      creativeId: "3300",
+    });
+    expect(updates[0].data.rawFormData).toMatchObject({ leadgen_id: META_ID, campaignId: "120245300016060396" });
+  });
+
+  it("skips the extra call when GHL already sent them", async () => {
+    await fireMetaLeadEvent(instantLead({ campaignName: "From GHL", creativeId: "9" }));
+    const calls = (fetch as any).mock.calls.map((c: any[]) => String(c[0]));
+    expect(calls.some((u: string) => u.includes(`/${META_ID}?`))).toBe(false);
+    expect(updates[0].data.campaignName).toBeUndefined();
+  });
+
+  it("keeps the lead id and the form's ad ids when the ad lookup fails", async () => {
+    graph.leadAd = null;
+    graph.formLeads = [formLead({ ad_id: "3301", adset_id: "2201", campaign_id: "120245300016060397" })];
+    const res = await fireMetaLeadEvent(instantLead());
+    expect(res.ok).toBe(true);
+    expect(sent[0].text).toContain(`"lead_id":${META_ID}`);
+    expect(updates[0].data).toMatchObject({ adsetId: "2201", creativeId: "3301" });
+    expect(updates[0].data.campaignName).toBeUndefined();
+    expect(updates[0].data.rawFormData).toMatchObject({ leadgen_id: META_ID, campaignId: "120245300016060397" });
+  });
+
+  it("never replaces what's already on the lead", () => {
+    const fill = adColumnsToFill(
+      { campaignName: "Kept", utmCampaign: "", adsetId: "1", creativeId: null },
+      { campaign_name: "Meta", adset_id: "2", ad_id: "3" },
+    );
+    expect(fill).toEqual({ utmCampaign: "Meta", creativeId: "3" });
+  });
+
+  it("fills a lead that already has its Meta id", async () => {
+    const { fill } = await fillLeadAd(stored());
+    expect(fill).toMatchObject({ campaignName: "Blue Collar ER", creativeId: "3300" });
+    expect(updates[0].data.rawFormData).toMatchObject({ leadgen_id: META_ID, campaignId: "120245300016060396" });
+  });
+
+  it("writes nothing on a dry run", async () => {
+    const { fill } = await fillLeadAd(stored(), { dryRun: true });
+    expect(fill.creativeId).toBe("3300");
+    expect(updates).toHaveLength(0);
+  });
+
+  it("says why when Meta won't share the ad", async () => {
+    graph.leadAd = null;
+    expect(await fillLeadAd(stored())).toEqual({ fill: {}, error: "no ad access" });
+    expect(updates).toHaveLength(0);
+  });
+
+  it("does nothing without a stored Meta id", async () => {
+    expect(await fillLeadAd(instantLead())).toEqual({ fill: {}, error: "no lead or form id" });
+  });
+});
 
 describe("new instant form leads", () => {
   it("sends the first CRM stage with Meta's lead id and keeps the id", async () => {

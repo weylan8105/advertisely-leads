@@ -22,7 +22,16 @@ type LeadForLookup = {
   phone?: string | null;
   receivedAt?: Date | string | null;
   rawFormData?: unknown;
+} & LeadAdColumns;
+
+export type LeadAdColumns = {
+  campaignName?: string | null;
+  utmCampaign?: string | null;
+  adsetId?: string | null;
+  creativeId?: string | null;
 };
+
+type LeadAd = Pick<MetaLeadDetail, "ad_id" | "adset_id" | "campaign_id"> & { campaign_name?: string };
 
 /**
  * What a CRM event needs to know about an instant form lead. `note` says how the
@@ -56,6 +65,28 @@ export async function listFormLeads(formId: string, token: string, since: Date):
   }
   return out;
 }
+
+/** The campaign and ad Meta has on file for a form lead. */
+async function fetchLeadAd(leadId: string, token: string): Promise<LeadAd> {
+  const qs = new URLSearchParams({ fields: "ad_id,adset_id,campaign_id,campaign_name", access_token: token });
+  const res = await fetch(`${GRAPH}/${encodeURIComponent(leadId)}?${qs}`, { cache: "no-store" });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw new Error(data?.error?.message ?? `Graph API ${res.status}`);
+  return data;
+}
+
+/** What Meta can add to this lead's ad columns. Anything already set stays. */
+export function adColumnsToFill(lead: LeadAdColumns, ad: LeadAd): LeadAdColumns {
+  const fill: LeadAdColumns = {};
+  if (!lead.campaignName && ad.campaign_name) fill.campaignName = ad.campaign_name;
+  if (!lead.utmCampaign && ad.campaign_name) fill.utmCampaign = ad.campaign_name;
+  if (!lead.adsetId && ad.adset_id) fill.adsetId = ad.adset_id;
+  if (!lead.creativeId && ad.ad_id) fill.creativeId = ad.ad_id;
+  return fill;
+}
+
+const rawWithAd = (raw: Record<string, string>, ad: LeadAd | null) =>
+  ad?.campaign_id ? { ...raw, campaignId: ad.campaign_id } : raw;
 
 function isSamePerson(detail: MetaLeadDetail, email?: string | null, phone?: string | null): boolean {
   const wantEmail = email?.trim().toLowerCase();
@@ -97,13 +128,52 @@ async function lookUpLeadId(
     reachedForm = true;
     const match = closestMatch(leads, lead, receivedMs);
     if (match) {
+      // GHL stopped sending the campaign and ad on Nov 5, 2026, so they come from Meta.
+      const ad = lead.campaignName && lead.creativeId ? null : await fetchLeadAd(match.id, token).catch(() => match);
       await prisma?.lead
-        .update({ where: { id: lead.id }, data: { rawFormData: { ...raw, leadgen_id: match.id } } })
+        .update({
+          where: { id: lead.id },
+          data: { rawFormData: { ...rawWithAd(raw, ad), leadgen_id: match.id }, ...(ad ? adColumnsToFill(lead, ad) : {}) },
+        })
         .catch(() => {});
       return { leadId: match.id, note: "id:found" };
     }
   }
   return { note: reachedForm ? "id:not-found" : "id:no-access" };
+}
+
+const rawOf = (lead: LeadForLookup) =>
+  (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, string>;
+const formIdOf = (raw: Record<string, string>) => ghlFormId(raw) || raw["form_id"] || raw["leadgen_form_id"] || "";
+
+/**
+ * Fill a lead's blank ad columns from the Meta lead id already stored on it, for
+ * leads that got their id before the columns were filled at intake. `dryRun`
+ * reads without writing. Returns what Meta could fill, or why it couldn't.
+ */
+export async function fillLeadAd(
+  lead: LeadForLookup,
+  { dryRun = false } = {},
+): Promise<{ fill: LeadAdColumns; error?: string }> {
+  const raw = rawOf(lead);
+  const formId = formIdOf(raw);
+  if (!raw["leadgen_id"] || !formId) return { fill: {}, error: "no lead or form id" };
+
+  let error: string | undefined;
+  for (const token of await leadFormTokens(formId)) {
+    let ad: LeadAd;
+    try {
+      ad = await fetchLeadAd(raw["leadgen_id"], token);
+    } catch (e) {
+      error = (e as Error).message;
+      continue; // this token's Page doesn't own the form
+    }
+    const fill = adColumnsToFill(lead, ad);
+    if (Object.keys(fill).length === 0) continue;
+    if (!dryRun) await prisma?.lead.update({ where: { id: lead.id }, data: { ...fill, rawFormData: rawWithAd(raw, ad) } });
+    return { fill };
+  }
+  return { fill: {}, error };
 }
 
 /**
@@ -119,10 +189,8 @@ export async function instantFormContext(
   lead: LeadForLookup,
   budgetMs = LOOKUP_BUDGET_MS,
 ): Promise<InstantFormContext | null> {
-  const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
-    ? (lead.rawFormData as Record<string, string>)
-    : {}) as Record<string, string>;
-  const formId = ghlFormId(raw) || raw["form_id"] || raw["leadgen_form_id"] || "";
+  const raw = rawOf(lead);
+  const formId = formIdOf(raw);
   if (!formId && !/^(facebook|meta - )/i.test(lead.source ?? "")) return null;
 
   if (formId) {
