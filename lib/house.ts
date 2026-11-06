@@ -233,8 +233,9 @@ export async function deliverLeadToOwner(
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { state: true, rawFormData: true } });
 
-  // Past their weekly keep amount (lib/advertiserVolume.ts), the lead goes to
-  // someone on the advertiser's team instead; otherwise they keep it.
+  // Past their weekly keep amount, or by turn on a round-robin team
+  // (lib/advertiserVolume.ts), the lead goes to someone on the advertiser's
+  // team instead; otherwise they keep it.
   const teamPick = await advertiserTeamRecipient(ownerUserId, organizationId, lead?.state ?? "");
   const recipientId = teamPick?.userId ?? ownerUserId;
   const now = new Date();
@@ -265,7 +266,7 @@ export async function deliverLeadToOwner(
       leadId,
       type: "LEAD_ASSIGNED",
       body: teamPick
-        ? `${reason} Routed to ${recipient?.name ?? recipient?.email ?? "a team member"} on the advertiser's team (past the advertiser's weekly keep amount).`
+        ? `${reason} Routed to ${recipient?.name ?? recipient?.email ?? "a team member"} on the advertiser's team (${teamPick.byRotation ? "round-robin" : "past the advertiser's weekly keep amount"}).`
         : reason,
     },
   });

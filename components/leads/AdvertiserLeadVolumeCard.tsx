@@ -65,6 +65,8 @@ export function AdvertiserLeadVolumeCard() {
   if (!data) return null;
   const { keep, kept7d, teammates } = data;
   const keepingAll = keep === null;
+  // No amount set on a round-robin team: leads rotate through everyone in it.
+  const rotating = keepingAll && data.distributionMode === "ROUND_ROBIN";
   const teamGetsAll = keep === 0;
   const atLimit = !keepingAll && !teamGetsAll && kept7d >= keep!;
 
@@ -76,7 +78,10 @@ export function AdvertiserLeadVolumeCard() {
       <p className="text-xs text-muted-foreground mb-3">
         How many of your own campaign leads you keep each rolling 7 days. Once you&apos;ve kept that many, new leads go to
         your team{data.distributionMode === "WEEKLY_QUOTA" ? " by their weekly amounts" : ", spread evenly"} so they can eat.
-        Set 0 to give your team every lead. Blank = keep them all.
+        Set 0 to give your team every lead.{" "}
+        {data.distributionMode === "ROUND_ROBIN"
+          ? "Blank = round-robin across everyone in rotation on your team, you included if you're in it."
+          : "Blank = keep them all."}
       </p>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
@@ -85,8 +90,8 @@ export function AdvertiserLeadVolumeCard() {
             min={0}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Keep all"
-            className="w-28 h-9 rounded-md border border-slate-200 px-3 text-sm focus:border-brand-red focus:outline-none"
+            placeholder={data.distributionMode === "ROUND_ROBIN" ? "Round-robin" : "Keep all"}
+            className="w-32 h-9 rounded-md border border-slate-200 px-3 text-sm focus:border-brand-red focus:outline-none"
           />
           <span className="text-sm text-muted-foreground">leads / 7 days</span>
           <Button size="sm" onClick={() => save(input)} disabled={saving}>
@@ -103,17 +108,18 @@ export function AdvertiserLeadVolumeCard() {
         <div className="flex items-center gap-3 text-sm">
           <span className="tabular-nums font-semibold">
             {kept7d}
-            <span className="text-muted-foreground font-normal"> / {keepingAll ? "all" : keep}</span>
+            <span className="text-muted-foreground font-normal">{rotating ? " kept" : ` / ${keepingAll ? "all" : keep}`}</span>
           </span>
           <span
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-              keepingAll ? "border-slate-200 bg-slate-50 text-slate-600"
+              rotating ? "border-sky-200 bg-sky-50 text-sky-700"
+                : keepingAll ? "border-slate-200 bg-slate-50 text-slate-600"
                 : teamGetsAll || atLimit ? "border-sky-200 bg-sky-50 text-sky-700"
                 : "border-emerald-200 bg-emerald-50 text-emerald-700",
             )}
           >
-            {keepingAll ? "Keeping every lead" : teamGetsAll ? "Team gets every lead" : atLimit ? "Full — team is getting leads" : "Keeping leads"}
+            {rotating ? "Round-robin is on" : keepingAll ? "Keeping every lead" : teamGetsAll ? "Team gets every lead" : atLimit ? "Full — team is getting leads" : "Keeping leads"}
           </span>
         </div>
       </div>
@@ -123,7 +129,7 @@ export function AdvertiserLeadVolumeCard() {
           You&apos;ll start keeping leads again {when(data.resumesAt)}, when enough of this week&apos;s leads age out of the rolling 7 days.
         </p>
       )}
-      {!keepingAll && teammates === 0 && (
+      {(!keepingAll || rotating) && teammates === 0 && (
         <p className="mt-2 text-xs text-amber-700">
           You don&apos;t have anyone on your team yet, so you&apos;ll keep every lead until you{" "}
           <Link href="/team" className="underline">add a team member</Link>.

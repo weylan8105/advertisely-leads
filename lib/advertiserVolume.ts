@@ -10,6 +10,9 @@ import { loadQuotaSlots, takeQuotaSlot } from "./teamQuota";
  * their amount, each new campaign lead goes to a team member:
  *  - team on "Weekly amounts" → the agent furthest behind their weekly number
  *  - otherwise → round-robin across approved, in-rotation teammates
+ * With no amount set, a team on "Round-robin" spreads campaign leads across
+ * everyone in rotation, the advertiser included when they're in it; any other
+ * team leaves them all with the advertiser.
  * Only agents licensed in the lead's state qualify (no states on file = all).
  * If nobody on the team can take it, the advertiser keeps it — a lead is never
  * left unassigned.
@@ -51,18 +54,19 @@ export async function advertiserUsage(
 
 /**
  * Who on the advertiser's team should get this lead instead of them, or null
- * to keep it (no amount set, still under it, or no teammate can take it).
+ * to keep it (no amount set off round-robin, still under it, their turn in the
+ * rotation, or no teammate can take it).
  */
 export async function advertiserTeamRecipient(
   ownerId: string,
   organizationId: string | null,
   state: string,
-): Promise<{ userId: string; byQuota: boolean } | null> {
+): Promise<{ userId: string; byQuota: boolean; byRotation?: boolean } | null> {
   if (!prisma || !organizationId) return null;
   const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { advertiserWeeklyKeep: true } });
   const keep = owner?.advertiserWeeklyKeep;
-  if (keep === null || keep === undefined) return null;
-  if (keep > 0 && (await advertiserKeptLeads(ownerId)).length < keep) return null;
+  const noAmount = keep === null || keep === undefined;
+  if (!noAmount && keep > 0 && (await advertiserKeptLeads(ownerId)).length < keep) return null;
 
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -71,7 +75,7 @@ export async function advertiserTeamRecipient(
       distributionMode: true,
       rrCursor: true,
       memberships: {
-        where: { userId: { not: ownerId }, inRotation: true, pendingApproval: false },
+        where: { inRotation: true, pendingApproval: false },
         select: { userId: true, user: { select: { licensedStates: true } } },
         orderBy: { createdAt: "asc" },
       },
@@ -79,13 +83,16 @@ export async function advertiserTeamRecipient(
   });
   // Only the team the advertiser owns; a member's own campaign stays theirs.
   if (!org || org.ownerId !== ownerId) return null;
+  if (noAmount && org.distributionMode !== "ROUND_ROBIN") return null;
 
   if (org.distributionMode === "WEEKLY_QUOTA") {
     const agent = takeQuotaSlot(await loadQuotaSlots(organizationId, ownerId), state);
     if (agent) return { userId: agent, byQuota: true };
   }
 
+  // Past a keep amount the advertiser is done for the week, so only teammates count.
   const pool = org.memberships.filter((m) => {
+    if (!noAmount && m.userId === ownerId) return false;
     const states = m.user.licensedStates ?? [];
     return states.length === 0 || states.includes(state);
   });
@@ -95,5 +102,6 @@ export async function advertiserTeamRecipient(
     where: { id: organizationId },
     data: { rrCursor: (org.rrCursor + 1) % 1_000_000 },
   });
-  return { userId: pick.userId, byQuota: false };
+  if (pick.userId === ownerId) return null;
+  return { userId: pick.userId, byQuota: false, byRotation: noAmount };
 }

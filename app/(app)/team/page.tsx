@@ -418,9 +418,10 @@ export default function TeamPage() {
             </>
           ) : rr ? (
             <>
-              <span className="font-medium text-foreground">Round-robin is on.</span> New purchased leads are
-              spread evenly across the {inRotationCount} member{inRotationCount === 1 ? "" : "s"} in rotation
-              below.
+              <span className="font-medium text-foreground">Round-robin is on.</span> New purchased leads and
+              advertiser campaign leads are spread evenly across the {inRotationCount} member
+              {inRotationCount === 1 ? "" : "s"} in rotation below. Campaign leads only go to members licensed in
+              the lead&apos;s state.
             </>
           ) : (
             <>
