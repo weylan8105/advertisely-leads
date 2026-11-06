@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { advertiserUsage, MAX_ADVERTISER_KEEP } from "@/lib/advertiserVolume";
+import { primaryOwnedTeam } from "@/lib/org";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,15 +16,15 @@ async function load(userId: string) {
     select: {
       isAdvertiser: true,
       advertiserWeeklyKeep: true,
+      defaultOrganizationId: true,
       ownedOrganizations: {
-        select: { distributionMode: true, _count: { select: { memberships: { where: { pendingApproval: false } } } } },
+        select: { id: true, distributionMode: true, _count: { select: { memberships: { where: { pendingApproval: false } } } } },
         orderBy: { createdAt: "asc" },
-        take: 1,
       },
     },
   });
   if (!me?.isAdvertiser) return null;
-  const team = me.ownedOrganizations[0];
+  const team = primaryOwnedTeam(me.ownedOrganizations, me.defaultOrganizationId);
   const keep = me.advertiserWeeklyKeep ?? null;
   return {
     keep,

@@ -5,6 +5,7 @@ import { quotaRecipientFor } from "./teamQuota";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
 import { advertiserTeamRecipient } from "./advertiserVolume";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
+import { primaryOwnedTeam } from "./org";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -223,11 +224,12 @@ export async function deliverLeadToOwner(
       email: true,
       name: true,
       defaultOrganizationId: true,
-      ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 },
+      ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!owner) return false;
-  const organizationId = owner.ownedOrganizations[0]?.id ?? owner.defaultOrganizationId ?? null;
+  const organizationId =
+    primaryOwnedTeam(owner.ownedOrganizations, owner.defaultOrganizationId)?.id ?? owner.defaultOrganizationId ?? null;
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { state: true, rawFormData: true } });
 

@@ -61,6 +61,41 @@ export async function getOrgContext(userId: string): Promise<OrgContext | null> 
 }
 
 /**
+ * The user's owned team, creating their personal one if they own none. A new
+ * user's first page load fires several API calls at once, and each used to see
+ * no team and create its own, so the check and create run under a per-user lock.
+ */
+async function provisionOwnedTeam(userId: string): Promise<{ id: string; name: string } | null> {
+  if (!prisma) return null;
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+    const owned = await tx.organization.findFirst({
+      where: { ownerId: userId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true },
+    });
+    if (owned) return owned;
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, agency: true, defaultOrganizationId: true },
+    });
+    if (!user) return null;
+    const org = await tx.organization.create({
+      data: { name: personalOrgName(user), ownerId: user.id, distributionMode: "MANUAL" },
+      select: { id: true, name: true },
+    });
+    await tx.membership.create({
+      data: { organizationId: org.id, userId: user.id, role: "OWNER", inRotation: true },
+    });
+    if (!user.defaultOrganizationId) {
+      await tx.user.update({ where: { id: user.id }, data: { defaultOrganizationId: org.id } });
+    }
+    return org;
+  });
+}
+
+/**
  * Like getOrgContext but provisions a personal organization for the user if
  * they don't have one yet (new signups after the Phase 1 migration). Every
  * user is the OWNER of their own team by default.
@@ -69,31 +104,7 @@ export async function ensureOrgContext(userId: string): Promise<OrgContext | nul
   if (!prisma) return null;
   const existing = await getOrgContext(userId);
   if (existing) return existing;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, agency: true },
-  });
-  if (!user) return null;
-
-  const org = await prisma.organization.create({
-    data: { name: personalOrgName(user), ownerId: user.id, distributionMode: "MANUAL" },
-  });
-  await prisma.membership.create({
-    data: { organizationId: org.id, userId: user.id, role: "OWNER", inRotation: true },
-  });
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { defaultOrganizationId: org.id },
-  });
-
-  return {
-    organizationId: org.id,
-    organizationName: org.name,
-    role: "OWNER",
-    distributionMode: "MANUAL",
-    pending: false,
-  };
+  return (await provisionOwnedTeam(userId)) ? getOrgContext(userId) : null;
 }
 
 /**
@@ -108,24 +119,19 @@ export async function ensureOwnedOrganization(userId: string): Promise<{ id: str
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true },
   });
-  if (owned) return owned;
+  return owned ?? provisionOwnedTeam(userId);
+}
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, agency: true, defaultOrganizationId: true },
-  });
-  if (!user) return null;
-  const org = await prisma.organization.create({
-    data: { name: personalOrgName(user), ownerId: user.id, distributionMode: "MANUAL" },
-    select: { id: true, name: true },
-  });
-  await prisma.membership.create({
-    data: { organizationId: org.id, userId: user.id, role: "OWNER", inRotation: true },
-  });
-  if (!user.defaultOrganizationId) {
-    await prisma.user.update({ where: { id: user.id }, data: { defaultOrganizationId: org.id } });
-  }
-  return org;
+/**
+ * The team an owner's campaign leads run through: their active team when they
+ * own it, else their oldest. Some accounts own empty duplicates (see
+ * provisionOwnedTeam), so the oldest isn't always the one with their agents.
+ */
+export function primaryOwnedTeam<T extends { id: string }>(
+  owned: T[],
+  defaultOrganizationId: string | null | undefined,
+): T | undefined {
+  return owned.find((o) => o.id === defaultOrganizationId) ?? owned[0];
 }
 
 export function canManageTeam(role: OrgRole): boolean {

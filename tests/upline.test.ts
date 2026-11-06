@@ -66,6 +66,7 @@ const db = {
     update: vi.fn(async ({ where, data }: any) => Object.assign(findMem(where)!, data)),
   },
   invitation: { findUnique: vi.fn(async () => null) },
+  $executeRaw: vi.fn(async () => 0),
   $transaction: vi.fn(async (ops: any) => (typeof ops === "function" ? ops(db) : Promise.all(ops))),
 };
 
