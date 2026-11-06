@@ -184,7 +184,7 @@ export default function LeaderboardPage() {
             </table>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Policies and AP count Issued PAID deals. Dials, contacts and presentations count leads moved to those
+            Policies and AP count Issued PAID deals. Dials count every call started from Advertisely since Nov 6, and one per lead moved before that. Contacts and presentations count leads moved to those
             pipeline stages in the period. Central time.
           </p>
         </div>

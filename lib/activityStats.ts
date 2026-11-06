@@ -1,7 +1,9 @@
 // Activity Dashboard + Leaderboards: per-agent production numbers for a period.
 //
 //   Leads          leads assigned to the agent in the period
-//   Dials          leads moved out of New Lead (any stage) in the period
+//   Dials          every dial logged in the period (lib/dials.ts), so a lead can count
+//                  many times. A lead moved out of New Lead (any stage) with no logged
+//                  dial counts as one, which is all the days before Nov 6, 2026 have.
 //   Contacts       leads moved to Contacted / Follow up / Call Back or further
 //   Appointments   leads moved to Call Back / Appointment or further
 //   Presentations  leads moved to Presentation Ran or further (incl. Underwriting…)
@@ -11,8 +13,9 @@
 // metadata {stage, label, actorId}; older ones only have the text
 // `Moved to "<label>" in the pipeline.`, so stages are classified by id when we
 // have it and by label otherwise (agents rename/add stages, e.g. "Appointment
-// Booked", "No Show'd"). A lead counts once per level per period ("reached at
-// least"). Older moves have no actor, so they credit the lead's current owner.
+// Booked", "No Show'd"). Past dials, a lead counts once per level per period
+// ("reached at least"). Older moves have no actor, so they credit the lead's
+// current owner.
 
 import { prisma } from "./prisma";
 import { WON_STAGE_ID } from "@/data/pipeline";
@@ -100,6 +103,53 @@ export async function periodStart(period: Period): Promise<Date | null> {
   return rows[0]?.since ?? null;
 }
 
+export interface StageMoveRow {
+  leadId: string;
+  body: string;
+  metadata: any;
+  ownerId: string | null;
+}
+
+export interface DialRow {
+  leadId: string;
+  actorId: string | null;
+}
+
+/** Adds dials, contacts, appointments and presentations to each user's stats. */
+export function addFunnelStats(
+  moves: StageMoveRow[],
+  dials: DialRow[],
+  get: (userId: string) => ActivityStats,
+  allowed: Set<string> | null,
+) {
+  const logged = new Set<string>(); // `${uid}\u0000${leadId}`
+  for (const d of dials) {
+    if (!d.actorId || (allowed && !allowed.has(d.actorId))) continue;
+    get(d.actorId).dials++;
+    logged.add(`${d.actorId}\u0000${d.leadId}`);
+  }
+
+  // Highest level each (user, lead) reached in the period.
+  const best = new Map<string, number>(); // `${uid}\u0000${leadId}` → level
+  for (const e of moves) {
+    const md = e.metadata && typeof e.metadata === "object" ? e.metadata : {};
+    const level = moveLevel(e.body, e.metadata);
+    if (level <= 0) continue;
+    const uid = (typeof md.actorId === "string" && md.actorId) || e.ownerId;
+    if (!uid || (allowed && !allowed.has(uid))) continue;
+    const key = `${uid}\u0000${e.leadId}`;
+    if ((best.get(key) ?? 0) < level) best.set(key, level);
+  }
+  for (const [key, level] of best) {
+    const s = get(key.slice(0, key.indexOf("\u0000")));
+    // A stage move only stands in for a dial when none was logged.
+    if (!logged.has(key)) s.dials++;
+    if (level >= 2) s.contacts++;
+    if (level >= 3) s.appointments++;
+    if (level >= 4) s.presentations++;
+  }
+}
+
 /**
  * Stats per user for the period. `userIds` limits the result (null = everyone
  * with any activity). Trashed leads never count.
@@ -115,7 +165,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
   };
   const sinceTs = since ?? new Date(0);
 
-  const [leadRows, soldRows, events] = await Promise.all([
+  const [leadRows, soldRows, events, dials] = await Promise.all([
     prisma.lead.groupBy({
       by: ["assignedUserId"],
       where: {
@@ -136,11 +186,16 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
       _count: { _all: true },
       _sum: { soldPremiumCents: true },
     }),
-    prisma.$queryRaw<{ leadId: string; body: string; metadata: any; ownerId: string | null }[]>`
+    prisma.$queryRaw<StageMoveRow[]>`
       SELECT a."leadId", a.body, a.metadata, l."assignedUserId" AS "ownerId"
       FROM "LeadActivity" a
       JOIN "Lead" l ON l.id = a."leadId"
       WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
+    prisma.$queryRaw<DialRow[]>`
+      SELECT a."leadId", a.metadata->>'actorId' AS "actorId"
+      FROM "LeadActivity" a
+      JOIN "Lead" l ON l.id = a."leadId"
+      WHERE a.type = 'CALL_MADE' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
   ]);
 
   for (const r of leadRows) if (r.assignedUserId) get(r.assignedUserId).leads = r._count._all;
@@ -151,25 +206,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
     s.apCents = r._sum.soldPremiumCents ?? 0;
   }
 
-  // Highest level each (user, lead) reached in the period.
-  const allowed = userIds ? new Set(userIds) : null;
-  const best = new Map<string, number>(); // `${uid}\u0000${leadId}` → level
-  for (const e of events) {
-    const md = e.metadata && typeof e.metadata === "object" ? e.metadata : {};
-    const level = moveLevel(e.body, e.metadata);
-    if (level <= 0) continue;
-    const uid = (typeof md.actorId === "string" && md.actorId) || e.ownerId;
-    if (!uid || (allowed && !allowed.has(uid))) continue;
-    const key = `${uid}\u0000${e.leadId}`;
-    if ((best.get(key) ?? 0) < level) best.set(key, level);
-  }
-  for (const [key, level] of best) {
-    const s = get(key.slice(0, key.indexOf("\u0000")));
-    s.dials++;
-    if (level >= 2) s.contacts++;
-    if (level >= 3) s.appointments++;
-    if (level >= 4) s.presentations++;
-  }
+  addFunnelStats(events, dials, get, userIds ? new Set(userIds) : null);
   return out;
 }
 
