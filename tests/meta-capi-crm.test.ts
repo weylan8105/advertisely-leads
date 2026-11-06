@@ -110,13 +110,13 @@ describe("new instant form leads", () => {
   it("sends the first CRM stage with Meta's lead id and keeps the id", async () => {
     const res = await fireMetaLeadEvent(instantLead());
     expect(res.ok).toBe(true);
-    expect(event().event_name).toBe("InstantFormLead");
+    expect(event().event_name).toBe("Contact");
     expect(event().action_source).toBe("system_generated");
     expect(event().custom_data).toEqual({ event_source: "crm", lead_event_source: "Advertisely" });
     // A bare number, digit for digit: as a JS number it would lose precision.
     expect(sent[0].text).toContain(`"lead_id":${META_ID}`);
     expect(updates[0].data.rawFormData).toMatchObject({ leadgen_id: META_ID, attributionSource: attribution });
-    expect(logged[0].cta).toBe("ok InstantFormLead rcvd:1 id:found lead:L1");
+    expect(logged[0].cta).toBe("ok Contact rcvd:1 id:found lead:L1");
     expect(logged[0].step).toBe(200);
   });
 
@@ -203,7 +203,7 @@ describe("stage events", () => {
     await fireMetaStageEvent("L1", "approved");
     expect(sent[0].text).toContain(`"lead_id":${META_ID}`);
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
-    expect(logged[0].cta).toBe("ok Approved rcvd:1 id:stored lead:L1");
+    expect(logged[0].cta).toBe("ok CompleteRegistration rcvd:1 id:stored lead:L1");
   });
 
   it("uses the lead's own id when it came straight from Meta", async () => {
@@ -212,12 +212,26 @@ describe("stage events", () => {
     expect(sent[0].text).toContain(`"lead_id":${META_ID}`);
   });
 
+  it("uses standard Meta names, so core setup can't drop a stage", async () => {
+    leads.set("L1", instantLead());
+    await fireMetaStageEvent("L1", "approved");
+    await fireMetaStageEvent("L1", "issued-not-paid");
+    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["CompleteRegistration", "AddPaymentInfo"]);
+  });
+
+  it("reports an older move at the time it happened", async () => {
+    leads.set("L1", instantLead());
+    const movedAt = new Date("2026-11-03T20:04:00Z");
+    await fireMetaStageEvent("L1", "approved", null, movedAt);
+    expect(event().event_time).toBe(movedAt.getTime() / 1000);
+  });
+
   it("keeps Meta's reason when it refuses an event", async () => {
     leads.set("L1", instantLead());
     graph.capi = () => json({ error: { message: "Invalid parameter", code: 100 } }, 400);
     await fireMetaStageEvent("L1", "issued-not-paid");
     expect(logged[0].step).toBe(400);
-    expect(logged[0].cta).toContain("error IssuedNotPaid");
+    expect(logged[0].cta).toContain("error AddPaymentInfo");
     expect(logged[0].cta).toContain("Invalid parameter");
   });
 
@@ -225,7 +239,7 @@ describe("stage events", () => {
     leads.set("L1", instantLead());
     graph.capi = () => json({ events_received: 0, messages: ["dropped"] });
     await fireMetaStageEvent("L1", "approved");
-    expect(logged[0].cta).toContain("ok Approved rcvd:0");
+    expect(logged[0].cta).toContain("ok CompleteRegistration rcvd:0");
     expect(logged[0].cta).toContain("dropped");
   });
 

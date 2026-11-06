@@ -9,7 +9,7 @@ import { instantFormContext, type InstantFormContext } from "./metaLeadId";
  * Events:
  *   • "Lead"            — when a quiz lead is created (deduped with the browser
  *                         pixel via the quiz's event_id).
- *   • "InstantFormLead" — when an instant form lead is created. Meta already counts
+ *   • "Contact"         — when an instant form lead is created. Meta already counts
  *                         the submission; this is the first stage of its CRM funnel.
  *   • Stage events      — see STAGE_EVENTS. "Purchase" (Issued PAID) carries the
  *                         premium as value, deduped per-lead via conv_<leadId>.
@@ -43,9 +43,10 @@ const pixelFor = (lead: { source?: string | null }) =>
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || "";
 const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE || "";
 const PURCHASE_EVENT = process.env.META_PURCHASE_EVENT || "Purchase";
-// A custom name on purpose: a plain "Lead" here would also count as a pixel Lead
-// for website ad sets optimizing on this pixel.
-const INSTANT_FORM_LEAD_EVENT = "InstantFormLead";
+// Standard Meta names only. The Enhanced Wealth pixel is in core setup (Financial
+// service), which drops custom event names even though Meta answers 200. Not "Lead":
+// that would also count as a pixel Lead for website ad sets optimizing on this pixel.
+export const INSTANT_FORM_LEAD_EVENT = "Contact";
 const CRM_NAME = "Advertisely";
 // A new lead waits on this lookup before it's delivered, so keep it short. Stage
 // moves can afford the default, and retry when this one comes up empty.
@@ -90,6 +91,7 @@ type EventOpts = {
   valueCents?: number | null;
   eventSourceUrl?: string;
   crm?: InstantFormContext | null;
+  eventTime?: Date;
 };
 
 type SendResult = {
@@ -158,7 +160,7 @@ async function sendMetaEvent(lead: LeadLike, opts: EventOpts): Promise<SendResul
 
   const event: Record<string, unknown> = {
     event_name: opts.eventName,
-    event_time: Math.floor(Date.now() / 1000),
+    event_time: Math.floor((opts.eventTime?.getTime() ?? Date.now()) / 1000),
     event_id: opts.eventId,
     action_source: opts.actionSource || "system_generated",
     user_data: userData,
@@ -221,13 +223,16 @@ async function recordCapiResult(lead: LeadLike, eventName: string, result: SendR
     .catch(() => {});
 }
 
-/** Fire the server-side event for a freshly-created lead and record the outcome. */
-export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
+/**
+ * Fire the server-side event for a freshly-created lead and record the outcome.
+ * Pass occurredAt to report an older lead at its real time.
+ */
+export async function fireMetaLeadEvent(lead: LeadLike, occurredAt?: Date): Promise<SendResult> {
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object"
     ? (lead.rawFormData as Record<string, string>)
     : {}) as Record<string, string>;
   const clicked = lead.fbclid || raw["fbc"] || raw["fbp"];
-  const crm = clicked ? null : await instantFormContext(lead, INTAKE_LOOKUP_MS).catch(() => null);
+  const crm = clicked ? null : await instantFormContext(lead, occurredAt ? undefined : INTAKE_LOOKUP_MS).catch(() => null);
   const eventName = clicked ? raw["event_name"] || "Lead" : crm ? INSTANT_FORM_LEAD_EVENT : "Lead";
   let result: SendResult;
   if (clicked) {
@@ -236,6 +241,7 @@ export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
       eventId: raw["event_id"] || `lead_${lead.id}`, // shared with the browser pixel = deduped
       actionSource: "website",
       eventSourceUrl: raw["landing_url"] || undefined,
+      eventTime: occurredAt,
     }).catch(sendFailed);
   } else if (crm) {
     result = await sendMetaEvent(lead, {
@@ -243,6 +249,7 @@ export async function fireMetaLeadEvent(lead: LeadLike): Promise<SendResult> {
       eventId: `lead_${lead.id}`,
       actionSource: "system_generated",
       crm,
+      eventTime: occurredAt,
     }).catch(sendFailed);
   } else {
     // Only worth sending for ad-sourced leads (need a click id / pixel cookie).
@@ -323,10 +330,11 @@ export async function sendMetaTestEvent(): Promise<{
 // CRM stages that count as a "converting" signal worth sending to Meta, and the
 // event each maps to. Facebook uses these to find more people like the ones who
 // progress this far. Only the actual paid sale carries the premium as value.
-const STAGE_EVENTS: Record<string, { event: string; withValue?: boolean }> = {
+// Standard names on every pixel, so a restriction can't silently drop a stage.
+export const STAGE_EVENTS: Record<string, { event: string; withValue?: boolean }> = {
   underwriting: { event: "SubmitApplication" },
-  approved: { event: "Approved" },
-  "issued-not-paid": { event: "IssuedNotPaid" },
+  approved: { event: "CompleteRegistration" },
+  "issued-not-paid": { event: "AddPaymentInfo" },
   "issued-paid": { event: PURCHASE_EVENT, withValue: true },
 };
 
@@ -339,11 +347,13 @@ export function isMetaConversionStage(stage: string): boolean {
  * high-intent stage (underwriting → approved → issued-not-paid → issued-paid).
  * Each stage is its own event, deduped per lead+stage; the paid sale carries the
  * premium as value. No-op for any other stage, or when CAPI isn't configured.
+ * Pass occurredAt to report an older move at its real time.
  */
 export async function fireMetaStageEvent(
   leadId: string,
   stage: string,
   valueCents?: number | null,
+  occurredAt?: Date,
 ): Promise<void> {
   if (!isMetaCapiConfigured || !prisma) return;
   const cfg = STAGE_EVENTS[stage];
@@ -360,6 +370,7 @@ export async function fireMetaStageEvent(
     actionSource: "system_generated",
     valueCents: cfg.withValue ? (valueCents ?? lead.soldPremiumCents ?? null) : null,
     crm,
+    eventTime: occurredAt,
   }).catch(sendFailed);
   await recordCapiResult(lead, cfg.event, result, crm?.note);
 }
