@@ -180,7 +180,8 @@
 .dark .bg-slate-100 {
   background-color: hsl(217 30% 15%);
 }
-.dark .bg-slate-200 {
+.dark .bg-slate-200,
+.dark .data-\[state\=active\]\:bg-slate-200[data-state="active"] {
   background-color: hsl(217 25% 20%);
 }
 .dark .hover\:bg-white:hover,

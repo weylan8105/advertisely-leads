@@ -14,6 +14,7 @@ import type { Lead } from "@/types";
 import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
 import { CallbackModal } from "@/components/leads/CallbackModal";
 import { WorkerBadge, WorkerPicker, type TeamMember } from "@/components/leads/WorkerBadge";
+import { leadMatchesSearch, searchWords } from "@/lib/leadSearch";
 
 const TONE_DOT: Record<string, string> = {
   slate: "bg-slate-400",
@@ -60,6 +61,7 @@ export function PipelineBoard({
   openLeadId,
   showWorkers = true,
   sortMode = "newest",
+  initialQuery = "",
 }: {
   leads: Lead[];
   /** Open this lead's contact card on load (e.g. arriving from /leads/[id]). */
@@ -71,6 +73,8 @@ export function PipelineBoard({
   showWorkers?: boolean;
   /** Card order within a column: newest lead on top (default), or where the agent dropped them. */
   sortMode?: PipelineSort;
+  /** Search to start with (the top bar's ?q=). */
+  initialQuery?: string;
 }) {
   const cols = stages && stages.length ? stages : PIPELINE_STAGES;
   const colIds = new Set(cols.map((s) => s.id));
@@ -219,9 +223,9 @@ export function PipelineBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openLeadId, leads]);
 
-  // Search: every word must match one of the lead's fields; phone matches on digits,
-  // so "214-555", "(214) 555" and "214555" all find the same number.
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
+  // A new search from the top bar replaces whatever is in the box.
+  useEffect(() => setQuery(initialQuery), [initialQuery]);
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     // "/" jumps to search (unless you're already typing somewhere).
@@ -236,19 +240,9 @@ export function PipelineBoard({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   const shown = useMemo(() => {
-    const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const words = searchWords(query);
     if (!words.length) return leads;
-    return leads.filter((l) => {
-      const notes = (l.notes ?? []).map((n) => String((n as { body?: unknown }).body ?? "")).join(" ");
-      const hay = [l.name, l.email, l.phone, l.state, l.state ? stateName(stateCode(l.state) ?? l.state) : "", l.zip, l.occupation, l.leadTypeLabel, l.source, notes]
-        .filter(Boolean).join(" ").toLowerCase();
-      const phoneDigits = (l.phone || "").replace(/\D/g, "");
-      return words.every((w) => {
-        if (hay.includes(w)) return true;
-        const d = w.replace(/\D/g, "");
-        return d.length >= 3 && phoneDigits.includes(d);
-      });
-    });
+    return leads.filter((l) => leadMatchesSearch(l, words));
   }, [leads, query]);
 
   // Copy a phone/email to the clipboard from a card, with a brief ✓ confirmation.

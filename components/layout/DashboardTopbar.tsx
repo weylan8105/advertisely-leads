@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search, ChevronDown } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -25,6 +27,8 @@ export function DashboardTopbar() {
   const displayName = session?.user?.name ?? currentUser.name;
   const displayEmail = session?.user?.email ?? currentUser.email;
   const avatarUrl = session?.user?.image;
+  const router = useRouter();
+  const [search, setSearch] = useState("");
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="h-full px-6 flex items-center justify-between gap-6">
@@ -34,12 +38,25 @@ export function DashboardTopbar() {
         </div>
 
         {/* Desktop search bar */}
-        <div className="hidden md:flex items-center gap-2 max-w-md w-full">
+        <form
+          className="hidden md:flex items-center gap-2 max-w-md w-full"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = search.trim();
+            router.push(q ? `/leads?q=${encodeURIComponent(q)}` : "/leads");
+          }}
+        >
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search leads, orders, contacts…" className="pl-9 h-9" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search your leads…"
+              aria-label="Search your leads"
+              className="pl-9 h-9"
+            />
           </div>
-        </div>
+        </form>
 
         <div className="flex items-center gap-3 ml-auto">
           <ThemeToggle />

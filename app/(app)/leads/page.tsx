@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { PlusCircle, Rows3, KanbanSquare, Loader2, Users, SlidersHorizontal, FileText } from "lucide-react";
@@ -20,8 +21,19 @@ import type { Lead } from "@/types";
 
 interface TeamMember { userId: string; name: string | null; email: string; isSelf?: boolean }
 
+// Wrapped in Suspense because useSearchParams requires it during prerender.
 export default function LeadsPage() {
+  return (
+    <Suspense fallback={null}>
+      <LeadsPageInner />
+    </Suspense>
+  );
+}
+
+function LeadsPageInner() {
   const { data: session } = useSession();
+  // ?q= is a search from the top bar.
+  const initialQuery = useSearchParams().get("q") ?? "";
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const [view, setView] = useState<"list" | "kanban">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -247,7 +259,7 @@ export default function LeadsPage() {
         </Card>
       ) : view === "list" ? (
         <Card className="p-5">
-          <LeadTable leads={leads} stages={stages} openLeadId={openLeadId} />
+          <LeadTable leads={leads} stages={stages} openLeadId={openLeadId} initialQuery={initialQuery} />
         </Card>
       ) : (
         <Card className="p-5">
@@ -266,7 +278,7 @@ export default function LeadsPage() {
               </Button>
             )}
           </div>
-          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} openLeadId={openLeadId} sortMode={sortMode} />
+          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} openLeadId={openLeadId} sortMode={sortMode} initialQuery={initialQuery} />
         </Card>
       )}
 

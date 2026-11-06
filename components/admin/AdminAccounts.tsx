@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, X, ArrowRight, Users, Package, Repeat, RefreshCw, Megaphone, Link2 as LinkIcon, Copy, Check } from "lucide-react";
+import { Loader2, X, ArrowRight, Search, Users, Package, Repeat, RefreshCw, Megaphone, Link2 as LinkIcon, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { ClientOrdersModal } from "@/components/admin/ClientOrdersModal";
+import { matchesWords, searchWords } from "@/lib/leadSearch";
 import type { Lead } from "@/types";
 
 interface Account {
@@ -68,6 +69,7 @@ export function AdminAccounts() {
   const [ringyFor, setRingyFor] = useState<Account | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [segment, setSegment] = useState<"all" | Segment>("all");
+  const [search, setSearch] = useState("");
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -177,13 +179,19 @@ export function AdminAccounts() {
       </div>
     );
 
-  const counts = {
-    all: accounts.length,
-    orders: accounts.filter((a) => segmentOf(a) === "orders").length,
-    subs: accounts.filter((a) => segmentOf(a) === "subs").length,
-    advertisers: accounts.filter((a) => segmentOf(a) === "advertisers").length,
-  };
-  const filtered = segment === "all" ? accounts : accounts.filter((a) => segmentOf(a) === segment);
+  const countsOf = (list: Account[]) => ({
+    all: list.length,
+    orders: list.filter((a) => segmentOf(a) === "orders").length,
+    subs: list.filter((a) => segmentOf(a) === "subs").length,
+    advertisers: list.filter((a) => segmentOf(a) === "advertisers").length,
+  });
+  const counts = countsOf(accounts);
+  // Search by name, phone or email. The tab counts follow it, so a match on
+  // another tab still shows up.
+  const words = searchWords(search);
+  const matched = accounts.filter((a) => matchesWords(words, [a.name, a.email].filter(Boolean).join(" "), a.phone));
+  const tabCounts = countsOf(matched);
+  const filtered = segment === "all" ? matched : matched.filter((a) => segmentOf(a) === segment);
 
   const SEGMENTS: { key: "all" | Segment; label: string }[] = [
     { key: "all", label: "All" },
@@ -196,22 +204,41 @@ export function AdminAccounts() {
     <>
       {/* Segment the box into the three account types: one-off lead-order buyers,
           weekly subscribers, and advertisers (exclusive owner-delivery). */}
-      <div className="mb-3 inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
-        {SEGMENTS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSegment(s.key)}
-            className={cn(
-              "rounded-md px-3 py-1 text-xs font-medium transition-colors inline-flex items-center gap-1.5",
-              segment === s.key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {s.key === "subs" && <Repeat className="h-3 w-3" />}
-            {s.key === "advertisers" && <Megaphone className="h-3 w-3" />}
-            {s.label}
-            <span className="tabular-nums opacity-60">{counts[s.key]}</span>
-          </button>
-        ))}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
+          {SEGMENTS.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setSegment(s.key)}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-medium transition-colors inline-flex items-center gap-1.5",
+                segment === s.key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {s.key === "subs" && <Repeat className="h-3 w-3" />}
+              {s.key === "advertisers" && <Megaphone className="h-3 w-3" />}
+              {s.label}
+              <span className="tabular-nums opacity-60">{tabCounts[s.key]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") setSearch(""); }}
+            placeholder="Search name, phone, email…"
+            aria-label="Search client accounts"
+            className="h-8 w-full rounded-full border border-slate-200 bg-white pl-8 pr-8 text-sm placeholder:text-muted-foreground focus:border-brand-red/50 focus:outline-none focus:ring-2 focus:ring-brand-red/15"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-slate-100 hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
@@ -450,13 +477,15 @@ export function AdminAccounts() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={10} className="text-center text-sm text-muted-foreground py-10">
-                  {segment === "advertisers"
+                  {words.length
+                    ? "No accounts match that search."
+                    : segment === "advertisers"
                     ? "No advertiser accounts yet."
                     : segment === "subs"
                       ? "No subscription accounts yet."
                       : segment === "orders"
                         ? "No lead-order accounts yet."
-                        : "No client accounts with leads or orders yet."}
+                        : "No client accounts yet."}
                 </td>
               </tr>
             )}

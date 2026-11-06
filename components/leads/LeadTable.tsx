@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
 import { AVAILABLE_STATES, US_STATES, stateName, stateCode } from "@/data/states";
+import { leadMatchesSearch, searchWords } from "@/lib/leadSearch";
 
 interface LeadTableProps {
   leads: Lead[];
@@ -67,6 +68,8 @@ interface LeadTableProps {
   openLeadId?: string | null;
   /** The pipeline stages to color/filter rows by (defaults to the standard set). */
   stages?: PipelineStage[];
+  /** Search to start with (the top bar's ?q=). */
+  initialQuery?: string;
 }
 
 interface Toast {
@@ -77,8 +80,10 @@ interface Toast {
 
 let toastCounter = 0;
 
-export function LeadTable({ leads, showBulk = true, compact = false, stages, openLeadId }: LeadTableProps) {
-  const [search, setSearch] = useState("");
+export function LeadTable({ leads, showBulk = true, compact = false, stages, openLeadId, initialQuery = "" }: LeadTableProps) {
+  const [search, setSearch] = useState(initialQuery);
+  // A new search from the top bar replaces whatever is in the box.
+  useEffect(() => setSearch(initialQuery), [initialQuery]);
   const [stageFilter, setStageFilter] = useState<string>("all");
 
   // Resolve a lead's pipeline stage (id → label + color), falling back to the
@@ -114,13 +119,9 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
   const [movingGm, setMovingGm] = useState(false);
 
   const filtered = useMemo(() => {
+    const words = searchWords(search);
     return leads.filter((l) => {
-      const matchesSearch =
-        !search ||
-        [l.name, l.email, l.phone, l.state, l.state ? stateName(stateCode(l.state) ?? l.state) : "", l.occupation, l.id, ...(l.tags ?? [])]
-          .join(" ")
-          .toLowerCase()
-          .includes(search.toLowerCase());
+      const matchesSearch = leadMatchesSearch(l, words);
       const effId = stageOverrides[l.id] ?? l.pipelineStage;
       const stageId = stageById.has(effId) ? effId : DEFAULT_STAGE;
       const matchesStage = stageFilter === "all" || stageId === stageFilter;
