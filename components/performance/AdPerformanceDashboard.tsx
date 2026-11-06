@@ -161,7 +161,7 @@ function DayChart({
 }
 
 const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string }[] = [
-  { label: "Ad spend", value: (s) => money(s.spendCents) },
+  { label: "Ad spend", value: (s) => (s.spendKnown ? money(s.spendCents) : "—") },
   { label: "New leads", value: (s) => count(s.leads) },
   { label: "Dialed", value: (s) => count(s.dialed) },
   { label: "Contacted", value: (s) => count(s.contacted) },
@@ -213,10 +213,9 @@ export function AdPerformanceDashboard() {
   }, []);
 
   const s = data?.funnels[view];
-  // Zero spend and unknown spend aren't the same thing.
-  const spend = data?.metaConfigured ? money(s?.spendCents) : "—";
   const secondsAgo = data ? Math.max(0, Math.round((now - new Date(data.fetchedAt).getTime()) / 1000)) : null;
   const campaigns = (data?.campaigns ?? []).filter((c) => view === "all" || c.funnel === view);
+  const showPixels = !!data?.events.some((e) => e.shown != null);
 
   return (
     <div className="[--series-abca:#eb6834] [--series-ew:#2a78d6] dark:[--series-abca:#d95926] dark:[--series-ew:#3987e5]">
@@ -252,10 +251,12 @@ export function AdPerformanceDashboard() {
           Meta isn&apos;t connected, so spend and costs are blank. Set META_ADS_ACCESS_TOKEN or META_ADS_MANAGE_TOKEN in Vercel.
         </div>
       )}
-      {!!data?.errors.length && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      {data?.metaConfigured && !!data.errors.length && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" title={data.errors[0]}>
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Meta didn&apos;t return everything, so spend may be low: {data.errors[0]}
+          {data.missing.length
+            ? `Meta didn't return spend for ${data.missing.map((f) => FUNNEL_NAME[f]).join(" and ")}, so its costs are blank until the app has access to that ad account.`
+            : "Meta didn't return everything, so the trends may be incomplete."}
         </div>
       )}
 
@@ -268,8 +269,8 @@ export function AdPerformanceDashboard() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile
               label="Ad spend"
-              value={spend}
-              hint={data!.metaConfigured ? (s.activeBudgetCents > 0 ? `${money(s.activeBudgetCents)} a day in active budgets` : "No active budgets") : undefined}
+              value={s.spendKnown ? money(s.spendCents) : "—"}
+              hint={s.spendKnown ? (s.activeBudgetCents > 0 ? `${money(s.activeBudgetCents)} a day in active budgets` : "No active budgets") : "Spend not available"}
             />
             <Tile label="Cost per lead" value={money(s.cplCents)} hint={`${count(s.leads)} new leads`} />
             <Tile label="CPA · cost per application" value={money(s.cpaCents)} hint={`${count(s.applications)} applications`} strong />
@@ -426,7 +427,7 @@ export function AdPerformanceDashboard() {
                 </Table>
               </div>
             )}
-            {view === "all" && data!.noCampaign.leads + data!.noCampaign.applications > 0 && (
+            {view === "all" && !data!.missing.length && data!.noCampaign.leads + data!.noCampaign.applications > 0 && (
               <p className="mt-2 text-xs text-slate-500">
                 {count(data!.noCampaign.leads)} leads and {count(data!.noCampaign.applications)} applications have no campaign recorded, so they aren&apos;t in this table.
               </p>
@@ -435,7 +436,11 @@ export function AdPerformanceDashboard() {
 
           <Panel
             title="Events sent to Meta"
-            note="What Advertisely sent in this window next to what the pixels show. Resent events count on the day they happened, so the two can differ."
+            note={
+              showPixels
+                ? "What Advertisely sent in this window next to what the pixels show. Resent events count on the day they happened, so the two can differ."
+                : "What Advertisely sent in this window."
+            }
           >
             <div className="overflow-x-auto">
               <Table>
@@ -445,7 +450,7 @@ export function AdPerformanceDashboard() {
                     <TableHead>Meta event</TableHead>
                     <TableHead className="text-right">Sent</TableHead>
                     <TableHead className="text-right">Refused</TableHead>
-                    <TableHead className="text-right">On the pixels</TableHead>
+                    {showPixels && <TableHead className="text-right">On the pixels</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -455,7 +460,7 @@ export function AdPerformanceDashboard() {
                       <TableCell className="py-1.5 text-slate-500">{e.event}</TableCell>
                       <TableCell className="py-1.5 text-right tabular-nums">{count(e.sent)}</TableCell>
                       <TableCell className="py-1.5 text-right tabular-nums">{count(e.failed)}</TableCell>
-                      <TableCell className="py-1.5 text-right tabular-nums">{e.shown == null ? "—" : count(e.shown)}</TableCell>
+                      {showPixels && <TableCell className="py-1.5 text-right tabular-nums">{e.shown == null ? "—" : count(e.shown)}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>

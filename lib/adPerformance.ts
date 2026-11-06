@@ -176,6 +176,8 @@ export function tally(
 export const costPer = (cents: number, n: number) => (n > 0 ? Math.round(cents / n) : null);
 
 export interface PerfSummary extends PerfCounts {
+  // False when Meta wouldn't return the spend: costs are then unknown, not zero.
+  spendKnown: boolean;
   spendCents: number;
   impressions: number;
   clicks: number;
@@ -190,22 +192,23 @@ export interface PerfSummary extends PerfCounts {
 }
 
 /** Add Meta's numbers to the CRM counts and work out the costs. */
-export function summarize(counts: PerfCounts, campaigns: CampaignPerf[]): PerfSummary {
+export function summarize(counts: PerfCounts, campaigns: CampaignPerf[], spendKnown = true): PerfSummary {
   const sum = (f: (c: CampaignPerf) => number) => campaigns.reduce((n, c) => n + f(c), 0);
   const spendCents = sum((c) => c.spendCents);
   const impressions = sum((c) => c.impressions);
   const clicks = sum((c) => c.clicks);
   return {
     ...counts,
+    spendKnown,
     spendCents,
     impressions,
     clicks,
     linkClicks: sum((c) => c.linkClicks),
     metaLeads: sum((c) => c.metaLeads),
     activeBudgetCents: sum((c) => c.dailyBudgetCents ?? 0),
-    cplCents: costPer(spendCents, counts.leads),
-    cpaCents: costPer(spendCents, counts.applications),
-    cacCents: costPer(spendCents, counts.issuedPaid),
+    cplCents: spendKnown ? costPer(spendCents, counts.leads) : null,
+    cpaCents: spendKnown ? costPer(spendCents, counts.applications) : null,
+    cacCents: spendKnown ? costPer(spendCents, counts.issuedPaid) : null,
     cpmCents: impressions > 0 ? Math.round((spendCents / impressions) * 1000) : null,
     ctrPct: impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : null,
   };
@@ -287,6 +290,7 @@ export interface AdPerformance {
   until: string;
   fetchedAt: string;
   metaConfigured: boolean;
+  missing: PerfFunnel[];
   errors: string[];
   funnels: { all: PerfSummary; ew: PerfSummary; abca: PerfSummary };
   campaigns: PerfCampaignRow[];
@@ -376,11 +380,12 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
     until: days.until,
     fetchedAt: now.toISOString(),
     metaConfigured: meta.configured,
+    missing: meta.missing,
     errors: meta.errors,
     funnels: {
-      all: summarize(addCounts(ewCounts, abcaCounts), meta.campaigns),
-      ew: summarize(ewCounts, funnelCampaigns("ew")),
-      abca: summarize(abcaCounts, funnelCampaigns("abca")),
+      all: summarize(addCounts(ewCounts, abcaCounts), meta.campaigns, meta.missing.length === 0),
+      ew: summarize(ewCounts, funnelCampaigns("ew"), !meta.missing.includes("ew")),
+      abca: summarize(abcaCounts, funnelCampaigns("abca"), !meta.missing.includes("abca")),
     },
     campaigns,
     noCampaign,

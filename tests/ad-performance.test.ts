@@ -112,6 +112,14 @@ describe("costs", () => {
     expect(costPer(5000, 0)).toBeNull();
   });
 
+  it("leaves costs blank when Meta wouldn't return the spend", () => {
+    const s = summarize({ ...emptyCounts(), leads: 100, applications: 5, issuedPaid: 2 }, [], false);
+    expect(s.spendKnown).toBe(false);
+    expect(s.cplCents).toBeNull();
+    expect(s.cpaCents).toBeNull();
+    expect(s.cacCents).toBeNull();
+  });
+
   it("adds up spend and delivery across campaigns", () => {
     const s = summarize(emptyCounts(), [campaign(1000, 1000, 30), campaign(3000, 1000, 10)]);
     expect(s.spendCents).toBe(4000);

@@ -466,6 +466,8 @@ export interface MetaPerformance {
   dailySpendCents: Record<string, number>;
   // Events the pixels show for the window. Null when they can't be read.
   pixelEvents: Record<string, number> | null;
+  // Funnels whose spend Meta wouldn't return, so their costs can't be worked out.
+  missing: PerfFunnel[];
   errors: string[];
 }
 
@@ -490,7 +492,9 @@ export async function getMetaPerformance(
   trendFor: (tz: string) => { since: string; until: string },
   pixelWindow: { since: Date; until: Date } | null,
 ): Promise<MetaPerformance> {
-  if (!PERF_TOKEN) return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, errors: [] };
+  if (!PERF_TOKEN) {
+    return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, missing: ["ew", "abca"], errors: [] };
+  }
   const cached = perfCache.get(key);
   if (cached && Date.now() - cached.at < PERF_TTL_MS) return cached.snap;
 
@@ -498,6 +502,7 @@ export async function getMetaPerformance(
   const campaigns: CampaignPerf[] = [];
   const dailySpendCents: Record<string, number> = {};
   const errors: string[] = [];
+  const missing: PerfFunnel[] = [];
   let pixelEvents: Record<string, number> | null = pixelWindow ? {} : null;
 
   await Promise.all(
@@ -523,6 +528,7 @@ export async function getMetaPerformance(
       for (const [name, r] of [["spend", ins], ["daily spend", daily], ["campaigns", list]] as const) {
         if (r.error) errors.push(`${funnel} ${name}: ${r.error}`);
       }
+      if (ins.error || list.error) missing.push(funnel);
 
       const insById = new Map<string, any>(ins.rows.map((r) => [String(r.campaign_id), r]));
       const adsetBudget = new Map<string, number>();
@@ -567,7 +573,7 @@ export async function getMetaPerformance(
     }),
   );
 
-  const snap: MetaPerformance = { configured: true, campaigns, dailySpendCents, pixelEvents, errors };
+  const snap: MetaPerformance = { configured: true, campaigns, dailySpendCents, pixelEvents, missing, errors };
   if (!errors.length) perfCache.set(key, { at: Date.now(), snap });
   return snap;
 }
