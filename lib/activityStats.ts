@@ -82,6 +82,15 @@ export function stageLevel(id: string | null | undefined, label: string | null |
 // Legacy status-dropdown changes ("Status changed from NEW to CONTACTED").
 const LEVEL_BY_STATUS: Record<string, number> = { CONTACTED: 2, APPOINTMENT_SET: 3 };
 
+/** Funnel level of a STATUS_CHANGED activity; 0 when it isn't a move up the funnel. */
+export function moveLevel(body: string | null | undefined, metadata: unknown): number {
+  const md = (metadata && typeof metadata === "object" ? metadata : {}) as Record<string, any>;
+  if (md.stage || md.label) return stageLevel(md.stage, md.label);
+  if (md.to && LEVEL_BY_STATUS[md.to]) return LEVEL_BY_STATUS[md.to];
+  const m = /^Moved to "(.*)" in the pipeline\.$/.exec(body ?? "");
+  return m ? stageLevel(null, m[1]) : 0;
+}
+
 /** Start of the period in the activity timezone; null for "all". */
 export async function periodStart(period: Period): Promise<Date | null> {
   if (period === "all" || !prisma) return null;
@@ -147,14 +156,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
   const best = new Map<string, number>(); // `${uid}\u0000${leadId}` → level
   for (const e of events) {
     const md = e.metadata && typeof e.metadata === "object" ? e.metadata : {};
-    let level: number;
-    if (md.stage || md.label) level = stageLevel(md.stage, md.label);
-    else if (md.to && LEVEL_BY_STATUS[md.to]) level = LEVEL_BY_STATUS[md.to];
-    else {
-      const m = /^Moved to "(.*)" in the pipeline\.$/.exec(e.body ?? "");
-      if (!m) continue;
-      level = stageLevel(null, m[1]);
-    }
+    const level = moveLevel(e.body, e.metadata);
     if (level <= 0) continue;
     const uid = (typeof md.actorId === "string" && md.actorId) || e.ownerId;
     if (!uid || (allowed && !allowed.has(uid))) continue;

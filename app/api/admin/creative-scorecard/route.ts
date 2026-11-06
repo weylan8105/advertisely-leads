@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getScorecardSpend } from "@/lib/metaInsights";
+import { stageLabel } from "@/data/pipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ const ALLOWED_DAYS = new Set([7, 30, 90]);
 // that report back to Meta (lib/metaCapi.ts STAGE_EVENTS).
 const APP_STAGES = ["underwriting", "approved", "issued-not-paid", "issued-paid"];
 const PAID_STAGE = "issued-paid";
+// A lead that reached one of those stages stays an application if it's declined later.
+const APP_MOVES = APP_STAGES.map((s) => `Moved to "${stageLabel(s)}" in the pipeline.`);
 
 function ymdInTz(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -57,7 +60,9 @@ export async function GET(req: NextRequest) {
       SELECT COALESCE("creativeId", NULLIF("rawFormData"->>'utm_content', '')) AS ad,
              MIN(source) AS source,
              COUNT(*)::int AS leads,
-             COUNT(*) FILTER (WHERE "pipelineStage" = ANY(${APP_STAGES}))::int AS apps,
+             COUNT(*) FILTER (WHERE "pipelineStage" = ANY(${APP_STAGES}) OR EXISTS (
+               SELECT 1 FROM "LeadActivity" a WHERE a."leadId" = "Lead".id AND a.body = ANY(${APP_MOVES})
+             ))::int AS apps,
              COUNT(*) FILTER (WHERE "pipelineStage" = ${PAID_STAGE})::int AS paid,
              COALESCE(SUM("soldPremiumCents") FILTER (WHERE "pipelineStage" = ${PAID_STAGE}), 0) AS premium
       FROM "Lead"
@@ -103,6 +108,7 @@ export async function GET(req: NextRequest) {
       paid: l.paid,
       premiumCents: l.premiumCents,
       cplCents: spendCents > 0 && l.leads > 0 ? Math.round(spendCents / l.leads) : null,
+      costPerAppCents: spendCents > 0 && l.apps > 0 ? Math.round(spendCents / l.apps) : null,
       costPerPaidCents: spendCents > 0 && l.paid > 0 ? Math.round(spendCents / l.paid) : null,
       appRatePct: l.leads > 0 ? Math.round((l.apps / l.leads) * 1000) / 10 : null,
       // Annual premium written per $1 of ad spend.

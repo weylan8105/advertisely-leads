@@ -18,6 +18,7 @@ interface Row {
   paid: number;
   premiumCents: number;
   cplCents: number | null;
+  costPerAppCents: number | null;
   costPerPaidCents: number | null;
   appRatePct: number | null;
   premiumPerDollar: number | null;
@@ -46,20 +47,21 @@ const FUNNEL_STYLE: Record<Funnel, string> = {
   Other: "bg-slate-100 text-slate-600",
 };
 
-type SortKey = "spendCents" | "leads" | "cplCents" | "apps" | "appRatePct" | "paid" | "premiumCents" | "costPerPaidCents" | "premiumPerDollar";
+type SortKey = "spendCents" | "leads" | "cplCents" | "apps" | "appRatePct" | "costPerAppCents" | "paid" | "premiumCents" | "costPerPaidCents" | "premiumPerDollar";
 const COLUMNS: { key: SortKey; label: string; title?: string }[] = [
   { key: "spendCents", label: "Spend" },
   { key: "leads", label: "Leads" },
   { key: "cplCents", label: "Cost/lead" },
-  { key: "apps", label: "Apps", title: "Leads now in Underwriting, Approved, Issued not paid or Issued PAID" },
+  { key: "apps", label: "Apps", title: "Leads that reached Underwriting, Approved, Issued Not Paid or Issued PAID" },
   { key: "appRatePct", label: "Lead → app" },
+  { key: "costPerAppCents", label: "CPA", title: "Cost per application: spend divided by apps" },
   { key: "paid", label: "Issued PAID" },
   { key: "premiumCents", label: "Premium", title: "Annual premium on Issued PAID deals" },
   { key: "costPerPaidCents", label: "Cost/paid deal" },
   { key: "premiumPerDollar", label: "Premium per $1", title: "Annual premium written for every $1 of ad spend" },
 ];
 // Lower is better for cost columns, so they sort ascending.
-const ASCENDING: Set<SortKey> = new Set(["cplCents", "costPerPaidCents"]);
+const ASCENDING: Set<SortKey> = new Set(["cplCents", "costPerAppCents", "costPerPaidCents"]);
 
 const money = (c: number | null) => (c == null ? "—" : formatCurrency(c / 100));
 
@@ -116,6 +118,7 @@ export function CreativeScorecard() {
       ...t,
       cplCents: t.leads > 0 && t.spendCents > 0 ? Math.round(t.spendCents / t.leads) : null,
       appRatePct: t.leads > 0 ? Math.round((t.apps / t.leads) * 1000) / 10 : null,
+      costPerAppCents: t.apps > 0 && t.spendCents > 0 ? Math.round(t.spendCents / t.apps) : null,
       costPerPaidCents: t.paid > 0 && t.spendCents > 0 ? Math.round(t.spendCents / t.paid) : null,
       premiumPerDollar: t.spendCents > 0 ? Math.round((t.premiumCents / t.spendCents) * 100) / 100 : null,
     };
@@ -123,7 +126,7 @@ export function CreativeScorecard() {
 
   const cell = (r: Pick<Row, SortKey>, key: SortKey) => {
     const v = r[key];
-    if (key === "spendCents" || key === "cplCents" || key === "premiumCents" || key === "costPerPaidCents") return money(v);
+    if (key === "spendCents" || key === "cplCents" || key === "premiumCents" || key === "costPerAppCents" || key === "costPerPaidCents") return money(v);
     if (key === "appRatePct") return v == null ? "—" : `${v}%`;
     if (key === "premiumPerDollar") return v == null ? "—" : `$${v.toFixed(2)}`;
     return v ?? "—";

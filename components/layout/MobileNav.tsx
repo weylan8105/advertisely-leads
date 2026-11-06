@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Settings,
   Shield,
+  Gauge,
   Landmark,
   LifeBuoy,
   Gem,
@@ -49,6 +50,7 @@ const ALL: Item[] = [
   ...(REFERRAL_PROGRAM_ENABLED ? [{ href: "/rewards", label: "Rewards & Bucks", icon: Coins }] : []),
   { href: "/settings", label: "Settings & Integrations", icon: Settings },
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
+  { href: "/performance", label: "Ad Performance", icon: Gauge, adminOnly: true },
   { href: "/business-pnl", label: "Business P&L", icon: Landmark, adminOnly: true },
   { href: "/ad-uploader", label: "Ad Bulk Uploader", icon: UploadCloud, adminOnly: true },
 ];

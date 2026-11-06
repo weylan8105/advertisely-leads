@@ -432,3 +432,139 @@ export async function getScorecardSpend(sinceYmd: string | null, untilYmd: strin
   if (!errors.length) scorecardCache.set(key, { at: Date.now(), snap });
   return snap;
 }
+
+// --- Ad Performance dashboard ------------------------------------------------
+
+export type PerfFunnel = "ew" | "abca";
+
+// Each ad account reports days in its own timezone.
+const PERF_ACCOUNTS: { funnel: PerfFunnel; raw: string; tz: string; pixel: string }[] = [
+  { funnel: "ew", raw: ACCOUNT_RAW || "2254810101392917", tz: "America/Los_Angeles", pixel: "717587103522110" },
+  { funnel: "abca", raw: ABCA_ACCOUNT_RAW || "2126340781245705", tz: "America/Chicago", pixel: "1060042860173387" },
+];
+
+// Campaigns run for clients: their spend and leads are theirs, not ours.
+export const isClientCampaign = (name?: string | null) => /^Advertisely Advertiser/.test(name ?? "");
+
+export interface CampaignPerf {
+  campaignId: string;
+  name: string;
+  funnel: PerfFunnel;
+  status: string | null;
+  dailyBudgetCents: number | null;
+  spendCents: number;
+  impressions: number;
+  clicks: number;
+  linkClicks: number;
+  metaLeads: number;
+}
+
+export interface MetaPerformance {
+  configured: boolean;
+  campaigns: CampaignPerf[];
+  // Spend per day and funnel, keyed `${ymd}:${funnel}`.
+  dailySpendCents: Record<string, number>;
+  // Events the pixels show for the window. Null when they can't be read.
+  pixelEvents: Record<string, number> | null;
+  errors: string[];
+}
+
+const perfCache = new Map<string, { at: number; snap: MetaPerformance }>();
+const PERF_TTL_MS = 55 * 1000;
+
+const toCents = (v: unknown) => Math.round((parseFloat(String(v ?? "0")) || 0) * 100);
+const toInt = (v: unknown) => parseInt(String(v ?? "0"), 10) || 0;
+const timeRange = (r: { since: string; until: string }) => `time_range=${encodeURIComponent(JSON.stringify(r))}`;
+
+/**
+ * Spend and delivery per campaign for both ad accounts, plus 14 days of daily
+ * spend and what each pixel shows. `rangeFor` turns a timezone into that
+ * account's dates. Client campaigns are left out. One-minute cache.
+ */
+export async function getMetaPerformance(
+  key: string,
+  rangeFor: (tz: string) => { since: string; until: string },
+  trendFor: (tz: string) => { since: string; until: string },
+  pixelWindow: { since: Date; until: Date } | null,
+): Promise<MetaPerformance> {
+  if (!TOKEN) return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, errors: [] };
+  const cached = perfCache.get(key);
+  if (cached && Date.now() - cached.at < PERF_TTL_MS) return cached.snap;
+
+  const tok = `access_token=${encodeURIComponent(TOKEN)}`;
+  const campaigns: CampaignPerf[] = [];
+  const dailySpendCents: Record<string, number> = {};
+  const errors: string[] = [];
+  let pixelEvents: Record<string, number> | null = pixelWindow ? {} : null;
+
+  await Promise.all(
+    PERF_ACCOUNTS.map(async ({ funnel, raw, tz, pixel }) => {
+      const account = raw.startsWith("act_") ? raw : `act_${raw}`;
+      const [ins, daily, list, adsets, stats] = await Promise.all([
+        fetchAllPages(
+          `${GRAPH}/${account}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks,inline_link_clicks,actions&${timeRange(rangeFor(tz))}&limit=200&${tok}`,
+        ),
+        fetchAllPages(
+          `${GRAPH}/${account}/insights?level=campaign&fields=campaign_name,spend&time_increment=1&${timeRange(trendFor(tz))}&limit=500&${tok}`,
+        ),
+        fetchAllPages(`${GRAPH}/${account}/campaigns?fields=id,name,effective_status,daily_budget&limit=200&${tok}`),
+        fetchAllPages(
+          `${GRAPH}/${account}/adsets?fields=campaign_id,daily_budget&effective_status=${encodeURIComponent('["ACTIVE"]')}&limit=500&${tok}`,
+        ),
+        pixelWindow
+          ? fetchAllPages(
+              `${GRAPH}/${pixel}/stats?aggregation=event&start_time=${Math.floor(pixelWindow.since.getTime() / 1000)}&end_time=${Math.floor(pixelWindow.until.getTime() / 1000)}&limit=500&${tok}`,
+            )
+          : Promise.resolve({ rows: [] as any[], error: undefined as string | undefined }),
+      ]);
+      for (const [name, r] of [["spend", ins], ["daily spend", daily], ["campaigns", list]] as const) {
+        if (r.error) errors.push(`${funnel} ${name}: ${r.error}`);
+      }
+
+      const insById = new Map<string, any>(ins.rows.map((r) => [String(r.campaign_id), r]));
+      const adsetBudget = new Map<string, number>();
+      for (const a of adsets.rows) {
+        const id = String(a.campaign_id);
+        adsetBudget.set(id, (adsetBudget.get(id) ?? 0) + toInt(a.daily_budget));
+      }
+      for (const c of list.rows) {
+        if (isClientCampaign(c.name)) continue;
+        const id = String(c.id);
+        const r = insById.get(id);
+        const active = c.effective_status === "ACTIVE";
+        campaigns.push({
+          campaignId: id,
+          name: String(c.name ?? id),
+          funnel,
+          status: c.effective_status ? String(c.effective_status) : null,
+          dailyBudgetCents: active ? toInt(c.daily_budget) || adsetBudget.get(id) || null : null,
+          spendCents: toCents(r?.spend),
+          impressions: toInt(r?.impressions),
+          clicks: toInt(r?.clicks),
+          linkClicks: toInt(r?.inline_link_clicks),
+          metaLeads: toInt((r?.actions ?? []).find((a: any) => a?.action_type === "lead")?.value),
+        });
+      }
+      for (const r of daily.rows) {
+        if (isClientCampaign(r.campaign_name)) continue;
+        const k = `${r.date_start}:${funnel}`;
+        dailySpendCents[k] = (dailySpendCents[k] ?? 0) + toCents(r.spend);
+      }
+      // Reading pixel stats takes more access than reading ads, so a failure here
+      // only blanks that column.
+      if (stats.error) pixelEvents = null;
+      else if (pixelEvents) {
+        for (const bucket of stats.rows) {
+          for (const d of bucket?.data ?? []) {
+            const name = String(d?.value ?? "");
+            if (name) pixelEvents[name] = (pixelEvents[name] ?? 0) + toInt(d?.count);
+          }
+        }
+      }
+    }),
+  );
+
+  const snap: MetaPerformance = { configured: true, campaigns, dailySpendCents, pixelEvents, errors };
+  if (!errors.length) perfCache.set(key, { at: Date.now(), snap });
+  return snap;
+}
