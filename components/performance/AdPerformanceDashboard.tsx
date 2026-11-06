@@ -70,7 +70,7 @@ function Tile({ label, value, hint, strong }: { label: string; value: string; hi
 
 function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
+    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         {note && <p className="mt-1 text-xs text-slate-500">{note}</p>}
@@ -123,7 +123,7 @@ function DayChart({
   const showAbca = view !== "ew";
   const axis = { fontSize: 11, fill: "hsl(var(--muted-foreground))" };
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-2 text-xs font-medium text-slate-500">{title}</div>
       <div className="h-36">
         <ResponsiveContainer width="100%" height="100%">
@@ -290,8 +290,8 @@ export function AdPerformanceDashboard() {
             <Tile label="Issued PAID" value={count(s.issuedPaid)} hint={share(s.issuedPaid, s.applications, "applications")} />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="min-w-0 lg:col-span-2">
               <Panel title="Enhanced Wealth vs ABCA">
                 <div className="overflow-x-auto">
                   <Table>
@@ -349,7 +349,7 @@ export function AdPerformanceDashboard() {
                 </span>
               )}
             </div>
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               <DayChart title="Ad spend" days={data!.daily} metric="spendCents" view={view} format={money} />
               <DayChart title="New leads" days={data!.daily} metric="leads" view={view} format={count} />
               <DayChart title="Applications" days={data!.daily} metric="applications" view={view} format={count} />
