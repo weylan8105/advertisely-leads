@@ -72,6 +72,7 @@ export interface PerfLead {
   campaignName: string | null;
   utmCampaign: string | null;
   rawCampaign: string | null;
+  assignedUserId: string | null;
   receivedAt: Date;
   pipelineStage: string;
   soldAt: Date | null;
@@ -270,6 +271,46 @@ export function eventRows(ctas: (string | null)[], pixelEvents: Record<string, n
   }));
 }
 
+export interface PerfDealRow {
+  agent: string;
+  underwriting: number;
+  approved: number;
+  issuedNotPaid: number;
+  issuedPaid: number;
+  // Got an application in, then left those stages (declined, moved back).
+  leftStages: number;
+  applications: number;
+  premiumCents: number;
+}
+
+/**
+ * Every deal so far, by who holds it now. Not tied to a window: the stage columns
+ * are the counts Client Accounts shows, so the two can be checked against each other.
+ */
+export function dealsByAgent(leads: PerfLead[], events: PerfEvent[], agentName: (userId: string) => string): PerfDealRow[] {
+  const applied = new Set(events.filter((e) => e.kind === "application").map((e) => e.leadId));
+  const rows = new Map<string, PerfDealRow>();
+  for (const l of leads) {
+    const inStage = (CONVERSION_STAGE_IDS as readonly string[]).includes(l.pipelineStage);
+    if (!inStage && !applied.has(l.id)) continue;
+    const agent = l.assignedUserId ? agentName(l.assignedUserId) : "Unassigned";
+    let row = rows.get(agent);
+    if (!row) {
+      row = { agent, underwriting: 0, approved: 0, issuedNotPaid: 0, issuedPaid: 0, leftStages: 0, applications: 0, premiumCents: 0 };
+      rows.set(agent, row);
+    }
+    row.applications++;
+    if (l.pipelineStage === "underwriting") row.underwriting++;
+    else if (l.pipelineStage === "approved") row.approved++;
+    else if (l.pipelineStage === "issued-not-paid") row.issuedNotPaid++;
+    else if (l.pipelineStage === WON_STAGE_ID) {
+      row.issuedPaid++;
+      row.premiumCents += l.soldPremiumCents ?? 0;
+    } else row.leftStages++;
+  }
+  return [...rows.values()].sort((a, b) => b.applications - a.applications || a.agent.localeCompare(b.agent));
+}
+
 export interface PerfDay {
   date: string;
   ew: { spendCents: number; leads: number; applications: number; issuedPaid: number };
@@ -295,6 +336,7 @@ export interface AdPerformance {
   funnels: { all: PerfSummary; ew: PerfSummary; abca: PerfSummary };
   campaigns: PerfCampaignRow[];
   noCampaign: PerfCounts;
+  deals: PerfDealRow[];
   daily: PerfDay[];
   events: PerfEventRow[];
 }
@@ -310,7 +352,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
   const pixelCutoff = new Date(now.getTime() - PIXEL_STATS_DAYS * 86_400_000);
   const pixelWindow = { since: since < pixelCutoff ? pixelCutoff : since, until: until > now ? now : until };
 
-  const [meta, leads, moves, sends] = await Promise.all([
+  const [meta, leads, moves, sends, users] = await Promise.all([
     getMetaPerformance(
       `${range}:${today}`,
       (tz) => rangeDays(range, ymdInTz(now, tz)),
@@ -318,7 +360,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
       pixelWindow,
     ),
     prisma.$queryRaw<PerfLead[]>`
-      SELECT id, source, "campaignName", "utmCampaign",
+      SELECT id, source, "campaignName", "utmCampaign", "assignedUserId",
              substring("rawFormData"::text from 'campaignId[^0-9]{1,12}([0-9]{10,})') AS "rawCampaign",
              "receivedAt", "pipelineStage", "soldAt", "soldPremiumCents"
       FROM "Lead"
@@ -331,10 +373,13 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
       where: { source: "meta-capi", createdAt: { gte: since, lt: until } },
       select: { cta: true },
     }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true } }),
   ]);
 
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const events = perfEvents(leads, moves);
+  const userById = new Map(users.map((u) => [u.id, u]));
+  const agentName = (id: string) => userById.get(id)?.name?.trim() || userById.get(id)?.email || "Unknown agent";
   const funnelKey = (id: string) => funnelOf(leadById.get(id) ?? { source: null });
 
   const byFunnel = tally(events, since, until, funnelKey);
@@ -389,6 +434,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
     },
     campaigns,
     noCampaign,
+    deals: dealsByAgent(leads, events, agentName),
     daily,
     events: eventRows(sends.map((s) => s.cta), meta.pixelEvents),
   };

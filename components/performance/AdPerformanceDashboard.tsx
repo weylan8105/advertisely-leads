@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Pills } from "@/components/activity/shared";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { AdPerformance, PerfDay, PerfRange, PerfSummary } from "@/lib/adPerformance";
+import type { AdPerformance, PerfDay, PerfDealRow, PerfRange, PerfSummary } from "@/lib/adPerformance";
 
 const REFRESH_MS = 60_000;
 
@@ -175,7 +175,7 @@ const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string }[] = [
 
 /** Admin: how the ads are running, with Meta's numbers next to what the leads became. */
 export function AdPerformanceDashboard() {
-  const [range, setRange] = useState<PerfRange>("today");
+  const [range, setRange] = useState<PerfRange>("30d");
   const [view, setView] = useState<FunnelView>("all");
   const [data, setData] = useState<AdPerformance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,6 +216,8 @@ export function AdPerformanceDashboard() {
   const secondsAgo = data ? Math.max(0, Math.round((now - new Date(data.fetchedAt).getTime()) / 1000)) : null;
   const campaigns = (data?.campaigns ?? []).filter((c) => view === "all" || c.funnel === view);
   const showPixels = !!data?.events.some((e) => e.shown != null);
+  const deals = data?.deals ?? [];
+  const dealTotal = (key: Exclude<keyof PerfDealRow, "agent">) => deals.reduce((n, d) => n + d[key], 0);
 
   return (
     <div className="[--series-abca:#eb6834] [--series-ew:#2a78d6] dark:[--series-abca:#d95926] dark:[--series-ew:#3987e5]">
@@ -387,6 +389,56 @@ export function AdPerformanceDashboard() {
             </details>
           </Panel>
 
+          <Panel
+            title="Deals by agent"
+            note="All time, every funnel: the date and funnel buttons don't change this table. The stage columns are the same counts as Client Accounts."
+          >
+            {deals.length === 0 ? (
+              <p className="text-sm text-slate-500">No applications yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Agent</TableHead>
+                      <TableHead className="text-right">Underwriting</TableHead>
+                      <TableHead className="text-right">Approved</TableHead>
+                      <TableHead className="text-right">Issued Not Paid</TableHead>
+                      <TableHead className="text-right">Issued PAID</TableHead>
+                      <TableHead className="text-right" title="Got an application in, then was declined or moved back">Left those stages</TableHead>
+                      <TableHead className="text-right">Applications</TableHead>
+                      <TableHead className="text-right">Premium</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deals.map((d) => (
+                      <TableRow key={d.agent}>
+                        <TableCell className="py-1.5 font-medium">{d.agent}</TableCell>
+                        <TableCell className="py-1.5 text-right tabular-nums">{count(d.underwriting)}</TableCell>
+                        <TableCell className="py-1.5 text-right tabular-nums">{count(d.approved)}</TableCell>
+                        <TableCell className="py-1.5 text-right tabular-nums">{count(d.issuedNotPaid)}</TableCell>
+                        <TableCell className="py-1.5 text-right tabular-nums">{count(d.issuedPaid)}</TableCell>
+                        <TableCell className="py-1.5 text-right tabular-nums">{count(d.leftStages)}</TableCell>
+                        <TableCell className="py-1.5 text-right font-medium tabular-nums">{count(d.applications)}</TableCell>
+                        <TableCell className="py-1.5 text-right tabular-nums">{money(d.premiumCents)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-semibold">
+                      <TableCell className="py-1.5">Total</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{count(dealTotal("underwriting"))}</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{count(dealTotal("approved"))}</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{count(dealTotal("issuedNotPaid"))}</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{count(dealTotal("issuedPaid"))}</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{count(dealTotal("leftStages"))}</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{count(dealTotal("applications"))}</TableCell>
+                      <TableCell className="py-1.5 text-right tabular-nums">{money(dealTotal("premiumCents"))}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Panel>
+
           <Panel title="Campaigns">
             {campaigns.length === 0 ? (
               <p className="text-sm text-slate-500">No campaigns ran in this window.</p>
@@ -427,20 +479,23 @@ export function AdPerformanceDashboard() {
                 </Table>
               </div>
             )}
-            {view === "all" && !data!.missing.length && data!.noCampaign.leads + data!.noCampaign.applications > 0 && (
+            {view === "all" && data!.noCampaign.leads + data!.noCampaign.applications > 0 && (
               <p className="mt-2 text-xs text-slate-500">
-                {count(data!.noCampaign.leads)} leads and {count(data!.noCampaign.applications)} applications have no campaign recorded, so they aren&apos;t in this table.
+                {count(data!.noCampaign.leads)} leads and {count(data!.noCampaign.applications)} applications aren&apos;t in this table because{" "}
+                {data!.missing.length
+                  ? `Meta isn't sharing ${data!.missing.map((f) => FUNNEL_NAME[f]).join(" and ")} campaigns, or no campaign was recorded.`
+                  : "no campaign was recorded."}
               </p>
             )}
           </Panel>
 
           <Panel
             title="Events sent to Meta"
-            note={
+            note={`${
               showPixels
                 ? "What Advertisely sent in this window next to what the pixels show. Resent events count on the day they happened, so the two can differ."
                 : "What Advertisely sent in this window."
-            }
+            } This log only goes back to Nov 4 and includes resends, so it isn't a count of deals.`}
           >
             <div className="overflow-x-auto">
               <Table>
@@ -476,6 +531,7 @@ export function AdPerformanceDashboard() {
               <li>Application: a lead that reached Underwriting, Approved, Issued Not Paid or Issued PAID. It counts once, on the first day it got there, and a later decline doesn&apos;t remove it.</li>
               <li>CPA is ad spend divided by applications. CAC is ad spend divided by Issued PAID.</li>
               <li>Everything counts on the day it happened, so a sale today can come from an older lead. Short windows swing a lot; use 30 days or longer to judge CAC.</li>
+              <li>The tiles only count what happened in the dates you pick. Client Accounts shows every deal ever, by its stage now. Deals by agent shows that same all-time view, so use it to check the two against each other.</li>
               <li>Dialed means a lead was moved out of New Lead, and Contacted means it reached Contacted or further. Calls themselves aren&apos;t tracked.</li>
               <li>Days run on Central time in Advertisely. Meta uses each ad account&apos;s own timezone: Pacific for Enhanced Wealth, Central for ABCA.</li>
               <li>Client campaigns and their leads aren&apos;t included. Leads moved to the trash aren&apos;t counted either, so Advertisely can read a little below Meta.</li>

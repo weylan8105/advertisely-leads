@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  addDays, costPer, dayStart, emptyCounts, eventRows, isApplicationMove, perfEvents, rangeDays, summarize, tally,
+  addDays, costPer, dayStart, dealsByAgent, emptyCounts, eventRows, isApplicationMove, perfEvents, rangeDays, summarize, tally,
   campaignKeyOf, type PerfLead, type PerfMove,
 } from "../lib/adPerformance";
 
 const lead = (over: Partial<PerfLead> = {}): PerfLead => ({
-  id: "L1", source: "facebook", campaignName: null, utmCampaign: null, rawCampaign: null,
+  id: "L1", source: "facebook", campaignName: null, utmCampaign: null, rawCampaign: null, assignedUserId: "luke",
   receivedAt: new Date("2026-11-01T15:00:00Z"), pipelineStage: "new-lead", soldAt: null, soldPremiumCents: null,
   ...over,
 });
@@ -144,6 +144,42 @@ describe("campaign matching", () => {
 
   it("leaves a lead with no campaign unmatched", () => {
     expect(campaignKeyOf(lead(), ids)).toBeNull();
+  });
+});
+
+describe("deals by agent", () => {
+  const deals = (leads: PerfLead[], moves: PerfMove[] = []) => dealsByAgent(leads, perfEvents(leads, moves), (id) => id.toUpperCase());
+
+  it("counts each deal in the stage it's in now, however long ago it got there", () => {
+    const leads = [
+      lead({ id: "A", pipelineStage: "underwriting" }),
+      lead({ id: "B", pipelineStage: "approved" }),
+      lead({ id: "C", pipelineStage: "issued-not-paid" }),
+      lead({ id: "D", pipelineStage: "issued-paid", soldPremiumCents: 240_000 }),
+      lead({ id: "E", pipelineStage: "issued-paid", soldPremiumCents: 60_000 }),
+    ];
+    expect(deals(leads)).toEqual([{
+      agent: "LUKE", underwriting: 1, approved: 1, issuedNotPaid: 1, issuedPaid: 2, leftStages: 0, applications: 5, premiumCents: 300_000,
+    }]);
+  });
+
+  it("keeps a declined deal as an application, apart from the stage columns", () => {
+    const [row] = deals([lead({ pipelineStage: "declined" })], [move("Underwriting", "2026-10-02T15:00:00Z")]);
+    expect(row).toMatchObject({ underwriting: 0, leftStages: 1, applications: 1 });
+  });
+
+  it("leaves out leads that never reached an application", () => {
+    expect(deals([lead({ pipelineStage: "presentation-ran" })], [move("Call Back", "2026-10-02T15:00:00Z")])).toEqual([]);
+  });
+
+  it("lists agents with the most deals first and groups leads with no owner", () => {
+    const rows = deals([
+      lead({ id: "A", pipelineStage: "approved", assignedUserId: "ryan" }),
+      lead({ id: "B", pipelineStage: "approved" }),
+      lead({ id: "C", pipelineStage: "underwriting" }),
+      lead({ id: "D", pipelineStage: "underwriting", assignedUserId: null }),
+    ]);
+    expect(rows.map((r) => [r.agent, r.applications])).toEqual([["LUKE", 2], ["RYAN", 1], ["Unassigned", 1]]);
   });
 });
 
