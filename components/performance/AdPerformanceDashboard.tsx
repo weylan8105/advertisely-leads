@@ -213,6 +213,8 @@ export function AdPerformanceDashboard() {
   }, []);
 
   const s = data?.funnels[view];
+  // Zero spend and unknown spend aren't the same thing.
+  const spend = data?.metaConfigured ? money(s?.spendCents) : "—";
   const secondsAgo = data ? Math.max(0, Math.round((now - new Date(data.fetchedAt).getTime()) / 1000)) : null;
   const campaigns = (data?.campaigns ?? []).filter((c) => view === "all" || c.funnel === view);
 
@@ -247,7 +249,7 @@ export function AdPerformanceDashboard() {
       {data && !data.metaConfigured && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Meta isn&apos;t connected, so spend and costs are blank. Set META_ADS_ACCESS_TOKEN in Vercel.
+          Meta isn&apos;t connected, so spend and costs are blank. Set META_ADS_ACCESS_TOKEN or META_ADS_MANAGE_TOKEN in Vercel.
         </div>
       )}
       {!!data?.errors.length && (
@@ -266,8 +268,8 @@ export function AdPerformanceDashboard() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Tile
               label="Ad spend"
-              value={money(s.spendCents)}
-              hint={s.activeBudgetCents > 0 ? `${money(s.activeBudgetCents)} a day in active budgets` : "No active budgets"}
+              value={spend}
+              hint={data!.metaConfigured ? (s.activeBudgetCents > 0 ? `${money(s.activeBudgetCents)} a day in active budgets` : "No active budgets") : undefined}
             />
             <Tile label="Cost per lead" value={money(s.cplCents)} hint={`${count(s.leads)} new leads`} />
             <Tile label="CPA · cost per application" value={money(s.cpaCents)} hint={`${count(s.applications)} applications`} strong />
@@ -471,7 +473,7 @@ export function AdPerformanceDashboard() {
               <li>Everything counts on the day it happened, so a sale today can come from an older lead. Short windows swing a lot; use 30 days or longer to judge CAC.</li>
               <li>Dialed means a lead was moved out of New Lead, and Contacted means it reached Contacted or further. Calls themselves aren&apos;t tracked.</li>
               <li>Days run on Central time in Advertisely. Meta uses each ad account&apos;s own timezone: Pacific for Enhanced Wealth, Central for ABCA.</li>
-              <li>Client campaigns and their leads aren&apos;t included. Campaign spend comes straight from Meta.</li>
+              <li>Client campaigns and their leads aren&apos;t included. Leads moved to the trash aren&apos;t counted either, so Advertisely can read a little below Meta.</li>
             </ul>
           </details>
         </div>

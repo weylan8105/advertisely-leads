@@ -471,6 +471,9 @@ export interface MetaPerformance {
 
 const perfCache = new Map<string, { at: number; snap: MetaPerformance }>();
 const PERF_TTL_MS = 55 * 1000;
+// Only reads here. Kept apart from TOKEN so this doesn't switch on the CPL price
+// floor or the house-lead invoice amounts, which turn on when TOKEN is set.
+const PERF_TOKEN = TOKEN || process.env.META_ADS_MANAGE_TOKEN;
 
 const toCents = (v: unknown) => Math.round((parseFloat(String(v ?? "0")) || 0) * 100);
 const toInt = (v: unknown) => parseInt(String(v ?? "0"), 10) || 0;
@@ -487,11 +490,11 @@ export async function getMetaPerformance(
   trendFor: (tz: string) => { since: string; until: string },
   pixelWindow: { since: Date; until: Date } | null,
 ): Promise<MetaPerformance> {
-  if (!TOKEN) return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, errors: [] };
+  if (!PERF_TOKEN) return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, errors: [] };
   const cached = perfCache.get(key);
   if (cached && Date.now() - cached.at < PERF_TTL_MS) return cached.snap;
 
-  const tok = `access_token=${encodeURIComponent(TOKEN)}`;
+  const tok = `access_token=${encodeURIComponent(PERF_TOKEN)}`;
   const campaigns: CampaignPerf[] = [];
   const dailySpendCents: Record<string, number> = {};
   const errors: string[] = [];
