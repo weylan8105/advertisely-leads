@@ -32,15 +32,18 @@ export function dialAction(via: DialVia, recent: { via: unknown; at: Date } | nu
   return now.getTime() - recent.at.getTime() < REDIAL_MS ? "skip" : "log";
 }
 
-// One click can reach here twice, so the first one wins.
+// A double click can reach here twice, so the first one wins. Kept per action:
+// copying right after clicking the lead has to get through, or dialAction never
+// sees the copy and the next redial merges into the click.
 const SAME_CLICK_MS = 2_000;
 const sentAt = new Map<string, number>();
 
 /** Browser side: report a dial. Never blocks the agent. */
 export function reportDial(leadId: string, via: DialVia) {
   const now = Date.now();
-  if (now - (sentAt.get(leadId) ?? 0) < SAME_CLICK_MS) return;
-  sentAt.set(leadId, now);
+  const key = `${leadId}:${via}`;
+  if (now - (sentAt.get(key) ?? 0) < SAME_CLICK_MS) return;
+  sentAt.set(key, now);
   fetch(`/api/leads/${leadId}/dial`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

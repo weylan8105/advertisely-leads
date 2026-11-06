@@ -20,6 +20,7 @@ const canActOnLead = vi.fn();
 vi.mock("@/lib/leadAccess", () => ({ canActOnLead: (...a: unknown[]) => canActOnLead(...a) }));
 
 import { POST } from "@/app/api/leads/[id]/dial/route";
+import { reportDial } from "@/lib/dials";
 
 type Req = Parameters<typeof POST>[0];
 const send = async (via: unknown) => {
@@ -36,6 +37,25 @@ beforeEach(() => {
   canActOnLead.mockResolvedValue(true);
   prismaMock.lead.findUnique.mockResolvedValue({ id: "L1", assignedUserId: "agent", organizationId: "o1", pipeline: "main" });
   prismaMock.leadActivity.findFirst.mockResolvedValue(null);
+});
+
+describe("reportDial", () => {
+  const sent = () => vi.mocked(fetch).mock.calls.map(([, init]) => JSON.parse(String(init?.body)).via);
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+  });
+
+  it("sends a copy made right after clicking the lead", () => {
+    reportDial("quick", "talking");
+    reportDial("quick", "copy");
+    expect(sent()).toEqual(["talking", "copy"]);
+  });
+
+  it("sends a double click once", () => {
+    reportDial("double", "copy");
+    reportDial("double", "copy");
+    expect(sent()).toEqual(["copy"]);
+  });
 });
 
 describe("POST /api/leads/:id/dial", () => {
