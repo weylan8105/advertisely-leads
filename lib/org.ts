@@ -134,6 +134,30 @@ export function primaryOwnedTeam<T extends { id: string }>(
   return owned.find((o) => o.id === defaultOrganizationId) ?? owned[0];
 }
 
+/**
+ * Move a user's own lead orders (and those orders' leads still on the main
+ * board) from teams they've left to the team they're on now. An agent's
+ * purchases are filed under whatever team was active when they bought, so
+ * without this a transfer would leave their old upline managing leads they
+ * paid for, and they couldn't route them to their own agents.
+ */
+export async function refileOwnOrders(userId: string, fromOrganizationIds: string[], toOrganizationId: string) {
+  if (!prisma || fromOrganizationIds.length === 0) return;
+  const orders = await prisma.order.findMany({
+    where: { userId, organizationId: { in: fromOrganizationIds } },
+    select: { id: true },
+  });
+  if (orders.length === 0) return;
+  const ids = orders.map((o) => o.id);
+  await prisma.$transaction([
+    prisma.order.updateMany({ where: { id: { in: ids } }, data: { organizationId: toOrganizationId } }),
+    prisma.lead.updateMany({
+      where: { orderId: { in: ids }, organizationId: { in: fromOrganizationIds }, pipeline: "main" },
+      data: { organizationId: toOrganizationId },
+    }),
+  ]);
+}
+
 export function canManageTeam(role: OrgRole): boolean {
   return role === "OWNER" || role === "ADMIN";
 }

@@ -77,11 +77,14 @@ export async function POST(req: NextRequest) {
   // Load the requested leads and keep only the ones this caller may move.
   const leads = await prisma.lead.findMany({
     where: { id: { in: leadIds } },
-    select: { id: true, organizationId: true, state: true, receivedAt: true },
+    select: { id: true, organizationId: true, state: true, receivedAt: true, assignedUserId: true, pipeline: true },
   });
-  const allowed = isPlatformAdmin
-    ? leads
-    : leads.filter((l) => !!l.organizationId && l.organizationId === ctx!.organizationId);
+  const inOrg = (l: (typeof leads)[number]) => !!l.organizationId && l.organizationId === ctx?.organizationId;
+  // The caller's own leads filed under another team (bought while an agent
+  // there) can go to an agent on the team they run, and move to that team.
+  const ownFromOtherTeam = (l: (typeof leads)[number]) =>
+    !isPlatformAdmin && !!targetUserId && !inOrg(l) && l.assignedUserId === callerId && l.pipeline !== "goldmine";
+  const allowed = isPlatformAdmin ? leads : leads.filter((l) => inOrg(l) || ownFromOtherTeam(l));
   const skippedNotYours = leadIds.length - allowed.length;
 
   // Never hand a client (someone with an active order) an off-state or aged
@@ -97,6 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
   const allowedIds = deliverable.map((l) => l.id);
+  const refileIds = deliverable.filter(ownFromOtherTeam).map((l) => l.id);
   const skipped = skippedNotYours + skippedMismatch;
 
   if (allowedIds.length === 0) {
@@ -113,11 +117,16 @@ export async function POST(req: NextRequest) {
   const result = await prisma.$transaction([
     prisma.lead.updateMany({
       where: { id: { in: allowedIds } },
-      // Leads keep their existing organizationId; bulk assign only changes owner.
+      // Leads keep their existing organizationId (the caller's own leads from
+      // another team are refiled just below); bulk assign only changes owner.
       data: {
         assignedUserId: targetUserId,
         assignedAt: targetUserId ? now : null,
       },
+    }),
+    prisma.lead.updateMany({
+      where: { id: { in: refileIds } },
+      data: { organizationId: ctx?.organizationId },
     }),
     prisma.leadActivity.createMany({
       data: allowedIds.map((leadId) => ({

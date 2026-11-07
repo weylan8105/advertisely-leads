@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isDatabaseConfigured, prisma } from "@/lib/prisma";
-import { ensureOwnedOrganization } from "@/lib/org";
+import { ensureOwnedOrganization, refileOwnOrders } from "@/lib/org";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/team/leave — body { organizationId } — leave a team you're an agent
  * or admin on (e.g. one you joined by mistake). Owners can't leave their own
- * team. Your leads stay in your CRM; if it was your active team, you switch to
- * your own.
+ * team. Your leads stay in your CRM, and lead orders you bought move to your
+ * own team; if it was your active team, you switch to your own.
  */
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) {
@@ -35,9 +35,10 @@ export async function POST(req: NextRequest) {
   }
 
   await prisma.membership.delete({ where: { id: membership.id } });
+  const own = await ensureOwnedOrganization(userId);
+  if (own) await refileOwnOrders(userId, [organizationId], own.id);
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { defaultOrganizationId: true } });
   if (me?.defaultOrganizationId === organizationId) {
-    const own = await ensureOwnedOrganization(userId);
     await prisma.user.update({ where: { id: userId }, data: { defaultOrganizationId: own?.id ?? null } });
   }
   return NextResponse.json({ ok: true });

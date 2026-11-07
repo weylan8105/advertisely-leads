@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeCode } from "@/lib/referralPricing";
-import { canManageTeam, ensureOwnedOrganization, getOrgContext, personalOrgName } from "@/lib/org";
+import { canManageTeam, ensureOwnedOrganization, getOrgContext, personalOrgName, refileOwnOrders } from "@/lib/org";
 import { isEmailConfigured, sendUplineJoinEmail } from "@/lib/email";
 
 /**
@@ -17,7 +17,8 @@ import { isEmailConfigured, sendUplineJoinEmail } from "@/lib/email";
  *
  * An agent has one upline at a time: joining a new upline's team is a transfer
  * that takes them off any other team where they're an agent (their own team,
- * and teams they help run as an admin, stay). Their leads stay in their CRM.
+ * and teams they help run as an admin, stay). Their leads stay in their CRM,
+ * and lead orders they bought move to the new team.
  */
 
 export interface UplineTeam {
@@ -69,16 +70,18 @@ export async function resolveUplineCode(raw: unknown): Promise<UplineTeam | null
 
 /**
  * Leave every other team where this user is an agent, so their new upline's
- * team is their only one. Returns the names of the teams they left.
+ * team is their only one, and bring their own lead orders with them. Returns
+ * the names of the teams they left.
  */
 async function leaveOtherUplineTeams(userId: string, keepOrganizationId: string): Promise<string[]> {
   if (!prisma) return [];
   const others = await prisma.membership.findMany({
     where: { userId, role: "AGENT", organizationId: { not: keepOrganizationId } },
-    select: { id: true, organization: { select: { name: true } } },
+    select: { id: true, organizationId: true, organization: { select: { name: true } } },
   });
   if (others.length === 0) return [];
   await prisma.membership.deleteMany({ where: { id: { in: others.map((m) => m.id) } } });
+  await refileOwnOrders(userId, others.map((m) => m.organizationId), keepOrganizationId);
   return others.map((m) => m.organization.name);
 }
 

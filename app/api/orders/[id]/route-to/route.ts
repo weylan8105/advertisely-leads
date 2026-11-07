@@ -17,7 +17,9 @@ export const dynamic = "force-dynamic";
  * (deliverToUserId). userId:null clears the routing (future leads go back to the
  * buyer; already-moved leads stay where they are). Only the order's buyer, an
  * org owner/admin, or a platform admin may route, and the target must be a
- * member of the buyer's organization.
+ * member of the buyer's organization. A buyer who has since moved to running
+ * their own team (the order was stamped with their old upline's team) can route
+ * it to an agent on the team they now manage; the order moves to that team.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isDatabaseConfigured || !prisma) {
@@ -50,7 +52,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "You can't route this order." }, { status: 403 });
   }
 
-  const orgId = order.organizationId ?? ctx?.organizationId ?? null;
+  let orgId = order.organizationId ?? ctx?.organizationId ?? null;
+  let moveToOrgId: string | null = null;
 
   // Validate the target agent is in the order's organization (unless clearing).
   let targetName: string | null = null;
@@ -62,8 +65,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             select: { id: true },
           })
         : null;
-      if (!member) {
+      // The buyer's order may be filed under a team they were an agent on when
+      // they bought it; they can still send it to an agent on the team they run.
+      const onBuyersTeam =
+        !member && isBuyer && !!ctx && canManageTeam(ctx.role) && ctx.organizationId !== orgId
+          ? await prisma.membership.findUnique({
+              where: { organizationId_userId: { organizationId: ctx.organizationId, userId: targetUserId } },
+              select: { id: true },
+            })
+          : null;
+      if (!member && !onBuyersTeam) {
         return NextResponse.json({ error: "That agent isn't on this order's team." }, { status: 400 });
+      }
+      if (onBuyersTeam) {
+        moveToOrgId = ctx!.organizationId;
+        orgId = moveToOrgId;
       }
     }
     const u = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
@@ -71,7 +87,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // Point future deliveries at the agent (or clear).
-  await prisma.order.update({ where: { id: order.id }, data: { deliverToUserId: targetUserId } });
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { deliverToUserId: targetUserId, ...(moveToOrgId ? { organizationId: moveToOrgId } : {}) },
+  });
 
   // Move the order's existing (non-trashed) leads to the agent now.
   let moved = 0;

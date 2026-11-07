@@ -13,6 +13,8 @@ type M = { id: string; organizationId: string; userId: string; role: string; inR
 let users: U[] = [];
 let orgs: O[] = [];
 let mems: M[] = [];
+let ords: { id: string; userId: string; organizationId: string }[] = [];
+let lds: { id: string; orderId: string; organizationId: string; pipeline: string }[] = [];
 let seq = 0;
 const id = (p: string) => `${p}_${++seq}`;
 const tick = () => new Date(Date.UTC(2026, 0, 1) + ++seq * 1000);
@@ -67,7 +69,7 @@ const db = {
     findMany: vi.fn(async ({ where }: any) =>
       mems
         .filter((m) => m.userId === where.userId && m.role === where.role && m.organizationId !== where.organizationId.not)
-        .map((m) => ({ id: m.id, organization: orgs.find((o) => o.id === m.organizationId) })),
+        .map((m) => ({ id: m.id, organizationId: m.organizationId, organization: orgs.find((o) => o.id === m.organizationId) })),
     ),
     deleteMany: vi.fn(async ({ where }: any) => {
       const before = mems.length;
@@ -76,6 +78,21 @@ const db = {
     }),
     delete: vi.fn(async ({ where }: any) => {
       mems = mems.filter((m) => m.id !== where.id);
+    }),
+  },
+  order: {
+    findMany: vi.fn(async ({ where }: any) =>
+      ords.filter((o) => o.userId === where.userId && where.organizationId.in.includes(o.organizationId)),
+    ),
+    updateMany: vi.fn(async ({ where, data }: any) => {
+      for (const o of ords) if (where.id.in.includes(o.id)) Object.assign(o, data);
+    }),
+  },
+  lead: {
+    updateMany: vi.fn(async ({ where, data }: any) => {
+      for (const l of lds)
+        if (where.orderId.in.includes(l.orderId) && where.organizationId.in.includes(l.organizationId) && l.pipeline === where.pipeline)
+          Object.assign(l, data);
     }),
   },
   invitation: { findUnique: vi.fn(async () => null) },
@@ -126,6 +143,8 @@ beforeEach(() => {
   users = [];
   orgs = [];
   mems = [];
+  ords = [];
+  lds = [];
   sessionUserId = null;
   sendUplineJoinEmail.mockClear();
   ryan = addUser("Ryan Test", "RYAN7K");
@@ -195,12 +214,19 @@ describe("joinUplineTeam", () => {
     addMember(davidsTeam, trevor, "AGENT", { pendingApproval: true, inRotation: false });
     trevor.defaultOrganizationId = davidsTeam.id;
     addMember(ryansTeam, trevor, "ADMIN"); // helps run Ryan's team: stays
+    ords.push({ id: "ord_t", userId: trevor.id, organizationId: davidsTeam.id }); // bought while on David's team
+    ords.push({ id: "ord_d", userId: david.id, organizationId: davidsTeam.id });
+    lds.push({ id: "l_main", orderId: "ord_t", organizationId: davidsTeam.id, pipeline: "main" });
+    lds.push({ id: "l_gold", orderId: "ord_t", organizationId: davidsTeam.id, pipeline: "goldmine" });
 
     const r = await joinUplineTeam(trevor.id, "JORDAN2");
     expect(r).toMatchObject({ status: "joined", organizationId: jordansTeam.id, left: ["David Test's Team"] });
     const teams = mems.filter((m) => m.userId === trevor.id).map((m) => m.organizationId).sort();
     expect(teams).toEqual([trevorsOwn.id, ryansTeam.id, jordansTeam.id].sort());
     expect(trevor.defaultOrganizationId).toBe(jordansTeam.id);
+    // Their own purchase moves with them; David's order and the Goldmine pool stay.
+    expect(ords.map((o) => [o.id, o.organizationId])).toEqual([["ord_t", jordansTeam.id], ["ord_d", davidsTeam.id]]);
+    expect(lds.map((l) => [l.id, l.organizationId])).toEqual([["l_main", jordansTeam.id], ["l_gold", davidsTeam.id]]);
   });
 
   it("re-entering the code of a team they're already on still moves them off the others", async () => {
@@ -236,11 +262,13 @@ describe("POST /api/team/leave", () => {
     const own = addTeam(agent);
     addMember(ryansTeam, agent, "AGENT", { pendingApproval: true });
     agent.defaultOrganizationId = ryansTeam.id;
+    ords.push({ id: "ord_a", userId: agent.id, organizationId: ryansTeam.id });
     sessionUserId = agent.id;
     const res = await leave(jsonReq("https://advertisely.io/api/team/leave", { organizationId: ryansTeam.id }));
     expect(res.status).toBe(200);
     expect(mems.some((m) => m.userId === agent.id && m.organizationId === ryansTeam.id)).toBe(false);
     expect(agent.defaultOrganizationId).toBe(own.id);
+    expect(ords[0].organizationId).toBe(own.id);
   });
 
   it("an owner can't leave their own team, and you can't leave a team you're not on", async () => {

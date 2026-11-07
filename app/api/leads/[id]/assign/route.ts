@@ -41,14 +41,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const ctx = await ensureOrgContext(callerId);
   const managesLeadOrg =
     !!ctx && canManageTeam(ctx.role) && !!lead.organizationId && lead.organizationId === ctx.organizationId;
-  if (!isPlatformAdmin && !managesLeadOrg) {
+  // A manager's own lead that's filed under another team (they bought it while
+  // an agent there) can still go to an agent on the team they run; it moves
+  // to that team.
+  const ownLeadFromOtherTeam =
+    !managesLeadOrg && !!ctx && canManageTeam(ctx.role) && !!targetUserId &&
+    lead.assignedUserId === callerId && lead.pipeline !== "goldmine";
+  if (!isPlatformAdmin && !managesLeadOrg && !ownLeadFromOtherTeam) {
     return NextResponse.json(
       { error: "You can only reassign leads within your organization." },
       { status: 403 },
     );
   }
 
-  let orgId = lead.organizationId ?? ctx?.organizationId ?? null;
+  let orgId = ownLeadFromOtherTeam ? ctx!.organizationId : lead.organizationId ?? ctx?.organizationId ?? null;
   // Platform admin handing the lead to someone outside its team: it moves into
   // the target's own team (and out of any Goldmine) so the right managers see it.
   let leaveGoldmine = false;
