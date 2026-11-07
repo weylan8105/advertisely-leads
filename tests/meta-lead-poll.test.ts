@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // pollMetaLeads with Graph (fetch), the database and ingest mocked — pins the
 // lookback filter, pagination, per-form error isolation and dry-run behaviour.
 
-const { createMapping } = vi.hoisted(() => ({ createMapping: vi.fn(async () => ({})) }));
+const { createMany } = vi.hoisted(() => ({ createMany: vi.fn(async () => ({ count: 1 })) }));
 const mappings = [
   { formId: "F1", formName: "Jace form", packageId: "blue-collar-iul", ownerUserId: "U1", fieldMapping: {}, pageConnection: { pageId: "P", pageAccessToken: "stored" } },
   { formId: "F2", formName: "Broken form", packageId: "blue-collar-iul", ownerUserId: null, fieldMapping: {}, pageConnection: { pageId: "P", pageAccessToken: "stored" } },
@@ -11,8 +11,13 @@ const mappings = [
 vi.mock("@/lib/prisma", () => ({
   isDatabaseConfigured: true,
   prisma: {
-    metaFormMapping: { findMany: vi.fn(async () => mappings), create: createMapping },
-    metaPageConnection: { findMany: vi.fn(async () => [{ id: "PC", pageId: "P", pageName: "ABCA", pageAccessToken: "stored" }]) },
+    metaFormMapping: { findMany: vi.fn(async () => mappings), createMany },
+    metaPageConnection: {
+      findMany: vi.fn(async () => [{ id: "PC", pageId: "P", pageName: "ABCA", pageAccessToken: "stored" }]),
+      findUnique: vi.fn(async ({ where }: any) =>
+        where.pageId === "P" ? { id: "PC", pageId: "P", pageName: "ABCA", pageAccessToken: "stored", enabled: true } : null,
+      ),
+    },
     user: { findMany: vi.fn(async () => [{ email: "admin@advertisely.io" }]) },
     lead: { findMany: vi.fn(async () => [{ externalId: "L1" }]) },
   },
@@ -37,7 +42,7 @@ let urls: string[];
 beforeEach(() => {
   urls = [];
   ingestLeadFromFields.mockClear();
-  createMapping.mockClear();
+  createMany.mockClear();
   sendUnlinkedFormsEmail.mockClear();
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     urls.push(url);
@@ -76,8 +81,8 @@ describe("findUnlinkedForms", () => {
     const { findUnlinkedForms } = await import("@/lib/metaLeadPoll");
     const found = await findUnlinkedForms();
     expect(found).toEqual([{ formId: "NEW", formName: "Nurse form", pageName: "ABCA", leads: 3 }]);
-    expect(createMapping).toHaveBeenCalledTimes(1);
-    expect(createMapping.mock.calls[0][0].data).toMatchObject({
+    expect(createMany).toHaveBeenCalledTimes(1);
+    expect(createMany.mock.calls[0][0].data[0]).toMatchObject({
       formId: "NEW",
       enabled: false,
       pageConnectionId: "PC",
@@ -85,5 +90,28 @@ describe("findUnlinkedForms", () => {
     });
     expect(sendUnlinkedFormsEmail).toHaveBeenCalledTimes(1);
     expect(sendUnlinkedFormsEmail).toHaveBeenCalledWith({ toEmail: "admin@advertisely.io", forms: found });
+  });
+});
+
+describe("flagUnlinkedForm", () => {
+  it("saves the form and emails admins when a lead arrives on it", async () => {
+    const { flagUnlinkedForm } = await import("@/lib/metaLeadPoll");
+    const form = await flagUnlinkedForm("P", "NEW");
+    expect(form).toEqual({ formId: "NEW", formName: "Nurse form", pageName: "ABCA", leads: 3 });
+    expect(createMany.mock.calls[0][0].data[0]).toMatchObject({ enabled: false, pageConnectionId: "PC" });
+    expect(sendUnlinkedFormsEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays quiet when another lead already flagged the form", async () => {
+    createMany.mockResolvedValueOnce({ count: 0 });
+    const { flagUnlinkedForm } = await import("@/lib/metaLeadPoll");
+    expect(await flagUnlinkedForm("P", "NEW")).toBeNull();
+    expect(sendUnlinkedFormsEmail).not.toHaveBeenCalled();
+  });
+
+  it("ignores a Page that isn't connected", async () => {
+    const { flagUnlinkedForm } = await import("@/lib/metaLeadPoll");
+    expect(await flagUnlinkedForm("OTHER", "NEW")).toBeNull();
+    expect(createMany).not.toHaveBeenCalled();
   });
 });

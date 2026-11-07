@@ -5,7 +5,7 @@ import {
   fetchMetaLeadDetail,
   type MetaLeadgenWebhookPayload,
 } from "@/lib/meta";
-import { ingestMetaLead } from "@/lib/metaLeadPoll";
+import { flagUnlinkedForm, ingestMetaLead } from "@/lib/metaLeadPoll";
 
 // Force this route to run in Node.js runtime (not Edge) — Prisma requires Node.
 export const runtime = "nodejs";
@@ -95,6 +95,13 @@ export async function POST(req: NextRequest) {
         console.log(
           `Meta webhook: no enabled mapping for form ${event.form_id}, skipping`,
         );
+        // The lead waits at Meta until the form is linked. Say so now, not at
+        // the next daily check. A failure here retries on the form's next lead.
+        if (!formMapping) {
+          await flagUnlinkedForm(event.page_id, event.form_id).catch((err) =>
+            console.error("Meta webhook: couldn't flag unlinked form:", err),
+          );
+        }
         continue;
       }
       if (!formMapping.pageConnection.pageAccessToken) {

@@ -125,6 +125,53 @@ export interface UnlinkedForm {
   leads: number;
 }
 
+type ConnectedPage = { id: string; pageId: string; pageName: string };
+
+/**
+ * Save a form that's getting leads, switched off, with its fields suggested.
+ * Null when it's already saved, so two leads at once can't alert twice.
+ */
+async function saveUnlinkedForm(page: ConnectedPage, formId: string, token: string): Promise<UnlinkedForm | null> {
+  const { name, questions } = await fetchMetaFormQuestions(formId, token);
+  const formName = name ?? formId;
+  const { count } = await prisma!.metaFormMapping.createMany({
+    data: [
+      {
+        formId,
+        formName,
+        packageId: DEFAULT_PACKAGE_ID,
+        pageConnectionId: page.id,
+        enabled: false,
+        fieldMapping: suggestFieldMapping(questions),
+      },
+    ],
+    skipDuplicates: true,
+  });
+  if (count === 0) return null;
+  const leads = await listFormLeads(formId, token, lookbackStart());
+  return { formId, formName, pageName: page.pageName, leads: leads.length };
+}
+
+async function alertAdmins(forms: UnlinkedForm[]) {
+  if (forms.length === 0 || !isEmailConfigured) return;
+  for (const toEmail of await adminEmails()) {
+    await sendUnlinkedFormsEmail({ toEmail, forms }).catch((err) =>
+      console.error(`Meta: unlinked form email failed: ${(err as Error).message}`),
+    );
+  }
+}
+
+/** The webhook's version of findUnlinkedForms, for a lead on a form nobody linked. */
+export async function flagUnlinkedForm(pageId: string, formId: string): Promise<UnlinkedForm | null> {
+  if (!prisma) return null;
+  const page = await prisma.metaPageConnection.findUnique({ where: { pageId } });
+  if (!page?.enabled) return null;
+  const token = (await systemUserPageToken(pageId)) ?? page.pageAccessToken;
+  const form = await saveUnlinkedForm(page, formId, token);
+  if (form) await alertAdmins([form]);
+  return form;
+}
+
 async function adminEmails(): Promise<string[]> {
   const admins = await prisma!.user.findMany({ where: { role: "ADMIN" }, select: { email: true } });
   const fromEnv = (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim());
@@ -153,30 +200,14 @@ export async function findUnlinkedForms(): Promise<UnlinkedForm[]> {
         if (form.status !== "ACTIVE" || known.has(form.id)) continue;
         const leads = await listFormLeads(form.id, token, lookbackStart());
         if (leads.length === 0) continue;
-        const { questions } = await fetchMetaFormQuestions(form.id, token);
-        await prisma.metaFormMapping.create({
-          data: {
-            formId: form.id,
-            formName: form.name,
-            packageId: DEFAULT_PACKAGE_ID,
-            pageConnectionId: page.id,
-            enabled: false,
-            fieldMapping: suggestFieldMapping(questions),
-          },
-        });
-        found.push({ formId: form.id, formName: form.name, pageName: page.pageName, leads: leads.length });
+        const saved = await saveUnlinkedForm(page, form.id, token);
+        if (saved) found.push(saved);
       }
     } catch (err) {
       console.error(`Meta poll: form check on page ${page.pageId} failed: ${(err as Error).message.slice(0, 300)}`);
     }
   }
 
-  if (found.length > 0 && isEmailConfigured) {
-    for (const toEmail of await adminEmails()) {
-      await sendUnlinkedFormsEmail({ toEmail, forms: found }).catch((err) =>
-        console.error(`Meta poll: unlinked form email failed: ${(err as Error).message}`),
-      );
-    }
-  }
+  await alertAdmins(found);
   return found;
 }
