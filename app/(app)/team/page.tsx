@@ -243,6 +243,14 @@ export default function TeamPage() {
 
   async function joinTeam(e: React.FormEvent) {
     e.preventDefault();
+    // One upline at a time: joining a new team moves the agent off their others.
+    const current = data?.teams.filter((t) => t.role === "AGENT").map((t) => t.name) ?? [];
+    if (
+      current.length > 0 &&
+      !confirm(`You're an agent on ${current.join(" and ")}. Joining a new upline's team moves you off it. Your leads stay with you. Continue?`)
+    ) {
+      return;
+    }
     setBusy("join");
     setJoinMsg(null);
     const res = await fetch("/api/team/join", {
@@ -257,13 +265,33 @@ export default function TeamPage() {
       return;
     }
     setJoinCode("");
+    const left: string[] = body.left ?? [];
+    const moved = left.length > 0 ? ` You left ${left.join(" and ")}.` : "";
     setJoinMsg({
       ok: true,
       text:
         body.status === "already-member"
-          ? `You're already on ${body.teamName}.`
-          : `You joined ${body.teamName}. Your upline will approve you to unlock the team's shared leads.`,
+          ? `You're on ${body.teamName}.${moved}`
+          : `You joined ${body.teamName}.${moved} Your upline will approve you to unlock the team's shared leads.`,
     });
+    load();
+  }
+
+  async function leaveTeam() {
+    if (!data) return;
+    if (!confirm(`Leave ${data.organization.name}? Your leads stay in your CRM.`)) return;
+    setBusy("leave");
+    const res = await fetch("/api/team/leave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId: data.organization.id }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) {
+      alert(body.error ?? "Could not leave that team");
+      return;
+    }
     load();
   }
 
@@ -324,6 +352,13 @@ export default function TeamPage() {
             )}
           </p>
         </div>
+        <div className="flex items-end gap-2">
+        {data.role !== "OWNER" && (
+          <Button size="sm" variant="ghost" onClick={leaveTeam} disabled={busy === "leave"}>
+            {busy === "leave" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Leave team
+          </Button>
+        )}
         {data.teams.length > 1 && (
           <div className="space-y-1">
             <Label htmlFor="active-team" className="text-xs text-muted-foreground">
@@ -345,6 +380,7 @@ export default function TeamPage() {
             </select>
           </div>
         )}
+        </div>
       </div>
 
       {data.pending && (
@@ -743,7 +779,9 @@ export default function TeamPage() {
         <h2 className="font-semibold tracking-tight flex items-center gap-2">
           <UsersRound className="h-4 w-4" /> Have an upline?
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Enter their code to join their team.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Enter their code to join their team. Already on another upline&apos;s team? Their code moves you over.
+        </p>
         <form onSubmit={joinTeam} className="mt-4 flex gap-2 flex-wrap items-end">
           <div className="flex-1 min-w-[200px] max-w-xs space-y-1.5">
             <Label htmlFor="join-code">Upline code</Label>

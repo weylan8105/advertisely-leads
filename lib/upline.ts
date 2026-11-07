@@ -14,6 +14,10 @@ import { isEmailConfigured, sendUplineJoinEmail } from "@/lib/email";
  * pendingApproval: the agent is on the team right away, but the team's shared
  * Goldmine, round-robin rotation and roster stay closed until a manager
  * approves them on the Team page.
+ *
+ * An agent has one upline at a time: joining a new upline's team is a transfer
+ * that takes them off any other team where they're an agent (their own team,
+ * and teams they help run as an admin, stay). Their leads stay in their CRM.
  */
 
 export interface UplineTeam {
@@ -26,8 +30,8 @@ export interface UplineTeam {
 }
 
 export type JoinResult =
-  | { status: "joined"; organizationId: string; teamName: string; uplineName: string | null }
-  | { status: "already-member"; organizationId: string; teamName: string; uplineName: string | null }
+  | { status: "joined"; organizationId: string; teamName: string; uplineName: string | null; left: string[] }
+  | { status: "already-member"; organizationId: string; teamName: string; uplineName: string | null; left: string[] }
   | { status: "own-code" }
   | { status: "invalid" };
 
@@ -64,8 +68,24 @@ export async function resolveUplineCode(raw: unknown): Promise<UplineTeam | null
 }
 
 /**
- * Put `userId` on the team behind an upline code (pending approval) and make
- * it their active team. Already on that team → nothing changes.
+ * Leave every other team where this user is an agent, so their new upline's
+ * team is their only one. Returns the names of the teams they left.
+ */
+async function leaveOtherUplineTeams(userId: string, keepOrganizationId: string): Promise<string[]> {
+  if (!prisma) return [];
+  const others = await prisma.membership.findMany({
+    where: { userId, role: "AGENT", organizationId: { not: keepOrganizationId } },
+    select: { id: true, organization: { select: { name: true } } },
+  });
+  if (others.length === 0) return [];
+  await prisma.membership.deleteMany({ where: { id: { in: others.map((m) => m.id) } } });
+  return others.map((m) => m.organization.name);
+}
+
+/**
+ * Put `userId` on the team behind an upline code (pending approval), make it
+ * their active team, and take them off any other upline's team (a transfer).
+ * Already on that team → their membership there is unchanged.
  */
 export async function joinUplineTeam(userId: string, raw: unknown): Promise<JoinResult> {
   if (!prisma) return { status: "invalid" };
@@ -78,12 +98,18 @@ export async function joinUplineTeam(userId: string, raw: unknown): Promise<Join
     : await ensureOwnedOrganization(up.uplineUserId);
   if (!team) return { status: "invalid" };
 
-  const already = { status: "already-member" as const, organizationId: team.id, teamName: team.name, uplineName: up.uplineName };
+  const already = async () => {
+    const left = await leaveOtherUplineTeams(userId, team.id);
+    if (left.length > 0) {
+      await prisma!.user.update({ where: { id: userId }, data: { defaultOrganizationId: team.id } });
+    }
+    return { status: "already-member" as const, organizationId: team.id, teamName: team.name, uplineName: up.uplineName, left };
+  };
   const existing = await prisma.membership.findUnique({
     where: { organizationId_userId: { organizationId: team.id, userId } },
     select: { id: true },
   });
-  if (existing) return already;
+  if (existing) return already();
 
   try {
     await prisma.$transaction([
@@ -93,14 +119,15 @@ export async function joinUplineTeam(userId: string, raw: unknown): Promise<Join
       prisma.user.update({ where: { id: userId }, data: { defaultOrganizationId: team.id } }),
     ]);
   } catch (e: any) {
-    if (e?.code === "P2002") return already; // joined concurrently
+    if (e?.code === "P2002") return already(); // joined concurrently
     throw e;
   }
+  const left = await leaveOtherUplineTeams(userId, team.id);
 
   await notifyUplineOfJoin(team.id, up.uplineUserId, userId).catch((e) =>
     console.warn("[upline] join notification failed", e),
   );
-  return { status: "joined", organizationId: team.id, teamName: team.name, uplineName: up.uplineName };
+  return { status: "joined", organizationId: team.id, teamName: team.name, uplineName: up.uplineName, left };
 }
 
 /** Email the code's owner (and the team owner, if someone else) that an agent joined and needs approval. */
