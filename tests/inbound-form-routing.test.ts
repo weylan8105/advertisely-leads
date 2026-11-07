@@ -4,9 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // mapped to an advertiser must route the lead to them (never the marketplace).
 
 const created: any[] = [];
+const copies: any[] = [];
 vi.mock("@/lib/prisma", () => ({
   isDatabaseConfigured: true,
   prisma: {
+    $queryRaw: vi.fn(async () => copies),
     lead: {
       findUnique: vi.fn(async () => null),
       create: vi.fn(async ({ data }: any) => {
@@ -42,6 +44,7 @@ const ghl = (attribution: Record<string, unknown>) => ({
 
 beforeEach(() => {
   created.length = 0;
+  copies.length = 0;
   deliverLeadToOwner.mockClear();
   tryFulfillForNewLead.mockClear();
   fireMetaLeadEvent.mockClear();
@@ -68,6 +71,16 @@ describe("GHL leads routed by Meta form id", () => {
     expect(deliverLeadToOwner).toHaveBeenCalledWith("L1", "JACE", expect.stringContaining("JACE_FORM"));
     expect(tryFulfillForNewLead).not.toHaveBeenCalled();
     expect(fireMetaLeadEvent).not.toHaveBeenCalled();
+  });
+
+  it("drops a GHL lead Meta already brought in for a linked form", async () => {
+    copies.push({ id: "M1", rawFormData: {} });
+    const { normalizeInboundLead } = await import("@/lib/inboundLead");
+    const { createInboundLead } = await import("@/lib/inboundIntake");
+    const out = await createInboundLead(normalizeInboundLead(ghl({ attributionSource: { formId: "JACE_FORM" } })), { activityBody: "t" });
+    expect(out.status).toBe("duplicate");
+    expect(created).toHaveLength(0);
+    expect(deliverLeadToOwner).not.toHaveBeenCalled();
   });
 
   it("leaves leads from unmapped forms on the normal marketplace path", async () => {

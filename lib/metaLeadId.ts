@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { flattenMetaFields, type MetaLeadDetail } from "./meta";
+import { flattenMetaFields, META_LEAD_FIELDS, type MetaLeadDetail } from "./meta";
 import { leadFormTokens } from "./metaAds";
 import { ghlFormId } from "./inboundLead";
 
@@ -31,7 +31,7 @@ export type LeadAdColumns = {
   creativeId?: string | null;
 };
 
-type LeadAd = Pick<MetaLeadDetail, "ad_id" | "adset_id" | "campaign_id"> & { campaign_name?: string };
+type LeadAd = Pick<MetaLeadDetail, "ad_id" | "adset_id" | "campaign_id" | "campaign_name">;
 
 /**
  * What a CRM event needs to know about an instant form lead. `note` says how the
@@ -45,7 +45,7 @@ export interface InstantFormContext {
 /** Every lead on a form created after `since`, following pagination. */
 export async function listFormLeads(formId: string, token: string, since: Date): Promise<MetaLeadDetail[]> {
   const qs = new URLSearchParams({
-    fields: "id,created_time,ad_id,adset_id,campaign_id,form_id,field_data",
+    fields: META_LEAD_FIELDS,
     filtering: JSON.stringify([
       { field: "time_created", operator: "GREATER_THAN", value: Math.floor(since.getTime() / 1000) },
     ]),

@@ -36,9 +36,13 @@ export interface MetaLeadDetail {
   ad_id?: string;
   adset_id?: string;
   campaign_id?: string;
+  campaign_name?: string;
   form_id: string;
   field_data: MetaLeadFieldData[];
 }
+
+// Meta leaves the ad and campaign off a lead unless they're asked for by name.
+export const META_LEAD_FIELDS = "id,created_time,ad_id,adset_id,campaign_id,campaign_name,form_id,field_data";
 
 /**
  * Verify the X-Hub-Signature-256 header Meta sends on every webhook delivery.
@@ -134,7 +138,7 @@ export async function fetchMetaLeadDetail(
 ): Promise<MetaLeadDetail> {
   const url = `${META_GRAPH_API}/${encodeURIComponent(
     leadgenId,
-  )}?access_token=${encodeURIComponent(pageAccessToken)}`;
+  )}?fields=${META_LEAD_FIELDS}&access_token=${encodeURIComponent(pageAccessToken)}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     const text = await res.text();
@@ -165,6 +169,31 @@ export const META_BUILTIN_KEYS = new Set([
 export const MAPPABLE_DB_FIELDS = [
   "name", "email", "phone", "state", "age", "income", "occupation", "intentReason",
 ] as const;
+
+// Heuristic auto-suggest: match a question's key/label to a DB field.
+export function suggestField(key: string, label: string): string | null {
+  const t = `${key} ${label}`.toLowerCase();
+  if (/\b(income|salary|earn|household)\b/.test(t)) return "income";
+  if (/\b(state|province)\b/.test(t)) return "state";
+  if (/\b(age)\b/.test(t)) return "age";
+  if (/\b(trade|occupation|job|work|profession|career)\b/.test(t)) return "occupation";
+  if (/\b(retire|timeline|when|goal|reason|interest)\b/.test(t)) return "intentReason";
+  if (/\b(email)\b/.test(t)) return "email";
+  if (/\b(phone|mobile|cell)\b/.test(t)) return "phone";
+  if (/\b(name)\b/.test(t)) return "name";
+  return null;
+}
+
+/** A starting field mapping for a form's custom questions. */
+export function suggestFieldMapping(questions: MetaFormQuestion[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  for (const q of questions) {
+    if (META_BUILTIN_KEYS.has(q.key)) continue;
+    const field = suggestField(q.key, q.label);
+    if (field) mapping[q.key] = field;
+  }
+  return mapping;
+}
 
 /**
  * Fetch a lead form's questions from the Graph API so an admin can see the
@@ -227,7 +256,8 @@ export function mapLeadFields(
   const standardized: Record<string, string | number> = {};
 
   // Meta's built-in fields use well-known keys.
-  if (flat.full_name) standardized.name = flat.full_name;
+  const name = flat.full_name || [flat.first_name, flat.last_name].filter(Boolean).join(" ");
+  if (name) standardized.name = name;
   if (flat.email) standardized.email = flat.email;
   if (flat.phone_number) standardized.phone = flat.phone_number;
   // Normalize state to a 2-letter code so it matches order.filterStates.

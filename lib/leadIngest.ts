@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { mapLeadFields } from "./meta";
 import { tryFulfillForNewLead } from "./fulfillment";
 import { deliverLeadToOwner } from "./house";
+import { fireMetaLeadEvent } from "./metaCapi";
 import { isTestLead } from "./testLeads";
 
 export interface IngestResult {
@@ -10,6 +11,27 @@ export interface IngestResult {
   assigned?: boolean;
   orderId?: string | null;
   missing?: string[];
+}
+
+// GHL can forward a lead a while after the form was submitted.
+const COPY_WINDOW_MS = 86_400_000;
+
+/**
+ * The same form submission already stored by the other intake path. GHL and Meta
+ * give one lead different ids, so while a form moves off GHL they can both bring
+ * it in. Matches on the form, phone and time, so someone who fills the form out
+ * again later is still a new lead.
+ */
+export async function findFormLeadCopy(formId: string, phone: string, around: Date) {
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  if (!prisma || digits.length < 10) return null;
+  const rows = await prisma.$queryRaw<{ id: string; rawFormData: Record<string, unknown> | null }[]>`
+    SELECT id, "rawFormData" FROM "Lead"
+    WHERE "receivedAt" BETWEEN ${new Date(around.getTime() - COPY_WINDOW_MS)} AND ${new Date(around.getTime() + COPY_WINDOW_MS)}
+      AND right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = ${digits}
+      AND "rawFormData"::text LIKE ${`%${formId}%`}
+    LIMIT 1`;
+  return rows[0] ?? null;
 }
 
 /**
@@ -32,6 +54,8 @@ export async function ingestLeadFromFields(opts: {
     adsetId?: string;
     adId?: string;
     createdTime?: Date;
+    campaignName?: string;
+    formId?: string;
   };
   activityBody: string;
 }): Promise<IngestResult> {
@@ -63,6 +87,20 @@ export async function ingestLeadFromFields(opts: {
     return { status: "missing_fields", missing };
   }
 
+  const formId = opts.meta?.formId;
+  if (formId) {
+    const copy = await findFormLeadCopy(formId, standardized.phone!, opts.meta?.createdTime ?? new Date());
+    if (copy) {
+      if (!copy.rawFormData?.leadgen_id) {
+        await prisma.lead.update({
+          where: { id: copy.id },
+          data: { rawFormData: { ...(copy.rawFormData as object), leadgen_id: opts.externalId } },
+        });
+      }
+      return { status: "skipped_duplicate", leadId: copy.id };
+    }
+  }
+
   const created = await prisma.lead.create({
     data: {
       externalId: opts.externalId,
@@ -77,12 +115,16 @@ export async function ingestLeadFromFields(opts: {
       intentReason: standardized.intentReason,
       packageId: opts.packageId,
       source: opts.source,
-      campaignName: opts.meta?.campaignId,
+      campaignName: opts.meta?.campaignName,
+      utmCampaign: opts.meta?.campaignName,
       adsetId: opts.meta?.adsetId,
       creativeId: opts.meta?.adId,
       consentMethod: "TCPA_WEB_FORM",
       consentTime: opts.meta?.createdTime ?? new Date(),
-      rawFormData: raw,
+      // The form and campaign ids are what CRM events and Ad Performance read.
+      rawFormData: formId
+        ? { ...raw, form_id: formId, leadgen_id: opts.externalId, ...(opts.meta?.campaignId ? { campaignId: opts.meta.campaignId } : {}) }
+        : raw,
       activity: {
         create: {
           type: "LEAD_RECEIVED",
@@ -118,6 +160,16 @@ export async function ingestLeadFromFields(opts: {
       `Delivered to advertiser (owns form "${opts.source}") — not distributed to buyers.`,
     );
     return { status: "ingested", leadId: created.id, assigned: delivered, orderId: null };
+  }
+
+  // Same order as the inbound path: tell Meta first, so a failed assignment below
+  // can't lose the event. Admin simulations have no Meta lead to report.
+  if (opts.meta) {
+    try {
+      await fireMetaLeadEvent(created);
+    } catch (err) {
+      console.warn(`[meta-capi] lead ${created.id}: ${(err as Error).message}`);
+    }
   }
 
   // Try to immediately assign to an open order (sends email + Sheets sync).

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isDatabaseConfigured } from "@/lib/prisma";
-import { pollMetaLeads } from "@/lib/metaLeadPoll";
+import { findUnlinkedForms, pollMetaLeads } from "@/lib/metaLeadPoll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,11 +11,12 @@ export const maxDuration = 60;
 /**
  * GET /api/cron/meta-leads — pull recent leads for every mapped Meta form.
  *
- * Not scheduled: advertiser form leads arrive through GHL and are routed by form
- * id (lib/inboundIntake.ts). Running this alongside GHL would store each lead
- * twice (leadgen id vs GHL contact id). It stays as a manual tool — callable
- * with `Authorization: Bearer <CRON_SECRET>` or by a signed-in admin, and
- * `?dryRun=1` lists what would be ingested (ids only) without writing anything.
+ * This is the direct Meta connection: no GHL in between. It also flags forms on
+ * connected Pages that are getting leads but aren't linked yet. A form still on
+ * GHL can run alongside it, since findFormLeadCopy keeps the two from storing one
+ * lead twice. Called by the Vercel Cron in vercel.json with
+ * `Authorization: Bearer <CRON_SECRET>`, or by a signed-in admin. `?dryRun=1`
+ * lists what would be ingested (ids only) without writing anything.
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -34,5 +35,6 @@ export async function GET(req: NextRequest) {
 
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
   const forms = await pollMetaLeads({ dryRun });
-  return NextResponse.json({ ok: true, dryRun, forms, ranAt: new Date().toISOString() });
+  const unlinkedForms = dryRun ? [] : await findUnlinkedForms();
+  return NextResponse.json({ ok: true, dryRun, forms, unlinkedForms, ranAt: new Date().toISOString() });
 }

@@ -582,6 +582,43 @@ ${tableHtml}
 }
 
 /**
+ * Alert admins that Meta forms are collecting leads nobody will receive until the
+ * forms are linked. See findUnlinkedForms in lib/metaLeadPoll.ts.
+ */
+export async function sendUnlinkedFormsEmail({
+  toEmail,
+  forms,
+}: {
+  toEmail: string;
+  forms: { formName: string; pageName: string; leads: number }[];
+}) {
+  const url = "https://advertisely.io/admin";
+  const subject = `⚠️ ${forms.length} Meta form${forms.length === 1 ? "" : "s"} getting leads with nobody assigned`;
+  const rows = forms
+    .map(
+      (f) => `<tr style="border-bottom:1px solid #eef2f7;">
+<td style="padding:10px;font-size:13px;font-weight:600;color:#0f172a;">${escapeHtml(f.formName)}<div style="font-size:11px;color:#94a3b8;font-weight:400;">${escapeHtml(f.pageName)}</div></td>
+<td style="padding:10px;font-size:13px;font-weight:700;color:#dc2626;text-align:center;">${f.leads}</td></tr>`,
+    )
+    .join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;"><tr><td align="center">
+<table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:#dc2626;padding:24px 32px;"><div style="color:#fff;font-size:20px;font-weight:700;">Advertisely</div><div style="color:#fca5a5;font-size:13px;margin-top:2px;">Meta lead forms</div></td></tr>
+<tr><td style="padding:28px 32px;">
+<p style="margin:0 0 18px;font-size:14px;color:#475569;line-height:1.6;">These forms are getting leads, but Advertisely doesn't know who they belong to. They wait safely at Meta. Open Meta ingestion in the Admin Console and link each form to bring them in.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;border-collapse:separate;overflow:hidden;margin:8px 0 20px;">
+<thead><tr style="background:#0f172a;text-align:left;"><th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;">Form</th><th style="padding:10px;font-size:11px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em;text-align:center;">Leads, last 48h</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div style="text-align:center;margin:4px 0 8px;"><a href="${url}" style="display:inline-block;background:#dc2626;color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;">Open Admin Console →</a></div>
+</td></tr></table></td></tr></table></body></html>`;
+
+  return sendEmail({ to: toEmail, subject, html });
+}
+
+/**
  * Weekly house-lead invoice: what each admin owes for the overflow leads they
  * took in the last 7 days, at the current blended CPL. See
  * app/api/cron/house-lead-invoice/route.ts + lib/houseLeadInvoice.ts.

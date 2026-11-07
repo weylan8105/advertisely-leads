@@ -457,8 +457,10 @@ function FormMappingList({
                 });
                 if (res.ok) {
                   const { mapping } = await res.json();
-                  setMappings([...mappings, mapping]);
+                  setMappings([...mappings.filter((m) => m.formId !== mapping.formId), mapping]);
                   setShow(false);
+                  setFormId("");
+                  setFormName("");
                   setOwnerEmail("");
                 } else {
                   const data = await res.json().catch(() => null);
@@ -506,6 +508,22 @@ function FormMappingList({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {!m.enabled && (
+                    <Button
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => {
+                        setFormId(m.formId);
+                        setFormName(m.formName);
+                        setPackageId(m.packageId);
+                        setOwnerEmail("");
+                        setSaveError(null);
+                        setShow(true);
+                      }}
+                    >
+                      Link form
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -514,8 +532,8 @@ function FormMappingList({
                   >
                     <SlidersHorizontal className="h-3 w-3" /> Configure fields
                   </Button>
-                  <Badge variant={m.enabled ? "success" : "muted"} className="text-[10px]">
-                    {m.enabled ? "Active" : "Off"}
+                  <Badge variant={m.enabled ? "success" : "warning"} className="text-[10px]">
+                    {m.enabled ? "Active" : "Getting leads, not linked"}
                   </Badge>
                 </div>
               </div>

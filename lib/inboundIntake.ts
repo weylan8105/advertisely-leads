@@ -3,6 +3,7 @@ import type { NormalizedInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
 import { deliverLeadToOwner, assignLeadToHouse } from "@/lib/house";
 import { fireMetaLeadEvent } from "@/lib/metaCapi";
+import { findFormLeadCopy } from "@/lib/leadIngest";
 import { isTestLead } from "@/lib/testLeads";
 
 export type InboundLeadOutcome =
@@ -35,6 +36,19 @@ export async function createInboundLead(
       where: { externalId: lead.externalId },
     });
     if (existing) return { status: "duplicate" };
+  }
+
+  const formMapping = lead.formId
+    ? await prisma.metaFormMapping.findUnique({
+        where: { formId: lead.formId },
+        select: { ownerUserId: true, enabled: true },
+      })
+    : null;
+
+  // A form linked under Meta ingestion brings its own leads in. Until its GHL
+  // workflow is off, GHL can forward one Meta already gave us.
+  if (formMapping?.enabled && (await findFormLeadCopy(lead.formId!, lead.standardized.phone, new Date()))) {
+    return { status: "duplicate" };
   }
 
   let record;
@@ -100,14 +114,8 @@ export async function createInboundLead(
   // lead fall through into the sellable marketplace pool.
   // A lead from an advertiser's own Meta form (matched by form id, e.g. GHL's
   // attribution) is exclusive to that advertiser even without an owner tag.
-  let formOwnerId: string | null = null;
-  if (!lead.ownerUserId && !lead.ownerEmail && lead.formId) {
-    const mapping = await prisma.metaFormMapping.findUnique({
-      where: { formId: lead.formId },
-      select: { ownerUserId: true, enabled: true },
-    });
-    if (mapping?.enabled && mapping.ownerUserId) formOwnerId = mapping.ownerUserId;
-  }
+  const formOwnerId =
+    !lead.ownerUserId && !lead.ownerEmail && formMapping?.enabled ? formMapping.ownerUserId : null;
 
   const ownerSpecified = lead.ownerUserId || lead.ownerEmail || formOwnerId;
   if (ownerSpecified) {

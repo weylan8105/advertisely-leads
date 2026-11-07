@@ -1,13 +1,16 @@
 import { prisma } from "./prisma";
-import { flattenMetaFields, type MetaLeadDetail } from "./meta";
+import { fetchMetaFormQuestions, flattenMetaFields, suggestFieldMapping, type MetaLeadDetail } from "./meta";
 import { ingestLeadFromFields, type IngestResult } from "./leadIngest";
-import { systemUserPageToken } from "./metaAds";
+import { listLeadForms, systemUserPageToken } from "./metaAds";
 import { listFormLeads } from "./metaLeadId";
+import { isEmailConfigured, sendUnlinkedFormsEmail } from "./email";
 
 // How far back each poll looks. Re-reading leads we already have is free
 // (ingest is idempotent on the leadgen id), and the overlap lets a missed or
 // failed run catch up on the next one.
 export const POLL_LOOKBACK_HOURS = 48;
+// Placeholder until an admin links the form and picks its real package.
+const DEFAULT_PACKAGE_ID = "blue-collar-iul";
 
 type MappingWithPage = {
   formId: string;
@@ -33,6 +36,8 @@ export function ingestMetaLead(mapping: MappingWithPage, detail: MetaLeadDetail)
     source: `Meta - ${mapping.formName}`,
     meta: {
       campaignId: detail.campaign_id,
+      campaignName: detail.campaign_name,
+      formId: mapping.formId,
       adsetId: detail.adset_id,
       adId: detail.ad_id,
       createdTime: new Date(detail.created_time),
@@ -40,6 +45,8 @@ export function ingestMetaLead(mapping: MappingWithPage, detail: MetaLeadDetail)
     activityBody: `Lead received from Meta form "${mapping.formName}".`,
   });
 }
+
+const lookbackStart = () => new Date(Date.now() - POLL_LOOKBACK_HOURS * 3600_000);
 
 export interface FormPollResult {
   formId: string;
@@ -57,22 +64,27 @@ export interface FormPollResult {
  * Pull recent leads for every enabled form mapping straight from the Graph API.
  * This is how leads arrive while the app's leadgen webhook can't be enabled
  * (it needs Advanced Access); with the webhook on, it's a harmless backstop.
+ * `since` and `formId` narrow it to one form when that form is first linked.
  */
-export async function pollMetaLeads(opts: { dryRun?: boolean; lookbackHours?: number } = {}): Promise<FormPollResult[]> {
+export async function pollMetaLeads(
+  opts: { dryRun?: boolean; formId?: string; since?: Date } = {},
+): Promise<FormPollResult[]> {
   if (!prisma) return [];
-  const since = new Date(Date.now() - (opts.lookbackHours ?? POLL_LOOKBACK_HOURS) * 3600_000);
+  const since = opts.since ?? lookbackStart();
   const mappings = await prisma.metaFormMapping.findMany({
-    where: { enabled: true, pageConnection: { enabled: true } },
+    where: { enabled: true, pageConnection: { enabled: true }, ...(opts.formId ? { formId: opts.formId } : {}) },
     include: { pageConnection: true },
   });
 
   const results: FormPollResult[] = [];
+  const tokens = new Map<string, string | null>();
   for (const mapping of mappings) {
     const r: FormPollResult = { formId: mapping.formId, formName: mapping.formName, found: 0, ingested: 0, duplicates: 0, skipped: 0 };
     results.push(r);
     try {
-      const token =
-        (await systemUserPageToken(mapping.pageConnection.pageId)) ?? mapping.pageConnection.pageAccessToken;
+      const pageId = mapping.pageConnection.pageId;
+      if (!tokens.has(pageId)) tokens.set(pageId, await systemUserPageToken(pageId));
+      const token = tokens.get(pageId) ?? mapping.pageConnection.pageAccessToken;
       const leads = await listFormLeads(mapping.formId, token, since);
       r.found = leads.length;
 
@@ -104,4 +116,67 @@ export async function pollMetaLeads(opts: { dryRun?: boolean; lookbackHours?: nu
     }
   }
   return results;
+}
+
+export interface UnlinkedForm {
+  formId: string;
+  formName: string;
+  pageName: string;
+  leads: number;
+}
+
+async function adminEmails(): Promise<string[]> {
+  const admins = await prisma!.user.findMany({ where: { role: "ADMIN" }, select: { email: true } });
+  const fromEnv = (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim());
+  return Array.from(
+    new Map([...admins.map((u) => u.email), ...fromEnv].filter(Boolean).map((e) => [e.toLowerCase(), e])).values(),
+  );
+}
+
+/**
+ * Find forms on connected Pages that are collecting leads but aren't linked to
+ * anyone, so a new form can't lose leads unnoticed. Each is saved switched off
+ * with its fields suggested, for an admin to link under Meta ingestion: only a
+ * person can say whose leads they are, and a guess could hand a client's leads
+ * to someone else. Admins get one email per form, when it's first found.
+ */
+export async function findUnlinkedForms(): Promise<UnlinkedForm[]> {
+  if (!prisma) return [];
+  const pages = await prisma.metaPageConnection.findMany({ where: { enabled: true } });
+  const known = new Set((await prisma.metaFormMapping.findMany({ select: { formId: true } })).map((m) => m.formId));
+  const found: UnlinkedForm[] = [];
+
+  for (const page of pages) {
+    try {
+      const token = (await systemUserPageToken(page.pageId)) ?? page.pageAccessToken;
+      for (const form of await listLeadForms(page.pageId)) {
+        if (form.status !== "ACTIVE" || known.has(form.id)) continue;
+        const leads = await listFormLeads(form.id, token, lookbackStart());
+        if (leads.length === 0) continue;
+        const { questions } = await fetchMetaFormQuestions(form.id, token);
+        await prisma.metaFormMapping.create({
+          data: {
+            formId: form.id,
+            formName: form.name,
+            packageId: DEFAULT_PACKAGE_ID,
+            pageConnectionId: page.id,
+            enabled: false,
+            fieldMapping: suggestFieldMapping(questions),
+          },
+        });
+        found.push({ formId: form.id, formName: form.name, pageName: page.pageName, leads: leads.length });
+      }
+    } catch (err) {
+      console.error(`Meta poll: form check on page ${page.pageId} failed: ${(err as Error).message.slice(0, 300)}`);
+    }
+  }
+
+  if (found.length > 0 && isEmailConfigured) {
+    for (const toEmail of await adminEmails()) {
+      await sendUnlinkedFormsEmail({ toEmail, forms: found }).catch((err) =>
+        console.error(`Meta poll: unlinked form email failed: ${(err as Error).message}`),
+      );
+    }
+  }
+  return found;
 }

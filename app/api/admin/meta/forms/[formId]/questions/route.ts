@@ -5,24 +5,11 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import {
   fetchMetaFormQuestions,
   META_BUILTIN_KEYS,
+  suggestField,
 } from "@/lib/meta";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// Heuristic auto-suggest: match a question's key/label to a DB field.
-function suggestField(key: string, label: string): string | null {
-  const t = `${key} ${label}`.toLowerCase();
-  if (/\b(income|salary|earn|household)\b/.test(t)) return "income";
-  if (/\b(state|province)\b/.test(t)) return "state";
-  if (/\b(age)\b/.test(t)) return "age";
-  if (/\b(trade|occupation|job|work|profession|career)\b/.test(t)) return "occupation";
-  if (/\b(retire|timeline|when|goal|reason|interest)\b/.test(t)) return "intentReason";
-  if (/\b(email)\b/.test(t)) return "email";
-  if (/\b(phone|mobile|cell)\b/.test(t)) return "phone";
-  if (/\b(name)\b/.test(t)) return "name";
-  return null;
-}
 
 /**
  * GET /api/admin/meta/forms/[formId]/questions

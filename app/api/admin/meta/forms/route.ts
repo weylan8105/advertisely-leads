@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { pollMetaLeads, POLL_LOOKBACK_HOURS } from "@/lib/metaLeadPoll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,14 +65,21 @@ export async function POST(req: NextRequest) {
     ownerUserId = ownerUser.id;
   }
 
+  const before = await prisma.metaFormMapping.findUnique({
+    where: { formId: body.formId },
+    select: { enabled: true, createdAt: true },
+  });
+
   const mapping = await prisma.metaFormMapping.upsert({
     where: { formId: body.formId },
     update: {
       formName: body.formName,
       packageId: body.packageId,
       ...(body.fieldMapping !== undefined ? { fieldMapping: body.fieldMapping } : {}),
-      ...(body.ownerEmail !== undefined ? { ownerUserId } : {}),
-      enabled: true,
+      // Only the link step sends ownerEmail, so it alone turns a form on. Saving
+      // the fields of a form still waiting to be linked must not put a client's
+      // leads on the marketplace.
+      ...(body.ownerEmail !== undefined ? { ownerUserId, enabled: true } : {}),
     },
     create: {
       pageConnectionId: body.pageConnectionId,
@@ -82,6 +90,12 @@ export async function POST(req: NextRequest) {
       ownerUserId,
     },
   });
+
+  // Bring in what the form collected while it waited to be linked.
+  if (before && !before.enabled && mapping.enabled) {
+    const since = new Date(before.createdAt.getTime() - POLL_LOOKBACK_HOURS * 3600_000);
+    await pollMetaLeads({ formId: mapping.formId, since });
+  }
 
   // Hand the UI the owner's display info so the "Exclusive" badge renders at once.
   if (!ownerUser && mapping.ownerUserId) {
