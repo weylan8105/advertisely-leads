@@ -30,6 +30,9 @@ vi.mock("../lib/prisma", () => {
         logged.push(data);
         return {};
       }),
+      findMany: vi.fn(async ({ where }: any) =>
+        logged.filter((l) => l.source === "meta-capi" && l.cta.startsWith(where.cta.startsWith) && l.cta.includes(where.cta.contains)),
+      ),
     },
   };
   return { isDatabaseConfigured: true, prisma };
@@ -271,7 +274,7 @@ describe("stage events", () => {
     await fireMetaStageEvent("L1", "approved");
     expect(sent[0].text).toContain(`"lead_id":${META_ID}`);
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
-    expect(logged[0].cta).toBe("ok CompleteRegistration rcvd:1 id:stored lead:L1");
+    expect(logged[0].cta).toBe("ok Purchase rcvd:1 id:stored lead:L1");
   });
 
   it("uses the lead's own id when it came straight from Meta", async () => {
@@ -280,11 +283,32 @@ describe("stage events", () => {
     expect(sent[0].text).toContain(`"lead_id":${META_ID}`);
   });
 
-  it("uses standard Meta names, so core setup can't drop a stage", async () => {
+  it("sends one Purchase per lead, at its first closing stage", async () => {
     leads.set("L1", instantLead());
+    await fireMetaStageEvent("L1", "underwriting");
     await fireMetaStageEvent("L1", "approved");
     await fireMetaStageEvent("L1", "issued-not-paid");
-    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["CompleteRegistration", "AddPaymentInfo"]);
+    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Purchase"]);
+    expect(event().event_id).toBe("conv_L1");
+    expect(logged).toHaveLength(1);
+  });
+
+  it("doesn't mistake another lead's Purchase for this one's", async () => {
+    leads.set("L1", instantLead());
+    leads.set("L10", instantLead({ id: "L10" }));
+    await fireMetaStageEvent("L10", "approved");
+    await fireMetaStageEvent("L1", "approved");
+    expect(sent).toHaveLength(2);
+  });
+
+  it("sends the Purchase again after Meta refused the first", async () => {
+    leads.set("L1", instantLead());
+    graph.capi = () => json({ error: { message: "Invalid parameter", code: 100 } }, 400);
+    await fireMetaStageEvent("L1", "underwriting");
+    graph.capi = () => json({ events_received: 1 });
+    await fireMetaStageEvent("L1", "approved");
+    expect(sent).toHaveLength(2);
+    expect(logged[1].cta).toContain("ok Purchase");
   });
 
   it("reports an older move at the time it happened", async () => {
@@ -299,7 +323,7 @@ describe("stage events", () => {
     graph.capi = () => json({ error: { message: "Invalid parameter", code: 100 } }, 400);
     await fireMetaStageEvent("L1", "issued-not-paid");
     expect(logged[0].step).toBe(400);
-    expect(logged[0].cta).toContain("error AddPaymentInfo");
+    expect(logged[0].cta).toContain("error Purchase");
     expect(logged[0].cta).toContain("Invalid parameter");
   });
 
@@ -307,7 +331,7 @@ describe("stage events", () => {
     leads.set("L1", instantLead());
     graph.capi = () => json({ events_received: 0, messages: ["dropped"] });
     await fireMetaStageEvent("L1", "approved");
-    expect(logged[0].cta).toContain("ok CompleteRegistration rcvd:0");
+    expect(logged[0].cta).toContain("ok Purchase rcvd:0");
     expect(logged[0].cta).toContain("dropped");
   });
 

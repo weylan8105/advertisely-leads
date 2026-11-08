@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { stageLabel } from "@/data/pipeline";
+import { CONVERSION_STAGE_IDS, stageLabel } from "@/data/pipeline";
 import { INSTANT_FORM_LEAD_EVENT, STAGE_EVENTS, fireMetaLeadEvent, fireMetaStageEvent } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
@@ -14,17 +14,18 @@ const WINDOW_MS = 7 * 86_400_000 - 5 * 60_000;
 // Answer before the function is cut off; call again for what's left.
 const BUDGET_MS = 45_000;
 const ABCA_SOURCE = "early-retirement-quiz";
-// The stages whose old custom names never reached the Enhanced Wealth pixel.
-const RESEND_STAGES = ["approved", "issued-not-paid"];
+// Every closing stage sends the one Purchase a lead gets; a lead that reached
+// one before that was the rule (or under an old custom name) gets it here.
+const RESEND_STAGES: string[] = [...CONVERSION_STAGE_IDS];
 
 const moveBody = (stage: string) => `Moved to "${stageLabel(stage)}" in the pipeline.`;
 
 /**
  * POST /api/admin/meta-resend — resend Enhanced Wealth events Meta never showed,
- * at their real times: stage moves and instant form leads still inside Meta's
- * 7-day limit. Skips anything already sent under the current name, so it's safe
- * to repeat until `remaining` is 0. Outcomes land in FunnelEvent like any send.
- * Admin only.
+ * at their real times: closing-stage moves (one Purchase per lead, at its first
+ * such move) and instant form leads still inside Meta's 7-day limit. Skips
+ * anything already sent under the current name, so it's safe to repeat until
+ * `remaining` is 0. Outcomes land in FunnelEvent like any send. Admin only.
  */
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -61,9 +62,12 @@ export async function POST() {
 
   // Stage moves first: they're the fewest and the closest to aging out.
   const jobs: (() => Promise<unknown>)[] = [];
+  const queued = new Set<string>();
   for (const move of moves) {
     const stage = RESEND_STAGES.find((s) => moveBody(s) === move.body)!;
-    if (sent.has(`${STAGE_EVENTS[stage].event}:${move.leadId}`)) continue;
+    const key = `${STAGE_EVENTS[stage].event}:${move.leadId}`;
+    if (sent.has(key) || queued.has(key)) continue;
+    queued.add(key);
     jobs.push(() => fireMetaStageEvent(move.leadId, stage, null, move.createdAt));
   }
   for (const lead of leads) {

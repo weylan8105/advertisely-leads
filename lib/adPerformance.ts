@@ -289,10 +289,13 @@ export function campaignKeyOf(lead: PerfLead, idByName: Map<string, string>): st
 const EVENT_ROWS: { stage: string; events: string[]; compare: boolean }[] = [
   { stage: "New quiz lead", events: ["Lead"], compare: false },
   { stage: "New instant form lead", events: ["Contact", "InstantFormLead"], compare: true },
-  { stage: "Underwriting", events: ["SubmitApplication"], compare: true },
-  { stage: "Approved", events: ["CompleteRegistration", "Approved"], compare: true },
-  { stage: "Issued Not Paid", events: ["AddPaymentInfo", "IssuedNotPaid"], compare: true },
-  { stage: "Issued PAID", events: ["Purchase"], compare: true },
+  // Since 2026-11-08 every closing stage sends one Purchase per lead; the other
+  // names are what the stages sent before that.
+  {
+    stage: "Closed deal (Underwriting on)",
+    events: ["Purchase", "SubmitApplication", "CompleteRegistration", "Approved", "AddPaymentInfo", "IssuedNotPaid"],
+    compare: true,
+  },
 ];
 
 export interface PerfEventRow {

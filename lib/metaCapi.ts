@@ -11,8 +11,10 @@ import { instantFormContext, type InstantFormContext } from "./metaLeadId";
  *                         pixel via the quiz's event_id).
  *   • "Contact"         — when an instant form lead is created. Meta already counts
  *                         the submission; this is the first stage of its CRM funnel.
- *   • Stage events      — see STAGE_EVENTS. "Purchase" (Issued PAID) carries the
- *                         premium as value, deduped per-lead via conv_<leadId>.
+ *   • "Purchase"        — once per lead, the first time it reaches a closing stage
+ *                         (Underwriting, Approved, Issued Not Paid or Issued PAID;
+ *                         see STAGE_EVENTS). Carries the premium as value when it's
+ *                         known, deduped per-lead via conv_<leadId>.
  *
  * Instant form leads go out in Meta's Conversion Leads format (CRM labels plus
  * Meta's lead id when known), which is what lets it optimize those forms on lead
@@ -327,26 +329,39 @@ export async function sendMetaTestEvent(): Promise<{
   }
 }
 
-// CRM stages that count as a "converting" signal worth sending to Meta, and the
-// event each maps to. Facebook uses these to find more people like the ones who
-// progress this far. Only the actual paid sale carries the premium as value.
-// Standard names on every pixel, so a restriction can't silently drop a stage.
+// CRM stages that count as a closed deal to Meta. Every one of them is the same
+// "Purchase" event (user, 2026-11-08: a deal in underwriting is already a sale to
+// us), so the ad account optimizes on one closed-deal signal and the campaign's
+// Purchase column counts every deal, not only the ones whose premium has drafted.
+// Sent once per lead, the first time it reaches any of these; the premium goes
+// with it when it's known (Issued PAID).
 export const STAGE_EVENTS: Record<string, { event: string; withValue?: boolean }> = {
-  underwriting: { event: "SubmitApplication" },
-  approved: { event: "CompleteRegistration" },
-  "issued-not-paid": { event: "AddPaymentInfo" },
+  underwriting: { event: PURCHASE_EVENT },
+  approved: { event: PURCHASE_EVENT },
+  "issued-not-paid": { event: PURCHASE_EVENT },
   "issued-paid": { event: PURCHASE_EVENT, withValue: true },
 };
+
+/** Whether Meta already accepted a "Purchase" for this lead (any closing stage). */
+async function purchaseAlreadySent(leadId: string): Promise<boolean> {
+  const rows = await prisma!.funnelEvent.findMany({
+    where: { source: "meta-capi", cta: { startsWith: `ok ${PURCHASE_EVENT} `, contains: `lead:${leadId}` } },
+    select: { cta: true },
+  });
+  const mine = new RegExp(`lead:${leadId}(\\s|$)`);
+  return rows.some((r) => mine.test(r.cta ?? ""));
+}
 
 export function isMetaConversionStage(stage: string): boolean {
   return stage in STAGE_EVENTS;
 }
 
 /**
- * Fire a server-side conversion signal to Meta when a lead advances to a
- * high-intent stage (underwriting → approved → issued-not-paid → issued-paid).
- * Each stage is its own event, deduped per lead+stage; the paid sale carries the
- * premium as value. No-op for any other stage, or when CAPI isn't configured.
+ * Fire the server-side "Purchase" to Meta when a lead advances to a closing
+ * stage (underwriting → approved → issued-not-paid → issued-paid). One per lead:
+ * the first closing stage it reaches sends it, later moves don't repeat it
+ * (Meta only dedupes an event id for 48 hours). Issued PAID carries the premium.
+ * No-op for any other stage, or when CAPI isn't configured.
  * Pass occurredAt to report an older move at its real time.
  */
 export async function fireMetaStageEvent(
@@ -360,13 +375,13 @@ export async function fireMetaStageEvent(
   if (!cfg) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) return;
-  // Issued-paid shares the "Purchase" event id used by the partner Conversions
-  // API so the sale is never double-counted; other stages dedupe per stage.
-  const eventId = stage === "issued-paid" ? `conv_${lead.id}` : `${stage}_${lead.id}`;
+  if (await purchaseAlreadySent(lead.id).catch(() => false)) return;
   const crm = await instantFormContext(lead).catch(() => null);
   const result = await sendMetaEvent(lead, {
     eventName: cfg.event,
-    eventId,
+    // The same event id the partner Conversions API uses, so a sale reported
+    // both ways is never double-counted.
+    eventId: `conv_${lead.id}`,
     actionSource: "system_generated",
     valueCents: cfg.withValue ? (valueCents ?? lead.soldPremiumCents ?? null) : null,
     crm,

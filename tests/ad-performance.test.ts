@@ -237,10 +237,13 @@ describe("deals by agent", () => {
 describe("events sent to Meta", () => {
   const row = (rows: ReturnType<typeof eventRows>, stage: string) => rows.find((r) => r.stage === stage)!;
 
-  it("groups an event's old and new names on one row", () => {
-    const rows = eventRows(["ok Approved rcvd:1 lead:a", "ok CompleteRegistration rcvd:1 lead:b"], null);
-    expect(row(rows, "Approved").sent).toBe(2);
-    expect(row(rows, "Approved").event).toBe("CompleteRegistration");
+  it("groups a closed deal's old and new names on one row", () => {
+    const rows = eventRows(
+      ["ok Approved rcvd:1 lead:a", "ok CompleteRegistration rcvd:1 lead:b", "ok AddPaymentInfo rcvd:1 lead:c", "ok Purchase rcvd:1 lead:d"],
+      null,
+    );
+    expect(row(rows, "Closed deal (Underwriting on)").sent).toBe(4);
+    expect(row(rows, "Closed deal (Underwriting on)").event).toBe("Purchase");
   });
 
   it("counts the older log format as a lead event and skips aren't failures", () => {
@@ -250,18 +253,17 @@ describe("events sent to Meta", () => {
   });
 
   it("counts refused events", () => {
-    expect(row(eventRows(["error Purchase lead:a"], null), "Issued PAID").failed).toBe(1);
+    expect(row(eventRows(["error Purchase lead:a"], null), "Closed deal (Underwriting on)").failed).toBe(1);
   });
 
   it("shows pixel counts, except quiz leads, which the browser also sends", () => {
     const rows = eventRows([], { Purchase: 3, Lead: 40, Approved: 1, CompleteRegistration: 2 });
-    expect(row(rows, "Issued PAID").shown).toBe(3);
-    expect(row(rows, "Approved").shown).toBe(3);
+    expect(row(rows, "Closed deal (Underwriting on)").shown).toBe(6);
     expect(row(rows, "New quiz lead").shown).toBeNull();
   });
 
   it("leaves the pixel column blank when it can't be read", () => {
-    expect(row(eventRows([], null), "Issued PAID").shown).toBeNull();
+    expect(row(eventRows([], null), "Closed deal (Underwriting on)").shown).toBeNull();
   });
 });
 

@@ -17,7 +17,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/metaCapi", () => ({
   INSTANT_FORM_LEAD_EVENT: "Contact",
-  STAGE_EVENTS: { approved: { event: "CompleteRegistration" }, "issued-not-paid": { event: "AddPaymentInfo" } },
+  STAGE_EVENTS: { underwriting: { event: "Purchase" }, approved: { event: "Purchase" }, "issued-not-paid": { event: "Purchase" }, "issued-paid": { event: "Purchase" } },
   fireMetaStageEvent: fired.stage,
   fireMetaLeadEvent: fired.lead,
 }));
@@ -53,7 +53,7 @@ describe("POST /api/admin/meta-resend", () => {
 
   it("skips anything already sent under the current name", async () => {
     db.sends = [
-      { cta: "ok AddPaymentInfo rcvd:1 id:found lead:L1" },
+      { cta: "ok Purchase rcvd:1 id:found lead:L1" },
       { cta: "ok Contact rcvd:1 id:found lead:L2" },
     ];
     db.moves = [{ leadId: "L1", body: 'Moved to "Issued Not Paid" in the pipeline.', createdAt: movedAt }];
@@ -62,6 +62,19 @@ describe("POST /api/admin/meta-resend", () => {
     expect(await res.json()).toEqual({ processed: 0, remaining: 0 });
     expect(fired.stage).not.toHaveBeenCalled();
     expect(fired.lead).not.toHaveBeenCalled();
+  });
+
+  it("queues one Purchase per lead, at its first closing move", async () => {
+    const later = new Date(movedAt.getTime() + 60_000);
+    db.moves = [
+      { leadId: "L1", body: 'Moved to "Underwriting" in the pipeline.', createdAt: movedAt },
+      { leadId: "L1", body: 'Moved to "Approved" in the pipeline.', createdAt: later },
+      { leadId: "L3", body: 'Moved to "Issued PAID 💰" in the pipeline.', createdAt: later },
+    ];
+    const res = await POST();
+    expect(await res.json()).toEqual({ processed: 2, remaining: 0 });
+    expect(fired.stage).toHaveBeenCalledWith("L1", "underwriting", null, movedAt);
+    expect(fired.stage).toHaveBeenCalledWith("L3", "issued-paid", null, later);
   });
 
   it("still sends a lead whose earlier send used the old name", async () => {
