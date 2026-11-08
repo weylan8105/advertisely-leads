@@ -767,7 +767,7 @@ export function PipelineBoard({
 }
 
 /** "Drafts Nov 12" on a card — amber within 3 days, red on the day, grey once past. */
-// Lead type tag colors: Blue-Collar IUL is blue, Healthcare (nurse) IUL is pink.
+// Lead type tag colors: Blue-Collar IUL is blue, Nurse IUL is pink.
 function leadTypeTagClass(type: Lead["leadType"]): string {
   if (type === "blue-collar-iul") return "bg-blue-100 text-blue-700 font-medium";
   if (type === "healthcare-iul") return "bg-pink-100 text-pink-700 font-medium";

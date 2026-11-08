@@ -15,7 +15,7 @@ export const leadPackages: LeadPackage[] = [
     // pool: NOT in IUL_POOL_IDS, so these leads never fill Blue Collar orders,
     // replacements, or the house sweep. Hidden until a product sells them.
     id: "healthcare-iul",
-    name: "Healthcare IUL Leads",
+    name: "Nurse IUL Leads",
     tagline: "Nurses and healthcare workers asking about cash-value life insurance.",
     description: "RNs, LPNs, CNAs and other medical workers from the Healthcare Wealth Advantage funnel.",
     pricePerLead: 45,
