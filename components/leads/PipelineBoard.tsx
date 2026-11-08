@@ -637,7 +637,7 @@ export function PipelineBoard({
                             {lead.draftDate && <DraftDateTag date={lead.draftDate} />}
 
                             <div className="mt-1.5 flex flex-wrap gap-1">
-                              <span className="text-[10px] bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
+                              <span className={cn("text-[10px] rounded px-1.5 py-0.5", leadTypeTagClass(lead.leadType))}>
                                 {lead.leadTypeLabel}
                               </span>
                               {qCoverage && (
@@ -767,6 +767,13 @@ export function PipelineBoard({
 }
 
 /** "Drafts Nov 12" on a card — amber within 3 days, red on the day, grey once past. */
+// Lead type tag colors: Blue-Collar IUL is blue, Healthcare (nurse) IUL is pink.
+function leadTypeTagClass(type: Lead["leadType"]): string {
+  if (type === "blue-collar-iul") return "bg-blue-100 text-blue-700 font-medium";
+  if (type === "healthcare-iul") return "bg-pink-100 text-pink-700 font-medium";
+  return "bg-slate-100 text-slate-600";
+}
+
 function DraftDateTag({ date }: { date: string }) {
   const [y, m, d] = date.split("-").map(Number);
   const draft = new Date(y, m - 1, d);
