@@ -58,7 +58,7 @@ export async function fetchExportLeads(
     // shared Goldmine (every member sees all of it). Trashed leads are left out.
     const ctx = scope === "pipeline" ? null : await getOrgContext(userId);
     const mine = { assignedUserId: userId, pipeline: "main" };
-    const gold = ctx && !ctx.pending ? { organizationId: ctx.organizationId, pipeline: "goldmine" } : null;
+    const gold = ctx && !ctx.goldmineOff ? { organizationId: ctx.organizationId, pipeline: "goldmine" } : null;
     const parts = scope === "pipeline" ? [mine] : scope === "goldmine" ? (gold ? [gold] : []) : gold ? [mine, gold] : [mine];
     if (parts.length === 0) return [];
     where = { trashedAt: null, OR: parts };

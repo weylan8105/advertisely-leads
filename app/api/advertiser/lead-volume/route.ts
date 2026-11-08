@@ -18,7 +18,7 @@ async function load(userId: string) {
       advertiserWeeklyKeep: true,
       defaultOrganizationId: true,
       ownedOrganizations: {
-        select: { id: true, distributionMode: true, _count: { select: { memberships: { where: { pendingApproval: false } } } } },
+        select: { id: true, distributionMode: true, _count: { select: { memberships: true } } },
         orderBy: { createdAt: "asc" },
       },
     },

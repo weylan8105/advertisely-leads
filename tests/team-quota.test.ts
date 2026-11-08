@@ -158,14 +158,14 @@ describe("admin overflow under weekly amounts", () => {
 });
 
 describe("team API", () => {
-  const ownerMembership = { id: "m_owner", organizationId: "org_1", userId: OWNER, role: "OWNER", pendingApproval: false, organization: { id: "org_1", name: "Owner's Team", distributionMode: "WEEKLY_QUOTA" } };
+  const ownerMembership = { id: "m_owner", organizationId: "org_1", userId: OWNER, role: "OWNER", goldmineBlocked: false, organization: { id: "org_1", name: "Owner's Team", distributionMode: "WEEKLY_QUOTA" } };
   beforeEach(() => {
     sessionUserId = OWNER;
     db.user.findUnique.mockResolvedValue({ defaultOrganizationId: "org_1" });
     db.membership.findUnique.mockImplementation(async ({ where }: any) =>
-      where.id ? { id: where.id, organizationId: "org_1", userId: "agent_a", role: "AGENT", pendingApproval: false } : ownerMembership,
+      where.id ? { id: where.id, organizationId: "org_1", userId: "agent_a", role: "AGENT", goldmineBlocked: false } : ownerMembership,
     );
-    db.membership.update.mockImplementation(async ({ data }: any) => ({ id: "m_a", role: "AGENT", inRotation: true, pendingApproval: false, ...data }));
+    db.membership.update.mockImplementation(async ({ data }: any) => ({ id: "m_a", role: "AGENT", inRotation: true, goldmineBlocked: false, ...data }));
   });
   const patch = (body: unknown) =>
     patchMember(new Request("https://advertisely.io/api/team/members/m_a", { method: "PATCH", body: JSON.stringify(body) }) as any, { params: { id: "m_a" } });

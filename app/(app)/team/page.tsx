@@ -15,8 +15,7 @@ import {
   ShoppingCart,
   PackageCheck,
   Link2,
-  Clock,
-  UserCheck,
+  Gem,
   CalendarRange,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -52,7 +51,7 @@ interface Member {
   email: string;
   role: "OWNER" | "ADMIN" | "AGENT";
   inRotation: boolean;
-  pendingApproval: boolean;
+  goldmineAccess: boolean;
   /** Leads/week under "Weekly amounts" (0 = none) and how many they got in the last 7 days. */
   weeklyLeadQuota: number;
   quotaThisWeek: number;
@@ -70,11 +69,11 @@ interface TeamData {
   organization: { id: string; name: string; distributionMode: DistributionMode };
   role: "OWNER" | "ADMIN" | "AGENT";
   canManage: boolean;
-  /** The caller joined with an upline code and is waiting for approval. */
-  pending: boolean;
+  /** The team's manager switched off the caller's Goldmine access. */
+  goldmineOff: boolean;
   members: Member[];
   invitations: Invitation[];
-  teams: { id: string; name: string; role: string; pending: boolean }[];
+  teams: { id: string; name: string; role: string }[];
   upline: { code: string | null; team: { id: string; name: string } | null };
 }
 
@@ -219,12 +218,12 @@ export default function TeamPage() {
     load();
   }
 
-  async function approveMember(m: Member) {
+  async function toggleGoldmine(m: Member) {
     setBusy(m.membershipId);
     await fetch(`/api/team/members/${m.membershipId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approve: true }),
+      body: JSON.stringify({ goldmineAccess: !m.goldmineAccess }),
     });
     setBusy(null);
     load();
@@ -272,7 +271,7 @@ export default function TeamPage() {
       text:
         body.status === "already-member"
           ? `You're on ${body.teamName}.${moved}`
-          : `You joined ${body.teamName}.${moved} Your upline will approve you to unlock the team's shared leads.`,
+          : `You joined ${body.teamName}.${moved} You can work the team's Goldmine now. Your upline adds you to their round robin.`,
     });
     load();
   }
@@ -342,14 +341,8 @@ export default function TeamPage() {
             <UsersRound className="h-6 w-6 text-brand-red" /> {org.name}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data.pending ? (
-              "Waiting for approval"
-            ) : (
-              <>
-                {members.length} {members.length === 1 ? "member" : "members"} ·
-                You&apos;re {data.role === "AGENT" ? "an agent" : `an ${data.role.toLowerCase()}`}
-              </>
-            )}
+            {members.length} {members.length === 1 ? "member" : "members"} ·
+            You&apos;re {data.role === "AGENT" ? "an agent" : `an ${data.role.toLowerCase()}`}
           </p>
         </div>
         <div className="flex items-end gap-2">
@@ -374,7 +367,7 @@ export default function TeamPage() {
               {data.teams.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
-                  {t.role === "OWNER" ? " (yours)" : t.pending ? " (pending)" : ""}
+                  {t.role === "OWNER" ? " (yours)" : ""}
                 </option>
               ))}
             </select>
@@ -383,13 +376,12 @@ export default function TeamPage() {
         </div>
       </div>
 
-      {data.pending && (
+      {data.goldmineOff && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+          <Gem className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            You joined <span className="font-semibold">{org.name}</span> with your upline&apos;s code. Your upline
-            can already send leads to your CRM. Once they approve you, you&apos;ll also see the rest of the team
-            and its shared leads.
+            Your upline switched off your access to <span className="font-semibold">{org.name}</span>&apos;s
+            Goldmine. Leads they send you still go to your CRM.
           </div>
         </div>
       )}
@@ -494,12 +486,6 @@ export default function TeamPage() {
                 <div className="text-xs text-muted-foreground truncate">{m.email}</div>
               </div>
 
-              {m.pendingApproval && (
-                <Badge variant="muted" className="text-[10px] border-amber-200 bg-amber-50 text-amber-800">
-                  <Clock className="h-3 w-3 mr-1" />
-                  Needs approval
-                </Badge>
-              )}
               <Badge variant={roleBadge[m.role]} className="text-[10px]">
                 {m.role === "OWNER" && <ShieldCheck className="h-3 w-3 mr-1" />}
                 {m.role}
@@ -583,10 +569,23 @@ export default function TeamPage() {
                 </a>
               )}
 
-              {canManage && m.pendingApproval && (
-                <Button size="sm" onClick={() => approveMember(m)} disabled={busy === m.membershipId}>
-                  <UserCheck className="h-3.5 w-3.5" /> Approve
-                </Button>
+              {/* Goldmine access: on by default; managers can switch an agent's off */}
+              {m.role === "AGENT" && (
+                <button
+                  onClick={() => canManage && toggleGoldmine(m)}
+                  disabled={!canManage || busy === m.membershipId}
+                  title={m.goldmineAccess ? "Can work the team's Goldmine" : "Goldmine access switched off"}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
+                    m.goldmineAccess
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-slate-200 bg-slate-50 text-muted-foreground",
+                    !canManage && "opacity-70 cursor-default",
+                  )}
+                >
+                  <Gem className="h-3 w-3" />
+                  {m.goldmineAccess ? "Goldmine on" : "Goldmine off"}
+                </button>
               )}
 
               {canManage && m.role !== "OWNER" && (
@@ -742,8 +741,8 @@ export default function TeamPage() {
           <p className="mt-1 text-sm text-muted-foreground max-w-xl">
             Agents who enter your code when they create their Advertisely account join{" "}
             <span className="font-medium text-foreground">{data.upline.team?.name ?? "your team"}</span> right
-            away. You approve each one here before they see the team&apos;s shared leads. It&apos;s the same code
-            that gives 10% off at checkout.
+            away and can work your Goldmine (switch anyone&apos;s off below). They&apos;re not in your round robin
+            until you put them in rotation here. It&apos;s the same code that gives 10% off at checkout.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm font-semibold tracking-wider">

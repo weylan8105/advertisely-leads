@@ -10,10 +10,11 @@ import { isEmailConfigured, sendUplineJoinEmail } from "@/lib/email";
  *
  * The code joins the team its owner runs: their active team when they manage it
  * (OWNER/ADMIN), else the team they own (created on first use). Because these
- * codes are shared publicly as discount codes, a code join starts as
- * pendingApproval: the agent is on the team right away, but the team's shared
- * Goldmine, round-robin rotation and roster stay closed until a manager
- * approves them on the Team page.
+ * codes are shared publicly as discount codes, there's no approval step: the
+ * agent is on the team right away with the team's Goldmine (a manager can switch
+ * that off per member), but out of round-robin rotation until a manager puts
+ * them in it on the Team page. Someone on the wrong team just enters the right
+ * upline's code.
  *
  * An agent has one upline at a time: joining a new upline's team is a transfer
  * that takes them off any other team where they're an agent (their own team,
@@ -86,7 +87,7 @@ async function leaveOtherUplineTeams(userId: string, keepOrganizationId: string)
 }
 
 /**
- * Put `userId` on the team behind an upline code (pending approval), make it
+ * Put `userId` on the team behind an upline code (out of rotation), make it
  * their active team, and take them off any other upline's team (a transfer).
  * Already on that team → their membership there is unchanged.
  */
@@ -117,7 +118,7 @@ export async function joinUplineTeam(userId: string, raw: unknown): Promise<Join
   try {
     await prisma.$transaction([
       prisma.membership.create({
-        data: { organizationId: team.id, userId, role: "AGENT", inRotation: false, pendingApproval: true },
+        data: { organizationId: team.id, userId, role: "AGENT", inRotation: false },
       }),
       prisma.user.update({ where: { id: userId }, data: { defaultOrganizationId: team.id } }),
     ]);
@@ -133,7 +134,7 @@ export async function joinUplineTeam(userId: string, raw: unknown): Promise<Join
   return { status: "joined", organizationId: team.id, teamName: team.name, uplineName: up.uplineName, left };
 }
 
-/** Email the code's owner (and the team owner, if someone else) that an agent joined and needs approval. */
+/** Email the code's owner (and the team owner, if someone else) that an agent joined their team. */
 async function notifyUplineOfJoin(organizationId: string, uplineUserId: string, joinerUserId: string) {
   if (!prisma || !isEmailConfigured) return;
   const [org, joiner] = await Promise.all([

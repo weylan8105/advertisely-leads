@@ -604,9 +604,11 @@ model Membership {
   role           MembershipRole @default(AGENT)
   // Whether this member receives leads under ROUND_ROBIN distribution.
   inRotation     Boolean        @default(true)
-  // Joined with the upline's code (lib/upline.ts) and not yet approved by a
-  // team manager: on the team, but no shared Goldmine / rotation / roster yet.
-  pendingApproval Boolean       @default(false)
+  // The team's manager switched off this member's Goldmine access (shared aged
+  // pool). Members get Goldmine automatically; this is the opt-out. Stored in the
+  // old "pendingApproval" column (join approval was removed Nov 2026), so rows
+  // that were still pending then start with Goldmine off.
+  goldmineBlocked Boolean       @default(false) @map("pendingApproval")
   // Weekly amounts: how many of the owner's incoming leads this member gets per
   // rolling 7 days when the team distributes by WEEKLY_QUOTA. Null/0 = none.
   weeklyLeadQuota Int?

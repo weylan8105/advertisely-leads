@@ -31,7 +31,7 @@ const db = {
       const m = memberships.find((x) => x.userId === where.userId);
       if (!m) return null;
       const org = orgs.find((o) => o.id === m.organizationId)!;
-      return { role: m.role, pendingApproval: false, organization: { id: org.id, name: org.name, distributionMode: "MANUAL" } };
+      return { role: m.role, goldmineBlocked: false, organization: { id: org.id, name: org.name, distributionMode: "MANUAL" } };
     }),
   },
 };

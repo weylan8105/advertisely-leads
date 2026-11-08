@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/team/join — body { code } — an existing account joins its upline's
  * team with their code. Same as entering the code at signup: on the team right
- * away, shared leads once a team manager approves.
+ * away with its Goldmine; round-robin leads once a team manager adds them.
  */
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) {

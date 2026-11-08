@@ -27,9 +27,10 @@ async function guard(membershipId: string) {
 }
 
 /**
- * PATCH /api/team/members/:id — { role?, inRotation?, approve?, weeklyLeadQuota? }
- * approve = let in an upline-code joiner; weeklyLeadQuota = leads/week under
- * WEEKLY_QUOTA distribution (0 or null = none).
+ * PATCH /api/team/members/:id — { role?, inRotation?, goldmineAccess?, weeklyLeadQuota? }
+ * goldmineAccess = switch the member's access to the team's Goldmine (on by
+ * default); weeklyLeadQuota = leads/week under WEEKLY_QUOTA distribution (0 or
+ * null = none).
  */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!isDatabaseConfigured || !prisma) {
@@ -41,10 +42,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const body = (await req.json().catch(() => ({}))) as {
     role?: string;
     inRotation?: boolean;
-    approve?: boolean;
+    goldmineAccess?: boolean;
     weeklyLeadQuota?: unknown;
   };
-  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; pendingApproval?: boolean; weeklyLeadQuota?: number | null } = {};
+  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; goldmineBlocked?: boolean; weeklyLeadQuota?: number | null } = {};
   if (body.weeklyLeadQuota !== undefined) {
     const q = body.weeklyLeadQuota === null || body.weeklyLeadQuota === "" ? 0 : Number(body.weeklyLeadQuota);
     if (!Number.isInteger(q) || q < 0 || q > MAX_WEEKLY_QUOTA) {
@@ -57,12 +58,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
   if (body.role === "ADMIN" || body.role === "AGENT") data.role = body.role;
   if (typeof body.inRotation === "boolean") data.inRotation = body.inRotation;
-  // Making a pending joiner an admin approves them too.
-  if ((body.approve === true || data.role === "ADMIN") && g.membership.pendingApproval) {
-    // Approved: same footing as an emailed invite (shared leads + rotation).
-    data.pendingApproval = false;
-    if (data.inRotation === undefined) data.inRotation = true;
-  }
+  if (typeof body.goldmineAccess === "boolean") data.goldmineBlocked = !body.goldmineAccess;
+  // Admins help run the team, Goldmine included.
+  if (data.role === "ADMIN") data.goldmineBlocked = false;
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
@@ -74,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       id: updated.id,
       role: updated.role,
       inRotation: updated.inRotation,
-      pendingApproval: updated.pendingApproval,
+      goldmineAccess: !updated.goldmineBlocked,
       weeklyLeadQuota: updated.weeklyLeadQuota,
     },
   });

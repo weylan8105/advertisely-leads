@@ -7,8 +7,8 @@ export interface OrgContext {
   organizationName: string;
   role: OrgRole;
   distributionMode: "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA";
-  // Joined with an upline code and awaiting a manager's approval (see lib/upline.ts).
-  pending: boolean;
+  // A team manager switched off this member's Goldmine (shared pool) access.
+  goldmineOff: boolean;
 }
 
 export function personalOrgName(u: { name: string | null; email: string; agency: string | null }): string {
@@ -56,7 +56,7 @@ export async function getOrgContext(userId: string): Promise<OrgContext | null> 
     organizationName: membership.organization.name,
     role: membership.role as OrgRole,
     distributionMode: membership.organization.distributionMode as OrgContext["distributionMode"],
-    pending: membership.pendingApproval,
+    goldmineOff: membership.goldmineBlocked,
   };
 }
 

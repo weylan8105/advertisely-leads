@@ -111,7 +111,7 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
         distributionMode: true,
         rrCursor: true,
         memberships: {
-          where: { inRotation: true, pendingApproval: false },
+          where: { inRotation: true },
           select: { userId: true },
           orderBy: { createdAt: "asc" },
         },

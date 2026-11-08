@@ -12,7 +12,7 @@ export interface LeadAccessShape {
  *  - platform admin, or the assigned agent → always
  *  - a **Goldmine** lead → ANY member of the lead's org (shared team pool)
  *  - a **main**-pipeline lead → only a manager (OWNER/ADMIN) of the lead's org
- *  - members still pending approval (upline-code joiners) get neither
+ *  - a member whose Goldmine access the team manager switched off gets no Goldmine
  *
  * Team membership is checked against the LEAD's org directly (not the caller's
  * default team), so an agent on several teams never loses access to a team's
@@ -27,10 +27,9 @@ export async function canActOnLead(
   if (!lead.organizationId || !prisma) return false;
   const membership = await prisma.membership.findUnique({
     where: { organizationId_userId: { organizationId: lead.organizationId, userId } },
-    select: { role: true, pendingApproval: true },
+    select: { role: true, goldmineBlocked: true },
   });
-  // Not approved yet (joined with an upline code): only their own leads.
-  if (!membership || membership.pendingApproval) return false;
-  if (lead.pipeline === "goldmine") return true; // shared team pool
+  if (!membership) return false;
+  if (lead.pipeline === "goldmine") return !membership.goldmineBlocked; // shared team pool
   return canManageTeam(membership.role as OrgRole);
 }

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 type U = { id: string; name: string | null; email: string; agency: string | null; referralCode: string | null; defaultOrganizationId: string | null; passwordHash?: string | null };
 type O = { id: string; name: string; ownerId: string; distributionMode: string; createdAt: Date };
-type M = { id: string; organizationId: string; userId: string; role: string; inRotation: boolean; pendingApproval: boolean; createdAt: Date };
+type M = { id: string; organizationId: string; userId: string; role: string; inRotation: boolean; goldmineBlocked: boolean; createdAt: Date };
 
 let users: U[] = [];
 let orgs: O[] = [];
@@ -61,7 +61,7 @@ const db = {
     ),
     create: vi.fn(async ({ data }: any) => {
       if (findMem({ organizationId_userId: data })) throw Object.assign(new Error("dup"), { code: "P2002" });
-      const m = { id: id("m"), role: "AGENT", inRotation: true, pendingApproval: false, createdAt: tick(), ...data };
+      const m = { id: id("m"), role: "AGENT", inRotation: true, goldmineBlocked: false, createdAt: tick(), ...data };
       mems.push(m);
       return m;
     }),
@@ -130,7 +130,7 @@ function addTeam(owner: U, name = `${owner.name}'s Team`): O {
   return o;
 }
 function addMember(o: O, u: U, role = "AGENT", extra: Partial<M> = {}): M {
-  const m: M = { id: id("m"), organizationId: o.id, userId: u.id, role, inRotation: true, pendingApproval: false, createdAt: tick(), ...extra };
+  const m: M = { id: id("m"), organizationId: o.id, userId: u.id, role, inRotation: true, goldmineBlocked: false, createdAt: tick(), ...extra };
   mems.push(m);
   return m;
 }
@@ -181,12 +181,12 @@ describe("resolveUplineCode", () => {
 });
 
 describe("joinUplineTeam", () => {
-  it("joins pending approval, out of rotation, and makes it the active team", async () => {
+  it("joins with Goldmine on, out of rotation, and makes it the active team", async () => {
     const newbie = addUser("New Agent", null);
     const r = await joinUplineTeam(newbie.id, "RYAN7K");
     expect(r).toMatchObject({ status: "joined", organizationId: ryansTeam.id });
     const m = mems.find((x) => x.userId === newbie.id)!;
-    expect(m).toMatchObject({ organizationId: ryansTeam.id, role: "AGENT", inRotation: false, pendingApproval: true });
+    expect(m).toMatchObject({ organizationId: ryansTeam.id, role: "AGENT", inRotation: false, goldmineBlocked: false });
     expect(newbie.defaultOrganizationId).toBe(ryansTeam.id);
     expect(sendUplineJoinEmail).toHaveBeenCalledWith(expect.objectContaining({ toEmail: ryan.email, teamName: ryansTeam.name, joinerName: "New Agent" }));
   });
@@ -211,7 +211,7 @@ describe("joinUplineTeam", () => {
     const jordansTeam = addTeam(jordan);
     const trevor = addUser("Trevor Test", null);
     const trevorsOwn = addTeam(trevor);
-    addMember(davidsTeam, trevor, "AGENT", { pendingApproval: true, inRotation: false });
+    addMember(davidsTeam, trevor, "AGENT", { goldmineBlocked: true, inRotation: false });
     trevor.defaultOrganizationId = davidsTeam.id;
     addMember(ryansTeam, trevor, "ADMIN"); // helps run Ryan's team: stays
     ords.push({ id: "ord_t", userId: trevor.id, organizationId: davidsTeam.id }); // bought while on David's team
@@ -234,7 +234,7 @@ describe("joinUplineTeam", () => {
     const davidsTeam = addTeam(david);
     const trevor = addUser("Trevor Test", null);
     addMember(ryansTeam, trevor);
-    addMember(davidsTeam, trevor, "AGENT", { pendingApproval: true });
+    addMember(davidsTeam, trevor, "AGENT", { goldmineBlocked: true });
     trevor.defaultOrganizationId = davidsTeam.id;
     const r = await joinUplineTeam(trevor.id, "RYAN7K");
     expect(r).toMatchObject({ status: "already-member", left: ["David Test's Team"] });
@@ -260,7 +260,7 @@ describe("POST /api/team/leave", () => {
   it("an agent leaves a team and switches back to their own", async () => {
     const agent = addUser("Agent Test", null);
     const own = addTeam(agent);
-    addMember(ryansTeam, agent, "AGENT", { pendingApproval: true });
+    addMember(ryansTeam, agent, "AGENT", { goldmineBlocked: true });
     agent.defaultOrganizationId = ryansTeam.id;
     ords.push({ id: "ord_a", userId: agent.id, organizationId: ryansTeam.id });
     sessionUserId = agent.id;
@@ -287,7 +287,7 @@ describe("POST /api/auth/register with an upline code", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toMatchObject({ ok: true, joinedTeam: true, uplineTeam: ryansTeam.name });
     const u = users.find((x) => x.email === base.email)!;
-    expect(mems.find((m) => m.userId === u.id)).toMatchObject({ organizationId: ryansTeam.id, pendingApproval: true });
+    expect(mems.find((m) => m.userId === u.id)).toMatchObject({ organizationId: ryansTeam.id, inRotation: false, goldmineBlocked: false });
   });
 
   it("rejects an unknown code without creating the account", async () => {
@@ -331,34 +331,49 @@ describe("POST /api/team/join (existing accounts)", () => {
   });
 });
 
-describe("approval", () => {
-  it("a manager's approve unlocks shared leads + rotation; agents can't approve", async () => {
+describe("Goldmine access", () => {
+  it("a joiner works the Goldmine right away; a manager can switch it off and back on; agents can't", async () => {
     const newbie = addUser("New Agent", null);
     await joinUplineTeam(newbie.id, "RYAN7K");
     const m = mems.find((x) => x.userId === newbie.id)!;
     const goldLead = { assignedUserId: null, organizationId: ryansTeam.id, pipeline: "goldmine" };
-    expect(await canActOnLead(newbie.id, false, goldLead)).toBe(false);
+    expect(await canActOnLead(newbie.id, false, goldLead)).toBe(true);
 
     const peer = addUser("Peer Agent", null);
     addMember(ryansTeam, peer);
     peer.defaultOrganizationId = ryansTeam.id;
     sessionUserId = peer.id;
-    const denied = await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { approve: true }, "PATCH"), { params: { id: m.id } });
+    const denied = await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { goldmineAccess: false }, "PATCH"), { params: { id: m.id } });
     expect(denied.status).toBe(403);
 
     sessionUserId = ryan.id;
-    const res = await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { approve: true }, "PATCH"), { params: { id: m.id } });
-    expect(res.status).toBe(200);
-    expect(m).toMatchObject({ pendingApproval: false, inRotation: true });
+    const off = await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { goldmineAccess: false }, "PATCH"), { params: { id: m.id } });
+    expect(off.status).toBe(200);
+    expect(await off.json()).toMatchObject({ membership: { goldmineAccess: false, inRotation: false } });
+    expect(await canActOnLead(newbie.id, false, goldLead)).toBe(false);
+
+    await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { goldmineAccess: true }, "PATCH"), { params: { id: m.id } });
     expect(await canActOnLead(newbie.id, false, goldLead)).toBe(true);
   });
 
-  it("making a pending joiner an admin approves them", async () => {
+  it("round robin stays a manual step for the upline", async () => {
     const newbie = addUser("New Agent", null);
     await joinUplineTeam(newbie.id, "RYAN7K");
     const m = mems.find((x) => x.userId === newbie.id)!;
+    expect(m.inRotation).toBe(false);
+    sessionUserId = ryan.id;
+    await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { inRotation: true }, "PATCH"), { params: { id: m.id } });
+    expect(m.inRotation).toBe(true);
+  });
+
+  it("making an agent an admin turns their Goldmine back on", async () => {
+    const newbie = addUser("New Agent", null);
+    await joinUplineTeam(newbie.id, "RYAN7K");
+    const m = mems.find((x) => x.userId === newbie.id)!;
+    m.goldmineBlocked = true;
     sessionUserId = ryan.id;
     await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { role: "ADMIN" }, "PATCH"), { params: { id: m.id } });
-    expect(m).toMatchObject({ role: "ADMIN", pendingApproval: false });
+    expect(m).toMatchObject({ role: "ADMIN", goldmineBlocked: false });
   });
 });
+

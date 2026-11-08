@@ -9,7 +9,7 @@ import { loadQuotaSlots, takeQuotaSlot } from "./teamQuota";
  * instead. Mirrors the admin overflow target (lib/house.ts). Once they've kept
  * their amount, each new campaign lead goes to a team member:
  *  - team on "Weekly amounts" → the agent furthest behind their weekly number
- *  - otherwise → round-robin across approved, in-rotation teammates
+ *  - otherwise → round-robin across in-rotation teammates
  * With no amount set, a team on "Round-robin" spreads campaign leads across
  * everyone in rotation, the advertiser included when they're in it; any other
  * team leaves them all with the advertiser.
@@ -75,7 +75,7 @@ export async function advertiserTeamRecipient(
       distributionMode: true,
       rrCursor: true,
       memberships: {
-        where: { inRotation: true, pendingApproval: false },
+        where: { inRotation: true },
         select: { userId: true, user: { select: { licensedStates: true } } },
         orderBy: { createdAt: "asc" },
       },
