@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { canActOnLead } from "@/lib/leadAccess";
-import { DIAL_VIAS, SAME_CALL_MS, dialAction } from "@/lib/dials";
+import { DIAL_CAP, DIAL_VIAS, SAME_CALL_MS, dialAction } from "@/lib/dials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!mayDial || (via === "talking" && !worksLead)) return NextResponse.json({ ok: true, counted: false });
 
   const now = new Date();
-  const recent = await prisma.leadActivity.findFirst({
+  const recent = await prisma.leadActivity.findMany({
     where: {
       leadId: lead.id,
       type: "CALL_MADE",
@@ -46,12 +46,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       metadata: { path: ["actorId"], equals: userId },
     },
     orderBy: { createdAt: "desc" },
+    take: DIAL_CAP,
     select: { id: true, createdAt: true, metadata: true },
   });
-  const action = dialAction(via, recent && { via: (recent.metadata as any)?.via, at: recent.createdAt }, now);
+  const action = dialAction(
+    via,
+    recent.map((r) => ({ via: (r.metadata as any)?.via, at: r.createdAt })),
+    now,
+  );
 
   if (action === "merge") {
-    await prisma.leadActivity.update({ where: { id: recent!.id }, data: { metadata: { via, actorId: userId } } });
+    // The dial happened when they copied, so it moves to now. That also starts
+    // the 2-minute redial window from the copy, not the click.
+    await prisma.leadActivity.update({
+      where: { id: recent[0].id },
+      data: { createdAt: now, metadata: { via, actorId: userId } },
+    });
   } else if (action === "log") {
     const name = session?.user?.name ?? null;
     await prisma.leadActivity.create({

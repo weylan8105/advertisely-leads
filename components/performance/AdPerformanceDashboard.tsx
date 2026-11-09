@@ -538,7 +538,7 @@ export function AdPerformanceDashboard() {
               <li>CPA is ad spend divided by applications. CAC is ad spend divided by Issued PAID.</li>
               <li>Everything counts on the day it happened, so a sale today can come from an older lead. Short windows swing a lot; use 30 days or longer to judge CAC.</li>
               <li>The tiles only count what happened in the dates you pick. Client Accounts shows every deal ever, by its stage now. Deals by agent shows that same all-time view, so use it to check the two against each other.</li>
-              <li>A dial is logged each time someone copies a lead&apos;s number, taps Call or clicks the lead. Clicking the lead and then copying its number is one dial, and so is clicking it again within 30 minutes. Copying the number again counts as a new dial once 30 seconds have passed.</li>
+              <li>A dial is logged each time someone copies a lead&apos;s number, taps Call or clicks the lead. Clicking the lead and then copying its number is one dial, and so is clicking it again within 30 minutes. Copying the number or tapping Call again counts as another dial, up to 2 dials per lead in any 2 minutes.</li>
               <li>Dials weren&apos;t logged before Nov 6, so those days show one dial per lead moved out of New Lead, and their contact rate reads high.</li>
               <li>Contacted means a lead reached Contacted or further. Dials per contact is the average number of dials a lead took before that, for leads first worked since Nov 6.</li>
               <li>Days run on Central time in Advertisely. Meta uses each ad account&apos;s own timezone: Pacific for Enhanced Wealth, Central for ABCA.</li>
