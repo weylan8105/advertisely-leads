@@ -122,6 +122,40 @@ describe("pricing", () => {
   });
 });
 
+describe("weekly ad spend", () => {
+  it("paces a weekly payment over the days until it renews, the rest to month end", async () => {
+    const { idealDailyCents } = await import("@/lib/adSpend");
+    // David: $700/week ($679 after card processing), $347.10 left, renews Nov 11 → Nov 8–10.
+    const weekly = { amountCents: 70_000, netCents: 67_900, renewsAt: "2026-11-11T20:10:00Z" };
+    expect(idealDailyCents(34_710, weekly, "2026-11-30")).toBe(11_570);
+    // Jace: $1,400/week plus one-time payments: this week's $1,358 over Nov 8–14, the rest by Nov 30.
+    const jace = { amountCents: 140_000, netCents: 135_800, renewsAt: "2026-11-15T20:15:00Z" };
+    expect(idealDailyCents(556_457, jace, "2026-11-30")).toBe(Math.floor(135_800 / 7 + (556_457 - 135_800) / 23));
+    // No subscription: everything by the target date.
+    expect(idealDailyCents(230_000, null, "2026-11-30")).toBe(10_000);
+  });
+
+  it("reads the weekly subscription from Stripe and paces the campaign to it", async () => {
+    const { stripe } = (await import("@/lib/stripe")) as any;
+    stripe.subscriptions = {
+      list: vi.fn(async () => ({
+        data: [{ latest_invoice: { lines: { data: [
+          { description: "7 × Weekly Ad Spend Budget (at $100.00 / week)", amount: 70_000, period: { end: Date.parse("2026-11-11T20:10:00Z") / 1000 } },
+        ] } } }],
+      })),
+    };
+    charges = [paid(700, { description: "7 × Weekly Ad Spend Budget" }), paid(150, { description: "Adspend Budget" })];
+    invoices = {};
+    const { enforceAdSpend, getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.recurring?.netCents).toBe(67_900);
+    await enforceAdSpend("JACE");
+    // $850 paid − $25.50 processing − $500 spent = $324.50; this week's $324.50 over Nov 8–10 ≈ $108/day.
+    delete stripe.subscriptions;
+    expect(setDailyBudget).toHaveBeenCalledWith("AS1", 10_800);
+  });
+});
+
 describe("summary", () => {
   it("counts only Stripe payments titled ad spend, not the monthly service subscription", async () => {
     charges = [

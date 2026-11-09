@@ -123,9 +123,20 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-4 py-3 text-sm">
           <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-red" />
           <span>
-            We manage your campaign to use your budget by <strong>{dayLabel(summary.targetDate)}</strong>, at about{" "}
-            <strong>{usd0(summary.pacedDailyCents)}/day</strong>. Daily budgets are adjusted gradually so delivery stays
-            steady, and your campaign never spends more than you&apos;ve added.
+            {summary.recurring ? (
+              <>
+                Your recurring ad spend is paced to last until it renews on{" "}
+                <strong>{new Date(summary.recurring.renewsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</strong>, at about{" "}
+                <strong>{usd0(summary.pacedDailyCents)}/day</strong>. Daily budgets are adjusted gradually so delivery stays
+                steady, and your campaign never spends more than you&apos;ve added.
+              </>
+            ) : (
+              <>
+                We manage your campaign to use your budget by <strong>{dayLabel(summary.targetDate)}</strong>, at about{" "}
+                <strong>{usd0(summary.pacedDailyCents)}/day</strong>. Daily budgets are adjusted gradually so delivery stays
+                steady, and your campaign never spends more than you&apos;ve added.
+              </>
+            )}
           </span>
         </div>
       )}
