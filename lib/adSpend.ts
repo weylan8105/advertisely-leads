@@ -106,6 +106,14 @@ export interface RecurringAdSpend {
   renewsAt: string; // ISO; the next payment
 }
 
+/** A client's Stripe subscription, as seen by the ad-spend reader (for admins checking it). */
+export interface ClientSubscription {
+  id: string;
+  status: string;
+  adSpend: boolean;
+  lines: { description: string; amountCents: number; periodEnd: string | null }[];
+}
+
 /**
  * The daily spend that uses a client's budget on schedule: their recurring
  * (weekly) ad-spend payment over the days until it renews, and anything else
@@ -311,30 +319,48 @@ async function chargeTitles(c: any): Promise<string[]> {
  * payments, which fund their campaign, and everything else (the monthly
  * service subscription, lead orders), which doesn't.
  */
-type StripeAdSpend = { adSpend: ClientPayment[]; other: ClientPayment[]; recurring: RecurringAdSpend | null };
+type StripeAdSpend = { adSpend: ClientPayment[]; other: ClientPayment[]; recurring: RecurringAdSpend | null; subscriptions: ClientSubscription[] };
 
 /** The client's active recurring ad-spend subscription(s), from their latest invoice. */
-async function recurringAdSpend(customerIds: string[]): Promise<RecurringAdSpend | null> {
-  if (!stripe) return null;
+async function recurringAdSpend(customerIds: string[]): Promise<{ recurring: RecurringAdSpend | null; subscriptions: ClientSubscription[] }> {
+  const subscriptions: ClientSubscription[] = [];
+  if (!stripe) return { recurring: null, subscriptions };
   let amountCents = 0;
   let renewsAt: number | null = null;
   const nowSec = Date.now() / 1000;
   for (const customer of customerIds) {
-    const subs = await stripe.subscriptions.list({ customer, status: "active", limit: 20, expand: ["data.latest_invoice"] });
+    const subs = await stripe.subscriptions.list({ customer, status: "all", limit: 20, expand: ["data.latest_invoice"] });
     for (const sub of subs.data as any[]) {
-      for (const line of sub.latest_invoice?.lines?.data ?? []) {
+      const lines = (sub.latest_invoice?.lines?.data ?? []) as any[];
+      const record: ClientSubscription = {
+        id: sub.id,
+        status: sub.status,
+        adSpend: false,
+        lines: lines.map((l) => ({
+          description: String(l.description ?? ""),
+          amountCents: l.amount ?? 0,
+          periodEnd: l.period?.end ? new Date(l.period.end * 1000).toISOString() : null,
+        })),
+      };
+      subscriptions.push(record);
+      if (sub.status !== "active" && sub.status !== "trialing") continue;
+      for (const line of lines) {
         if (!AD_SPEND_TITLE.test(String(line.description ?? "")) || !(line.period?.end > nowSec)) continue;
+        record.adSpend = true;
         amountCents += line.amount ?? 0;
         renewsAt = renewsAt === null ? line.period.end : Math.min(renewsAt, line.period.end);
       }
     }
   }
-  if (!amountCents || renewsAt === null) return null;
-  return { amountCents, netCents: amountCents - processingFeeCents(amountCents), renewsAt: new Date(renewsAt * 1000).toISOString() };
+  if (!amountCents || renewsAt === null) return { recurring: null, subscriptions };
+  return {
+    recurring: { amountCents, netCents: amountCents - processingFeeCents(amountCents), renewsAt: new Date(renewsAt * 1000).toISOString() },
+    subscriptions,
+  };
 }
 
 async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
-  if (!stripe) return { adSpend: [], other: [], recurring: null };
+  if (!stripe) return { adSpend: [], other: [], recurring: null, subscriptions: [] };
   const emails = [...new Set(paymentEmails.flatMap((e) => [e.trim(), e.trim().toLowerCase()]).filter(Boolean))];
   const customers = (await Promise.all(emails.map((e) => stripe!.customers.list({ email: e, limit: 100 })))).flatMap((r) => r.data);
   const customerIds = [...new Set(customers.map((c) => c.id))];
@@ -351,7 +377,7 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
     if (e && wanted.has(e) && !byId.has(ch.id)) byId.set(ch.id, ch);
   }
   const charges = [...byId.values()];
-  if (!charges.length) return { adSpend: [], other: [], recurring: null };
+  if (!charges.length) return { adSpend: [], other: [], recurring: null, subscriptions: [] };
 
   const adSpend: ClientPayment[] = [];
   const other: ClientPayment[] = [];
@@ -376,11 +402,11 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
   const byDate = (a: ClientPayment, b: ClientPayment) => b.at.localeCompare(a.at);
   // Subscriptions live on a customer even when the charge was matched by billing email.
   const allCustomers = [...new Set([...customerIds, ...charges.map((c) => (typeof c.customer === "string" ? c.customer : c.customer?.id)).filter(Boolean)])];
-  const recurring = await recurringAdSpend(allCustomers).catch((e) => {
+  const { recurring, subscriptions } = await recurringAdSpend(allCustomers).catch((e) => {
     console.error("[adSpend] recurring lookup failed", (e as Error).message);
-    return null;
+    return { recurring: null, subscriptions: [] as ClientSubscription[] };
   });
-  return { adSpend: adSpend.sort(byDate), other: other.sort(byDate), recurring };
+  return { adSpend: adSpend.sort(byDate), other: other.sort(byDate), recurring, subscriptions };
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────
@@ -410,6 +436,7 @@ export interface AdSpendSummary {
   targetDateSet: boolean; // false = defaulting to month end
   pacedDailyCents: number | null;
   recurring: RecurringAdSpend | null; // weekly ad-spend subscription, paced to its renewal
+  subscriptions: ClientSubscription[];
   campaigns: ClientCampaign[];
   autoPause: boolean;
   pausedForBudget: boolean;
@@ -461,7 +488,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
       : (errors.push("Meta isn't connected."), { campaigns: [], monthlySpendCents: {} } as MetaSpend),
     stripePayments([user.email, ...user.adSpendEmails]).catch((e) => {
       errors.push(`Stripe: ${(e as Error).message}`);
-      return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[], recurring: null } as StripeAdSpend;
+      return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[], recurring: null, subscriptions: [] } as StripeAdSpend;
     }),
     manualPayments(user.id),
     // deliverLeadToOwner stamps this label on every lead from the client's campaign.
@@ -512,6 +539,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     targetDateSet: !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10),
     pacedDailyCents: remaining > 0 ? Math.max(MIN_DAILY_BUDGET_CENTS, idealDailyCents(remaining, cardPayments.recurring, targetDate)) : null,
     recurring: cardPayments.recurring,
+    subscriptions: cardPayments.subscriptions,
     campaigns: meta.campaigns,
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,
