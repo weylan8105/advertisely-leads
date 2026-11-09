@@ -491,6 +491,80 @@ async function consumeHouseSkipCredit(): Promise<boolean> {
   return true;
 }
 
+// ─── TEMPORARY: ABCA event boost (Ryan, Nov 9–11 2026) ───────────────────────
+// For an event, temporarily prioritize the house (Ryan) on ABCA original-campaign
+// leads: 3 of every 4 go to Ryan, the 4th flows to the normal rotation (Luke +
+// other outstanding orders). ABCA original campaign = the early-retirement-quiz
+// funnel (americanbluecollaradvantage.com). HWA and the Enhanced Wealth / EWWS
+// pages are NOT affected by this block.
+//
+// Auto-expires at the START of Nov 12 (America/Chicago = CST, UTC-6) → after that
+// routeAbcaEventBoost is a no-op and ABCA returns to the usual per-state round
+// robin, no action needed.
+//
+// EASILY REVERSIBLE — to end it early either (a) set ABCA_EVENT_BOOST.enabled =
+// false and deploy, or (b) revert this commit. Deleting this const + the
+// routeAbcaEventBoost function + its one call in tryFulfillForNewLead fully
+// removes it. The counter lives in DistributionCursor id "abca:event-boost"; it's
+// harmless to leave behind.
+const ABCA_EVENT_BOOST = {
+  enabled: true,
+  endsAt: new Date("2026-11-12T06:00:00Z"), // Nov 12 00:00 America/Chicago (CST)
+  oneInEveryToRotation: 4, // every 4th matching lead → normal rotation; the other 3 → house
+};
+const ABCA_EVENT_CURSOR_ID = "abca:event-boost";
+
+/** An ABCA original-campaign lead = the early-retirement-quiz funnel. */
+function isAbcaOriginalLead(source: string | null): boolean {
+  return (source ?? "").toLowerCase().includes("early-retirement-quiz");
+}
+
+/**
+ * Event boost: route 3 of every 4 ABCA original-campaign leads to the house.
+ * Returns true if it claimed the lead (caller stops distributing); false means
+ * this lead falls through to the normal rotation — either because the window is
+ * closed, it isn't an ABCA lead, or it's the 1-in-4 that belongs to the buyers.
+ * Uses the same persistent DistributionCursor counter pattern as the house skip
+ * credit; low volume makes the read-modify-write race immaterial.
+ */
+async function routeAbcaEventBoost(lead: { id: string; source: string | null }): Promise<boolean> {
+  if (!prisma || !ABCA_EVENT_BOOST.enabled) return false;
+  if (Date.now() >= ABCA_EVENT_BOOST.endsAt.getTime()) return false; // window closed → normal
+  if (!isAbcaOriginalLead(lead.source)) return false;
+
+  const row = await prisma.distributionCursor.findUnique({ where: { id: ABCA_EVENT_CURSOR_ID } });
+  const prev = parseInt(row?.lastRecipientId ?? "0", 10);
+  const n = (Number.isFinite(prev) ? prev : 0) + 1;
+  await prisma.distributionCursor.upsert({
+    where: { id: ABCA_EVENT_CURSOR_ID },
+    update: { lastRecipientId: String(n) },
+    create: { id: ABCA_EVENT_CURSOR_ID, lastRecipientId: String(n) },
+  });
+  // Every Nth lead flows to the normal rotation (buyers/Luke); the rest → house.
+  if (n % ABCA_EVENT_BOOST.oneInEveryToRotation === 0) return false;
+
+  const house = await getHouseAccount();
+  if (!house) return false;
+  const res = await prisma.lead.updateMany({
+    where: { id: lead.id, assignedUserId: null, trashedAt: null },
+    data: {
+      assignedUserId: house.userId,
+      assignedAt: new Date(),
+      ...(house.organizationId ? { organizationId: house.organizationId } : {}),
+    },
+  });
+  if (res.count === 0) return false;
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      type: "LEAD_ASSIGNED",
+      body: "Routed to house CRM — temporary ABCA event boost (3 of every 4 → Ryan, through Nov 11).",
+    },
+  });
+  return true;
+}
+// ─── end TEMPORARY ABCA event boost ──────────────────────────────────────────
+
 export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   if (!prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -511,6 +585,12 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // requests auto-fill, and fulfillReplacement still enforces the request's order
   // states + age, so this can't deliver an off-state/off-order lead.
   if (await tryReplacementForFreshLead(leadId)) return;
+
+  // TEMPORARY event boost (Nov 9–11 2026): 3 of every 4 ABCA original-campaign
+  // leads go to the house (Ryan); the 4th flows to the normal rotation below.
+  // Owed replacements above still take precedence. Auto-expires Nov 12 — see
+  // ABCA_EVENT_BOOST. Easily reversible (flip its `enabled` or revert the commit).
+  if (await routeAbcaEventBoost(lead)) return;
 
   const pendingOrders = await prisma.order.findMany({
     where: {
