@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdSpendSummary } from "@/lib/adSpend";
+import { adSpendProgress } from "@/lib/adSpendProgress";
 
 const PRESETS = [500, 1000, 2500, 5000];
 const MIN_DOLLARS = 100;
@@ -80,6 +81,8 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
           </span>
         </div>
       )}
+
+      <AdSpendBar summary={summary} />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard
@@ -276,5 +279,53 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         </span>
       </p>
     </div>
+  );
+}
+
+/** At-a-glance progress through the budget: the same bar admins see for this account. */
+function AdSpendBar({ summary }: { summary: AdSpendSummary }) {
+  const { pct, out, low } = adSpendProgress(summary);
+  const days = summary.daysLeft;
+  return (
+    <Card>
+      <CardContent className="py-4">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <span className="text-sm">
+            <span className="font-semibold">{usd0(summary.chargedCents)}</span>
+            <span className="text-muted-foreground"> spent of {usd0(summary.availableCents)} added</span>
+          </span>
+          <span
+            className={cn(
+              "text-sm tabular-nums",
+              out ? "font-semibold text-rose-600" : low ? "font-semibold text-amber-600" : "text-muted-foreground",
+            )}
+          >
+            {out
+              ? "Budget used up"
+              : `${usd0(summary.balanceCents)} left${
+                  days !== null ? (days < 1 ? " · under 1 day" : ` · about ${days} day${days === 1 ? "" : "s"}`) : ""
+                }`}
+          </span>
+        </div>
+        <div
+          className="h-2.5 w-full overflow-hidden rounded-full bg-sky-100"
+          role="progressbar"
+          aria-label="Ad budget spent"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+        >
+          <div
+            className={cn("h-full rounded-full transition-all", out ? "bg-rose-500" : low ? "bg-amber-500" : "bg-sky-500")}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="mt-1.5 text-xs text-muted-foreground">
+          {pct}% of your budget used
+          {summary.costPerLeadCents !== null ? ` · ${usd(summary.costPerLeadCents)} per lead` : ""}
+          {summary.pausedForBudget ? " · campaign paused" : ""}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

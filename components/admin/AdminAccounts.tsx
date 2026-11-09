@@ -12,6 +12,7 @@ import { ViewAsClientButton } from "@/components/admin/ViewAsClient";
 import { matchesWords, searchWords } from "@/lib/leadSearch";
 import type { Lead } from "@/types";
 import type { AdSpendSummary } from "@/lib/adSpend";
+import { adSpendProgress } from "@/lib/adSpendProgress";
 
 interface Account {
   userId: string;
@@ -692,9 +693,7 @@ function AdSpendProgress({ userId, summary }: { userId: string; summary: AdSpend
     );
   }
   const s = summary!;
-  const pct = s.availableCents > 0 ? Math.min(100, Math.round((s.chargedCents / s.availableCents) * 100)) : 100;
-  const out = s.balanceCents <= 0;
-  const low = !out && s.daysLeft !== null && s.daysLeft <= 3;
+  const { pct, out, low } = adSpendProgress(s);
   return (
     <a
       href={`/dashboard?advertiser=${encodeURIComponent(userId)}`}
