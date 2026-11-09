@@ -30,14 +30,9 @@ vi.mock("@/lib/stripe", () => ({
   stripe: {
     customers: { list: vi.fn(async () => ({ data: [{ id: "cus_1" }] })) },
     charges: {
-      list: vi.fn(() => ({
+      list: vi.fn((params: any) => ({
         async *[Symbol.asyncIterator]() {
-          for (const c of charges) yield c;
-        },
-      })),
-      search: vi.fn(() => ({
-        async *[Symbol.asyncIterator]() {
-          for (const c of guestCharges) yield c;
+          for (const c of params.customer ? charges : guestCharges) yield c;
         },
       })),
     },
@@ -149,7 +144,11 @@ describe("summary", () => {
   it("finds guest payments by billing email, without counting one twice", async () => {
     const shared = paid(1000);
     charges = [shared];
-    guestCharges = [shared, paid(500, { description: "Adspend Budget", customer: null })];
+    guestCharges = [
+      shared,
+      paid(500, { description: "Adspend Budget", customer: null, billing_details: { email: "JACE@gmail.com" } }),
+      paid(700, { description: "Adspend Budget", customer: null, billing_details: { email: "someone@else.com" } }),
+    ];
     const { getAdSpendSummary } = await import("@/lib/adSpend");
     const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
     expect(s.paidCents).toBe(150_000);

@@ -238,6 +238,21 @@ async function manualPayments(userId: string): Promise<ClientPayment[]> {
   }));
 }
 
+// The account's charges from the last year, shared across clients for a minute.
+let recentChargesCache: { at: number; charges: Promise<any[]> } | null = null;
+function recentCharges(): Promise<any[]> {
+  if (recentChargesCache && Date.now() - recentChargesCache.at < 60_000) return recentChargesCache.charges;
+  const since = Math.floor(Date.now() / 1000) - 365 * 86_400;
+  const charges = (async () => {
+    const out: any[] = [];
+    for await (const ch of stripe!.charges.list({ created: { gte: since }, limit: 100, expand: ["data.payment_intent"] })) out.push(ch);
+    return out;
+  })();
+  recentChargesCache = { at: Date.now(), charges };
+  charges.catch(() => { recentChargesCache = null; });
+  return charges;
+}
+
 /** A Stripe payment counts toward the ad budget only when it's titled ad spend. */
 export const AD_SPEND_TITLE = /\bad[\s-]*spend\b/i;
 
@@ -284,11 +299,12 @@ async function stripePayments(email: string): Promise<{ adSpend: ClientPayment[]
   for (const customer of customerIds) {
     for await (const ch of stripe.charges.list({ customer, limit: 100, expand: ["data.payment_intent"] })) byId.set(ch.id, ch);
   }
-  // Guest payments (payment links, invoices paid by card without a saved
-  // customer) carry the email only on the card's billing details.
-  for (const e of emails) {
-    const query = `billing_details.email:"${e.replace(/["\\]/g, "")}"`;
-    for await (const ch of stripe.charges.search({ query, limit: 100, expand: ["data.payment_intent"] })) byId.set(ch.id, ch);
+  // Guest payments (payment links, invoices paid without a saved customer)
+  // carry the email only on the charge's billing details or receipt.
+  const wanted = new Set(emails.map((e) => e.toLowerCase()));
+  for (const ch of await recentCharges()) {
+    const e = String(ch.billing_details?.email ?? ch.receipt_email ?? "").toLowerCase();
+    if (e && wanted.has(e) && !byId.has(ch.id)) byId.set(ch.id, ch);
   }
   const charges = [...byId.values()];
   if (!charges.length) return { adSpend: [], other: [] };
