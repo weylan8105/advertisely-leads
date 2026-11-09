@@ -4,6 +4,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { processPaidInvoice, upsertLocalSubscription } from "@/lib/leadSubscription";
 import { placeCheckoutOrders, type PaidLine } from "@/lib/checkoutOrders";
 import { clawbackReferralBucks } from "@/lib/referral";
+import { AD_SPEND_KIND, enforceAdSpend } from "@/lib/adSpend";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -65,6 +66,12 @@ export async function POST(req: NextRequest) {
       // ── Weekly lead subscriptions ───────────────────────────────────────
       case "checkout.session.completed": {
         const s = event.data.object as Stripe.Checkout.Session;
+        // An advertiser added ad spend: lift their campaign's cap / resume it.
+        if (s.metadata?.kind === AD_SPEND_KIND && s.metadata.userId) {
+          const r = await enforceAdSpend(s.metadata.userId);
+          console.log("Stripe webhook: ad spend added", s.id, r.action, r.detail);
+          break;
+        }
         if (s.mode === "subscription" && s.subscription && stripe) {
           const subId = typeof s.subscription === "string" ? s.subscription : s.subscription.id;
           await upsertLocalSubscription(await stripe.subscriptions.retrieve(subId));
@@ -104,6 +111,8 @@ export async function POST(req: NextRequest) {
 async function handlePaymentSucceeded(intent: Stripe.PaymentIntent) {
   // Subscription payments are invoice-driven — handled by invoice.paid, not here.
   if ((intent as any).invoice) return;
+  // Advertiser ad-spend top-ups aren't lead orders (checkout.session.completed).
+  if (intent.metadata?.kind === AD_SPEND_KIND) return;
   if (!isDatabaseConfigured || !prisma) {
     console.error(
       "Stripe webhook: payment succeeded but DB not configured — order not created!",

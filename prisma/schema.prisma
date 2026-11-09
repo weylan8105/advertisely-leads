@@ -71,6 +71,13 @@ model User {
   // the rest go to their team (see lib/advertiserVolume.ts). null = keep every
   // lead (default), 0 = the team gets all of them.
   advertiserWeeklyKeep Int?
+  // Advertiser ad-spend budget (lib/adSpend.ts). Their Meta campaigns: these ids,
+  // or when empty the "Advertisely Advertiser - <name>" campaigns.
+  adCampaignIds            String[] @default([])
+  // Cap their campaigns at what they've paid for and pause them when it runs out.
+  adSpendAutoPause         Boolean  @default(false)
+  // Campaigns we paused for budget, resumed when they add spend.
+  adSpendPausedCampaignIds String[] @default([])
   createdAt     DateTime  @default(now())
 
   accounts              Account[]

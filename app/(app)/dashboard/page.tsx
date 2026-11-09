@@ -25,6 +25,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { PnlSummary } from "@/components/dashboard/PnlSummary";
+import { AdvertiserSpendPanel } from "@/components/dashboard/AdvertiserSpendPanel";
+import type { AdSpendSummary } from "@/lib/adSpend";
 import { ActivityDashboard } from "@/components/dashboard/ActivityDashboard";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
 import { LeadTable } from "@/components/leads/LeadTable";
@@ -61,6 +63,18 @@ export default function DashboardPage() {
   const userName = (session?.user?.name ?? "there").split(" ")[0];
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const [dash, setDash] = useState<DashData | null>(null);
+  // Advertisers (clients running their own campaign) get their budget up top.
+  const [adSpend, setAdSpend] = useState<AdSpendSummary | null>(null);
+
+  useEffect(() => {
+    const topup = new URLSearchParams(window.location.search).get("topup");
+    fetch(`/api/advertiser/spend${topup === "success" ? "?topup=success" : ""}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.summary) setAdSpend(d.summary); })
+      .catch(() => {});
+    if (topup === "success") addToast("success", "Payment received. Your campaign budget is updated.");
+    if (topup) window.history.replaceState(null, "", "/dashboard");
+  }, []);
 
   useEffect(() => {
     fetch("/api/orders")
@@ -169,8 +183,12 @@ export default function DashboardPage() {
 
       <PageHeader
         eyebrow={`Welcome back, ${userName}`}
-        title="Your IUL pipeline at a glance."
-        description="Real-time view of your purchased leads, tasks for today, and pipeline performance across the last 7 days."
+        title={adSpend ? "Your campaign at a glance." : "Your IUL pipeline at a glance."}
+        description={
+          adSpend
+            ? "Your campaign budget, spend and cost per lead, plus your leads, tasks for today, and pipeline performance."
+            : "Real-time view of your purchased leads, tasks for today, and pipeline performance across the last 7 days."
+        }
         actions={
           <>
             <Link href="/marketplace">
@@ -189,6 +207,8 @@ export default function DashboardPage() {
       />
 
       {isAdmin && <DeliveredLeadsTracker />}
+
+      {adSpend && <AdvertiserSpendPanel summary={adSpend} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard

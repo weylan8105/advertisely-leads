@@ -481,3 +481,15 @@ export function adsManagerUrl(accountId: string, campaignId?: string): string {
   const sel = campaignId ? `&selected_campaign_ids=${encodeURIComponent(campaignId)}` : "";
   return `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${act}${sel}`;
 }
+
+// ─── Advertiser budget guard (lib/adSpend.ts) ────────────────────────
+
+/** Pause or resume a client campaign. */
+export async function setCampaignStatus(campaignId: string, status: "ACTIVE" | "PAUSED"): Promise<void> {
+  await graphPost(encodeURIComponent(campaignId), { status });
+}
+
+/** Set a campaign's lifetime spending limit, in cents; Meta stops delivery there. */
+export async function setCampaignSpendCap(campaignId: string, spendCapCents: number): Promise<void> {
+  await graphPost(encodeURIComponent(campaignId), { spend_cap: String(Math.round(spendCapCents)) });
+}
