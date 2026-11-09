@@ -13,13 +13,17 @@ async function requireAdmin() {
   return (session?.user as any)?.role === "ADMIN";
 }
 
-/** GET /api/admin/ad-spend — every advertiser's paid / spent / budget left. */
-export async function GET() {
+/**
+ * GET /api/admin/ad-spend — every advertiser's paid / spent / budget left.
+ * ?quick=1 (the Client accounts progress bars) reuses summaries up to a minute old.
+ */
+export async function GET(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const fresh = req.nextUrl.searchParams.get("quick") !== "1";
   const users = await prisma.user.findMany({ where: { isAdvertiser: true }, select: { id: true }, orderBy: { createdAt: "asc" } });
   const summaries = [];
-  for (const u of users) summaries.push(await getAdSpendSummary(u.id, { fresh: true }));
+  for (const u of users) summaries.push(await getAdSpendSummary(u.id, { fresh }));
   return NextResponse.json({ summaries: summaries.filter(Boolean) });
 }
 

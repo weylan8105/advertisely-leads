@@ -11,6 +11,7 @@ import { ClientOrdersModal } from "@/components/admin/ClientOrdersModal";
 import { ViewAsClientButton } from "@/components/admin/ViewAsClient";
 import { matchesWords, searchWords } from "@/lib/leadSearch";
 import type { Lead } from "@/types";
+import type { AdSpendSummary } from "@/lib/adSpend";
 
 interface Account {
   userId: string;
@@ -64,6 +65,7 @@ function metrics(a: Account) {
 
 export function AdminAccounts() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
+  const [spend, setSpend] = useState<Record<string, AdSpendSummary> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Account | null>(null);
   const [managing, setManaging] = useState<Account | null>(null);
@@ -164,6 +166,16 @@ export function AdminAccounts() {
       setReconciling(false);
     }
   }
+
+  // Advertisers' ad spend progress (Meta + Stripe, so it loads after the list).
+  useEffect(() => {
+    fetch("/api/admin/ad-spend?quick=1")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: { summaries?: AdSpendSummary[] }) =>
+        setSpend(Object.fromEntries((d.summaries ?? []).map((x) => [x.userId, x]))),
+      )
+      .catch(() => setSpend({}));
+  }, [reloadKey]);
 
   useEffect(() => {
     fetch("/api/admin/accounts")
@@ -400,9 +412,7 @@ export function AdminAccounts() {
                       // Advertisers don't buy orders — their leads arrive via
                       // exclusive owner-delivery, so show that instead of a bar.
                       <div className="text-[11px]" title="Receives their own campaign's leads exclusively">
-                        <span className="inline-flex items-center gap-1 font-medium text-sky-600">
-                          <Megaphone className="h-3 w-3" /> Advertiser
-                        </span>
+                        <AdSpendProgress userId={a.userId} summary={spend === null ? undefined : spend[a.userId] ?? null} />
                         <div className="text-muted-foreground tabular-nums">{a.delivered} exclusive lead{a.delivered === 1 ? "" : "s"}</div>
                         <button
                           onClick={() => setRingyFor(a)}
@@ -653,5 +663,70 @@ function AccountBoardModal({ account, onClose }: { account: Account; onClose: ()
         </div>
       </div>
     </div>
+  );
+}
+
+const usd0 = (cents: number) =>
+  (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+/**
+ * An advertiser's ad spend progress, the advertiser version of the order bar:
+ * what's been spent (Meta spend + service fees) out of what they've paid in
+ * (after card processing). Click through to their full budget panel.
+ * summary: undefined = still loading, null = no budget data.
+ */
+function AdSpendProgress({ userId, summary }: { userId: string; summary: AdSpendSummary | null | undefined }) {
+  if (summary === undefined) {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Ad spend…
+      </span>
+    );
+  }
+  const noCampaign = !summary || (summary.errors.length > 0 && !summary.campaigns.length);
+  if (noCampaign && !(summary && summary.availableCents > 0)) {
+    return (
+      <span className="inline-flex items-center gap-1 font-medium text-sky-600" title={summary?.errors.join(" · ") || "No ad spend yet"}>
+        <Megaphone className="h-3 w-3" /> Advertiser · no ad spend yet
+      </span>
+    );
+  }
+  const s = summary!;
+  const pct = s.availableCents > 0 ? Math.min(100, Math.round((s.chargedCents / s.availableCents) * 100)) : 100;
+  const out = s.balanceCents <= 0;
+  const low = !out && s.daysLeft !== null && s.daysLeft <= 3;
+  return (
+    <a
+      href={`/dashboard?advertiser=${encodeURIComponent(userId)}`}
+      className="block w-44 hover:opacity-80"
+      title={`Ad spend: ${usd0(s.chargedCents)} spent of ${usd0(s.availableCents)} paid in. ${
+        s.dailyBudgetCents ? `${usd0(s.dailyBudgetCents)}/day budget. ` : ""
+      }${s.costPerLeadCents !== null ? `${usd0(s.costPerLeadCents)} per lead. ` : ""}Click for their full budget.`}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-sky-600">
+          <Megaphone className="h-3 w-3" /> {usd0(s.chargedCents)}/{usd0(s.availableCents)}
+        </span>
+        <span
+          className={cn(
+            "tabular-nums whitespace-nowrap",
+            out ? "font-medium text-rose-600" : low ? "font-medium text-amber-600" : "text-muted-foreground",
+          )}
+        >
+          {out ? "Out" : `${usd0(s.balanceCents)} left`}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-sky-100">
+        <div
+          className={cn("h-full rounded-full transition-all", out ? "bg-rose-500" : low ? "bg-amber-500" : "bg-sky-500")}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="mt-0.5 tabular-nums text-muted-foreground">
+        {s.costPerLeadCents !== null ? `${usd0(s.costPerLeadCents)}/lead` : "No leads yet"}
+        {s.daysLeft !== null && !out ? (s.daysLeft < 1 ? " · under 1 day" : ` · ~${s.daysLeft}d left`) : ""}
+        {s.pausedForBudget ? " · paused" : ""}
+      </div>
+    </a>
   );
 }
