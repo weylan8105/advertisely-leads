@@ -9,6 +9,8 @@ declare module "next-auth" {
       id?: string;
       role?: string;
       userMode?: boolean;
+      /** Set while an admin is viewing this client's account (lib/viewAs.ts). */
+      viewingAs?: boolean;
     } & DefaultSession["user"];
   }
 

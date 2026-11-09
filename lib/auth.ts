@@ -7,6 +7,7 @@ import { verifyPassword } from "@/lib/password";
 import { UPLINE_COOKIE } from "@/lib/uplineCookie";
 import { ADVERTISER_COOKIE, isAdvertiserInviteToken } from "@/lib/advertiserInvite";
 import { USER_MODE_COOKIE, isUserModeActive } from "@/lib/userMode";
+import { VIEW_AS_COOKIE, viewAsTargetId } from "@/lib/viewAs";
 
 const providers: NextAuthOptions["providers"] = [];
 
@@ -68,6 +69,16 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   events: {
+    // Leaving client view on sign-out, so its read-only lock never follows the
+    // next person who signs in on this browser.
+    async signOut() {
+      try {
+        const { cookies } = await import("next/headers");
+        if (cookies().get(VIEW_AS_COOKIE)) cookies().delete(VIEW_AS_COOKIE);
+      } catch (e) {
+        console.warn("[auth] clearing client view on sign-out failed", e);
+      }
+    },
     // "Sign up with Google" with an upline code: the signup page leaves the
     // code in a short-lived cookie; join their team once the account exists.
     async createUser({ user }) {
@@ -134,6 +145,33 @@ export const authOptions: NextAuthOptions = {
         if (token.role === "ADMIN") {
           try {
             const { cookies } = await import("next/headers");
+            // View as client: the session becomes that client's, so every page
+            // and API shows their account. middleware.ts keeps it read-only.
+            const targetId = viewAsTargetId(token.role, cookies().get(VIEW_AS_COOKIE)?.value);
+            const target =
+              targetId && prisma
+                ? await prisma.user.findUnique({
+                    where: { id: targetId },
+                    select: { id: true, name: true, email: true, image: true, role: true },
+                  })
+                : null;
+            if (target) {
+              (session.user as any).id = target.id;
+              // Never hand out admin through someone else's account.
+              (session.user as any).role = target.role === "ADMIN" ? "AGENT" : target.role;
+              session.user.name = target.name;
+              session.user.email = target.email;
+              session.user.image = target.image;
+              (session.user as any).viewingAs = true;
+              return session;
+            }
+            // Cookie points at an account that's gone: keep the admin's own
+            // session but still flag it, so the banner offers the way out of
+            // the read-only lock instead of leaving them stuck in it.
+            if (targetId) {
+              (session.user as any).viewingAs = true;
+              return session;
+            }
             if (isUserModeActive(token.role, cookies().get(USER_MODE_COOKIE)?.value)) {
               (session.user as any).role = "AGENT";
               (session.user as any).userMode = true;

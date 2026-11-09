@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { CartProvider } from "@/context/CartContext";
 import { UserModeBanner } from "@/components/admin/UserModeToggle";
+import { ViewAsBanner } from "@/components/admin/ViewAsClient";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -75,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <CartProvider>{children}</CartProvider>
           <UserModeBanner />
+          <ViewAsBanner />
         </AuthProvider>
       </body>
     </html>

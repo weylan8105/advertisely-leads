@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { ClientOrdersModal } from "@/components/admin/ClientOrdersModal";
+import { ViewAsClientButton } from "@/components/admin/ViewAsClient";
 import { matchesWords, searchWords } from "@/lib/leadSearch";
 import type { Lead } from "@/types";
 
@@ -448,6 +449,7 @@ export function AdminAccounts() {
                       <Button size="sm" variant="outline" onClick={() => setViewing(a)}>
                         View CRM <ArrowRight className="h-3.5 w-3.5" />
                       </Button>
+                      <ViewAsClientButton userId={a.userId} label={a.name ?? a.email} />
                       <Button
                         size="sm"
                         variant="ghost"
@@ -494,7 +496,7 @@ export function AdminAccounts() {
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1 font-medium text-indigo-600"><Repeat className="h-3 w-3" /> Subscription</span> (indigo) = leads delivered this billing week ÷ the subscription&apos;s weekly allotment · Order progress (red) = leads delivered ÷ leads ordered across open (incomplete) orders, for non-subscription accounts · Working = leads moved past intake · Quoted = presentation/underwriting/approved · Conv. = policies sold ÷ delivered.
-        <span className="font-medium">Manage orders</span> to change an order&apos;s states, quantity, or close/reopen it; <span className="font-medium">View CRM</span> to see their full pipeline.
+        <span className="font-medium">Manage orders</span> to change an order&apos;s states, quantity, or close/reopen it; <span className="font-medium">View CRM</span> to see their full pipeline; <span className="font-medium">View dashboard</span> to see their whole app exactly as they do (view only, nothing you click there changes their account).
       </p>
 
       {ringyFor && (
