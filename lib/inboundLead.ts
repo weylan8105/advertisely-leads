@@ -1,4 +1,5 @@
 import { findPackage } from "@/data/packages";
+import { resolveHealthcarePackage } from "./leadPackageClassify";
 import { normalizeState } from "./leadImport";
 import { stateFromZip, normalizeZip } from "./zipState";
 
@@ -163,9 +164,21 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
   const income = incomeMatch ? parseInt(incomeMatch[0], 10) : undefined;
 
   const requestedPackage = pick("packageId");
-  const packageId = requestedPackage && findPackage(requestedPackage)
+  const basePackage = requestedPackage && findPackage(requestedPackage)
     ? requestedPackage
     : DEFAULT_PACKAGE;
+  // Display/source label resolved once so both the return value and the nurse
+  // backstop below see the same string.
+  const resolvedSource =
+    lookup["form"] || lookup["form_name"] || lookup["lead_source"] || lookup["source"] || DEFAULT_SOURCE;
+  // Nurse/healthcare backstop: the connector doesn't reliably stamp package_id,
+  // so keep EWWS "Nurses" / HWA leads out of the Blue-Collar IUL pool by funnel.
+  const packageId = resolveHealthcarePackage(basePackage, {
+    campaign: pick("campaignName"),
+    utmCampaign: pick("utmCampaign"),
+    source: resolvedSource,
+    occupation: pick("occupation"),
+  });
 
   return {
     standardized: {
@@ -200,7 +213,7 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
     // their real source instead of being mislabeled. We still DON'T fall back to
     // the attribution channel ("facebook") or campaign name, so a bare FB-form
     // pipe lead (no source field) still reads cleanly as "Facebook instant form".
-    source: lookup["form"] || lookup["form_name"] || lookup["lead_source"] || lookup["source"] || DEFAULT_SOURCE,
+    source: resolvedSource,
     externalId: pick("externalId") || undefined,
     ownerEmail: pick("ownerEmail") || undefined,
     ownerUserId: pick("ownerUserId") || undefined,

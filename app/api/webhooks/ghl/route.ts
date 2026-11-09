@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
 import { normalizeState } from "@/lib/leadImport";
+import { resolveHealthcarePackage } from "@/lib/leadPackageClassify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -126,9 +127,14 @@ export async function POST(req: NextRequest) {
     null;
   const consentIp = pick(flat, ["ip", "ip_address", "consent_ip"]) ?? null;
 
-  const packageId = pick(flat, ["package", "packageId", "package_id"]) ?? DEFAULT_PACKAGE_ID;
   const sourceLabel =
     pick(flat, ["source", "form_name", "formName"]) ?? "GHL Form";
+  // Nurse/healthcare backstop: EWWS "Nurses" / HWA leads must land in the
+  // Healthcare IUL pool, not default to Blue-Collar IUL when the form omits a package.
+  const packageId = resolveHealthcarePackage(
+    pick(flat, ["package", "packageId", "package_id"]) ?? DEFAULT_PACKAGE_ID,
+    { campaign: pick(flat, ["campaign_name", "campaignName"]) ?? null, utmCampaign, source: sourceLabel, occupation },
+  );
 
   // Minimum viable lead: we need a phone (the dial identifier) and a name.
   if (!phone || !fullName) {
