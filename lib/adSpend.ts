@@ -279,12 +279,19 @@ async function stripePayments(email: string): Promise<{ adSpend: ClientPayment[]
   const emails = [...new Set([email, email.toLowerCase()])];
   const customers = (await Promise.all(emails.map((e) => stripe!.customers.list({ email: e, limit: 100 })))).flatMap((r) => r.data);
   const customerIds = [...new Set(customers.map((c) => c.id))];
-  if (!customerIds.length) return { adSpend: [], other: [] };
 
-  const charges: any[] = [];
+  const byId = new Map<string, any>();
   for (const customer of customerIds) {
-    for await (const ch of stripe.charges.list({ customer, limit: 100, expand: ["data.payment_intent"] })) charges.push(ch);
+    for await (const ch of stripe.charges.list({ customer, limit: 100, expand: ["data.payment_intent"] })) byId.set(ch.id, ch);
   }
+  // Guest payments (payment links, invoices paid by card without a saved
+  // customer) carry the email only on the card's billing details.
+  for (const e of emails) {
+    const query = `billing_details.email:"${e.replace(/["\\]/g, "")}"`;
+    for await (const ch of stripe.charges.search({ query, limit: 100, expand: ["data.payment_intent"] })) byId.set(ch.id, ch);
+  }
+  const charges = [...byId.values()];
+  if (!charges.length) return { adSpend: [], other: [] };
 
   const adSpend: ClientPayment[] = [];
   const other: ClientPayment[] = [];

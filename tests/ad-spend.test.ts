@@ -8,6 +8,7 @@ let user: any;
 let charges: any[];
 let manual: any[] = [];
 let invoices: Record<string, any> = {};
+let guestCharges: any[] = [];
 const updates: any[] = [];
 
 vi.mock("@/lib/prisma", () => ({
@@ -32,6 +33,11 @@ vi.mock("@/lib/stripe", () => ({
       list: vi.fn(() => ({
         async *[Symbol.asyncIterator]() {
           for (const c of charges) yield c;
+        },
+      })),
+      search: vi.fn(() => ({
+        async *[Symbol.asyncIterator]() {
+          for (const c of guestCharges) yield c;
         },
       })),
     },
@@ -84,6 +90,7 @@ beforeEach(() => {
   charges = [paid(1000)];
   manual = [];
   invoices = {};
+  guestCharges = [];
   updates.length = 0;
   campaignStatus = "ACTIVE";
   setCampaignStatus.mockClear();
@@ -137,6 +144,15 @@ describe("summary", () => {
     expect(s.processingFeeCents).toBe(3_600);
     expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([300_000]);
     expect(s.payments.find((p) => p.amountCents === 100_000)?.description).toMatch(/Ad Spend/);
+  });
+
+  it("finds guest payments by billing email, without counting one twice", async () => {
+    const shared = paid(1000);
+    charges = [shared];
+    guestCharges = [shared, paid(500, { description: "Adspend Budget", customer: null })];
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(150_000);
   });
 
   it("counts Zelle payments in full, with no card processing fee", async () => {
