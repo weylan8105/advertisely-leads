@@ -14,6 +14,7 @@
 // date, and pauses the campaign when it runs out.
 
 import { prisma } from "./prisma";
+import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding } from "./teamAdSpend";
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
 
@@ -398,7 +399,10 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
       .map(async (c) => {
         const titles = await chargeTitles(c);
         const amountCents = (c.amount ?? 0) - (c.amount_refunded ?? 0);
-        const isAdSpend = c.metadata?.kind === AD_SPEND_KIND || titles.some((t) => AD_SPEND_TITLE.test(t));
+        // A downline funding someone else's campaign: counted there (lib/teamAdSpend.ts), never here.
+        const piKind = typeof c.payment_intent === "object" ? c.payment_intent?.metadata?.kind : undefined;
+        const isTeamFunding = c.metadata?.kind === TEAM_AD_SPEND_KIND || piKind === TEAM_AD_SPEND_KIND;
+        const isAdSpend = !isTeamFunding && (c.metadata?.kind === AD_SPEND_KIND || titles.some((t) => AD_SPEND_TITLE.test(t)));
         const payment: ClientPayment = {
           id: String(c.id),
           at: new Date(c.created * 1000).toISOString(),
@@ -447,6 +451,8 @@ export interface AdSpendSummary {
   targetDateSet: boolean; // false = defaulting to month end
   pacedDailyCents: number | null;
   periods: AdSpendPeriod[]; // each ad-spend payment and the week it's spent in
+  teamFunding: TeamFunding[]; // downlines who added spend (lib/teamAdSpend.ts)
+  teamCreditCents: number; // their unspent credit, part of balanceCents
   subscriptions: ClientSubscription[];
   campaigns: ClientCampaign[];
   autoPause: boolean;
@@ -490,7 +496,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   if (!user) return null;
 
   const errors: string[] = [];
-  const [meta, cardPayments, otherPayments, leads] = await Promise.all([
+  const [meta, cardPayments, otherPayments, leads, teamPayments, team] = await Promise.all([
     READ_TOKEN
       ? metaSpend(user.name, user.adCampaignIds).catch((e) => {
           errors.push(`Meta: ${(e as Error).message}`);
@@ -504,6 +510,12 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     manualPayments(user.id),
     // deliverLeadToOwner stamps this label on every lead from the client's campaign.
     leadCounts(user.name?.trim() || user.email),
+    // Downlines' top-ups fund this campaign too.
+    teamFundingPayments(user.id).catch((e) => {
+      errors.push(`Team spend: ${(e as Error).message}`);
+      return [] as ClientPayment[];
+    }),
+    teamFunding(user.id).catch(() => [] as TeamFunding[]),
   ]);
   if (!stripe) errors.push("Stripe isn't connected.");
   // A failed read must never look like a $0 balance (and pause a campaign).
@@ -515,7 +527,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     .sort((a, b) => b.month.localeCompare(a.month));
   const thisMonth = months.find((m) => m.month === thisMonthKey) ?? chargeForMonth(thisMonthKey, 0);
   const sum = (k: keyof Omit<MonthCharge, "month">) => months.reduce((s, m) => s + m[k], 0);
-  const payments = [...cardPayments.adSpend, ...otherPayments].sort((a, b) => b.at.localeCompare(a.at));
+  const payments = [...cardPayments.adSpend, ...otherPayments, ...teamPayments].sort((a, b) => b.at.localeCompare(a.at));
   const paidCents = payments.reduce((s, p) => s + p.amountCents, 0);
   const processing = payments.reduce((s, p) => s + p.processingFeeCents, 0);
   const chargedCents = sum("chargedCents");
@@ -551,6 +563,8 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     targetDateSet: !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10),
     pacedDailyCents: remaining > 0 ? Math.max(MIN_DAILY_BUDGET_CENTS, idealDailyCents(remaining, periods, targetDate)) : null,
     periods,
+    teamFunding: team,
+    teamCreditCents: team.reduce((t, f) => t + Math.max(0, f.creditCents), 0),
     subscriptions: cardPayments.subscriptions,
     campaigns: meta.campaigns,
     autoPause: user.adSpendAutoPause,
@@ -559,6 +573,22 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   };
   summaryCache.set(userId, { at: Date.now(), summary });
   return summary;
+}
+
+/**
+ * The campaign's cost per lead for charging a downline's credit, or null when
+ * it can't be trusted right now (Meta unreadable, no campaign, no leads yet).
+ */
+export async function campaignCplCents(userId: string): Promise<number | null> {
+  const s = await getAdSpendSummary(userId).catch(() => null);
+  if (!s || !s.costPerLeadCents || s.costPerLeadCents <= 0) return null;
+  if (s.errors.some((e) => e.startsWith("Meta") || e.startsWith("No campaign"))) return null;
+  return s.costPerLeadCents;
+}
+
+/** Drop a cached summary (a payment just landed). */
+export function forgetAdSpendSummary(userId: string) {
+  summaryCache.delete(userId);
 }
 
 // ─── Budget management ───────────────────────────────────────────────

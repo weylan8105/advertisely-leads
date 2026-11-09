@@ -13,77 +13,77 @@ datasource db {
 // ─── NextAuth models ─────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
+  id                       String    @id @default(cuid())
+  name                     String?
+  email                    String    @unique
+  emailVerified            DateTime?
+  image                    String?
   // Set for email/password accounts; null for OAuth-only (e.g. Google) users.
-  passwordHash  String?
-  agency        String?
-  phone         String?
-  role          UserRole  @default(AGENT)
-  state         String?
+  passwordHash             String?
+  agency                   String?
+  phone                    String?
+  role                     UserRole  @default(AGENT)
+  state                    String?
   // States the agent is licensed in (2-letter codes), chosen at signup. Used to
   // pre-fill the state selection on every order.
-  licensedStates String[] @default([])
+  licensedStates           String[]  @default([])
   // The lead this user is on the phone with right now (pipeline "Talking to"),
   // shown to teammates so two people don't call the same lead. Stale after 30 min.
-  talkingLeadId String?
-  talkingAt     DateTime?
+  talkingLeadId            String?
+  talkingAt                DateTime?
   // Manually-entered Facebook cost-per-lead (cents) used for the fresh-lead price
   // floor when the Meta Marketing API isn't connected. Set by an admin; the
   // canonical (oldest) admin's value is the global one.
-  manualCplCents     Int?
-  manualCplUpdatedAt DateTime?
+  manualCplCents           Int?
+  manualCplUpdatedAt       DateTime?
   // Per-user CRM pipeline customization: an ordered JSON array of
   // { id, label, tone } stages. Null = use the default stage set
   // (see data/pipeline.ts). The reserved anchor ids "new-lead" and
   // "issued-paid" are always present so P&L / conversions keep working.
-  pipelineStages Json?
+  pipelineStages           Json?
   // How cards stack inside a pipeline column: null/"newest" = newest lead on top;
   // "manual" = the order the agent dragged them into (Lead.stageRank).
-  pipelineSort   String?
+  pipelineSort             String?
   // Sendblue texting: the agent's assigned Sendblue line (E.164, the number
   // leads see) and optional seat id. Null = this agent can't text yet.
-  sendblueNumber String?
-  sendblueSeatId String?
+  sendblueNumber           String?
+  sendblueSeatId           String?
   // Admin overflow appetite: how many overflow leads this admin wants per
   // rolling 7-day window. While under this count they're in the round-robin as a
   // house slot; at/over it they drop out (and overflow stays in the bank).
   // Null/0 = not taking overflow.
-  weeklyLeadTarget Int?
+  weeklyLeadTarget         Int?
   // Keys of one-time in-app announcements this user has already seen/dismissed
   // (see data/announcements.ts). Used to show each announcement exactly once.
-  announcementsSeen String[] @default([])
+  announcementsSeen        String[]  @default([])
   // Advertisely Bucks Marketing Campaign (DRAFT — see lib/referral.ts, gated by REFERRAL_PROGRAM_ENABLED).
   // The agent's own 10%-off code (stored uppercase; editable) and their
   // Advertisely Bucks balance in cents (earned when others buy with the code).
-  referralCode  String?   @unique
-  bucksCents    Int       @default(0)
+  referralCode             String?   @unique
+  bucksCents               Int       @default(0)
   // Advertiser account: this user runs their own ad campaign through Advertisely
   // and receives their campaign's leads EXCLUSIVELY (owner-delivery), rather than
   // buying from the marketplace. Auto-set the first time a lead is owner-delivered
   // to them (see deliverLeadToOwner); surfaces them as a distinct segment on the
   // admin Client-accounts tab. Does not block them from also placing orders.
-  isAdvertiser  Boolean   @default(false)
+  isAdvertiser             Boolean   @default(false)
   // How many of their own campaign leads an advertiser keeps per rolling 7 days;
   // the rest go to their team (see lib/advertiserVolume.ts). null = keep every
   // lead (default), 0 = the team gets all of them.
-  advertiserWeeklyKeep Int?
+  advertiserWeeklyKeep     Int?
   // Advertiser ad-spend budget (lib/adSpend.ts). Their Meta campaigns: these ids,
   // or when empty the "Advertisely Advertiser - <name>" campaigns.
-  adCampaignIds            String[] @default([])
+  adCampaignIds            String[]  @default([])
   // Cap their campaigns at what they've paid for and pause them when it runs out.
-  adSpendAutoPause         Boolean  @default(false)
+  adSpendAutoPause         Boolean   @default(false)
   // Campaigns we paused for budget, resumed when they add spend.
-  adSpendPausedCampaignIds String[] @default([])
+  adSpendPausedCampaignIds String[]  @default([])
   // Pace the daily budget to spend what they've paid by this date (null = month end).
   adSpendTargetDate        DateTime?
   adSpendPacedAt           DateTime?
   // Other emails the client pays ad spend from in Stripe.
-  adSpendEmails            String[] @default([])
-  createdAt     DateTime  @default(now())
+  adSpendEmails            String[]  @default([])
+  createdAt                DateTime  @default(now())
 
   accounts              Account[]
   sessions              Session[]
@@ -91,18 +91,18 @@ model User {
   leadSubscriptions     LeadSubscription[]
   adSpendPayments       AdSpendPayment[]
   houseLeadSettlements  HouseLeadSettlement[]
-  assignedLeads         Lead[]               @relation("AssignedAgent")
+  assignedLeads         Lead[]                @relation("AssignedAgent")
   integrations          Integration[]
   exportLogs            ExportLog[]
   tasks                 Task[]
-  requestedReplacements ReplacementRequest[] @relation("RequestedReplacements")
-  reviewedReplacements  ReplacementRequest[] @relation("ReviewedReplacements")
+  requestedReplacements ReplacementRequest[]  @relation("RequestedReplacements")
+  reviewedReplacements  ReplacementRequest[]  @relation("ReviewedReplacements")
 
   // Teams / multi-seat (Phase 1)
   defaultOrganizationId String?
-  ownedOrganizations    Organization[] @relation("OrgOwner")
+  ownedOrganizations    Organization[]     @relation("OrgOwner")
   memberships           Membership[]
-  sentInvitations       Invitation[]   @relation("InvitedBy")
+  sentInvitations       Invitation[]       @relation("InvitedBy")
   bucksTransactions     BucksTransaction[]
 }
 
@@ -192,67 +192,67 @@ model MetaFormMapping {
 // ─── Lead pipeline ───────────────────────────────────────────────────
 
 model Lead {
-  id              String        @id @default(cuid())
-  externalId      String?       @unique // Meta leadgen_id (legacy)
-  ghlContactId    String?       @unique // GHL contact id — arrives with GHL intake; powers sold-tagging
-  ghlSoldTaggedAt DateTime? // set when we tag the GHL contact advertisely-sold
-  name            String
-  phone           String
-  email           String
-  state           String
-  zip             String?
-  age             Int?
-  income          Int?
-  occupation      String?
-  intentReason    String?       @db.Text
-  packageId       String // which package this lead belongs to
-  status          LeadStatus    @default(NEW)
-  disposition     String?
-  pipelineStage   String        @default("new-lead") // CRM kanban stage id (see data/pipeline.ts)
+  id               String        @id @default(cuid())
+  externalId       String?       @unique // Meta leadgen_id (legacy)
+  ghlContactId     String?       @unique // GHL contact id — arrives with GHL intake; powers sold-tagging
+  ghlSoldTaggedAt  DateTime? // set when we tag the GHL contact advertisely-sold
+  name             String
+  phone            String
+  email            String
+  state            String
+  zip              String?
+  age              Int?
+  income           Int?
+  occupation       String?
+  intentReason     String?       @db.Text
+  packageId        String // which package this lead belongs to
+  status           LeadStatus    @default(NEW)
+  disposition      String?
+  pipelineStage    String        @default("new-lead") // CRM kanban stage id (see data/pipeline.ts)
   // Manual position within its pipeline column (lower = higher up). Null = never
   // placed by hand; those show first, newest on top.
-  stageRank      Float?
+  stageRank        Float?
   // Teammate actively working this lead (shown as initials on the card). Separate
   // from assignedUserId (the owner) — Goldmine leads stay owned by the team owner
   // while any teammate can claim them. Null = nobody claimed it.
-  workingUserId  String?
+  workingUserId    String?
   // Which pipeline this lead lives in: "main" (the agent's board) or "goldmine"
   // (the team-shared aged-lead board). Aged leads auto-move main → goldmine.
-  pipeline        String        @default("main")
-  goldmineAt      DateTime?     // when the lead moved into the Goldmine pipeline
+  pipeline         String        @default("main")
+  goldmineAt       DateTime? // when the lead moved into the Goldmine pipeline
   // Opportunity value the agent assigns to this lead (shown on the card + summed
   // per pipeline stage). Separate from soldPremiumCents (which powers P&L at close).
-  valueCents      Int?
+  valueCents       Int?
   // Date the initial premium is scheduled to draft on a submitted deal (a
   // reminder the agent sets; shown next to the value and on the card).
-  draftDate       DateTime?
-  soldPremiumCents Int?         // annual premium (AP) logged when moved to Issued PAID — powers P&L
-  soldAt          DateTime?
-  callbackAt      DateTime?     // scheduled call-back reminder (card counts down / flashes when due)
-  callbackEventId String?       // Google Calendar event id for the current callback (if synced)
-  source          String // e.g. "Meta - Lineman Retirement Q2"
-  campaignName    String?
-  adsetId         String?
-  creativeId      String?
-  utmSource       String?
-  utmMedium       String?
-  utmCampaign     String?
-  fbclid          String?
-  consentMethod   ConsentMethod @default(TCPA_WEB_FORM)
-  consentTime     DateTime
-  consentIp       String?
-  trustedFormUrl  String?
+  draftDate        DateTime?
+  soldPremiumCents Int? // annual premium (AP) logged when moved to Issued PAID — powers P&L
+  soldAt           DateTime?
+  callbackAt       DateTime? // scheduled call-back reminder (card counts down / flashes when due)
+  callbackEventId  String? // Google Calendar event id for the current callback (if synced)
+  source           String // e.g. "Meta - Lineman Retirement Q2"
+  campaignName     String?
+  adsetId          String?
+  creativeId       String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  fbclid           String?
+  consentMethod    ConsentMethod @default(TCPA_WEB_FORM)
+  consentTime      DateTime
+  consentIp        String?
+  trustedFormUrl   String?
   // Every question/answer from the Meta instant form, even ones we don't model
-  rawFormData     Json          @default("{}")
-  tags            String[]      @default([])
-  callAttempts    Int           @default(0)
-  lastContactedAt DateTime?
-  receivedAt      DateTime      @default(now())
+  rawFormData      Json          @default("{}")
+  tags             String[]      @default([])
+  callAttempts     Int           @default(0)
+  lastContactedAt  DateTime?
+  receivedAt       DateTime      @default(now())
   // Auto-bumped on every write — powers external incremental sync (updated_since).
-  updatedAt       DateTime      @updatedAt @default(now())
+  updatedAt        DateTime      @default(now()) @updatedAt
   // Recycle-bin: when set, the lead is trashed — excluded from all sellable
   // inventory/fulfillment and hard-deleted by the 30-day auto-empty job.
-  trashedAt       DateTime?
+  trashedAt        DateTime?
 
   // Assignment + order
   assignedUserId String?
@@ -314,7 +314,7 @@ model AdSpendPayment {
   id          String   @id @default(cuid())
   userId      String
   amountCents Int
-  method      String   // zelle | check | wire | cash | other
+  method      String // zelle | check | wire | cash | other
   note        String?
   receivedAt  DateTime @default(now())
   createdById String?
@@ -506,15 +506,15 @@ enum IntegrationType {
 // stored — the plaintext is shown once at creation and can never be read back.
 // Revoke by setting revokedAt; rotate by creating a new key and revoking old.
 model ApiKey {
-  id         String    @id @default(cuid())
-  name       String // human label, e.g. "Marketing — Conversions API"
-  prefix     String // first chars of the token, for identification in UI/logs
-  hashedKey  String    @unique // sha256(token) hex
-  scopes     String[]  @default([]) // e.g. ["conversions:read","conversions:write"]
+  id          String    @id @default(cuid())
+  name        String // human label, e.g. "Marketing — Conversions API"
+  prefix      String // first chars of the token, for identification in UI/logs
+  hashedKey   String    @unique // sha256(token) hex
+  scopes      String[]  @default([]) // e.g. ["conversions:read","conversions:write"]
   createdById String?
-  lastUsedAt DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([hashedKey])
 }
@@ -598,23 +598,23 @@ enum ReplacementStatus {
 // owners can invite additional seats (agents) and route purchased leads to
 // them. Leads and Orders are stamped with the owning organization.
 model Organization {
-  id               String           @id @default(cuid())
-  name             String
-  ownerId          String
+  id                String           @id @default(cuid())
+  name              String
+  ownerId           String
   // How purchased leads are handed out to the team.
-  distributionMode DistributionMode @default(MANUAL)
+  distributionMode  DistributionMode @default(MANUAL)
   // Round-robin pointer — advanced each time a lead is auto-assigned so the
   // rotation is fair and survives across separate fulfillment runs.
-  rrCursor         Int              @default(0)
+  rrCursor          Int              @default(0)
   // Goldmine: the team-shared aged-lead pipeline. When enabled, the owner's
   // main-pipeline leads auto-move here after `goldmineAfterDays` (time since
   // assignedAt). goldmineStages = this team's Goldmine stage set (same shape as
   // User.pipelineStages; reserved anchors new-lead/issued-paid always present).
-  goldmineEnabled   Boolean  @default(false)
+  goldmineEnabled   Boolean          @default(false)
   goldmineAfterDays Int?
   goldmineStages    Json?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   owner       User         @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   memberships Membership[]
@@ -627,21 +627,24 @@ model Organization {
 
 // A user's seat within an organization, with a role and rotation flag.
 model Membership {
-  id             String         @id @default(cuid())
-  organizationId String
-  userId         String
-  role           MembershipRole @default(AGENT)
+  id              String         @id @default(cuid())
+  organizationId  String
+  userId          String
+  role            MembershipRole @default(AGENT)
   // Whether this member receives leads under ROUND_ROBIN distribution.
-  inRotation     Boolean        @default(true)
+  inRotation      Boolean        @default(true)
   // The team's manager switched off this member's Goldmine access (shared aged
   // pool). Members get Goldmine automatically; this is the opt-out. Stored in the
   // old "pendingApproval" column (join approval was removed Nov 2026), so rows
   // that were still pending then start with Goldmine off.
-  goldmineBlocked Boolean       @default(false) @map("pendingApproval")
+  goldmineBlocked Boolean        @default(false) @map("pendingApproval")
   // Weekly amounts: how many of the owner's incoming leads this member gets per
   // rolling 7 days when the team distributes by WEEKLY_QUOTA. Null/0 = none.
   weeklyLeadQuota Int?
-  createdAt      DateTime       @default(now())
+  // An advertiser team: the owner let this member add spend to the owner's
+  // campaign and get campaign leads for it (lib/teamAdSpend.ts). Off by default.
+  adSpendAccess   Boolean        @default(false)
+  createdAt       DateTime       @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -693,17 +696,17 @@ enum DistributionMode {
 // Advertisely Bucks Marketing Campaign (DRAFT): every change to a user's Advertisely Bucks balance.
 // amountCents > 0 = earned (someone bought with their code), < 0 = spent.
 model BucksTransaction {
-  id              String   @id @default(cuid())
-  userId          String
-  amountCents     Int
-  kind            String // "EARN" | "SPEND" | "CLAWBACK" | "ADJUST"
-  note            String?
+  id           String   @id @default(cuid())
+  userId       String
+  amountCents  Int
+  kind         String // "EARN" | "SPEND" | "CLAWBACK" | "ADJUST"
+  note         String?
   // EARN: the buyer who used the code. SPEND/EARN: the checkout it came from.
-  sourceUserId    String?
-  orderId         String?
-  paymentRef      String? // Stripe PaymentIntent id, or "bucks:<id>" for fully-Bucks orders
-  createdAt       DateTime @default(now())
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceUserId String?
+  orderId      String?
+  paymentRef   String? // Stripe PaymentIntent id, or "bucks:<id>" for fully-Bucks orders
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([paymentRef, userId, kind]) // idempotent per checkout
   @@index([userId, createdAt])
@@ -744,4 +747,26 @@ model WeeklyTargetChange {
   createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// A downline's credit on their advertiser upline's campaign (lib/teamAdSpend.ts).
+// Signed ledger: "payment" rows add what they paid after card processing, "lead"
+// rows take the campaign's cost per lead for each campaign lead they received,
+// "adjust" rows are admin corrections (refunds etc.). Balance = sum(amountCents).
+model TeamAdSpend {
+  id                 String   @id @default(cuid())
+  advertiserId       String
+  userId             String
+  kind               String // payment | lead | adjust
+  amountCents        Int
+  grossCents         Int? // payment: what they were charged
+  processingFeeCents Int      @default(0)
+  cplCents           Int? // lead: the campaign CPL charged
+  leadId             String?  @unique
+  stripeRef          String?  @unique
+  note               String?
+  createdAt          DateTime @default(now())
+
+  @@index([advertiserId, userId])
+  @@index([userId])
 }

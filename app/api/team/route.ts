@@ -6,6 +6,7 @@ import { ensureOrgContext, canManageTeam } from "@/lib/org";
 import { ensureReferralCode } from "@/lib/referral";
 import { uplineTeamFor } from "@/lib/upline";
 import { quotaCountsThisWeek } from "@/lib/teamQuota";
+import { teamBalances } from "@/lib/teamAdSpend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,14 @@ export async function GET() {
     memberships.map((m) => m.userId),
   );
 
+  // Advertiser team: members the owner lets add spend to the owner's campaign.
+  const org = await prisma.organization.findUnique({
+    where: { id: ctx.organizationId },
+    select: { ownerId: true, owner: { select: { isAdvertiser: true } } },
+  });
+  const advertiserTeam = !!org?.owner?.isAdvertiser;
+  const credits = advertiserTeam && org ? await teamBalances(org.ownerId) : new Map<string, number>();
+
   const members = memberships.map((m) => ({
     membershipId: m.id,
     userId: m.userId,
@@ -59,6 +68,8 @@ export async function GET() {
     role: m.role,
     inRotation: m.inRotation,
     goldmineAccess: !m.goldmineBlocked,
+    adSpendAccess: m.adSpendAccess,
+    adSpendCreditCents: Math.max(0, credits.get(m.userId) ?? 0),
     weeklyLeadQuota: m.weeklyLeadQuota ?? 0,
     quotaThisWeek: quotaThisWeek.get(m.userId) ?? 0,
     leadCount: countByUser[m.userId] ?? 0,
@@ -93,6 +104,7 @@ export async function GET() {
     role: ctx.role,
     canManage: manage,
     goldmineOff: ctx.goldmineOff,
+    advertiserTeam,
     members,
     invitations,
     teams: myTeams.map((t) => ({

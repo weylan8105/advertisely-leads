@@ -12,7 +12,7 @@ import { adSpendProgress } from "@/lib/adSpendProgress";
 const PRESETS = [500, 1000, 2500, 5000];
 const MIN_DOLLARS = 100;
 const PROCESSING_RATE = 0.03; // lib/adSpend.ts PROCESSING_FEE_RATE
-const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other" };
+const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team" };
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -233,9 +233,41 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                     {summary.payments.map((p) => (
                       <tr key={p.id} className="border-t border-slate-100">
                         <td className="py-1.5">{new Date(p.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
-                        <td className="py-1.5">{METHOD_LABEL[p.method] ?? p.method}</td>
+                        <td className="py-1.5">{p.method === "team" ? p.description ?? "Team" : METHOD_LABEL[p.method] ?? p.method}</td>
                         <td className="py-1.5 text-right">{usd(p.amountCents)}</td>
                         <td className="py-1.5 text-right">{p.processingFeeCents ? `− ${usd(p.processingFeeCents)}` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {(summary.teamFunding?.length ?? 0) > 0 && (
+              <div className="overflow-x-auto">
+                <p className="mb-1 text-xs text-muted-foreground">
+                  Your team&apos;s spend: members you&apos;ve switched on add to this budget and get campaign leads in
+                  rotation with you, each at the campaign&apos;s cost per lead.
+                  {summary.teamCreditCents > 0 && <> Budget left includes {usd(summary.teamCreditCents)} of their unused credit.</>}
+                </p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-muted-foreground">
+                      <th className="py-1.5 font-medium">Member</th>
+                      <th className="py-1.5 text-right font-medium">Added</th>
+                      <th className="py-1.5 text-right font-medium">Leads</th>
+                      <th className="py-1.5 text-right font-medium">Credit left</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.teamFunding.map((f) => (
+                      <tr key={f.userId} className="border-t border-slate-100">
+                        <td className="py-1.5">
+                          {f.name}
+                          {!f.access && <span className="ml-1 text-xs text-muted-foreground">(switched off)</span>}
+                        </td>
+                        <td className="py-1.5 text-right">{usd(f.addedCents)}</td>
+                        <td className="py-1.5 text-right">{f.leads}</td>
+                        <td className="py-1.5 text-right">{usd(Math.max(0, f.creditCents))}</td>
                       </tr>
                     ))}
                   </tbody>

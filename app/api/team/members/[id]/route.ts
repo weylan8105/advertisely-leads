@@ -27,7 +27,9 @@ async function guard(membershipId: string) {
 }
 
 /**
- * PATCH /api/team/members/:id — { role?, inRotation?, goldmineAccess?, weeklyLeadQuota? }
+ * PATCH /api/team/members/:id — { role?, inRotation?, goldmineAccess?, adSpendAccess?, weeklyLeadQuota? }
+ * adSpendAccess = on an advertiser's team, let this member add spend to the
+ * owner's campaign for campaign leads (lib/teamAdSpend.ts; off by default).
  * goldmineAccess = switch the member's access to the team's Goldmine (on by
  * default); weeklyLeadQuota = leads/week under WEEKLY_QUOTA distribution (0 or
  * null = none).
@@ -43,9 +45,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     role?: string;
     inRotation?: boolean;
     goldmineAccess?: boolean;
+    adSpendAccess?: boolean;
     weeklyLeadQuota?: unknown;
   };
-  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; goldmineBlocked?: boolean; weeklyLeadQuota?: number | null } = {};
+  const data: { role?: "ADMIN" | "AGENT"; inRotation?: boolean; goldmineBlocked?: boolean; adSpendAccess?: boolean; weeklyLeadQuota?: number | null } = {};
   if (body.weeklyLeadQuota !== undefined) {
     const q = body.weeklyLeadQuota === null || body.weeklyLeadQuota === "" ? 0 : Number(body.weeklyLeadQuota);
     if (!Number.isInteger(q) || q < 0 || q > MAX_WEEKLY_QUOTA) {
@@ -59,6 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.role === "ADMIN" || body.role === "AGENT") data.role = body.role;
   if (typeof body.inRotation === "boolean") data.inRotation = body.inRotation;
   if (typeof body.goldmineAccess === "boolean") data.goldmineBlocked = !body.goldmineAccess;
+  if (typeof body.adSpendAccess === "boolean") data.adSpendAccess = body.adSpendAccess;
   // Admins help run the team, Goldmine included.
   if (data.role === "ADMIN") data.goldmineBlocked = false;
   if (Object.keys(data).length === 0) {
@@ -73,6 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       role: updated.role,
       inRotation: updated.inRotation,
       goldmineAccess: !updated.goldmineBlocked,
+      adSpendAccess: updated.adSpendAccess,
       weeklyLeadQuota: updated.weeklyLeadQuota,
     },
   });

@@ -4,6 +4,8 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { quotaRecipientFor } from "./teamQuota";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
 import { advertiserTeamRecipient } from "./advertiserVolume";
+import { assignFundedLead, fundedTeamRecipient, teamHasFundedMembers } from "./teamAdSpend";
+import { campaignCplCents } from "./adSpend";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { primaryOwnedTeam } from "./org";
 
@@ -233,41 +235,68 @@ export async function deliverLeadToOwner(
 
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { state: true, rawFormData: true } });
 
-  // Past their weekly keep amount, or by turn on a round-robin team
-  // (lib/advertiserVolume.ts), the lead goes to someone on the advertiser's
-  // team instead; otherwise they keep it.
-  const teamPick = await advertiserTeamRecipient(ownerUserId, organizationId, lead?.state ?? "");
-  const recipientId = teamPick?.userId ?? ownerUserId;
+  const label = owner.name?.trim() || owner.email;
   const now = new Date();
-
   // Stamp the client's name so the lead card reads "<Client> Lead", not one of
   // our own funnels — even when a teammate receives it.
   const raw = lead?.rawFormData && typeof lead.rawFormData === "object" && !Array.isArray(lead.rawFormData)
     ? lead.rawFormData
     : {};
+  const leadData = {
+    assignedAt: now,
+    rawFormData: { ...raw, [ADVERTISER_NAME_KEY]: label },
+    ...(organizationId ? { organizationId } : {}),
+  };
 
-  const res = await prisma.lead.updateMany({
-    where: { id: leadId, assignedUserId: null, trashedAt: null },
-    data: {
-      assignedUserId: recipientId,
-      assignedAt: now,
-      rawFormData: { ...raw, [ADVERTISER_NAME_KEY]: owner.name?.trim() || owner.email },
-      ...(organizationId ? { organizationId } : {}),
-      ...(teamPick?.byQuota ? { quotaRoutedAt: now } : {}),
-    },
-  });
-  if (res.count === 0) return false;
+  // Downlines who added spend to this campaign take turns in a rotation with
+  // the advertiser, paying the campaign's cost per lead (lib/teamAdSpend.ts).
+  let funded: { userId: string; cplCents: number } | null = null;
+  try {
+    if (organizationId && (await teamHasFundedMembers(ownerUserId, organizationId))) {
+      const cplCents = await campaignCplCents(ownerUserId);
+      const pick = cplCents
+        ? await fundedTeamRecipient(ownerUserId, organizationId, lead?.state ?? "", cplCents, label)
+        : null;
+      if (pick && cplCents && (await assignFundedLead({ leadId, advertiserId: ownerUserId, userId: pick, cplCents, leadData }))) {
+        funded = { userId: pick, cplCents };
+      }
+    }
+  } catch (e) {
+    console.warn("[house] team ad spend routing failed", e);
+  }
 
-  const recipient = teamPick
+  // The advertiser's turn: past their weekly keep amount, or by turn on a
+  // round-robin team (lib/advertiserVolume.ts), the lead goes to someone on the
+  // advertiser's team instead; otherwise they keep it.
+  const teamPick = funded ? null : await advertiserTeamRecipient(ownerUserId, organizationId, lead?.state ?? "");
+  const recipientId = funded?.userId ?? teamPick?.userId ?? ownerUserId;
+
+  if (!funded) {
+    const res = await prisma.lead.updateMany({
+      where: { id: leadId, assignedUserId: null, trashedAt: null },
+      data: {
+        ...leadData,
+        assignedUserId: recipientId,
+        ...(teamPick?.byQuota ? { quotaRoutedAt: now } : {}),
+      },
+    });
+    if (res.count === 0) return false;
+  }
+
+  const routedToTeam = !!(funded || teamPick);
+  const recipient = routedToTeam
     ? await prisma.user.findUnique({ where: { id: recipientId }, select: { email: true, name: true } })
     : null;
+  const who = recipient?.name ?? recipient?.email ?? "a team member";
   await prisma.leadActivity.create({
     data: {
       leadId,
       type: "LEAD_ASSIGNED",
-      body: teamPick
-        ? `${reason} Routed to ${recipient?.name ?? recipient?.email ?? "a team member"} on the advertiser's team (${teamPick.byRotation ? "round-robin" : "past the advertiser's weekly keep amount"}).`
-        : reason,
+      body: funded
+        ? `${reason} Routed to ${who}, who added spend to the advertiser's campaign (${(funded.cplCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} cost per lead taken from their credit).`
+        : teamPick
+          ? `${reason} Routed to ${who} on the advertiser's team (${teamPick.byRotation ? "round-robin" : "past the advertiser's weekly keep amount"}).`
+          : reason,
     },
   });
 
@@ -284,7 +313,7 @@ export async function deliverLeadToOwner(
   // on a forward failure — log the outcome either way.
   try {
     // Only leads the advertiser keeps go to their own dialer.
-    const ringy = teamPick ? null : await prisma.integration.findUnique({
+    const ringy = routedToTeam ? null : await prisma.integration.findUnique({
       where: { userId_type: { userId: ownerUserId, type: "RINGY" } },
       select: { enabled: true, config: true, id: true },
     });
@@ -314,7 +343,7 @@ export async function deliverLeadToOwner(
 
   // Notify the advertiser with the same delivery email buyers get, so their own
   // leads don't land silently. Never block delivery on an email failure.
-  const notify = teamPick ? recipient : owner;
+  const notify = routedToTeam ? recipient : owner;
   if (isEmailConfigured && notify?.email) {
     try {
       const full = await prisma.lead.findUnique({
@@ -329,7 +358,7 @@ export async function deliverLeadToOwner(
           agentEmail: notify.email,
           agentName: notify.name ?? "there",
           leadCount: 1,
-          packageName: findPackage(full.packageId)?.name ?? (teamPick ? "Your team's campaign" : "Your campaign"),
+          packageName: findPackage(full.packageId)?.name ?? (routedToTeam ? "Your team's campaign" : "Your campaign"),
           orderId: leadId,
           leads: [{
             name: full.name, phone: full.phone, email: full.email, state: full.state,

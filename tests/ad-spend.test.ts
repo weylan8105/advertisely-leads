@@ -9,20 +9,24 @@ let charges: any[];
 let manual: any[] = [];
 let invoices: Record<string, any> = {};
 let guestCharges: any[] = [];
+let team: any[] = [];
 const updates: any[] = [];
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
       findUnique: vi.fn(async () => user),
+      findMany: vi.fn(async () => [{ id: "DANA", name: "Dana Downline", email: "dana@example.com" }]),
       update: vi.fn(async (args: any) => {
         updates.push(args.data);
         Object.assign(user, args.data);
       }),
     },
     order: { findMany: vi.fn(async () => []) },
+    membership: { findMany: vi.fn(async () => [{ userId: "DANA" }]) },
     leadSubscription: { findMany: vi.fn(async () => []) },
     adSpendPayment: { findMany: vi.fn(async () => manual) },
+    teamAdSpend: { findMany: vi.fn(async ({ where }: any) => team.filter((r) => !where?.kind || r.kind === where.kind)) },
     $queryRaw: vi.fn(async () => [{ total: 10n, this_month: 4n }]),
   },
 }));
@@ -86,6 +90,7 @@ beforeEach(() => {
   manual = [];
   invoices = {};
   guestCharges = [];
+  team = [];
   updates.length = 0;
   campaignStatus = "ACTIVE";
   setCampaignStatus.mockClear();
@@ -174,6 +179,25 @@ describe("summary", () => {
     expect(s.processingFeeCents).toBe(3_600);
     expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([300_000]);
     expect(s.payments.find((p) => p.amountCents === 100_000)?.description).toMatch(/Ad Spend/);
+  });
+
+  it("counts downlines' team top-ups in the campaign budget, never their own", async () => {
+    team = [
+      { id: "t1", advertiserId: "JACE", userId: "DANA", kind: "payment", amountCents: 48_500, grossCents: 50_000, processingFeeCents: 1_500, createdAt: new Date("2026-11-08T12:00:00Z") },
+      { id: "t2", advertiserId: "JACE", userId: "DANA", kind: "lead", amountCents: -4_000, cplCents: 4_000, leadId: "L1", createdAt: new Date("2026-11-09T12:00:00Z") },
+    ];
+    // Jace's own Stripe also shows a team top-up he paid into someone else's campaign.
+    charges = [paid(1000), paid(300, { description: "Team campaign funding: Someone", metadata: { kind: "team-ad-spend" } })];
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(150_000);
+    expect(s.processingFeeCents).toBe(4_500);
+    expect(s.payments.find((p) => p.method === "team")?.description).toBe("Added by Dana Downline");
+    expect(s.teamFunding).toEqual([
+      expect.objectContaining({ userId: "DANA", addedCents: 50_000, leads: 1, creditCents: 44_500, access: true }),
+    ]);
+    expect(s.teamCreditCents).toBe(44_500);
+    expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([30_000]);
   });
 
   it("finds guest payments by billing email, without counting one twice", async () => {

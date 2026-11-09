@@ -17,6 +17,7 @@ import {
   Link2,
   Gem,
   CalendarRange,
+  Megaphone,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,9 @@ interface Member {
   role: "OWNER" | "ADMIN" | "AGENT";
   inRotation: boolean;
   goldmineAccess: boolean;
+  /** Advertiser team: may add spend to the owner's campaign; their credit left. */
+  adSpendAccess: boolean;
+  adSpendCreditCents: number;
   /** Leads/week under "Weekly amounts" (0 = none) and how many they got in the last 7 days. */
   weeklyLeadQuota: number;
   quotaThisWeek: number;
@@ -71,6 +75,8 @@ interface TeamData {
   canManage: boolean;
   /** The team's manager switched off the caller's Goldmine access. */
   goldmineOff: boolean;
+  /** The team owner runs their own campaign (advertiser). */
+  advertiserTeam: boolean;
   members: Member[];
   invitations: Invitation[];
   teams: { id: string; name: string; role: string }[];
@@ -224,6 +230,17 @@ export default function TeamPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ goldmineAccess: !m.goldmineAccess }),
+    });
+    setBusy(null);
+    load();
+  }
+
+  async function toggleAdSpend(m: Member) {
+    setBusy(m.membershipId);
+    await fetch(`/api/team/members/${m.membershipId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adSpendAccess: !m.adSpendAccess }),
     });
     setBusy(null);
     load();
@@ -585,6 +602,34 @@ export default function TeamPage() {
                 >
                   <Gem className="h-3 w-3" />
                   {m.goldmineAccess ? "Goldmine on" : "Goldmine off"}
+                </button>
+              )}
+
+              {/* Advertiser team: may this member add spend to the owner's campaign for its leads? Off by default. */}
+              {data.advertiserTeam && m.role !== "OWNER" && (canManage || m.isSelf) && (
+                <button
+                  onClick={() => canManage && toggleAdSpend(m)}
+                  disabled={!canManage || busy === m.membershipId}
+                  title={
+                    m.adSpendAccess
+                      ? "Can add spend to the campaign and get campaign leads for it"
+                      : "Can't add spend to the campaign"
+                  }
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
+                    m.adSpendAccess
+                      ? "border-sky-200 bg-sky-50 text-sky-800"
+                      : "border-slate-200 bg-slate-50 text-muted-foreground",
+                    !canManage && "opacity-70 cursor-default",
+                  )}
+                >
+                  <Megaphone className="h-3 w-3" />
+                  {m.adSpendAccess ? "Ad spend on" : "Ad spend off"}
+                  {m.adSpendCreditCents > 0 && (
+                    <span className="tabular-nums opacity-80">
+                      · {(m.adSpendCreditCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} credit
+                    </span>
+                  )}
                 </button>
               )}
 

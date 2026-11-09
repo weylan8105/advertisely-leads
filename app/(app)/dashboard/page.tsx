@@ -26,6 +26,7 @@ import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { PnlSummary } from "@/components/dashboard/PnlSummary";
 import { AdvertiserSpendPanel } from "@/components/dashboard/AdvertiserSpendPanel";
+import { TeamAdSpendCard } from "@/components/dashboard/TeamAdSpendCard";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { ActivityDashboard } from "@/components/dashboard/ActivityDashboard";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
@@ -76,7 +77,10 @@ export default function DashboardPage() {
       .then((d) => { if (d?.summary) setAdSpend(d.summary); })
       .catch(() => {});
     if (topup === "success") addToast("success", "Payment received. Your campaign budget is updated.");
-    if (topup) window.history.replaceState(null, "", "/dashboard");
+    // A downline funded their upline's campaign (TeamAdSpendCard).
+    const teamTopup = params.get("teamtopup");
+    if (teamTopup === "success") addToast("success", "Payment received. Your campaign credit shows here within a minute.");
+    if (topup || teamTopup) window.history.replaceState(null, "", "/dashboard");
   }, []);
 
   useEffect(() => {
@@ -212,6 +216,8 @@ export default function DashboardPage() {
       {isAdmin && <DeliveredLeadsTracker />}
 
       {adSpend && <AdvertiserSpendPanel summary={adSpend} />}
+
+      <TeamAdSpendCard />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard
