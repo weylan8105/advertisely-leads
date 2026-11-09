@@ -123,36 +123,50 @@ describe("pricing", () => {
 });
 
 describe("weekly ad spend", () => {
-  it("paces a weekly payment over the days until it renews, the rest to month end", async () => {
-    const { idealDailyCents } = await import("@/lib/adSpend");
-    // David: $700/week ($679 after card processing), $347.10 left, renews Nov 11 → Nov 8–10.
-    const weekly = { amountCents: 70_000, netCents: 67_900, renewsAt: "2026-11-11T20:10:00Z" };
-    expect(idealDailyCents(34_710, weekly, "2026-11-30")).toBe(11_570);
-    // Jace: $1,400/week plus one-time payments: this week's $1,358 over Nov 8–14, the rest by Nov 30.
-    const jace = { amountCents: 140_000, netCents: 135_800, renewsAt: "2026-11-15T20:15:00Z" };
-    expect(idealDailyCents(556_457, jace, "2026-11-30")).toBe(Math.floor(135_800 / 7 + (556_457 - 135_800) / 23));
-    // No subscription: everything by the target date.
-    expect(idealDailyCents(230_000, null, "2026-11-30")).toBe(10_000);
+  const week = (net: number, endsAt: string) => ({
+    amountCents: Math.round(net / 0.97), netCents: net, renews: false,
+    startsAt: new Date(Date.parse(endsAt) - 7 * 86_400_000).toISOString(), endsAt,
   });
 
-  it("reads the weekly subscription from Stripe and paces the campaign to it", async () => {
+  it("spends each paid week at its own rate until it ends, the rest by month end", async () => {
+    const { idealDailyCents } = await import("@/lib/adSpend");
+    // David: $679/week (after processing) through Nov 11 20:10Z, $347.10 left. ≈ $97/day + a little leftover.
+    const david = [week(67_900, "2026-11-11T20:10:00Z")];
+    const reserved = 9_700 * ((Date.parse("2026-11-11T20:10:00Z") - Date.now()) / 86_400_000);
+    expect(idealDailyCents(34_710, david, "2026-11-30")).toBe(Math.floor(9_700 + (34_710 - reserved) / 23));
+    // Less left than the week still needs: spend what's left over the rest of the week.
+    expect(idealDailyCents(10_000, david, "2026-11-30")).toBe(Math.floor((9_700 * 10_000) / reserved));
+    // A week that already ended doesn't count; no weeks: everything by the target date.
+    expect(idealDailyCents(230_000, [week(67_900, "2026-11-05T00:00:00Z")], "2026-11-30")).toBe(10_000);
+    expect(idealDailyCents(230_000, [], "2026-11-30")).toBe(10_000);
+  });
+
+  it("reads paid weeks from canceled subscriptions too and paces the campaign to them", async () => {
     const { stripe } = (await import("@/lib/stripe")) as any;
+    const end = Date.parse("2026-11-11T18:00:00Z") / 1000;
     stripe.subscriptions = {
       list: vi.fn(async () => ({
-        data: [{ id: "sub_1", status: "active", latest_invoice: { lines: { data: [
-          { description: "7 × Weekly Ad Spend Budget (at $100.00 / week)", amount: 70_000, period: { end: Date.parse("2026-11-11T20:10:00Z") / 1000 } },
-        ] } } }],
+        data: [
+          { id: "sub_w", status: "canceled", latest_invoice: { status: "paid", lines: { data: [
+            { description: "7 × Weekly Ad Spend Budget (at $100.00 / week)", amount: 70_000, period: { start: end - 7 * 86_400, end } },
+          ] } } },
+          { id: "sub_s", status: "active", latest_invoice: { status: "paid", lines: { data: [
+            { description: "1 × Advertisely Advertiser (at $3,000.00 / month)", amount: 300_000, period: { start: end - 86_400, end: end + 30 * 86_400 } },
+          ] } } },
+        ],
       })),
     };
     charges = [paid(700, { description: "7 × Weekly Ad Spend Budget" }), paid(150, { description: "Adspend Budget" })];
-    invoices = {};
     const { enforceAdSpend, getAdSpendSummary } = await import("@/lib/adSpend");
     const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
-    expect(s.recurring?.netCents).toBe(67_900);
-    await enforceAdSpend("JACE");
-    // $850 paid − $25.50 processing − $500 spent = $324.50; this week's $324.50 over Nov 8–10 ≈ $108/day.
+    const r = await enforceAdSpend("JACE");
     delete stripe.subscriptions;
-    expect(setDailyBudget).toHaveBeenCalledWith("AS1", 10_800);
+    expect(s.periods).toHaveLength(1);
+    expect(s.subscriptions.map((x) => [x.id, x.adSpend])).toEqual([["sub_w", true], ["sub_s", false]]);
+    // $324.50 left; the week needs $97/day × 3 days = $291, the other $33.50 over 23 days → $98.45/day,
+    // within 10% of the current $97, so the budget is left alone.
+    expect(r.detail).toContain("ideal 9845¢");
+    expect(setDailyBudget).not.toHaveBeenCalled();
   });
 });
 

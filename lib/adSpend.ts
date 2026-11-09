@@ -100,10 +100,13 @@ export function daysThrough(targetYmd: string, now = new Date()): number {
   return Math.max(1, Math.round(ms / 86_400_000) + 1);
 }
 
-export interface RecurringAdSpend {
-  amountCents: number; // per period, before card processing
+/** A paid ad-spend subscription period (e.g. one week), meant to be spent over that period. */
+export interface AdSpendPeriod {
+  amountCents: number; // before card processing
   netCents: number; // after card processing
-  renewsAt: string; // ISO; the next payment
+  startsAt: string; // ISO
+  endsAt: string; // ISO
+  renews: boolean; // the subscription is still active
 }
 
 /** A client's Stripe subscription, as seen by the ad-spend reader (for admins checking it). */
@@ -115,19 +118,25 @@ export interface ClientSubscription {
 }
 
 /**
- * The daily spend that uses a client's budget on schedule: their recurring
- * (weekly) ad-spend payment over the days until it renews, and anything else
- * (one-time payments, leftover from earlier weeks) by the target date.
+ * The daily spend that uses a client's budget on schedule. Each paid weekly
+ * period is spent at its own rate (its amount ÷ its length) until it ends,
+ * renewing or not; anything else (one-time payments, what earlier weeks didn't
+ * spend) is spread to the target date.
  */
-export function idealDailyCents(allowedCents: number, recurring: RecurringAdSpend | null, targetYmd: string, now = new Date()): number {
+export function idealDailyCents(allowedCents: number, periods: AdSpendPeriod[], targetYmd: string, now = new Date()): number {
   if (allowedCents <= 0) return 0;
-  const renewsYmd = recurring ? ymdIn(new Date(recurring.renewsAt)) : null;
-  if (!recurring || !renewsYmd || renewsYmd <= ymdIn(now) || renewsYmd > targetYmd) {
-    return Math.floor(allowedCents / daysThrough(targetYmd, now));
+  let rate = 0;
+  let reserved = 0; // what the periods still have to spend, at their rates
+  for (const p of periods) {
+    const start = Date.parse(p.startsAt);
+    const end = Date.parse(p.endsAt);
+    if (!(end > now.getTime()) || !(end > start)) continue;
+    const r = p.netCents / Math.max(1, (end - start) / 86_400_000);
+    rate += r;
+    reserved += r * ((end - Math.max(start, now.getTime())) / 86_400_000);
   }
-  const windowDays = Math.max(1, daysThrough(renewsYmd, now) - 1); // through the day before it renews
-  const thisPeriod = Math.min(allowedCents, recurring.netCents);
-  return Math.floor(thisPeriod / windowDays + (allowedCents - thisPeriod) / daysThrough(targetYmd, now));
+  if (rate > 0 && allowedCents <= reserved) return Math.floor((rate * allowedCents) / reserved);
+  return Math.floor(rate + (allowedCents - reserved) / daysThrough(targetYmd, now));
 }
 
 /** The daily budget that spends `remainingCents` by the target, within the step limits. */
@@ -319,19 +328,19 @@ async function chargeTitles(c: any): Promise<string[]> {
  * payments, which fund their campaign, and everything else (the monthly
  * service subscription, lead orders), which doesn't.
  */
-type StripeAdSpend = { adSpend: ClientPayment[]; other: ClientPayment[]; recurring: RecurringAdSpend | null; subscriptions: ClientSubscription[] };
+type StripeAdSpend = { adSpend: ClientPayment[]; other: ClientPayment[]; periods: AdSpendPeriod[]; subscriptions: ClientSubscription[] };
 
-/** The client's active recurring ad-spend subscription(s), from their latest invoice. */
-async function recurringAdSpend(customerIds: string[]): Promise<{ recurring: RecurringAdSpend | null; subscriptions: ClientSubscription[] }> {
+/** The client's paid ad-spend subscription periods still running, from each subscription's latest invoice. */
+async function adSpendPeriods(customerIds: string[]): Promise<{ periods: AdSpendPeriod[]; subscriptions: ClientSubscription[] }> {
   const subscriptions: ClientSubscription[] = [];
-  if (!stripe) return { recurring: null, subscriptions };
-  let amountCents = 0;
-  let renewsAt: number | null = null;
+  const periods: AdSpendPeriod[] = [];
+  if (!stripe) return { periods, subscriptions };
   const nowSec = Date.now() / 1000;
   for (const customer of customerIds) {
     const subs = await stripe.subscriptions.list({ customer, status: "all", limit: 20, expand: ["data.latest_invoice"] });
     for (const sub of subs.data as any[]) {
-      const lines = (sub.latest_invoice?.lines?.data ?? []) as any[];
+      const inv = sub.latest_invoice;
+      const lines = (inv?.lines?.data ?? []) as any[];
       const record: ClientSubscription = {
         id: sub.id,
         status: sub.status,
@@ -343,24 +352,25 @@ async function recurringAdSpend(customerIds: string[]): Promise<{ recurring: Rec
         })),
       };
       subscriptions.push(record);
-      if (sub.status !== "active" && sub.status !== "trialing") continue;
+      if (inv?.status !== "paid") continue;
       for (const line of lines) {
-        if (!AD_SPEND_TITLE.test(String(line.description ?? "")) || !(line.period?.end > nowSec)) continue;
+        if (!AD_SPEND_TITLE.test(String(line.description ?? "")) || !(line.amount > 0) || !(line.period?.end > nowSec)) continue;
         record.adSpend = true;
-        amountCents += line.amount ?? 0;
-        renewsAt = renewsAt === null ? line.period.end : Math.min(renewsAt, line.period.end);
+        periods.push({
+          amountCents: line.amount,
+          netCents: line.amount - processingFeeCents(line.amount),
+          startsAt: new Date(line.period.start * 1000).toISOString(),
+          endsAt: new Date(line.period.end * 1000).toISOString(),
+          renews: sub.status === "active" || sub.status === "trialing",
+        });
       }
     }
   }
-  if (!amountCents || renewsAt === null) return { recurring: null, subscriptions };
-  return {
-    recurring: { amountCents, netCents: amountCents - processingFeeCents(amountCents), renewsAt: new Date(renewsAt * 1000).toISOString() },
-    subscriptions,
-  };
+  return { periods, subscriptions };
 }
 
 async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
-  if (!stripe) return { adSpend: [], other: [], recurring: null, subscriptions: [] };
+  if (!stripe) return { adSpend: [], other: [], periods: [], subscriptions: [] };
   const emails = [...new Set(paymentEmails.flatMap((e) => [e.trim(), e.trim().toLowerCase()]).filter(Boolean))];
   const customers = (await Promise.all(emails.map((e) => stripe!.customers.list({ email: e, limit: 100 })))).flatMap((r) => r.data);
   const customerIds = [...new Set(customers.map((c) => c.id))];
@@ -377,7 +387,7 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
     if (e && wanted.has(e) && !byId.has(ch.id)) byId.set(ch.id, ch);
   }
   const charges = [...byId.values()];
-  if (!charges.length) return { adSpend: [], other: [], recurring: null, subscriptions: [] };
+  if (!charges.length) return { adSpend: [], other: [], periods: [], subscriptions: [] };
 
   const adSpend: ClientPayment[] = [];
   const other: ClientPayment[] = [];
@@ -402,11 +412,11 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
   const byDate = (a: ClientPayment, b: ClientPayment) => b.at.localeCompare(a.at);
   // Subscriptions live on a customer even when the charge was matched by billing email.
   const allCustomers = [...new Set([...customerIds, ...charges.map((c) => (typeof c.customer === "string" ? c.customer : c.customer?.id)).filter(Boolean)])];
-  const { recurring, subscriptions } = await recurringAdSpend(allCustomers).catch((e) => {
-    console.error("[adSpend] recurring lookup failed", (e as Error).message);
-    return { recurring: null, subscriptions: [] as ClientSubscription[] };
+  const { periods, subscriptions } = await adSpendPeriods(allCustomers).catch((e) => {
+    console.error("[adSpend] subscription lookup failed", (e as Error).message);
+    return { periods: [] as AdSpendPeriod[], subscriptions: [] as ClientSubscription[] };
   });
-  return { adSpend: adSpend.sort(byDate), other: other.sort(byDate), recurring, subscriptions };
+  return { adSpend: adSpend.sort(byDate), other: other.sort(byDate), periods, subscriptions };
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────
@@ -435,7 +445,7 @@ export interface AdSpendSummary {
   targetDate: string; // YYYY-MM-DD
   targetDateSet: boolean; // false = defaulting to month end
   pacedDailyCents: number | null;
-  recurring: RecurringAdSpend | null; // weekly ad-spend subscription, paced to its renewal
+  periods: AdSpendPeriod[]; // paid weekly ad-spend periods still running, each spent over its week
   subscriptions: ClientSubscription[];
   campaigns: ClientCampaign[];
   autoPause: boolean;
@@ -488,7 +498,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
       : (errors.push("Meta isn't connected."), { campaigns: [], monthlySpendCents: {} } as MetaSpend),
     stripePayments([user.email, ...user.adSpendEmails]).catch((e) => {
       errors.push(`Stripe: ${(e as Error).message}`);
-      return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[], recurring: null, subscriptions: [] } as StripeAdSpend;
+      return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[], periods: [], subscriptions: [] } as StripeAdSpend;
     }),
     manualPayments(user.id),
     // deliverLeadToOwner stamps this label on every lead from the client's campaign.
@@ -537,8 +547,8 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     daysLeft: activeBudget > 0 ? Math.max(0, Math.floor(balanceCents / activeBudget)) : null,
     targetDate,
     targetDateSet: !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10),
-    pacedDailyCents: remaining > 0 ? Math.max(MIN_DAILY_BUDGET_CENTS, idealDailyCents(remaining, cardPayments.recurring, targetDate)) : null,
-    recurring: cardPayments.recurring,
+    pacedDailyCents: remaining > 0 ? Math.max(MIN_DAILY_BUDGET_CENTS, idealDailyCents(remaining, cardPayments.periods, targetDate)) : null,
+    periods: cardPayments.periods,
     subscriptions: cardPayments.subscriptions,
     campaigns: meta.campaigns,
     autoPause: user.adSpendAutoPause,
@@ -625,9 +635,9 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
     }
     if (pausedByUs.has(c.id)) await setCampaignStatus(c.id, "ACTIVE");
   }
-  // Pace: this week's recurring payment until it renews, the rest by the target date.
+  // Pace: each paid week at its own rate until it ends, the rest by the target date.
   const liveNow = s.campaigns.filter((c) => c.status === "ACTIVE" || pausedByUs.has(c.id));
-  const ideal = idealDailyCents(allowedCents, s.recurring, s.targetDate);
+  const ideal = idealDailyCents(allowedCents, s.periods, s.targetDate);
   let paced = 0;
   let dailyTotal = 0;
   for (const c of liveNow) {
@@ -642,7 +652,7 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
   summaryCache.delete(userId);
   const parts = [
     `${changed} cap(s) set to cover ${allowedCents}¢ more spend`,
-    liveNow.length ? `daily budget ${dailyTotal}¢ (ideal ${ideal}¢${s.recurring ? `; weekly renews ${s.recurring.renewsAt.slice(0, 10)}` : ""}; target ${s.targetDate})${paced ? "" : " (unchanged)"}` : "",
+    liveNow.length ? `daily budget ${dailyTotal}¢ (ideal ${ideal}¢${s.periods.length ? `; weekly periods to ${s.periods.map((p) => p.endsAt.slice(0, 10)).join(", ")}` : ""}; target ${s.targetDate})${paced ? "" : " (unchanged)"}` : "",
     pausedByUs.size ? `resumed ${pausedByUs.size}` : "",
   ].filter(Boolean);
   if (!changed && !paced && !pausedByUs.size) return { userId, action: "none", detail: parts.join("; ") };
