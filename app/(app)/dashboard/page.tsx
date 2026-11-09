@@ -67,8 +67,11 @@ export default function DashboardPage() {
   const [adSpend, setAdSpend] = useState<AdSpendSummary | null>(null);
 
   useEffect(() => {
-    const topup = new URLSearchParams(window.location.search).get("topup");
-    fetch(`/api/advertiser/spend${topup === "success" ? "?topup=success" : ""}`)
+    const params = new URLSearchParams(window.location.search);
+    const topup = params.get("topup");
+    // Admins can preview a client's panel with ?advertiser=<userId>.
+    const preview = params.get("advertiser");
+    fetch(`/api/advertiser/spend${preview ? `?userId=${encodeURIComponent(preview)}` : topup === "success" ? "?topup=success" : ""}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d?.summary) setAdSpend(d.summary); })
       .catch(() => {});
