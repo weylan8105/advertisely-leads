@@ -10,6 +10,7 @@ import { tryReplacementForFreshLead } from "@/lib/replacement";
 import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
+import { leadOrigin } from "@/lib/leadOrigin";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -59,7 +60,7 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
 
   // Find unassigned leads from this order's underlying lead pool, matching its
   // state + income + age filters. Buckets resolve to their pool (e.g. aged-iul).
-  const candidates = await prisma.lead.findMany({
+  const rawCandidates = await prisma.lead.findMany({
     where: {
       packageId: { in: leadPoolIdsFor(order.packageId) },
       assignedUserId: null,
@@ -80,6 +81,16 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
     orderBy: { receivedAt: "asc" },
     take: opts.onlyLeadId ? 1 : remaining,
   });
+
+  // Owner directive (Nov 2026): leads from Ryan's own instant-form landing pages
+  // — Enhanced Wealth and Essential Workers Wealth Solutions (EWWS) — are
+  // house-only and must NEVER be delivered to a buyer order, even straight from
+  // the bank (e.g. older unassigned leads or CSV imports). These are exactly the
+  // non-quiz "import"-origin leads (lib/leadOrigin); the ABCA / HWA quiz funnels
+  // stay sellable.
+  const candidates = rawCandidates.filter(
+    (l) => leadOrigin(l.source, l.rawFormData) !== "import",
+  );
 
   if (candidates.length === 0) return 0;
 
@@ -365,6 +376,46 @@ async function routeHeldBackTagToHouse(lead: { id: string; tags: string[] }): Pr
   return true;
 }
 
+/**
+ * Owner directive (Nov 2026): every lead from Ryan's own instant-form landing
+ * pages — Enhanced Wealth and Essential Workers Wealth Solutions (EWWS) — belongs
+ * solely to the house (Ryan). They must never reach a buyer order, an overflow
+ * admin, or a team round-robin. These pages are exactly the non-quiz,
+ * "import"-origin leads the app already labels "Enhanced Wealth Lead"
+ * (lib/leadOrigin): Facebook instant-form intake (GHL + Meta webhooks), as
+ * opposed to the ABCA (early-retirement-quiz) and HWA (healthcare-wealth-quiz)
+ * funnels, which stay in the marketplace. Advertiser-owned leads never reach here
+ * — they're delivered to their owner upstream. No age gate: these arrive fresh.
+ * Returns true if it claimed the lead (caller then stops distributing).
+ */
+async function routePageLeadToHouse(lead: {
+  id: string;
+  source: string | null;
+  rawFormData: unknown;
+}): Promise<boolean> {
+  if (!prisma) return false;
+  if (leadOrigin(lead.source, lead.rawFormData) !== "import") return false;
+  const house = await getHouseAccount();
+  if (!house) return false;
+  const res = await prisma.lead.updateMany({
+    where: { id: lead.id, assignedUserId: null, trashedAt: null },
+    data: {
+      assignedUserId: house.userId,
+      assignedAt: new Date(),
+      ...(house.organizationId ? { organizationId: house.organizationId } : {}),
+    },
+  });
+  if (res.count === 0) return false;
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      type: "LEAD_ASSIGNED",
+      body: "Routed to house CRM — Enhanced Wealth / Essential Workers page lead (owner-only, not distributed to buyers).",
+    },
+  });
+  return true;
+}
+
 // How many states the house (Ryan) effectively covers. The house is the
 // catch-all for every state, so it has the broadest coverage and therefore the
 // weakest per-state claim. Used as the denominator in coverage weighting.
@@ -448,6 +499,11 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // Testing hold-back: a lead tagged as a product under evaluation goes straight
   // to the house (Ryan) before any buyer distribution runs.
   if (await routeHeldBackTagToHouse(lead)) return;
+
+  // Owner-only pages: Enhanced Wealth + Essential Workers (EWWS) instant-form
+  // leads go 100% to the house (Ryan) — never to a buyer, overflow admin, or
+  // team. Runs before all buyer distribution; the quiz funnels fall through.
+  if (await routePageLeadToHouse(lead)) return;
 
   // Replacements get FIRST claim (owner directive, Oct 2026): a lead owed to a
   // paying client as an approved replacement outranks filling outstanding orders
