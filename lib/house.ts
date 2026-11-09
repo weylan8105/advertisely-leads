@@ -13,19 +13,26 @@ import { primaryOwnedTeam } from "./org";
 // never aged inventory — so his profile doesn't fill with old leads.
 const HOUSE_FRESH_DAYS = 2;
 
+// Ryan's account is the house. Picked by email: "oldest admin" stopped meaning
+// Ryan once Weylan, who signed up first, became an admin, and every house lead
+// went to Weylan. HOUSE_ACCOUNT_EMAIL can point it elsewhere.
+const HOUSE_EMAIL = (process.env.HOUSE_ACCOUNT_EMAIL || "ryanrush129@gmail.com").trim().toLowerCase();
+
 /**
  * The "house" account — the platform admin's own CRM (Ryan). Any lead whose
  * state no active order covers is routed here instead of sitting unassigned in
- * the pool, so his team works it while it's fresh. Resolved by role rather than
- * a hard-coded email; falls back to null if no admin exists.
+ * the pool, so his team works it while it's fresh. Falls back to the oldest
+ * admin if that account isn't an admin, and to null if no admin exists.
  */
 export async function getHouseAccount(): Promise<{ userId: string; organizationId: string | null } | null> {
   if (!prisma) return null;
-  const admin = await prisma.user.findFirst({
-    where: { role: "ADMIN" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 } },
-  });
+  const select = { id: true, ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" as const }, take: 1 } };
+  const admin =
+    (await prisma.user.findFirst({
+      where: { role: "ADMIN", email: { equals: HOUSE_EMAIL, mode: "insensitive" } },
+      select,
+    })) ??
+    (await prisma.user.findFirst({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" }, select }));
   if (!admin) return null;
   return { userId: admin.id, organizationId: admin.ownedOrganizations[0]?.id ?? null };
 }
