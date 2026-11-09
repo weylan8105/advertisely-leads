@@ -87,6 +87,7 @@ model User {
   sessions              Session[]
   orders                Order[]
   leadSubscriptions     LeadSubscription[]
+  adSpendPayments       AdSpendPayment[]
   houseLeadSettlements  HouseLeadSettlement[]
   assignedLeads         Lead[]               @relation("AssignedAgent")
   integrations          Integration[]
@@ -303,6 +304,22 @@ model LeadSubscription {
 
   @@index([userId])
   @@index([status])
+}
+
+// Ad-spend money an advertiser sent outside Stripe (Zelle, check, wire, cash),
+// recorded by an admin. Counted in full: no card processing fee.
+model AdSpendPayment {
+  id          String   @id @default(cuid())
+  userId      String
+  amountCents Int
+  method      String   // zelle | check | wire | cash | other
+  note        String?
+  receivedAt  DateTime @default(now())
+  createdById String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // A text message (iMessage/SMS/RCS) to or from a lead, sent through Sendblue.

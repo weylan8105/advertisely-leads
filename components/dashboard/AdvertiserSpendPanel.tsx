@@ -11,6 +11,7 @@ import type { AdSpendSummary } from "@/lib/adSpend";
 const PRESETS = [500, 1000, 2500, 5000];
 const MIN_DOLLARS = 100;
 const PROCESSING_RATE = 0.03; // lib/adSpend.ts PROCESSING_FEE_RATE
+const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other" };
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -91,7 +92,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <DashboardStatCard
           label="Available for ads"
           value={usd(summary.availableCents)}
-          hint={`${usd0(summary.paidCents)} added − 3% processing`}
+          hint={summary.processingFeeCents ? `${usd0(summary.paidCents)} added − card processing` : `${usd0(summary.paidCents)} added`}
           icon={<Wallet className="h-4 w-4" />}
           accent="blue"
         />
@@ -186,7 +187,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
               {(
                 [
                   ["Added", usd(summary.paidCents), ""],
-                  ["Card processing (3%)", `− ${usd(summary.processingFeeCents)}`, "text-muted-foreground"],
+                  ["Card processing (3% of card payments)", `− ${usd(summary.processingFeeCents)}`, "text-muted-foreground"],
                   ["Available for ads", usd(summary.availableCents), "font-medium border-t border-slate-100 pt-1.5"],
                   ["Ad spend", `− ${usd(summary.spendCents)}`, "text-muted-foreground"],
                   ...(summary.serviceFeeCents
@@ -201,6 +202,30 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                 </div>
               ))}
             </dl>
+            {summary.payments.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-muted-foreground">
+                      <th className="py-1.5 font-medium">Payment</th>
+                      <th className="py-1.5 font-medium">Method</th>
+                      <th className="py-1.5 text-right font-medium">Amount</th>
+                      <th className="py-1.5 text-right font-medium">Processing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.payments.map((p) => (
+                      <tr key={p.id} className="border-t border-slate-100">
+                        <td className="py-1.5">{new Date(p.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                        <td className="py-1.5">{METHOD_LABEL[p.method] ?? p.method}</td>
+                        <td className="py-1.5 text-right">{usd(p.amountCents)}</td>
+                        <td className="py-1.5 text-right">{p.processingFeeCents ? `− ${usd(p.processingFeeCents)}` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             {summary.months.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -232,8 +257,8 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          3% of each payment covers card processing. That&apos;s Stripe&apos;s fee, passed through at cost; it isn&apos;t
-          revenue for Advertisely. Ad spend over $15,000 in a calendar month is subject to a 20% service fee, charged only
+          3% of each card payment covers card processing. That&apos;s Stripe&apos;s fee, passed through at cost; it
+          isn&apos;t revenue for Advertisely. Payments sent by Zelle, check or wire have no processing fee. Ad spend over $15,000 in a calendar month is subject to a 20% service fee, charged only
           on the amount over $15,000. Spend figures come from Meta and can lag by a few hours.
         </span>
       </p>

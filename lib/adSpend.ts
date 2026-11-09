@@ -218,60 +218,96 @@ export interface ClientPayment {
   at: string;
   amountCents: number; // net of refunds
   description: string | null;
+  method: string; // "card" for Stripe; zelle | check | wire | cash | other when recorded by an admin
+  processingFeeCents: number; // 3% on card payments, 0 otherwise
+}
+
+export const MANUAL_PAYMENT_METHODS = ["zelle", "check", "wire", "cash", "other"] as const;
+
+/** Payments an admin recorded for money sent outside Stripe. No card fee. */
+async function manualPayments(userId: string): Promise<ClientPayment[]> {
+  if (!prisma) return [];
+  const rows = await prisma.adSpendPayment.findMany({ where: { userId }, orderBy: { receivedAt: "desc" } });
+  return rows.map((r) => ({
+    id: r.id,
+    at: r.receivedAt.toISOString(),
+    amountCents: r.amountCents,
+    description: r.note,
+    method: r.method,
+    processingFeeCents: 0,
+  }));
+}
+
+/** A Stripe payment counts toward the ad budget only when it's titled ad spend. */
+export const AD_SPEND_TITLE = /\bad[\s-]*spend\b/i;
+
+/**
+ * What a charge was for: the app's own top-up tag, the charge / PaymentIntent
+ * description, and the product names on its invoice or Checkout session.
+ */
+async function chargeTitles(c: any): Promise<string[]> {
+  const titles: string[] = [];
+  if (c.metadata?.kind === AD_SPEND_KIND) titles.push("Advertisely campaign ad spend");
+  if (c.description) titles.push(String(c.description));
+  const pi = typeof c.payment_intent === "string" ? c.payment_intent : c.payment_intent?.id;
+  if (!pi || !stripe) return titles;
+  if (typeof c.payment_intent === "object" && c.payment_intent?.description) titles.push(String(c.payment_intent.description));
+  const [invoicePayments, sessions] = await Promise.all([
+    stripe.invoicePayments.list({ payment: { type: "payment_intent", payment_intent: pi }, limit: 10 }).catch(() => ({ data: [] as any[] })),
+    stripe.checkout.sessions.list({ payment_intent: pi, limit: 5, expand: ["data.line_items"] }).catch(() => ({ data: [] as any[] })),
+  ]);
+  for (const ip of invoicePayments.data as any[]) {
+    const id = typeof ip.invoice === "string" ? ip.invoice : ip.invoice?.id;
+    if (!id) continue;
+    const inv: any = await stripe.invoices.retrieve(id).catch(() => null);
+    if (inv?.description) titles.push(String(inv.description));
+    for (const line of inv?.lines?.data ?? []) if (line.description) titles.push(String(line.description));
+  }
+  for (const session of sessions.data as any[]) {
+    for (const li of session.line_items?.data ?? []) if (li.description) titles.push(String(li.description));
+  }
+  return titles;
 }
 
 /**
- * Every successful Stripe charge on the client's Stripe customer(s), net of
- * refunds, except ones the app already records as lead orders or lead
- * subscriptions.
+ * The client's successful Stripe charges (net of refunds), split into ad-spend
+ * payments, which fund their campaign, and everything else (the monthly
+ * service subscription, lead orders), which doesn't.
  */
-async function stripePayments(email: string): Promise<ClientPayment[]> {
-  if (!stripe || !prisma) return [];
+async function stripePayments(email: string): Promise<{ adSpend: ClientPayment[]; other: ClientPayment[] }> {
+  if (!stripe) return { adSpend: [], other: [] };
   const emails = [...new Set([email, email.toLowerCase()])];
   const customers = (await Promise.all(emails.map((e) => stripe!.customers.list({ email: e, limit: 100 })))).flatMap((r) => r.data);
   const customerIds = [...new Set(customers.map((c) => c.id))];
-  if (!customerIds.length) return [];
+  if (!customerIds.length) return { adSpend: [], other: [] };
 
   const charges: any[] = [];
   for (const customer of customerIds) {
-    for await (const ch of stripe.charges.list({ customer, limit: 100 })) charges.push(ch);
+    for await (const ch of stripe.charges.list({ customer, limit: 100, expand: ["data.payment_intent"] })) charges.push(ch);
   }
 
-  // Lead orders are recorded by PaymentIntent; lead subscriptions by invoice.
-  const intentIds = charges.map((c) => (typeof c.payment_intent === "string" ? c.payment_intent : c.payment_intent?.id)).filter(Boolean);
-  const orderIntents = new Set(
-    (await prisma.order.findMany({ where: { stripePaymentIntentId: { in: intentIds } }, select: { stripePaymentIntentId: true } }))
-      .map((o) => o.stripePaymentIntentId),
+  const adSpend: ClientPayment[] = [];
+  const other: ClientPayment[] = [];
+  await Promise.all(
+    charges
+      .filter((c) => c.status === "succeeded" && c.paid && (c.amount ?? 0) - (c.amount_refunded ?? 0) > 0)
+      .map(async (c) => {
+        const titles = await chargeTitles(c);
+        const amountCents = (c.amount ?? 0) - (c.amount_refunded ?? 0);
+        const isAdSpend = c.metadata?.kind === AD_SPEND_KIND || titles.some((t) => AD_SPEND_TITLE.test(t));
+        const payment: ClientPayment = {
+          id: String(c.id),
+          at: new Date(c.created * 1000).toISOString(),
+          amountCents,
+          description: titles.find((t) => AD_SPEND_TITLE.test(t)) ?? titles[titles.length - 1] ?? null,
+          method: "card",
+          processingFeeCents: isAdSpend ? processingFeeCents(amountCents) : 0,
+        };
+        (isAdSpend ? adSpend : other).push(payment);
+      }),
   );
-  const subscriptionIntents = new Set<string>();
-  const subs = await prisma.leadSubscription.findMany({
-    where: { stripeCustomerId: { in: customerIds } },
-    select: { stripeSubscriptionId: true },
-  });
-  for (const { stripeSubscriptionId } of subs) {
-    for await (const inv of stripe.invoices.list({ subscription: stripeSubscriptionId, limit: 100, expand: ["data.payments"] }) as any) {
-      for (const p of inv.payments?.data ?? []) {
-        const pi = p.payment?.payment_intent;
-        if (pi) subscriptionIntents.add(typeof pi === "string" ? pi : pi.id);
-      }
-    }
-  }
-
-  return charges
-    .filter((c) => c.status === "succeeded" && c.paid)
-    .filter((c) => {
-      const pi = typeof c.payment_intent === "string" ? c.payment_intent : c.payment_intent?.id;
-      if (c.metadata?.kind === AD_SPEND_KIND) return true;
-      return !(pi && (orderIntents.has(pi) || subscriptionIntents.has(pi)));
-    })
-    .map((c) => ({
-      id: String(c.id),
-      at: new Date(c.created * 1000).toISOString(),
-      amountCents: (c.amount ?? 0) - (c.amount_refunded ?? 0),
-      description: c.description ?? null,
-    }))
-    .filter((p) => p.amountCents > 0)
-    .sort((a, b) => b.at.localeCompare(a.at));
+  const byDate = (a: ClientPayment, b: ClientPayment) => b.at.localeCompare(a.at);
+  return { adSpend: adSpend.sort(byDate), other: other.sort(byDate) };
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────
@@ -281,9 +317,10 @@ export interface AdSpendSummary {
   name: string | null;
   email: string;
   paidCents: number;
-  processingFeeCents: number; // 3% of payments, passed through to Stripe
+  processingFeeCents: number; // 3% of card payments, passed through to Stripe
   availableCents: number; // paid − processing
-  payments: ClientPayment[];
+  payments: ClientPayment[]; // what funds the campaign: ad-spend card payments + Zelle etc.
+  otherStripePayments: ClientPayment[]; // service subscription, lead orders: not ad budget
   months: MonthCharge[]; // newest first
   spendCents: number; // Meta spend
   serviceFeeCents: number;
@@ -341,7 +378,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   if (!user) return null;
 
   const errors: string[] = [];
-  const [meta, payments, leads] = await Promise.all([
+  const [meta, cardPayments, otherPayments, leads] = await Promise.all([
     READ_TOKEN
       ? metaSpend(user.name, user.adCampaignIds).catch((e) => {
           errors.push(`Meta: ${(e as Error).message}`);
@@ -350,8 +387,9 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
       : (errors.push("Meta isn't connected."), { campaigns: [], monthlySpendCents: {} } as MetaSpend),
     stripePayments(user.email).catch((e) => {
       errors.push(`Stripe: ${(e as Error).message}`);
-      return [] as ClientPayment[];
+      return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[] };
     }),
+    manualPayments(user.id),
     // deliverLeadToOwner stamps this label on every lead from the client's campaign.
     leadCounts(user.name?.trim() || user.email),
   ]);
@@ -365,8 +403,9 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     .sort((a, b) => b.month.localeCompare(a.month));
   const thisMonth = months.find((m) => m.month === thisMonthKey) ?? chargeForMonth(thisMonthKey, 0);
   const sum = (k: keyof Omit<MonthCharge, "month">) => months.reduce((s, m) => s + m[k], 0);
+  const payments = [...cardPayments.adSpend, ...otherPayments].sort((a, b) => b.at.localeCompare(a.at));
   const paidCents = payments.reduce((s, p) => s + p.amountCents, 0);
-  const processing = payments.reduce((s, p) => s + processingFeeCents(p.amountCents), 0);
+  const processing = payments.reduce((s, p) => s + p.processingFeeCents, 0);
   const chargedCents = sum("chargedCents");
   const balanceCents = paidCents - processing - chargedCents;
   const activeBudget = meta.campaigns
@@ -383,6 +422,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     processingFeeCents: processing,
     availableCents: paidCents - processing,
     payments,
+    otherStripePayments: cardPayments.other,
     months,
     spendCents: sum("spendCents"),
     serviceFeeCents: sum("serviceFeeCents"),

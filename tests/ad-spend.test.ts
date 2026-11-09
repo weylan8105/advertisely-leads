@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 let user: any;
 let charges: any[];
+let manual: any[] = [];
+let invoices: Record<string, any> = {};
 const updates: any[] = [];
 
 vi.mock("@/lib/prisma", () => ({
@@ -19,6 +21,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     order: { findMany: vi.fn(async () => []) },
     leadSubscription: { findMany: vi.fn(async () => []) },
+    adSpendPayment: { findMany: vi.fn(async () => manual) },
     $queryRaw: vi.fn(async () => [{ total: 10n, this_month: 4n }]),
   },
 }));
@@ -32,7 +35,13 @@ vi.mock("@/lib/stripe", () => ({
         },
       })),
     },
-    invoices: { list: vi.fn() },
+    invoices: { list: vi.fn(), retrieve: vi.fn(async (id: string) => invoices[id]) },
+    invoicePayments: {
+      list: vi.fn(async ({ payment }: any) => ({
+        data: Object.keys(invoices).filter((id) => invoices[id].pi === payment.payment_intent).map((invoice) => ({ invoice })),
+      })),
+    },
+    checkout: { sessions: { list: vi.fn(async () => ({ data: [] })) } },
   },
 }));
 const setCampaignStatus = vi.fn(async () => undefined);
@@ -66,13 +75,15 @@ vi.stubGlobal(
 process.env.META_ADS_ACCESS_TOKEN = "t";
 
 const paid = (dollars: number, extra: any = {}) => ({
-  id: `ch_${Math.random()}`, status: "succeeded", paid: true, amount: dollars * 100, amount_refunded: 0, created: 1_762_000_000, payment_intent: `pi_${Math.random()}`, ...extra,
+  id: `ch_${Math.random()}`, status: "succeeded", paid: true, amount: dollars * 100, amount_refunded: 0, created: 1_762_000_000, payment_intent: `pi_${Math.random()}`, description: "Ad Spend", ...extra,
 });
 
 beforeEach(() => {
   vi.resetModules();
   user = { id: "JACE", name: "Jace Jensen", email: "jace@gmail.com", adCampaignIds: [], adSpendAutoPause: true, adSpendPausedCampaignIds: [], adSpendTargetDate: null };
   charges = [paid(1000)];
+  manual = [];
+  invoices = {};
   updates.length = 0;
   campaignStatus = "ACTIVE";
   setCampaignStatus.mockClear();
@@ -110,6 +121,35 @@ describe("pricing", () => {
 });
 
 describe("summary", () => {
+  it("counts only Stripe payments titled ad spend, not the monthly service subscription", async () => {
+    charges = [
+      paid(1000, { description: "Subscription creation", payment_intent: "pi_ads" }),
+      paid(3000, { description: "Subscription creation", payment_intent: "pi_service" }),
+      paid(200, { description: null, metadata: { kind: "ad-spend" } }),
+    ];
+    invoices = {
+      in_ads: { pi: "pi_ads", lines: { data: [{ description: "1 × Ad Spend (at $1,000.00 / month)" }] } },
+      in_service: { pi: "pi_service", lines: { data: [{ description: "1 × Advertisely Advertiser Services (at $3,000.00 / month)" }] } },
+    };
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(120_000);
+    expect(s.processingFeeCents).toBe(3_600);
+    expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([300_000]);
+    expect(s.payments.find((p) => p.amountCents === 100_000)?.description).toMatch(/Ad Spend/);
+  });
+
+  it("counts Zelle payments in full, with no card processing fee", async () => {
+    manual = [{ id: "m1", amountCents: 50_000, method: "zelle", note: "rest of payment", receivedAt: new Date("2026-11-08T17:00:00Z") }];
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(150_000);
+    expect(s.processingFeeCents).toBe(3_000); // 3% of the $1,000 card payment only
+    expect(s.availableCents).toBe(147_000);
+    expect(s.balanceCents).toBe(97_000);
+    expect(s.payments.map((p) => [p.method, p.processingFeeCents])).toEqual([["zelle", 0], ["card", 3_000]]);
+  });
+
   it("is paid minus 3% processing minus spend, with cost per lead", async () => {
     charges = [paid(1000), paid(300, { amount_refunded: 10_000 }), { ...paid(50), status: "failed", paid: false }];
     const { getAdSpendSummary } = await import("@/lib/adSpend");
