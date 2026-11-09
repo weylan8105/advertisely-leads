@@ -374,7 +374,12 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
       }),
   );
   const byDate = (a: ClientPayment, b: ClientPayment) => b.at.localeCompare(a.at);
-  const recurring = await recurringAdSpend(customerIds).catch(() => null);
+  // Subscriptions live on a customer even when the charge was matched by billing email.
+  const allCustomers = [...new Set([...customerIds, ...charges.map((c) => (typeof c.customer === "string" ? c.customer : c.customer?.id)).filter(Boolean)])];
+  const recurring = await recurringAdSpend(allCustomers).catch((e) => {
+    console.error("[adSpend] recurring lookup failed", (e as Error).message);
+    return null;
+  });
   return { adSpend: adSpend.sort(byDate), other: other.sort(byDate), recurring };
 }
 
