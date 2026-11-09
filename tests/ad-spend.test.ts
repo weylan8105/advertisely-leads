@@ -139,7 +139,7 @@ describe("weekly ad spend", () => {
     const { stripe } = (await import("@/lib/stripe")) as any;
     stripe.subscriptions = {
       list: vi.fn(async () => ({
-        data: [{ latest_invoice: { lines: { data: [
+        data: [{ id: "sub_1", status: "active", latest_invoice: { lines: { data: [
           { description: "7 × Weekly Ad Spend Budget (at $100.00 / week)", amount: 70_000, period: { end: Date.parse("2026-11-11T20:10:00Z") / 1000 } },
         ] } } }],
       })),
