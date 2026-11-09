@@ -62,6 +62,7 @@ export function PipelineBoard({
   showWorkers = true,
   sortMode = "newest",
   initialQuery = "",
+  presenceMs = 15_000,
 }: {
   leads: Lead[];
   /** Open this lead's contact card on load (e.g. arriving from /leads/[id]). */
@@ -75,6 +76,8 @@ export function PipelineBoard({
   sortMode?: PipelineSort;
   /** Search to start with (the top bar's ?q=). */
   initialQuery?: string;
+  /** How often to refresh who on the team is on the phone with which lead. */
+  presenceMs?: number;
 }) {
   const cols = stages && stages.length ? stages : PIPELINE_STAGES;
   const colIds = new Set(cols.map((s) => s.id));
@@ -187,7 +190,7 @@ export function PipelineBoard({
       body: JSON.stringify({ leadId: id }),
     }).catch(() => {});
   }
-  // Teammates' current calls, refreshed every 15s while the tab is visible.
+  // Teammates' current calls, refreshed every presenceMs while the tab is visible.
   const [talking, setTalking] = useState<{ userId: string; name: string | null; email: string | null; leadId: string; since: string }[]>([]);
   useEffect(() => {
     if (!showWorkers) return;
@@ -200,10 +203,10 @@ export function PipelineBoard({
         .catch(() => {});
     };
     load();
-    const t = setInterval(load, 15_000);
+    const t = setInterval(load, presenceMs);
     document.addEventListener("visibilitychange", load);
     return () => { live = false; clearInterval(t); document.removeEventListener("visibilitychange", load); };
-  }, [showWorkers]);
+  }, [showWorkers, presenceMs]);
   const talkingByLead = useMemo(() => new Map(talking.map((t) => [t.leadId, t])), [talking]);
   // Warn before calling/copying a lead a teammate is already on the phone with.
   function okToContact(lead: Lead, action: string): boolean {

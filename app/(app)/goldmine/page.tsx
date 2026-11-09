@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Gem, Loader2, SlidersHorizontal, Lock } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
@@ -8,7 +8,21 @@ import { PipelineEditor } from "@/components/leads/PipelineEditor";
 import { PIPELINE_STAGES, DEFAULT_PIPELINE_SORT, parsePipelineSort, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { changedLeadIds, mergeLeadDelta } from "@/lib/pipelineSync";
 import type { Lead } from "@/types";
+
+// Several people call from Goldmine at once, so the board picks up their moves,
+// notes and dials this often while the tab is open.
+const REFRESH_MS = 10_000;
+// A card you just changed keeps your copy this long, so a refresh can't undo a
+// move that is still saving.
+const LOCAL_GRACE_MS = 15_000;
+
+interface LeadsResponse {
+  leads?: Lead[];
+  ids?: string[];
+  asOf?: string;
+}
 
 interface GoldmineConfig {
   enabled: boolean;
@@ -20,7 +34,7 @@ interface GoldmineConfig {
 
 export default function GoldminePage() {
   const [config, setConfig] = useState<GoldmineConfig | null>(null);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeadsState] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditor, setShowEditor] = useState(false);
   const [enabling, setEnabling] = useState(false);
@@ -34,6 +48,42 @@ export default function GoldminePage() {
       .catch(() => {});
   }, []);
 
+  // The board's own edits go through here, which notes which cards the viewer touched.
+  const touchedAt = useRef(new Map<string, number>());
+  const setLeads = useCallback<React.Dispatch<React.SetStateAction<Lead[]>>>((update) => {
+    setLeadsState((cur) => {
+      const next = typeof update === "function" ? update(cur) : update;
+      const at = Date.now();
+      for (const id of changedLeadIds(cur, next)) touchedAt.current.set(id, at);
+      return next;
+    });
+  }, []);
+
+  // asOf from the last response; the next refresh asks only for what changed since.
+  const asOf = useRef<string | null>(null);
+  const needFull = useRef(false);
+  const applyLeads = useCallback((d: LeadsResponse) => {
+    const changed = d.leads ?? [];
+    const ids = d.ids ?? changed.map((l) => l.id);
+    const now = Date.now();
+    touchedAt.current.forEach((at, id) => {
+      if (now - at >= LOCAL_GRACE_MS) touchedAt.current.delete(id);
+    });
+    setLeadsState((cur) => {
+      const m = mergeLeadDelta(cur, changed, ids, touchedAt.current, now, LOCAL_GRACE_MS);
+      if (m.missing) needFull.current = true;
+      return m.leads;
+    });
+    if (d.asOf) asOf.current = d.asOf;
+  }, []);
+
+  async function loadLeads(since: string | null) {
+    const r = await fetch(`/api/leads?pipeline=goldmine${since ? `&since=${encodeURIComponent(since)}` : ""}`, {
+      cache: "no-store",
+    });
+    return r.ok ? ((await r.json()) as LeadsResponse) : null;
+  }
+
   async function loadConfig() {
     const r = await fetch("/api/goldmine");
     return r.ok ? ((await r.json()) as GoldmineConfig) : null;
@@ -46,16 +96,48 @@ export default function GoldminePage() {
       if (!active) return;
       setConfig(cfg);
       if (cfg?.enabled) {
-        const r = await fetch("/api/leads?pipeline=goldmine");
-        const d = r.ok ? await r.json() : { leads: [] };
-        if (active) setLeads(d.leads ?? []);
+        const d = await loadLeads(null);
+        if (active && d) applyLeads(d);
       }
       if (active) setLoading(false);
     })();
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live refresh while the tab is visible (and right away when you come back to it).
+  const enabled = !!config?.enabled;
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    let busy = false;
+    const refresh = async () => {
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+        const full = needFull.current || !asOf.current;
+        const d = await loadLeads(full ? null : asOf.current);
+        if (live && d) {
+          if (full) needFull.current = false;
+          applyLeads(d);
+        }
+      } catch {
+        // Offline or a blip; the next tick tries again.
+      } finally {
+        busy = false;
+      }
+    };
+    const t = setInterval(refresh, REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      live = false;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, applyLeads]);
 
   async function enableGoldmine() {
     setEnabling(true);
@@ -68,9 +150,8 @@ export default function GoldminePage() {
       if (r.ok) {
         const cfg = await loadConfig();
         setConfig(cfg);
-        const lr = await fetch("/api/leads?pipeline=goldmine");
-        const d = lr.ok ? await lr.json() : { leads: [] };
-        setLeads(d.leads ?? []);
+        const d = await loadLeads(null);
+        if (d) applyLeads(d);
       }
     } finally {
       setEnabling(false);
@@ -130,9 +211,16 @@ export default function GoldminePage() {
             <p className="text-xs text-muted-foreground">
               Shared aged-lead pool — anyone on the team can move, text, and close these.
               {config.afterDays ? ` Leads move here ${config.afterDays} days after they're assigned.` : ""}
+              {" "}Updates every {REFRESH_MS / 1000} seconds.
             </p>
           </div>
-          <PipelineBoard leads={leads} setLeads={setLeads} stages={stages} sortMode={sortMode} />
+          <PipelineBoard
+            leads={leads}
+            setLeads={setLeads}
+            stages={stages}
+            sortMode={sortMode}
+            presenceMs={REFRESH_MS}
+          />
         </Card>
       )}
 

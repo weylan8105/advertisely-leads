@@ -16,6 +16,9 @@ export const dynamic = "force-dynamic";
  * Optional query params:
  *   - status: filter by UI status label or DB enum (e.g. "New" / "NEW")
  *   - email:  ADMIN only — fetch another user's leads by their account email
+ *   - since:  pipeline=goldmine only — the `asOf` from a previous response. Returns
+ *             just the leads changed since then plus the ids of every lead still in
+ *             Goldmine, so teammates' boards can refresh every few seconds cheaply.
  */
 export async function GET(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) {
@@ -27,6 +30,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Taken before any reads so a write that lands mid-request is caught next time.
+  const asOf = new Date();
   const { searchParams } = new URL(req.url);
   const statusParam = searchParams.get("status");
   const emailParam = searchParams.get("email");
@@ -96,16 +101,52 @@ export async function GET(req: NextRequest) {
   // Trashed leads (replaced bad leads, recycle bin) never appear on a board.
   where.trashedAt = null;
 
-  const leads = await prisma.lead.findMany({
-    where,
-    orderBy: { receivedAt: "desc" },
-    include: {
-      assignedUser: { select: { name: true } },
-      notes: { orderBy: { createdAt: "desc" } },
-      tasks: true,
-      activity: { orderBy: { createdAt: "desc" } },
-    },
-  });
+  const include = {
+    assignedUser: { select: { name: true } },
+    notes: { orderBy: { createdAt: "desc" as const } },
+    tasks: true,
+    activity: { orderBy: { createdAt: "desc" as const } },
+  };
 
-  return NextResponse.json({ leads: leads.map(serializeLead) });
+  const since = pipelineParam === "goldmine" ? deltaSince(searchParams.get("since"), asOf) : null;
+  if (since) {
+    const [changed, current] = await Promise.all([
+      prisma.lead.findMany({
+        where: {
+          ...where,
+          OR: [
+            { updatedAt: { gt: since } },
+            { activity: { some: { createdAt: { gt: since } } } },
+            { notes: { some: { createdAt: { gt: since } } } },
+            { tasks: { some: { createdAt: { gt: since } } } },
+          ],
+        },
+        orderBy: { receivedAt: "desc" },
+        include,
+      }),
+      prisma.lead.findMany({ where, select: { id: true } }),
+    ]);
+    return NextResponse.json({
+      leads: changed.map(serializeLead),
+      ids: current.map((l) => l.id),
+      asOf: asOf.toISOString(),
+    });
+  }
+
+  const leads = await prisma.lead.findMany({ where, orderBy: { receivedAt: "desc" }, include });
+
+  return NextResponse.json({ leads: leads.map(serializeLead), asOf: asOf.toISOString() });
+}
+
+// Re-send anything from a little before the client's last asOf: a write stamped
+// just before that moment may not have been committed when it was read.
+const DELTA_OVERLAP_MS = 15_000;
+// Further back than this, a full reload is cheaper and safer.
+const DELTA_MAX_AGE_MS = 6 * 3600_000;
+
+function deltaSince(raw: string | null, now: Date): Date | null {
+  if (!raw) return null;
+  const t = new Date(raw).getTime();
+  if (!Number.isFinite(t) || t > now.getTime() + 60_000 || now.getTime() - t > DELTA_MAX_AGE_MS) return null;
+  return new Date(t - DELTA_OVERLAP_MS);
 }
