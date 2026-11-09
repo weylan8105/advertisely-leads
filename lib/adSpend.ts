@@ -364,6 +364,8 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { adSpendPausedCampaignIds: true } });
   const pausedByUs = new Set(user?.adSpendPausedCampaignIds ?? []);
   const live = s.campaigns.filter((c) => c.status === "ACTIVE" || pausedByUs.has(c.id));
+  // Paused ones are capped too, so turning one back on by hand stays inside the budget.
+  const cappable = s.campaigns.filter((c) => c.status !== "ARCHIVED" && c.status !== "DELETED");
   const allowedCents = affordableSpendCents(s.balanceCents, s.thisMonth.spendCents);
 
   if (allowedCents < PAUSE_BELOW_CENTS) {
@@ -377,10 +379,10 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
     return { userId, action: "paused", detail: `${toPause.length} campaign(s) paused; balance ${s.balanceCents}¢` };
   }
 
-  // Split what's left across the live campaigns; Meta enforces each cap.
-  const share = Math.floor(allowedCents / Math.max(1, live.length));
+  // Split what's left across the campaigns; Meta enforces each cap.
+  const share = Math.floor(allowedCents / Math.max(1, cappable.length));
   let changed = 0;
-  for (const c of live) {
+  for (const c of cappable) {
     const cap = Math.max(MIN_SPEND_CAP_CENTS, c.lifetimeSpendCents + share);
     if (c.spendCapCents === null || Math.abs(c.spendCapCents - cap) >= 100) {
       await setCampaignSpendCap(c.id, cap);

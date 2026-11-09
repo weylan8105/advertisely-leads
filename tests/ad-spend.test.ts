@@ -146,3 +146,13 @@ describe("auto-pause", () => {
     expect(setCampaignStatus).not.toHaveBeenCalled();
   });
 });
+
+describe("auto-pause on a campaign the client paused", () => {
+  it("still caps it, without turning it on", async () => {
+    campaignStatus = "PAUSED";
+    const { enforceAdSpend } = await import("@/lib/adSpend");
+    expect((await enforceAdSpend("JACE")).action).toBe("capped");
+    expect(setCampaignSpendCap).toHaveBeenCalledWith("C1", 50_000 + 47_087);
+    expect(setCampaignStatus).not.toHaveBeenCalled();
+  });
+});
