@@ -81,6 +81,8 @@ model User {
   // Pace the daily budget to spend what they've paid by this date (null = month end).
   adSpendTargetDate        DateTime?
   adSpendPacedAt           DateTime?
+  // Other emails the client pays ad spend from in Stripe.
+  adSpendEmails            String[] @default([])
   createdAt     DateTime  @default(now())
 
   accounts              Account[]

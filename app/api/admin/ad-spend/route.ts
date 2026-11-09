@@ -24,9 +24,10 @@ export async function GET() {
 }
 
 /**
- * POST /api/admin/ad-spend { userId, autoPause?, campaignIds?, targetDate? } —
+ * POST /api/admin/ad-spend { userId, autoPause?, campaignIds?, targetDate?, paymentEmails? } —
  * turn a client's budget management on/off, pin their campaign ids, or set the
- * date to spend their budget by (YYYY-MM-DD, or null for month end), then apply it.
+ * date to spend their budget by (YYYY-MM-DD, or null for month end), or list other
+ * emails they pay ad spend from in Stripe, then apply it.
  */
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     autoPause?: boolean;
     campaignIds?: string[];
     targetDate?: string | null;
+    paymentEmails?: string[];
   };
   if (body.targetDate && !/^\d{4}-\d{2}-\d{2}$/.test(body.targetDate)) {
     return NextResponse.json({ error: "targetDate must be YYYY-MM-DD." }, { status: 400 });
@@ -46,6 +48,9 @@ export async function POST(req: NextRequest) {
     data: {
       ...(typeof body.autoPause === "boolean" ? { adSpendAutoPause: body.autoPause } : {}),
       ...(Array.isArray(body.campaignIds) ? { adCampaignIds: body.campaignIds.map((s) => String(s).replace(/\D/g, "")).filter(Boolean) } : {}),
+      ...(Array.isArray(body.paymentEmails)
+        ? { adSpendEmails: [...new Set(body.paymentEmails.map((e) => String(e).trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))] }
+        : {}),
       ...(body.targetDate !== undefined ? { adSpendTargetDate: body.targetDate ? new Date(`${body.targetDate}T00:00:00Z`) : null } : {}),
     },
   });

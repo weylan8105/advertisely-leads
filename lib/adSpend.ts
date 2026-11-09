@@ -289,9 +289,9 @@ async function chargeTitles(c: any): Promise<string[]> {
  * payments, which fund their campaign, and everything else (the monthly
  * service subscription, lead orders), which doesn't.
  */
-async function stripePayments(email: string): Promise<{ adSpend: ClientPayment[]; other: ClientPayment[] }> {
+async function stripePayments(paymentEmails: string[]): Promise<{ adSpend: ClientPayment[]; other: ClientPayment[] }> {
   if (!stripe) return { adSpend: [], other: [] };
-  const emails = [...new Set([email, email.toLowerCase()])];
+  const emails = [...new Set(paymentEmails.flatMap((e) => [e.trim(), e.trim().toLowerCase()]).filter(Boolean))];
   const customers = (await Promise.all(emails.map((e) => stripe!.customers.list({ email: e, limit: 100 })))).flatMap((r) => r.data);
   const customerIds = [...new Set(customers.map((c) => c.id))];
 
@@ -395,7 +395,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     where: { id: userId },
     select: {
       id: true, name: true, email: true, adCampaignIds: true, adSpendAutoPause: true,
-      adSpendPausedCampaignIds: true, adSpendTargetDate: true,
+      adSpendPausedCampaignIds: true, adSpendTargetDate: true, adSpendEmails: true,
     },
   });
   if (!user) return null;
@@ -408,7 +408,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
           return { campaigns: [], monthlySpendCents: {} } as MetaSpend;
         })
       : (errors.push("Meta isn't connected."), { campaigns: [], monthlySpendCents: {} } as MetaSpend),
-    stripePayments(user.email).catch((e) => {
+    stripePayments([user.email, ...user.adSpendEmails]).catch((e) => {
       errors.push(`Stripe: ${(e as Error).message}`);
       return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[] };
     }),

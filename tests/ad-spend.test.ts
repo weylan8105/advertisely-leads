@@ -81,7 +81,7 @@ const paid = (dollars: number, extra: any = {}) => ({
 
 beforeEach(() => {
   vi.resetModules();
-  user = { id: "JACE", name: "Jace Jensen", email: "jace@gmail.com", adCampaignIds: [], adSpendAutoPause: true, adSpendPausedCampaignIds: [], adSpendTargetDate: null };
+  user = { id: "JACE", name: "Jace Jensen", email: "jace@gmail.com", adCampaignIds: [], adSpendAutoPause: true, adSpendPausedCampaignIds: [], adSpendTargetDate: null, adSpendEmails: [] };
   charges = [paid(1000)];
   manual = [];
   invoices = {};
@@ -152,6 +152,15 @@ describe("summary", () => {
     const { getAdSpendSummary } = await import("@/lib/adSpend");
     const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
     expect(s.paidCents).toBe(150_000);
+  });
+
+  it("also counts ad spend paid from the client's other emails", async () => {
+    user.adSpendEmails = ["pieroonly@gmail.com"];
+    charges = [];
+    guestCharges = [paid(700, { description: "Adspend Budget", customer: null, billing_details: { email: "pieroonly@gmail.com" } })];
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(70_000);
   });
 
   it("counts Zelle payments in full, with no card processing fee", async () => {

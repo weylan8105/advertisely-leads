@@ -19,3 +19,5 @@ CREATE TABLE IF NOT EXISTS "AdSpendPayment" (
   CONSTRAINT "AdSpendPayment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS "AdSpendPayment_userId_idx" ON "AdSpendPayment"("userId");
+-- Other emails a client pays ad spend from (added 2026-11-08).
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "adSpendEmails" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
