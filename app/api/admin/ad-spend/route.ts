@@ -24,19 +24,29 @@ export async function GET() {
 }
 
 /**
- * POST /api/admin/ad-spend { userId, autoPause?, campaignIds? } — turn a client's
- * auto-pause on/off or pin their campaign ids, then apply it.
+ * POST /api/admin/ad-spend { userId, autoPause?, campaignIds?, targetDate? } —
+ * turn a client's budget management on/off, pin their campaign ids, or set the
+ * date to spend their budget by (YYYY-MM-DD, or null for month end), then apply it.
  */
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const body = (await req.json().catch(() => ({}))) as { userId?: string; autoPause?: boolean; campaignIds?: string[] };
+  const body = (await req.json().catch(() => ({}))) as {
+    userId?: string;
+    autoPause?: boolean;
+    campaignIds?: string[];
+    targetDate?: string | null;
+  };
+  if (body.targetDate && !/^\d{4}-\d{2}-\d{2}$/.test(body.targetDate)) {
+    return NextResponse.json({ error: "targetDate must be YYYY-MM-DD." }, { status: 400 });
+  }
   if (!body.userId) return NextResponse.json({ error: "userId is required." }, { status: 400 });
   await prisma.user.update({
     where: { id: body.userId },
     data: {
       ...(typeof body.autoPause === "boolean" ? { adSpendAutoPause: body.autoPause } : {}),
       ...(Array.isArray(body.campaignIds) ? { adCampaignIds: body.campaignIds.map((s) => String(s).replace(/\D/g, "")).filter(Boolean) } : {}),
+      ...(body.targetDate !== undefined ? { adSpendTargetDate: body.targetDate ? new Date(`${body.targetDate}T00:00:00Z`) : null } : {}),
     },
   });
   const result = await enforceAdSpend(body.userId);

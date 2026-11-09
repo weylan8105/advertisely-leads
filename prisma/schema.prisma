@@ -78,6 +78,9 @@ model User {
   adSpendAutoPause         Boolean  @default(false)
   // Campaigns we paused for budget, resumed when they add spend.
   adSpendPausedCampaignIds String[] @default([])
+  // Pace the daily budget to spend what they've paid by this date (null = month end).
+  adSpendTargetDate        DateTime?
+  adSpendPacedAt           DateTime?
   createdAt     DateTime  @default(now())
 
   accounts              Account[]

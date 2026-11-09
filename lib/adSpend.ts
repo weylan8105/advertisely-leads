@@ -2,19 +2,22 @@
 // what their own Meta campaign has spent, so their dashboard can show how much
 // budget is left before they need to add more.
 //
-// What we charge for spend:
-//   - every dollar of Meta spend, plus 3% to cover Stripe's card fee
+// How a client's money is used:
+//   - 3% of each payment covers card processing (Stripe's fee, passed through at
+//     cost); the other 97% is available for ads
+//   - every dollar of Meta spend comes out of that
 //   - a 20% service fee on the part of a calendar month's spend over $15,000
 // A client's campaigns are the "Advertisely Advertiser - <Name>" campaigns in
-// our ad accounts (or the ids set on User.adCampaignIds). When auto-pause is on
-// for the client, the campaign's Meta spend cap is kept at what they've paid
-// for, and it's paused when that runs out (enforceAdSpend).
+// our ad accounts (or the ids set on User.adCampaignIds). With budget management
+// on (User.adSpendAutoPause), manageAdSpend keeps the campaign's Meta spend cap
+// at what they've paid for, paces the daily budget to spend it by their target
+// date, and pauses the campaign when it runs out.
 
 import { prisma } from "./prisma";
 import { stripe } from "./stripe";
-import { setCampaignStatus, setCampaignSpendCap } from "./metaAds";
+import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
 
-export const CARD_FEE_RATE = 0.03;
+export const PROCESSING_FEE_RATE = 0.03; // of each payment
 export const SERVICE_FEE_RATE = 0.2;
 export const SERVICE_FEE_THRESHOLD_CENTS = 1_500_000; // $15,000 of spend per calendar month
 export const MIN_TOP_UP_CENTS = 10_000; // $100
@@ -27,6 +30,12 @@ export const CLIENT_CAMPAIGN_PREFIX = "Advertisely Advertiser - ";
 const MIN_SPEND_CAP_CENTS = 10_000;
 // Below this much spend left, pause rather than cap.
 const PAUSE_BELOW_CENTS = 100;
+// Pacing: never set a daily budget under $10, move at most 2x (or down to half)
+// in one step so delivery isn't thrown around, and skip changes under 10%.
+const MIN_DAILY_BUDGET_CENTS = 1_000;
+const MAX_BUDGET_STEP = 2;
+const MIN_BUDGET_CHANGE = 0.1;
+const TZ = "America/Chicago"; // the ABCA account's reporting timezone
 
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
 const READ_TOKEN = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_MANAGE_TOKEN;
@@ -40,29 +49,65 @@ const AD_ACCOUNTS = [
 export interface MonthCharge {
   month: string; // YYYY-MM
   spendCents: number;
-  cardFeeCents: number;
   serviceFeeCents: number;
   chargedCents: number;
 }
 
-/** What a calendar month of Meta spend costs the client. */
+/** The processing fee taken from one payment. */
+export const processingFeeCents = (amountCents: number) => Math.round(amountCents * PROCESSING_FEE_RATE);
+
+/** What a calendar month of Meta spend uses of the client's budget. */
 export function chargeForMonth(month: string, spendCents: number): MonthCharge {
-  const cardFeeCents = Math.round(spendCents * CARD_FEE_RATE);
   const serviceFeeCents = Math.round(Math.max(0, spendCents - SERVICE_FEE_THRESHOLD_CENTS) * SERVICE_FEE_RATE);
-  return { month, spendCents, cardFeeCents, serviceFeeCents, chargedCents: spendCents + cardFeeCents + serviceFeeCents };
+  return { month, spendCents, serviceFeeCents, chargedCents: spendCents + serviceFeeCents };
 }
 
 /**
- * How much more Meta spend a balance pays for this month, given what the month
- * has already spent: 1.03 per dollar up to $15,000, then 1.23 per dollar.
+ * How much more Meta spend a balance covers this month, given what the month
+ * has already spent: $1 per dollar up to $15,000, then $1.20 per dollar.
  */
 export function affordableSpendCents(balanceCents: number, monthSpendCents: number): number {
   if (balanceCents <= 0) return 0;
   const belowThreshold = Math.max(0, SERVICE_FEE_THRESHOLD_CENTS - monthSpendCents);
-  const lowRate = 1 + CARD_FEE_RATE;
-  const highRate = 1 + CARD_FEE_RATE + SERVICE_FEE_RATE;
-  if (balanceCents <= belowThreshold * lowRate) return Math.floor(balanceCents / lowRate);
-  return Math.floor(belowThreshold + (balanceCents - belowThreshold * lowRate) / highRate);
+  if (balanceCents <= belowThreshold) return Math.floor(balanceCents);
+  return Math.floor(belowThreshold + (balanceCents - belowThreshold) / (1 + SERVICE_FEE_RATE));
+}
+
+// ─── Pacing ──────────────────────────────────────────────────────────
+
+/** YYYY-MM-DD in the ad account's timezone. */
+export function ymdIn(d: Date, tz = TZ): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+/** The last day of the month `ymd` is in. */
+function endOfMonth(ymd: string): string {
+  const [y, m] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+/** The date a client's budget should be spent by: theirs if still ahead, else month end. */
+export function targetDateFor(target: Date | null, now = new Date()): string {
+  const today = ymdIn(now);
+  const set = target ? target.toISOString().slice(0, 10) : null;
+  return set && set >= today ? set : endOfMonth(today);
+}
+
+/** Days from today through `targetYmd`, both included. */
+export function daysThrough(targetYmd: string, now = new Date()): number {
+  const today = ymdIn(now);
+  const ms = Date.parse(`${targetYmd}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`);
+  return Math.max(1, Math.round(ms / 86_400_000) + 1);
+}
+
+/** The daily budget that spends `remainingCents` by the target, within the step limits. */
+export function pacedDailyBudget(remainingCents: number, days: number, currentCents: number | null): number {
+  let want = Math.floor(remainingCents / Math.max(1, days));
+  if (currentCents && currentCents > 0) {
+    want = Math.min(want, currentCents * MAX_BUDGET_STEP);
+    want = Math.max(want, Math.floor(currentCents / MAX_BUDGET_STEP));
+  }
+  return Math.max(MIN_DAILY_BUDGET_CENTS, Math.round(want / 100) * 100);
 }
 
 // ─── Meta spend ──────────────────────────────────────────────────────
@@ -72,6 +117,8 @@ export interface ClientCampaign {
   name: string;
   status: string | null; // effective_status
   dailyBudgetCents: number | null; // active ad sets' budgets, or the campaign budget
+  campaignBudgetCents: number | null; // set when the budget is on the campaign (CBO)
+  adsets: { id: string; status: string | null; dailyBudgetCents: number }[];
   spendCapCents: number | null;
   lifetimeSpendCents: number;
 }
@@ -130,7 +177,7 @@ async function metaSpend(name: string | null, ids: string[]): Promise<MetaSpend>
       const id = String(c.id);
       const [months, adsets] = await Promise.all([
         graphRows(`${GRAPH}/${id}/insights?fields=spend&date_preset=maximum&time_increment=monthly&limit=100&${tok}`),
-        graphRows(`${GRAPH}/${id}/adsets?fields=daily_budget,effective_status&limit=100&${tok}`),
+        graphRows(`${GRAPH}/${id}/adsets?fields=id,daily_budget,effective_status&limit=100&${tok}`),
       ]);
       let lifetimeSpendCents = 0;
       for (const m of months) {
@@ -149,6 +196,12 @@ async function metaSpend(name: string | null, ids: string[]): Promise<MetaSpend>
         name: String(c.name ?? id),
         status: c.effective_status ? String(c.effective_status) : null,
         dailyBudgetCents: campaignBudget || adsetBudget || null,
+        campaignBudgetCents: campaignBudget || null,
+        adsets: adsets.map((a) => ({
+          id: String(a.id),
+          status: a.effective_status ? String(a.effective_status) : null,
+          dailyBudgetCents: parseInt(String(a.daily_budget ?? "0"), 10) || 0,
+        })),
         // Meta reports "no limit" as a huge number.
         spendCapCents: cap > 0 && cap < 1e13 ? cap : null,
         lifetimeSpendCents,
@@ -228,19 +281,24 @@ export interface AdSpendSummary {
   name: string | null;
   email: string;
   paidCents: number;
+  processingFeeCents: number; // 3% of payments, passed through to Stripe
+  availableCents: number; // paid − processing
   payments: ClientPayment[];
   months: MonthCharge[]; // newest first
-  spendCents: number; // raw Meta spend
-  cardFeeCents: number;
+  spendCents: number; // Meta spend
   serviceFeeCents: number;
-  chargedCents: number; // what the spend costs the client
-  balanceCents: number; // paid − charged
+  chargedCents: number; // spend + service fees
+  balanceCents: number; // available − charged
   thisMonth: MonthCharge;
   leads: number;
   leadsThisMonth: number;
   costPerLeadCents: number | null;
   dailyBudgetCents: number | null;
   daysLeft: number | null;
+  // Pacing: spend what's left by targetDate at about pacedDailyCents a day.
+  targetDate: string; // YYYY-MM-DD
+  targetDateSet: boolean; // false = defaulting to month end
+  pacedDailyCents: number | null;
   campaigns: ClientCampaign[];
   autoPause: boolean;
   pausedForBudget: boolean;
@@ -275,7 +333,10 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, adCampaignIds: true, adSpendAutoPause: true, adSpendPausedCampaignIds: true },
+    select: {
+      id: true, name: true, email: true, adCampaignIds: true, adSpendAutoPause: true,
+      adSpendPausedCampaignIds: true, adSpendTargetDate: true,
+    },
   });
   if (!user) return null;
 
@@ -305,32 +366,37 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   const thisMonth = months.find((m) => m.month === thisMonthKey) ?? chargeForMonth(thisMonthKey, 0);
   const sum = (k: keyof Omit<MonthCharge, "month">) => months.reduce((s, m) => s + m[k], 0);
   const paidCents = payments.reduce((s, p) => s + p.amountCents, 0);
+  const processing = payments.reduce((s, p) => s + processingFeeCents(p.amountCents), 0);
   const chargedCents = sum("chargedCents");
-  const balanceCents = paidCents - chargedCents;
+  const balanceCents = paidCents - processing - chargedCents;
   const activeBudget = meta.campaigns
     .filter((c) => c.status === "ACTIVE" || user.adSpendPausedCampaignIds.includes(c.id))
     .reduce((s, c) => s + (c.dailyBudgetCents ?? 0), 0);
-  const dailyCharge = activeBudget * (1 + CARD_FEE_RATE);
+  const targetDate = targetDateFor(user.adSpendTargetDate);
+  const remaining = affordableSpendCents(balanceCents, thisMonth.spendCents);
 
   const summary: AdSpendSummary = {
     userId: user.id,
     name: user.name,
     email: user.email,
     paidCents,
+    processingFeeCents: processing,
+    availableCents: paidCents - processing,
     payments,
     months,
     spendCents: sum("spendCents"),
-    cardFeeCents: sum("cardFeeCents"),
     serviceFeeCents: sum("serviceFeeCents"),
     chargedCents,
     balanceCents,
     thisMonth,
     leads: leads.total,
     leadsThisMonth: leads.thisMonth,
-    // What each lead has cost the client, card fee included.
-    costPerLeadCents: leads.total > 0 ? Math.round((sum("spendCents") + sum("cardFeeCents")) / leads.total) : null,
+    costPerLeadCents: leads.total > 0 ? Math.round(sum("spendCents") / leads.total) : null,
     dailyBudgetCents: activeBudget || null,
-    daysLeft: dailyCharge > 0 ? Math.max(0, Math.floor(balanceCents / dailyCharge)) : null,
+    daysLeft: activeBudget > 0 ? Math.max(0, Math.floor(balanceCents / activeBudget)) : null,
+    targetDate,
+    targetDateSet: !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10),
+    pacedDailyCents: remaining > 0 ? Math.max(MIN_DAILY_BUDGET_CENTS, Math.floor(remaining / daysThrough(targetDate))) : null,
     campaigns: meta.campaigns,
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,
@@ -340,7 +406,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   return summary;
 }
 
-// ─── Auto-pause ──────────────────────────────────────────────────────
+// ─── Budget management ───────────────────────────────────────────────
 
 export interface EnforceResult {
   userId: string;
@@ -349,16 +415,42 @@ export interface EnforceResult {
 }
 
 /**
- * Keep a client's campaigns inside what they've paid for: a Meta spend cap at
- * the spend their balance covers (Meta stops delivery there on its own), a pause
- * once it's used up, and a resume of what we paused once they add more. Only
- * for clients with auto-pause on, and never on a summary with read errors.
+ * Set the daily budget(s) of a live campaign to `dailyCents` in total: on the
+ * campaign for CBO, else split across its active ad sets in proportion to what
+ * they have now. Returns how many budgets changed.
+ */
+async function paceCampaign(c: ClientCampaign, dailyCents: number): Promise<number> {
+  const differs = (now: number, want: number) => !now || Math.abs(want - now) / now >= MIN_BUDGET_CHANGE;
+  if (c.campaignBudgetCents) {
+    if (!differs(c.campaignBudgetCents, dailyCents)) return 0;
+    await setDailyBudget(c.id, dailyCents);
+    return 1;
+  }
+  const active = c.adsets.filter((a) => a.status === "ACTIVE");
+  const total = active.reduce((s, a) => s + a.dailyBudgetCents, 0);
+  if (!active.length || !differs(total, dailyCents)) return 0;
+  let changed = 0;
+  for (const a of active) {
+    const share = total > 0 ? a.dailyBudgetCents / total : 1 / active.length;
+    const want = Math.max(MIN_DAILY_BUDGET_CENTS / active.length, Math.round((dailyCents * share) / 100) * 100);
+    await setDailyBudget(a.id, Math.max(100, want));
+    changed++;
+  }
+  return changed;
+}
+
+/**
+ * Keep a client's campaigns inside what they've paid for and on pace: a Meta
+ * spend cap at the spend their balance covers (Meta stops delivery there on its
+ * own), a daily budget that spends it by their target date, a pause once it's
+ * used up, and a resume of what we paused once they add more. Only for clients
+ * with management on, and never on a summary with read errors.
  */
 export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
   if (!prisma) return { userId, action: "skipped", detail: "no database" };
   const s = await getAdSpendSummary(userId, { fresh: true });
   if (!s) return { userId, action: "skipped", detail: "no user" };
-  if (!s.autoPause) return { userId, action: "skipped", detail: "auto-pause is off" };
+  if (!s.autoPause) return { userId, action: "skipped", detail: "budget management is off" };
   if (s.errors.length) return { userId, action: "skipped", detail: s.errors.join("; ") };
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { adSpendPausedCampaignIds: true } });
@@ -390,16 +482,37 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
     }
     if (pausedByUs.has(c.id)) await setCampaignStatus(c.id, "ACTIVE");
   }
-  if (pausedByUs.size) {
-    await prisma.user.update({ where: { id: userId }, data: { adSpendPausedCampaignIds: [] } });
+  // Pace: spread what's left over the days to the target date.
+  const liveNow = s.campaigns.filter((c) => c.status === "ACTIVE" || pausedByUs.has(c.id));
+  const days = daysThrough(s.targetDate);
+  let paced = 0;
+  let dailyTotal = 0;
+  for (const c of liveNow) {
+    const daily = pacedDailyBudget(Math.floor(allowedCents / liveNow.length), days, c.dailyBudgetCents);
+    dailyTotal += daily;
+    paced += await paceCampaign(c, daily);
   }
+  await prisma.user.update({
+    where: { id: userId },
+    data: { adSpendPacedAt: new Date(), ...(pausedByUs.size ? { adSpendPausedCampaignIds: [] } : {}) },
+  });
   summaryCache.delete(userId);
-  if (!changed && !pausedByUs.size) return { userId, action: "none", detail: "caps already current" };
-  return {
-    userId,
-    action: "capped",
-    detail: `${changed} cap(s) set to cover ${allowedCents}¢ more spend${pausedByUs.size ? `; resumed ${pausedByUs.size}` : ""}`,
-  };
+  const parts = [
+    `${changed} cap(s) set to cover ${allowedCents}¢ more spend`,
+    liveNow.length ? `daily budget ${dailyTotal}¢ for ${days} day(s) to ${s.targetDate}${paced ? "" : " (unchanged)"}` : "",
+    pausedByUs.size ? `resumed ${pausedByUs.size}` : "",
+  ].filter(Boolean);
+  if (!changed && !paced && !pausedByUs.size) return { userId, action: "none", detail: parts.join("; ") };
+  return { userId, action: "capped", detail: parts.join("; ") };
+}
+
+/** Re-run management for a client if it hasn't run in the last 20 hours. */
+export async function manageIfStale(userId: string): Promise<void> {
+  if (!prisma) return;
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { adSpendAutoPause: true, adSpendPacedAt: true } });
+  if (!u?.adSpendAutoPause) return;
+  if (u.adSpendPacedAt && Date.now() - u.adSpendPacedAt.getTime() < 20 * 3_600_000) return;
+  await enforceAdSpend(userId);
 }
 
 /** Enforce for every advertiser with auto-pause on (daily cron + after top-ups). */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet, TrendingUp, Users, Target, Loader2, AlertTriangle, PauseCircle, Info } from "lucide-react";
+import { Wallet, TrendingUp, Users, Target, Loader2, AlertTriangle, PauseCircle, Info, CalendarClock } from "lucide-react";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,17 @@ import type { AdSpendSummary } from "@/lib/adSpend";
 
 const PRESETS = [500, 1000, 2500, 5000];
 const MIN_DOLLARS = 100;
+const PROCESSING_RATE = 0.03; // lib/adSpend.ts PROCESSING_FEE_RATE
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const usd0 = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+function dayLabel(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
 
 function monthLabel(ym: string) {
   const [y, m] = ym.split("-").map(Number);
@@ -28,6 +34,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
   const [error, setError] = useState<string | null>(null);
 
   const low = summary.balanceCents <= 0;
+  const typedCents = Math.round((Number(amount.replace(/[^0-9.]/g, "")) || 0) * 100);
   const runningLow = !low && summary.daysLeft !== null && summary.daysLeft <= 3;
 
   async function addSpend() {
@@ -82,16 +89,16 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
           accent={low ? "amber" : "emerald"}
         />
         <DashboardStatCard
-          label="Total added"
-          value={usd(summary.paidCents)}
-          hint={`${summary.payments.length} payment${summary.payments.length === 1 ? "" : "s"}`}
+          label="Available for ads"
+          value={usd(summary.availableCents)}
+          hint={`${usd0(summary.paidCents)} added − 3% processing`}
           icon={<Wallet className="h-4 w-4" />}
           accent="blue"
         />
         <DashboardStatCard
-          label="Campaign spend"
+          label="Ad spend"
           value={usd(summary.chargedCents)}
-          hint="Includes 3% card processing"
+          hint={summary.serviceFeeCents ? `Includes ${usd(summary.serviceFeeCents)} service fee` : "What Meta has spent"}
           icon={<TrendingUp className="h-4 w-4" />}
           accent="teal"
         />
@@ -105,11 +112,22 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <DashboardStatCard
           label="Cost per lead"
           value={summary.costPerLeadCents !== null ? usd(summary.costPerLeadCents) : "—"}
-          hint="Spend incl. 3% ÷ leads"
+          hint="Ad spend ÷ leads"
           icon={<Target className="h-4 w-4" />}
           accent="amber"
         />
       </div>
+
+      {summary.autoPause && summary.pacedDailyCents !== null && !low && (
+        <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-4 py-3 text-sm">
+          <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-red" />
+          <span>
+            We manage your campaign to use your budget by <strong>{dayLabel(summary.targetDate)}</strong>, at about{" "}
+            <strong>{usd0(summary.pacedDailyCents)}/day</strong>. Daily budgets are adjusted gradually so delivery stays
+            steady, and your campaign never spends more than you&apos;ve added.
+          </span>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-1">
@@ -148,26 +166,48 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add spend"}
               </Button>
             </div>
+            {typedCents >= MIN_DOLLARS * 100 && (
+              <p className="text-xs text-muted-foreground">
+                {usd(typedCents)} adds {usd(typedCents - Math.round(typedCents * PROCESSING_RATE))} to your ad budget after the
+                3% card processing fee.
+              </p>
+            )}
             {error && <p className="text-xs text-rose-600">{error}</p>}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Spend by month</CardTitle>
-            <CardDescription>What your campaign spent, and what that came to with fees.</CardDescription>
+            <CardTitle>How your budget is used</CardTitle>
+            <CardDescription>Everything you&apos;ve added, and where it&apos;s gone.</CardDescription>
           </CardHeader>
-          <CardContent>
-            {summary.months.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No spend yet.</p>
-            ) : (
+          <CardContent className="space-y-4">
+            <dl className="space-y-1.5 text-sm">
+              {(
+                [
+                  ["Added", usd(summary.paidCents), ""],
+                  ["Card processing (3%)", `− ${usd(summary.processingFeeCents)}`, "text-muted-foreground"],
+                  ["Available for ads", usd(summary.availableCents), "font-medium border-t border-slate-100 pt-1.5"],
+                  ["Ad spend", `− ${usd(summary.spendCents)}`, "text-muted-foreground"],
+                  ...(summary.serviceFeeCents
+                    ? [["Service fee (20% over $15k/mo)", `− ${usd(summary.serviceFeeCents)}`, "text-muted-foreground"]]
+                    : []),
+                  ["Budget left", usd(summary.balanceCents), cn("font-semibold border-t border-slate-100 pt-1.5", low && "text-rose-600")],
+                ] as [string, string, string][]
+              ).map(([label, value, cls]) => (
+                <div key={label} className={cn("flex justify-between gap-4", cls)}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {summary.months.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
                       <th className="py-1.5 font-medium">Month</th>
                       <th className="py-1.5 text-right font-medium">Ad spend</th>
-                      <th className="py-1.5 text-right font-medium">3% card fee</th>
                       <th className="py-1.5 text-right font-medium">Service fee</th>
                       <th className="py-1.5 text-right font-medium">Total</th>
                     </tr>
@@ -177,7 +217,6 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                       <tr key={m.month} className="border-t border-slate-100">
                         <td className="py-1.5">{monthLabel(m.month)}</td>
                         <td className="py-1.5 text-right">{usd(m.spendCents)}</td>
-                        <td className="py-1.5 text-right">{usd(m.cardFeeCents)}</td>
                         <td className="py-1.5 text-right">{m.serviceFeeCents ? usd(m.serviceFeeCents) : "—"}</td>
                         <td className="py-1.5 text-right font-medium">{usd(m.chargedCents)}</td>
                       </tr>
@@ -193,8 +232,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          Campaign spend includes a 3% card processing fee. Ad spend over $15,000 in a calendar month is subject to a 20%
-          service fee, charged only on the amount over $15,000. Spend figures come from Meta and can lag by a few hours.
+          3% of each payment covers card processing. That&apos;s Stripe&apos;s fee, passed through at cost; it isn&apos;t
+          revenue for Advertisely. Ad spend over $15,000 in a calendar month is subject to a 20% service fee, charged only
+          on the amount over $15,000. Spend figures come from Meta and can lag by a few hours.
         </span>
       </p>
     </div>

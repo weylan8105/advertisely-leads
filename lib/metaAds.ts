@@ -493,3 +493,8 @@ export async function setCampaignStatus(campaignId: string, status: "ACTIVE" | "
 export async function setCampaignSpendCap(campaignId: string, spendCapCents: number): Promise<void> {
   await graphPost(encodeURIComponent(campaignId), { spend_cap: String(Math.round(spendCapCents)) });
 }
+
+/** Set a campaign's (CBO) or ad set's daily budget, in cents. */
+export async function setDailyBudget(objectId: string, dailyBudgetCents: number): Promise<void> {
+  await graphPost(encodeURIComponent(objectId), { daily_budget: String(Math.round(dailyBudgetCents)) });
+}
