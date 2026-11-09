@@ -123,15 +123,14 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-4 py-3 text-sm">
           <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-brand-red" />
           <span>
-            {summary.periods.length ? (
+            {summary.periods.some((p) => Date.parse(p.endsAt) > Date.now()) ? (
               <>
-                Each week of ad spend you pay for is spent over that week (your current one runs through{" "}
+                Each payment you add is spent over the 7 days after it&apos;s made (your latest runs through{" "}
                 <strong>
                   {new Date(Math.max(...summary.periods.map((p) => Date.parse(p.endsAt)))).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}
                 </strong>
-                ), and any one-time amounts by <strong>{dayLabel(summary.targetDate)}</strong>. That&apos;s about{" "}
-                <strong>{usd0(summary.pacedDailyCents)}/day</strong>. Daily budgets are adjusted gradually so delivery stays
-                steady, and your campaign never spends more than you&apos;ve added.
+                ). That&apos;s about <strong>{usd0(summary.pacedDailyCents)}/day</strong>. Daily budgets are adjusted gradually so
+                delivery stays steady, and your campaign never spends more than you&apos;ve added.
               </>
             ) : (
               <>
