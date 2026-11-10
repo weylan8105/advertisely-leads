@@ -314,14 +314,14 @@ export async function deliverLeadToOwner(
     data: { isAdvertiser: true },
   });
 
-  // Forward to the advertiser's own CRM (Ringy) when they've connected one, so
-  // their exclusive leads flow straight into their dialer in addition to their
-  // Advertisely CRM. Keyed off a per-user RINGY Integration; never block delivery
-  // on a forward failure — log the outcome either way.
+  // Forward to the Ringy CRM of whoever got the lead (the advertiser, or the
+  // downline it was routed to — uplines with Ringy link it for their team from
+  // the Team page), so it lands in their dialer as well as their Advertisely
+  // CRM. Keyed off a per-user RINGY Integration; never block delivery on a
+  // forward failure — log the outcome either way.
   try {
-    // Only leads the advertiser keeps go to their own dialer.
-    const ringy = routedToTeam ? null : await prisma.integration.findUnique({
-      where: { userId_type: { userId: ownerUserId, type: "RINGY" } },
+    const ringy = await prisma.integration.findUnique({
+      where: { userId_type: { userId: recipientId, type: "RINGY" } },
       select: { enabled: true, config: true, id: true },
     });
     const cfg = ringy?.config as Partial<RingyConfig> | undefined;
@@ -337,7 +337,7 @@ export async function deliverLeadToOwner(
             leadId,
             type: "LEAD_RECEIVED",
             body: result.ok
-              ? `Forwarded to advertiser's Ringy CRM${result.vendorResponseId ? ` (ref ${result.vendorResponseId})` : ""}.`
+              ? `Forwarded to ${routedToTeam ? `${who}'s` : "advertiser's"} Ringy CRM${result.vendorResponseId ? ` (ref ${result.vendorResponseId})` : ""}.`
               : `Ringy forward failed — ${result.error ?? "unknown error"}.`,
           },
         });

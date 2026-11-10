@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { hasRingy } from "@/lib/ringyAccess";
 import { ensureReferralCode } from "@/lib/referral";
 import { uplineTeamFor } from "@/lib/upline";
 import { quotaCountsThisWeek } from "@/lib/teamQuota";
@@ -59,6 +60,18 @@ export async function GET() {
   const advertiserTeam = !!org?.owner?.isAdvertiser;
   const credits = advertiserTeam && org ? await teamBalances(org.ownerId) : new Map<string, number>();
 
+  // Ringy: a manager who has Ringy can link it for downlines (lib/ringyAccess.ts).
+  const canLinkRingy = canManageTeam(ctx.role) && (await hasRingy(userId));
+  const ringyRows = await prisma.integration.findMany({
+    where: {
+      type: "RINGY",
+      enabled: true,
+      userId: { in: canLinkRingy ? memberships.map((m) => m.userId) : [userId] },
+    },
+    select: { userId: true },
+  });
+  const ringyOn = new Set(ringyRows.map((r) => r.userId));
+
   const members = memberships.map((m) => ({
     membershipId: m.id,
     userId: m.userId,
@@ -73,6 +86,7 @@ export async function GET() {
     weeklyLeadQuota: m.weeklyLeadQuota ?? 0,
     quotaThisWeek: quotaThisWeek.get(m.userId) ?? 0,
     leadCount: countByUser[m.userId] ?? 0,
+    ringyConnected: ringyOn.has(m.userId),
     isSelf: m.userId === userId,
   }));
 
@@ -105,6 +119,7 @@ export async function GET() {
     canManage: manage,
     goldmineOff: ctx.goldmineOff,
     advertiserTeam,
+    canLinkRingy,
     members,
     invitations,
     teams: myTeams.map((t) => ({

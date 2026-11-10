@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { RingyKeysModal } from "@/components/RingyKeysModal";
 
 const PKG_LABELS: Record<string, string> = {
   "blue-collar-iul": "Blue-Collar IUL",
@@ -60,6 +61,8 @@ interface Member {
   weeklyLeadQuota: number;
   quotaThisWeek: number;
   leadCount: number;
+  /** Their Ringy CRM is connected (shown to managers who can link Ringy). */
+  ringyConnected: boolean;
   isSelf: boolean;
 }
 interface Invitation {
@@ -77,6 +80,8 @@ interface TeamData {
   goldmineOff: boolean;
   /** The team owner runs their own campaign (advertiser). */
   advertiserTeam: boolean;
+  /** The caller manages this team and has Ringy, so they can link it for downlines. */
+  canLinkRingy: boolean;
   members: Member[];
   invitations: Invitation[];
   teams: { id: string; name: string; role: string }[];
@@ -97,6 +102,7 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [ringyFor, setRingyFor] = useState<Member | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"AGENT" | "ADMIN">("AGENT");
@@ -633,6 +639,27 @@ export default function TeamPage() {
                 </button>
               )}
 
+              {/* Managers who have Ringy can connect it for their downlines. */}
+              {data.canLinkRingy && m.role !== "OWNER" && !m.isSelf && (
+                <button
+                  onClick={() => setRingyFor(m)}
+                  title={
+                    m.ringyConnected
+                      ? "Ringy connected: their leads also go to their Ringy. Click to manage."
+                      : "Send this member's leads into their Ringy CRM"
+                  }
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
+                    m.ringyConnected
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-slate-50 text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Link2 className="h-3 w-3" />
+                  {m.ringyConnected ? "Ringy ✓" : "Link Ringy"}
+                </button>
+              )}
+
               {canManage && m.role !== "OWNER" && (
                 <div className="flex items-center gap-1">
                   {m.role === "AGENT" ? (
@@ -848,6 +875,17 @@ export default function TeamPage() {
           <p className={cn("mt-3 text-sm", joinMsg.ok ? "text-emerald-600" : "text-rose-600")}>{joinMsg.text}</p>
         )}
       </Card>
+
+      {ringyFor && (
+        <RingyKeysModal
+          userId={ringyFor.userId}
+          name={ringyFor.name ?? ringyFor.email}
+          connected={ringyFor.ringyConnected}
+          endpoint="/api/team/ringy"
+          description="Every lead from your campaign that goes to this member will also be sent into their Ringy account."
+          onClose={(changed) => { setRingyFor(null); if (changed) load(); }}
+        />
+      )}
     </div>
   );
 }
