@@ -511,6 +511,11 @@ const ABCA_EVENT_BOOST = {
   enabled: true,
   endsAt: new Date("2026-11-12T06:00:00Z"), // Nov 12 00:00 America/Chicago (CST)
   oneInEveryToRotation: 4, // every 4th matching lead → normal rotation; the other 3 → house
+  // Paused for the rest of Nov 10 (owner request): Ryan's team is calling old
+  // leads today, so ABCA leads go through the normal rotation and the buyers
+  // with open orders (Luke) get their usual share. The boost resumes on its own
+  // at Nov 11 00:00 America/Chicago and still ends Nov 12.
+  pausedUntil: new Date("2026-11-11T06:00:00Z"),
 };
 const ABCA_EVENT_CURSOR_ID = "abca:event-boost";
 
@@ -530,6 +535,7 @@ function isAbcaOriginalLead(source: string | null): boolean {
 async function routeAbcaEventBoost(lead: { id: string; source: string | null }): Promise<boolean> {
   if (!prisma || !ABCA_EVENT_BOOST.enabled) return false;
   if (Date.now() >= ABCA_EVENT_BOOST.endsAt.getTime()) return false; // window closed → normal
+  if (Date.now() < ABCA_EVENT_BOOST.pausedUntil.getTime()) return false; // paused today → normal
   if (!isAbcaOriginalLead(lead.source)) return false;
 
   const row = await prisma.distributionCursor.findUnique({ where: { id: ABCA_EVENT_CURSOR_ID } });
