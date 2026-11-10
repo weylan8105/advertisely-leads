@@ -26,6 +26,8 @@ import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { PnlSummary } from "@/components/dashboard/PnlSummary";
 import { AdvertiserSpendPanel } from "@/components/dashboard/AdvertiserSpendPanel";
+import { LeadCostPanel } from "@/components/dashboard/LeadCostPanel";
+import { LEAD_COST_OWNER_EMAILS } from "@/lib/owners";
 import { TeamAdSpendCard } from "@/components/dashboard/TeamAdSpendCard";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { ActivityDashboard } from "@/components/dashboard/ActivityDashboard";
@@ -63,6 +65,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const userName = (session?.user?.name ?? "there").split(" ")[0];
   const isAdmin = (session?.user as any)?.role === "ADMIN";
+  // Ryan (+ Weylan) see the Enhanced Wealth lead-cost panel instead of the
+  // standard advertiser budget panel.
+  const isOwner = isAdmin && LEAD_COST_OWNER_EMAILS.includes(String((session?.user as any)?.email ?? "").toLowerCase());
   const [dash, setDash] = useState<DashData | null>(null);
   // Advertisers (clients running their own campaign) get their budget up top.
   const [adSpend, setAdSpend] = useState<AdSpendSummary | null>(null);
@@ -190,9 +195,9 @@ export default function DashboardPage() {
 
       <PageHeader
         eyebrow={`Welcome back, ${userName}`}
-        title={adSpend ? "Your campaign at a glance." : "Your IUL pipeline at a glance."}
+        title={adSpend && !isOwner ? "Your campaign at a glance." : "Your IUL pipeline at a glance."}
         description={
-          adSpend
+          adSpend && !isOwner
             ? "Your campaign budget, spend and cost per lead, plus your leads, tasks for today, and pipeline performance."
             : "Real-time view of your purchased leads, tasks for today, and pipeline performance across the last 7 days."
         }
@@ -215,7 +220,8 @@ export default function DashboardPage() {
 
       {isAdmin && <DeliveredLeadsTracker />}
 
-      {adSpend && <AdvertiserSpendPanel summary={adSpend} />}
+      {isOwner && <LeadCostPanel />}
+      {adSpend && !isOwner && <AdvertiserSpendPanel summary={adSpend} />}
 
       <TeamAdSpendCard />
 

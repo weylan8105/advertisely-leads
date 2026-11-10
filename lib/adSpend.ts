@@ -276,7 +276,7 @@ export interface ClientPayment {
   processingFeeCents: number; // 3% on card payments, 0 otherwise
 }
 
-export const MANUAL_PAYMENT_METHODS = ["zelle", "check", "wire", "cash", "other"] as const;
+export const MANUAL_PAYMENT_METHODS = ["zelle", "check", "wire", "bank", "cash", "other"] as const;
 
 /** Payments an admin recorded for money sent outside Stripe. No card fee. */
 async function manualPayments(userId: string): Promise<ClientPayment[]> {

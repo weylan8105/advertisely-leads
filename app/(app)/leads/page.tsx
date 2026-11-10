@@ -13,6 +13,8 @@ import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBan
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { AdminLeadVolumeCard } from "@/components/leads/AdminLeadVolumeCard";
 import { AdvertiserLeadVolumeCard } from "@/components/leads/AdvertiserLeadVolumeCard";
+import { LeadCostReminderModal } from "@/components/leads/LeadCostReminderModal";
+import { LEAD_COST_OWNER_EMAILS } from "@/lib/owners";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,6 +37,7 @@ function LeadsPageInner() {
   // ?q= is a search from the top bar.
   const initialQuery = useSearchParams().get("q") ?? "";
   const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const isOwner = isAdmin && LEAD_COST_OWNER_EMAILS.includes(String((session?.user as any)?.email ?? "").toLowerCase());
   const [view, setView] = useState<"list" | "kanban">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +129,7 @@ function LeadsPageInner() {
 
   return (
     <div>
+      <LeadCostReminderModal enabled={isOwner} />
       <PageHeader
         title="Lead CRM / Pipeline"
         description="Manage every IUL lead you've purchased — statuses, tasks, notes, dispositions, and consent records all in one place."
