@@ -102,14 +102,14 @@ export function LeadCostPanel() {
     setError(null);
     setCplSaving(true);
     try {
-      const res = await fetch("/api/admin/cpl", {
-        method: "POST",
+      const res = await fetch("/api/admin/lead-cost", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cplDollars: dollars }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Could not set the cost per lead.");
-      const r = await fetch("/api/admin/lead-cost").then((x) => x.json());
-      setLedger(r.ledger);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not set the cost per lead.");
+      setLedger(data.ledger);
       setCplInput("");
     } catch (e) {
       setError((e as Error).message);
@@ -175,16 +175,22 @@ export function LeadCostPanel() {
             {ok && <p className="flex items-center gap-1.5 text-xs text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> {ok}</p>}
             {error && <p className="text-xs text-rose-600">{error}</p>}
 
-            {ledger.cplSource === "none" && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                <p className="mb-2 flex items-start gap-1.5 text-xs text-amber-800"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> No cost per lead yet, so the total shows $0. Set one to see what you owe.</p>
+            {ledger.cplSource !== "meta" && (
+              <div className={cn("rounded-md border p-3", ledger.cplSource === "none" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50")}>
+                <p className={cn("mb-2 flex items-start gap-1.5 text-xs", ledger.cplSource === "none" ? "text-amber-800" : "text-muted-foreground")}>
+                  {ledger.cplSource === "none" ? (
+                    <><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> No cost per lead set yet, so the total shows $0. Set the rate you&apos;re billed to see what you owe.</>
+                  ) : (
+                    <><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Billed at {usd(ledger.cplCents ?? 0)} per lead. Change it here anytime.</>
+                  )}
+                </p>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                    <input inputMode="decimal" value={cplInput} onChange={(e) => setCplInput(e.target.value)} placeholder="CPL" className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red" aria-label="Cost per lead" />
+                    <input inputMode="decimal" value={cplInput} onChange={(e) => setCplInput(e.target.value)} placeholder={ledger.cplCents != null ? (ledger.cplCents / 100).toFixed(2) : "cost per lead"} className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red" aria-label="Cost per lead" />
                   </div>
                   <Button variant="outline" onClick={saveCpl} disabled={cplSaving}>
-                    {cplSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set CPL"}
+                    {cplSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set rate"}
                   </Button>
                 </div>
               </div>

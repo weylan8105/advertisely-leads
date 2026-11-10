@@ -27,6 +27,29 @@ export const LOCKIN_END = new Date("2026-11-12T06:00:00Z");
 
 export const LEAD_COST_PAYMENT_METHOD = "bank";
 
+// The lead-cost reimbursement rate Ryan is billed per lead, stored on its own
+// (a DistributionCursor KV row) and kept SEPARATE from the global pricing CPL
+// (User.manualCplCents), which drives the marketplace fresh-lead price floor —
+// so setting Ryan's pay-back rate never moves lead sale prices.
+const LEAD_COST_CPL_KEY = "leadcost:cpl-cents";
+
+export async function getLeadCostCplCents(): Promise<number | null> {
+  if (!prisma) return null;
+  const row = await prisma.distributionCursor.findUnique({ where: { id: LEAD_COST_CPL_KEY } });
+  const n = parseInt(row?.lastRecipientId ?? "", 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+export async function setLeadCostCplCents(cents: number | null): Promise<void> {
+  if (!prisma) return;
+  const val = cents == null ? "" : String(Math.round(cents));
+  await prisma.distributionCursor.upsert({
+    where: { id: LEAD_COST_CPL_KEY },
+    update: { lastRecipientId: val },
+    create: { id: LEAD_COST_CPL_KEY, lastRecipientId: val },
+  });
+}
+
 export interface LeadCostTeamLine {
   userId: string;
   name: string;
@@ -71,20 +94,16 @@ export interface LeadCostLedger {
   payments: LeadCostPayment[];
 }
 
-/** Resolve the global manual CPL (stored on the oldest admin, like /api/admin/cpl). */
-async function manualCplCents(): Promise<number | null> {
-  if (!prisma) return null;
-  const admin = await prisma.user.findFirst({
-    where: { role: "ADMIN", manualCplCents: { not: null } },
-    orderBy: { createdAt: "asc" },
-    select: { manualCplCents: true },
-  });
-  return admin?.manualCplCents ?? null;
-}
-
-/** Current blended CPL at cost, Meta-live when configured, else the manual value. */
+/**
+ * The per-lead rate Ryan is billed. A rate he's set (the lead-cost KV) wins —
+ * it's what he's agreed to pay, and it's stable. Otherwise fall back to the live
+ * blended ad CPL (ad spend across both accounts ÷ leads generated) as an
+ * estimate. Never the global pricing CPL — that would move sale prices.
+ */
 export async function resolveCplCents(): Promise<{ cplCents: number | null; cplSource: LeadCostLedger["cplSource"] }> {
   if (!prisma) return { cplCents: null, cplSource: "none" };
+  const manual = await getLeadCostCplCents();
+  if (manual != null) return { cplCents: manual, cplSource: "manual" };
   const spend = await getBlendedAdSpend7d().catch(() => null);
   const leads7d = await prisma.lead.count({
     where: { receivedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, trashedAt: null },
@@ -92,8 +111,7 @@ export async function resolveCplCents(): Promise<{ cplCents: number | null; cplS
   if (spend?.configured && spend.spendCents > 0 && leads7d > 0) {
     return { cplCents: Math.round(spend.spendCents / leads7d), cplSource: "meta" };
   }
-  const manual = await manualCplCents();
-  return manual != null ? { cplCents: manual, cplSource: "manual" } : { cplCents: null, cplSource: "none" };
+  return { cplCents: null, cplSource: "none" };
 }
 
 /** House + team leads (delivered, not sold to outside buyers) received in a window. */

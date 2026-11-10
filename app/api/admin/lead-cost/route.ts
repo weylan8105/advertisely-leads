@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getHouseAccount } from "@/lib/house";
-import { buildLeadCostLedger, LEAD_COST_PAYMENT_METHOD } from "@/lib/leadCostLedger";
+import { buildLeadCostLedger, setLeadCostCplCents, LEAD_COST_PAYMENT_METHOD } from "@/lib/leadCostLedger";
 import { isOwnerEmail } from "@/lib/owners";
 
 export const runtime = "nodejs";
@@ -56,6 +56,29 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  const ledger = await buildLeadCostLedger().catch(() => null);
+  return NextResponse.json({ ok: true, ledger });
+}
+
+/**
+ * PATCH /api/admin/lead-cost { cplDollars } — set (or clear with null) the per-lead
+ * reimbursement rate Ryan is billed. Stored separately from the global pricing CPL,
+ * so it never affects marketplace lead prices.
+ */
+export async function PATCH(req: NextRequest) {
+  const by = await requireOwner();
+  if (!by) return NextResponse.json({ error: "Owner access required" }, { status: 403 });
+  if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  const body = (await req.json().catch(() => ({}))) as { cplDollars?: number | null; clear?: boolean };
+  if (body.clear === true || body.cplDollars == null) {
+    await setLeadCostCplCents(null);
+  } else {
+    const dollars = Number(body.cplDollars);
+    if (!Number.isFinite(dollars) || dollars < 0 || dollars > 10_000) {
+      return NextResponse.json({ error: "Enter a cost per lead between $0 and $10,000." }, { status: 400 });
+    }
+    await setLeadCostCplCents(Math.round(dollars * 100));
+  }
   const ledger = await buildLeadCostLedger().catch(() => null);
   return NextResponse.json({ ok: true, ledger });
 }
