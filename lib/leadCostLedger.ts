@@ -10,8 +10,9 @@ import { getHouseAccount } from "./house";
  * house CRM) or to one of his team's agents during (and after) the Enhanced
  * Wealth lock-in. Each such lead costs the current blended cost-per-lead (ad
  * spend across both ad accounts ÷ leads generated) — the same "at cost" number
- * the weekly house-lead invoice uses. Leads sold to outside buyers are NOT his
- * cost and are excluded.
+ * the weekly house-lead invoice uses. Leads sold to outside buyers, and leads
+ * that belong to other advertiser clients' own campaigns, are NOT his cost and
+ * are excluded.
  *
  * owed  = (house + team leads since the lock-in start) × CPL
  * paid  = the bank transfers Ryan records (AdSpendPayment)
@@ -128,7 +129,9 @@ async function countFrontedLeads(houseUserId: string, since: Date, until: Date) 
 
   const grouped = await prisma.lead.groupBy({
     by: ["assignedUserId"],
-    where: { ...base, NOT: { assignedUserId: houseUserId } },
+    // Other advertisers (clients running their own campaign) pay for their own
+    // leads, so those are never part of what Ryan fronts.
+    where: { ...base, NOT: { assignedUserId: houseUserId }, assignedUser: { isAdvertiser: false } },
     _count: { _all: true },
   });
   const team = grouped.reduce((s, g) => s + g._count._all, 0);

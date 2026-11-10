@@ -202,7 +202,7 @@ export function LeadCostPanel() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>{ledger.lockInActive ? "Lock-in leads so far" : "Leads since Nov 9"}</CardTitle>
-            <CardDescription>Every fresh lead delivered to you or your team since the lock-in began{ledger.cplCents !== null ? `, at ${usd(ledger.cplCents)} each` : ""}. Leads sold to outside buyers aren&apos;t included.</CardDescription>
+            <CardDescription>Every fresh lead delivered to you or your team since the lock-in began{ledger.cplCents !== null ? `, at ${usd(ledger.cplCents)} each` : ""}. Leads sold to outside buyers and clients&apos; own campaign leads aren&apos;t included.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <dl className="space-y-1.5 text-sm">
