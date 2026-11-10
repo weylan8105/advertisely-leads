@@ -140,7 +140,7 @@ export function LeadCostPanel() {
           </div>
           <div className="mt-1.5 text-xs text-muted-foreground">
             {coveredPct}% covered
-            {ledger.cplCents !== null ? ` · ${usd(ledger.cplCents)} per lead (${ledger.cplSource === "meta" ? "live blended CPL" : "manual"})` : " · set a cost per lead below"}
+            {ledger.cplCents !== null ? ` · ${usd(ledger.cplCents)} per lead${ledger.cplSource === "meta" ? "" : " (stored rate)"}` : " · set a cost per lead below"}
             {ledger.lockInActive ? ` · lock-in through ${dateLabel(ledger.lockInEndIso)}` : ""}
           </div>
         </CardContent>
@@ -148,7 +148,7 @@ export function LeadCostPanel() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard label="Leads fronted" value={ledger.totalLeads} hint={`${ledger.leadsToHouse} yours · ${ledger.leadsToTeam} team`} icon={<Users className="h-4 w-4" />} accent="violet" />
-        <DashboardStatCard label="Cost per lead" value={ledger.cplCents !== null ? usd(ledger.cplCents) : "—"} hint={ledger.cplSource === "meta" ? "Live blended CPL" : ledger.cplSource === "manual" ? "Manual CPL" : "Not set"} icon={<Target className="h-4 w-4" />} accent="amber" />
+        <DashboardStatCard label="Avg. cost per lead" value={ledger.cplCents !== null ? usd(ledger.cplCents) : "—"} hint={ledger.cplSource === "meta" ? "Ad spend ÷ leads" : ledger.cplSource === "manual" ? "Stored rate (ad spend not read)" : "Not set"} icon={<Target className="h-4 w-4" />} accent="amber" />
         <DashboardStatCard label="Total lead cost" value={usd(ledger.owedCents)} hint="Leads × cost per lead" icon={<TrendingUp className="h-4 w-4" />} accent="blue" />
         <DashboardStatCard label="Paid back" value={usd(ledger.paidCents)} hint="Your recorded transfers" icon={<Wallet className="h-4 w-4" />} accent="emerald" />
         <DashboardStatCard label={owes ? "Still owed" : "Balance"} value={owes ? usd(-ledger.balanceCents) : usd(ledger.balanceCents)} hint={owes ? "Pay this to settle" : "Credit on account"} icon={<Banknote className="h-4 w-4" />} accent={owes ? "amber" : "emerald"} />
@@ -210,7 +210,9 @@ export function LeadCostPanel() {
                 ["Your CRM", `${ledger.leadsToHouse} leads`, ""],
                 ["Your team", `${ledger.leadsToTeam} leads`, ""],
                 ["Total fronted", `${ledger.totalLeads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
-                ["Cost per lead", ledger.cplCents !== null ? usd(ledger.cplCents) : "—", "text-muted-foreground"],
+                ...(ledger.adSpendCents !== null && ledger.leadsGenerated !== null
+                  ? [[`Avg. cost per lead (${usd0(ledger.adSpendCents)} ad spend ÷ ${ledger.leadsGenerated} leads)`, usd(ledger.cplCents ?? 0), "text-muted-foreground"]]
+                  : [["Cost per lead", ledger.cplCents !== null ? usd(ledger.cplCents) : "—", "text-muted-foreground"]]),
                 ["Total lead cost", usd(ledger.owedCents), "font-semibold"],
                 ["Paid back", `− ${usd(ledger.paidCents)}`, "text-muted-foreground"],
                 [owes ? "Still owed" : "Credit", owes ? usd(-ledger.balanceCents) : usd(ledger.balanceCents), cn("font-semibold border-t border-slate-100 pt-1.5", owes && "text-rose-600")],
@@ -282,7 +284,7 @@ export function LeadCostPanel() {
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          Enhanced Wealth is fronting the ad cost for these leads. The total is the leads delivered to you and your team since the lock-in began, at the current blended cost per lead. Record each bank transfer you send and your balance updates — no receipts or verification needed.
+          Enhanced Wealth is fronting the ad cost for these leads. The total is the leads delivered to you and your team since the lock-in began, at the average cost per lead: what our own campaigns have spent since the lock-in began, divided by the leads they produced. Record each bank transfer you send and your balance updates — no receipts or verification needed.
         </span>
       </p>
     </div>

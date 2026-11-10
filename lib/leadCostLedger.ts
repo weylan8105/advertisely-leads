@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { getBlendedAdSpend7d } from "./metaInsights";
+import { isClientCampaign } from "./metaInsights";
 import { getHouseAccount } from "./house";
 
 /**
@@ -8,9 +8,10 @@ import { getHouseAccount } from "./house";
  *
  * Ryan fronts the ad cost for every fresh lead Advertisely delivers to him (his
  * house CRM) or to one of his team's agents during (and after) the Enhanced
- * Wealth lock-in. Each such lead costs the current blended cost-per-lead (ad
- * spend across both ad accounts ÷ leads generated) — the same "at cost" number
- * the weekly house-lead invoice uses. Leads sold to outside buyers, and leads
+ * Wealth lock-in. Each such lead costs the average cost per lead: ad spend on
+ * our own campaigns since the lock-in began ÷ the leads those campaigns
+ * produced, the same "ad spend ÷ leads" every advertiser's panel shows. Leads
+ * sold to outside buyers, and leads
  * that belong to other advertiser clients' own campaigns, are NOT his cost and
  * are excluded.
  *
@@ -74,6 +75,10 @@ export interface LeadCostLedger {
 
   cplCents: number | null;
   cplSource: "meta" | "manual" | "none";
+  // Behind a live average: ad spend on our own campaigns since the lock-in
+  // began, and the leads that spend produced. Null when Meta can't be read.
+  adSpendCents: number | null;
+  leadsGenerated: number | null;
 
   leadsToHouse: number; // delivered to Ryan's own CRM
   leadsToTeam: number; // delivered to his agents (not sold to buyers)
@@ -95,24 +100,116 @@ export interface LeadCostLedger {
   payments: LeadCostPayment[];
 }
 
+// ─── Average cost per lead (ad spend ÷ leads) ────────────────────────────────
+
+const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
+// Read-only use of whichever ads token production has. Deliberately not tied to
+// META_ADS_ACCESS_TOKEN alone: setting that one also switches on the CPL price
+// floor and the house-lead invoice amounts.
+const ADS_TOKEN = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_MANAGE_TOKEN;
+const LEDGER_START_YMD = "2026-11-09";
+const EWWS_CAMPAIGN_PREFIX = "EWWS";
+
+// The ad accounts our own campaigns run in. Enhanced Wealth and ABCA are the two
+// the rest of the app reads; the Essential Workers account is read when the
+// token can see it, and its leads are left out of the average when it can't.
+const HOUSE_AD_ACCOUNTS: { key: "ew" | "abca" | "ewws"; id: string; tz: string; required: boolean }[] = [
+  { key: "ew", id: process.env.ENHANCED_WEALTH_AD_ACCOUNT_ID || "2254810101392917", tz: "America/Los_Angeles", required: true },
+  { key: "abca", id: process.env.ABCA_AD_ACCOUNT_ID || "2126340781245705", tz: "America/Chicago", required: true },
+  { key: "ewws", id: process.env.EWWS_AD_ACCOUNT_ID || "1270766111922960", tz: "America/Los_Angeles", required: false },
+];
+
+const ymdIn = (d: Date, tz: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+
+/** One account's spend since the lock-in began, client campaigns left out. Throws when Meta won't answer. */
+async function accountSpendCents(accountId: string, tz: string, now: Date): Promise<number> {
+  const account = `act_${accountId.replace(/^act_/, "").replace(/\D/g, "")}`;
+  const until = ymdIn(now, tz);
+  const range = encodeURIComponent(JSON.stringify({ since: LEDGER_START_YMD, until: until < LEDGER_START_YMD ? LEDGER_START_YMD : until }));
+  let next: string | null =
+    `${GRAPH}/${account}/insights?level=campaign&fields=campaign_name,spend&time_range=${range}&limit=200&access_token=${encodeURIComponent(ADS_TOKEN!)}`;
+  let cents = 0;
+  for (let page = 0; next && page < 10; page++) {
+    const res: Response = await fetch(next, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) throw new Error(json?.error?.message ?? `Graph API ${res.status}`);
+    for (const row of json.data ?? []) {
+      if (isClientCampaign(row.campaign_name)) continue; // clients pay for their own campaigns
+      cents += Math.round((parseFloat(String(row.spend ?? "0")) || 0) * 100);
+    }
+    next = json.paging?.next ?? null;
+  }
+  return cents;
+}
+
+interface HouseAdSpend {
+  spendCents: number;
+  ewwsRead: boolean;
+}
+
+let houseSpendCache: { at: number; value: HouseAdSpend | null } | null = null;
+const HOUSE_SPEND_TTL_MS = 5 * 60_000;
+
+/** Ad spend on our own campaigns since the lock-in began. Null when it can't be read. Five-minute cache. */
+async function houseAdSpend(now: Date): Promise<HouseAdSpend | null> {
+  if (!ADS_TOKEN) return null;
+  if (houseSpendCache && Date.now() - houseSpendCache.at < HOUSE_SPEND_TTL_MS) return houseSpendCache.value;
+  const results = await Promise.all(
+    HOUSE_AD_ACCOUNTS.map((a) =>
+      accountSpendCents(a.id, a.tz, now).then(
+        (cents) => ({ a, cents, ok: true as const }),
+        (err) => {
+          console.warn(`[lead-cost] ad spend for ${a.key}: ${(err as Error).message}`);
+          return { a, cents: 0, ok: false as const };
+        },
+      ),
+    ),
+  );
+  const value: HouseAdSpend | null = results.some((r) => r.a.required && !r.ok)
+    ? null
+    : {
+        spendCents: results.reduce((sum, r) => sum + r.cents, 0),
+        ewwsRead: results.find((r) => r.a.key === "ewws")?.ok ?? false,
+      };
+  houseSpendCache = { at: Date.now(), value };
+  return value;
+}
+
 /**
- * The per-lead rate Ryan is billed. The live blended ad CPL (last-7d ad spend
- * across both accounts ÷ leads generated) wins whenever Meta ad spend can be
- * read, so the average tracks itself. Until the Meta ads env vars are set, the
- * stored lead-cost rate (the KV) stands in. Never the global pricing CPL — that
- * would move sale prices.
+ * The per-lead rate Ryan is billed: the average cost per lead, worked out the
+ * way every advertiser's is (ad spend ÷ leads). Spend is what our own campaigns
+ * have spent since the lock-in began; leads are the ones those campaigns
+ * produced in that time, whoever they went to. When Meta can't be read the
+ * stored lead-cost rate stands in. Never the global pricing CPL, which would
+ * move sale prices.
  */
-export async function resolveCplCents(): Promise<{ cplCents: number | null; cplSource: LeadCostLedger["cplSource"] }> {
-  if (!prisma) return { cplCents: null, cplSource: "none" };
-  const spend = await getBlendedAdSpend7d().catch(() => null);
-  if (spend?.configured && spend.spendCents > 0) {
-    const leads7d = await prisma.lead.count({
-      where: { receivedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, trashedAt: null },
-    });
-    if (leads7d > 0) return { cplCents: Math.round(spend.spendCents / leads7d), cplSource: "meta" };
+export async function resolveCplCents(
+  houseUserId: string,
+  now = new Date(),
+): Promise<Pick<LeadCostLedger, "cplCents" | "cplSource" | "adSpendCents" | "leadsGenerated">> {
+  if (!prisma) return { cplCents: null, cplSource: "none", adSpendCents: null, leadsGenerated: null };
+  const spend = await houseAdSpend(now).catch(() => null);
+  if (spend && spend.spendCents > 0) {
+    const [row] = await prisma.$queryRaw<{ n: number; ewws: number }[]>`
+      SELECT COUNT(*)::int AS n,
+             COALESCE(SUM(CASE WHEN COALESCE(l."campaignName", l."utmCampaign", '') ILIKE ${EWWS_CAMPAIGN_PREFIX + "%"} THEN 1 ELSE 0 END), 0)::int AS ewws
+      FROM "Lead" l
+      LEFT JOIN "User" u ON u.id = l."assignedUserId"
+      WHERE l."receivedAt" >= ${LEDGER_START} AND l."receivedAt" < ${now}
+        AND l."trashedAt" IS NULL
+        AND COALESCE(l."campaignName", '') NOT LIKE 'Advertisely Advertiser%'
+        AND COALESCE(l."utmCampaign", '') NOT LIKE 'Advertisely Advertiser%'
+        AND NOT (COALESCE(u."isAdvertiser", false) AND u.id <> ${houseUserId})`;
+    const leads = (row?.n ?? 0) - (spend.ewwsRead ? 0 : row?.ewws ?? 0);
+    if (leads > 0) {
+      return { cplCents: Math.round(spend.spendCents / leads), cplSource: "meta", adSpendCents: spend.spendCents, leadsGenerated: leads };
+    }
   }
   const stored = await getLeadCostCplCents();
-  return stored != null ? { cplCents: stored, cplSource: "manual" } : { cplCents: null, cplSource: "none" };
+  return stored != null
+    ? { cplCents: stored, cplSource: "manual", adSpendCents: null, leadsGenerated: null }
+    : { cplCents: null, cplSource: "none", adSpendCents: null, leadsGenerated: null };
 }
 
 /** House + team leads (delivered, not sold to outside buyers) received in a window. */
@@ -168,7 +265,7 @@ export async function buildLeadCostLedger(now = new Date()): Promise<LeadCostLed
   const house = await getHouseAccount();
   if (!house) return null;
 
-  const { cplCents, cplSource } = await resolveCplCents();
+  const { cplCents, cplSource, adSpendCents, leadsGenerated } = await resolveCplCents(house.userId, now);
 
   const { house: leadsToHouse, team: leadsToTeam, teamLines } = await countFrontedLeads(house.userId, LEDGER_START, now);
   const totalLeads = leadsToHouse + leadsToTeam;
@@ -193,6 +290,8 @@ export async function buildLeadCostLedger(now = new Date()): Promise<LeadCostLed
     nowIso: now.toISOString(),
     cplCents,
     cplSource,
+    adSpendCents,
+    leadsGenerated,
     leadsToHouse,
     leadsToTeam,
     totalLeads,
