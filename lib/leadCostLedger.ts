@@ -95,23 +95,23 @@ export interface LeadCostLedger {
 }
 
 /**
- * The per-lead rate Ryan is billed. A rate he's set (the lead-cost KV) wins —
- * it's what he's agreed to pay, and it's stable. Otherwise fall back to the live
- * blended ad CPL (ad spend across both accounts ÷ leads generated) as an
- * estimate. Never the global pricing CPL — that would move sale prices.
+ * The per-lead rate Ryan is billed. The live blended ad CPL (last-7d ad spend
+ * across both accounts ÷ leads generated) wins whenever Meta ad spend can be
+ * read, so the average tracks itself. Until the Meta ads env vars are set, the
+ * stored lead-cost rate (the KV) stands in. Never the global pricing CPL — that
+ * would move sale prices.
  */
 export async function resolveCplCents(): Promise<{ cplCents: number | null; cplSource: LeadCostLedger["cplSource"] }> {
   if (!prisma) return { cplCents: null, cplSource: "none" };
-  const manual = await getLeadCostCplCents();
-  if (manual != null) return { cplCents: manual, cplSource: "manual" };
   const spend = await getBlendedAdSpend7d().catch(() => null);
-  const leads7d = await prisma.lead.count({
-    where: { receivedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, trashedAt: null },
-  });
-  if (spend?.configured && spend.spendCents > 0 && leads7d > 0) {
-    return { cplCents: Math.round(spend.spendCents / leads7d), cplSource: "meta" };
+  if (spend?.configured && spend.spendCents > 0) {
+    const leads7d = await prisma.lead.count({
+      where: { receivedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, trashedAt: null },
+    });
+    if (leads7d > 0) return { cplCents: Math.round(spend.spendCents / leads7d), cplSource: "meta" };
   }
-  return { cplCents: null, cplSource: "none" };
+  const stored = await getLeadCostCplCents();
+  return stored != null ? { cplCents: stored, cplSource: "manual" } : { cplCents: null, cplSource: "none" };
 }
 
 /** House + team leads (delivered, not sold to outside buyers) received in a window. */
