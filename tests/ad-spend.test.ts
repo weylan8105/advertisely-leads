@@ -60,6 +60,7 @@ vi.setSystemTime(new Date("2026-11-08T18:00:00Z"));
 
 // Meta: one campaign "Advertisely Advertiser - Jace Jensen", $97/day, $500 spent this month.
 let campaignStatus = "ACTIVE";
+let cbo = false; // campaign budget $300/day, two ad sets with $100/day minimums
 const month = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit" })
   .format(new Date())
   .slice(0, 7);
@@ -69,11 +70,15 @@ vi.stubGlobal(
     const json = (data: any) => ({ ok: true, json: async () => ({ data }) });
     if (url.includes("/campaigns?")) {
       return json(url.includes("act_2126340781245705")
-        ? [{ id: "C1", name: "Advertisely Advertiser - Jace Jensen", effective_status: campaignStatus, spend_cap: null }]
+        ? [{ id: "C1", name: "Advertisely Advertiser - Jace Jensen", effective_status: campaignStatus, spend_cap: null, ...(cbo ? { daily_budget: "30000" } : {}) }]
         : []);
     }
     if (url.includes("/insights?")) return json([{ date_start: `${month}-01`, spend: "500.00" }]);
-    if (url.includes("/adsets?")) return json([{ id: "AS1", daily_budget: "9700", effective_status: "ACTIVE" }]);
+    if (url.includes("/adsets?")) {
+      return json(cbo
+        ? [{ id: "AS1", daily_min_spend_target: "10000", effective_status: "ACTIVE" }, { id: "AS2", daily_min_spend_target: "10000", effective_status: "ACTIVE" }]
+        : [{ id: "AS1", daily_budget: "9700", effective_status: "ACTIVE" }]);
+    }
     throw new Error(`unexpected ${url}`);
   }),
 );
@@ -93,6 +98,7 @@ beforeEach(() => {
   team = [];
   updates.length = 0;
   campaignStatus = "ACTIVE";
+  cbo = false;
   setCampaignStatus.mockClear();
   setCampaignSpendCap.mockClear();
   setDailyBudget.mockClear();
@@ -305,5 +311,27 @@ describe("budget management on a campaign the client paused", () => {
     expect(setCampaignSpendCap).toHaveBeenCalledWith("C1", 97_000);
     expect(setCampaignStatus).not.toHaveBeenCalled();
     expect(setDailyBudget).not.toHaveBeenCalled();
+  });
+});
+
+describe("a target date set for the client", () => {
+  it("spends everything left evenly through it, not each payment over its week", async () => {
+    user.adSpendTargetDate = new Date("2026-11-22T00:00:00Z"); // 15 days, today included
+    charges = [paid(1000), paid(2000, { created: Math.floor(Date.now() / 1000) - 3600 })]; // one paid an hour ago
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.targetDateSet).toBe(true);
+    expect(s.periods).toEqual([]);
+    expect(s.pacedDailyCents).toBe(16_066); // ($2,910 available − $500 spent) / 15
+  });
+
+  it("keeps a CBO campaign budget above its ad sets' spend minimums", async () => {
+    cbo = true;
+    user.adSpendTargetDate = new Date("2026-11-22T00:00:00Z");
+    const { enforceAdSpend } = await import("@/lib/adSpend");
+    await enforceAdSpend("JACE");
+    // $470 / 15 days is ~$31/day, but two ad sets at $100 minimum need $200.
+    expect(setDailyBudget).toHaveBeenCalledTimes(1);
+    expect(setDailyBudget).toHaveBeenCalledWith("C1", 20_000);
   });
 });

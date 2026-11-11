@@ -172,7 +172,7 @@ export interface ClientCampaign {
   status: string | null; // effective_status
   dailyBudgetCents: number | null; // active ad sets' budgets, or the campaign budget
   campaignBudgetCents: number | null; // set when the budget is on the campaign (CBO)
-  adsets: { id: string; status: string | null; dailyBudgetCents: number }[];
+  adsets: { id: string; status: string | null; dailyBudgetCents: number; minDailyCents: number }[]; // min = CBO ad set spend minimum
   spendCapCents: number | null;
   lifetimeSpendCents: number;
 }
@@ -231,7 +231,7 @@ async function metaSpend(name: string | null, ids: string[]): Promise<MetaSpend>
       const id = String(c.id);
       const [months, adsets] = await Promise.all([
         graphRows(`${GRAPH}/${id}/insights?fields=spend&date_preset=maximum&time_increment=monthly&limit=100&${tok}`),
-        graphRows(`${GRAPH}/${id}/adsets?fields=id,daily_budget,effective_status&limit=100&${tok}`),
+        graphRows(`${GRAPH}/${id}/adsets?fields=id,daily_budget,daily_min_spend_target,effective_status&limit=100&${tok}`),
       ]);
       let lifetimeSpendCents = 0;
       for (const m of months) {
@@ -255,6 +255,7 @@ async function metaSpend(name: string | null, ids: string[]): Promise<MetaSpend>
           id: String(a.id),
           status: a.effective_status ? String(a.effective_status) : null,
           dailyBudgetCents: parseInt(String(a.daily_budget ?? "0"), 10) || 0,
+          minDailyCents: parseInt(String(a.daily_min_spend_target ?? "0"), 10) || 0,
         })),
         // Meta reports "no limit" as a huge number.
         spendCapCents: cap > 0 && cap < 1e13 ? cap : null,
@@ -450,7 +451,7 @@ export interface AdSpendSummary {
   targetDate: string; // YYYY-MM-DD
   targetDateSet: boolean; // false = defaulting to month end
   pacedDailyCents: number | null;
-  periods: AdSpendPeriod[]; // each ad-spend payment and the week it's spent in
+  periods: AdSpendPeriod[]; // each ad-spend payment and the week it's spent in (none when a target date is set)
   teamFunding: TeamFunding[]; // downlines who added spend (lib/teamAdSpend.ts)
   teamCreditCents: number; // their unspent credit, part of balanceCents
   subscriptions: ClientSubscription[];
@@ -536,7 +537,9 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     .filter((c) => c.status === "ACTIVE" || user.adSpendPausedCampaignIds.includes(c.id))
     .reduce((s, c) => s + (c.dailyBudgetCents ?? 0), 0);
   const targetDate = targetDateFor(user.adSpendTargetDate);
-  const periods = paymentPeriods(payments);
+  const targetDateSet = !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10);
+  // A target date set for the client spends what's left evenly through it; otherwise each payment over its week.
+  const periods = targetDateSet ? [] : paymentPeriods(payments);
   const remaining = affordableSpendCents(balanceCents, thisMonth.spendCents);
 
   const summary: AdSpendSummary = {
@@ -560,7 +563,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     dailyBudgetCents: activeBudget || null,
     daysLeft: activeBudget > 0 ? Math.max(0, Math.floor(balanceCents / activeBudget)) : null,
     targetDate,
-    targetDateSet: !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10),
+    targetDateSet,
     pacedDailyCents: remaining > 0 ? Math.max(MIN_DAILY_BUDGET_CENTS, idealDailyCents(remaining, periods, targetDate)) : null,
     periods,
     teamFunding: team,
@@ -667,13 +670,18 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
     }
     if (pausedByUs.has(c.id)) await setCampaignStatus(c.id, "ACTIVE");
   }
-  // Pace: each payment over the week after it, leftovers by the target date (a week out).
+  // Pace: each payment over the week after it, leftovers by the target date (a week out);
+  // with a target date set, everything left evenly through it.
   const liveNow = s.campaigns.filter((c) => c.status === "ACTIVE" || pausedByUs.has(c.id));
   const ideal = idealDailyCents(allowedCents, s.periods, s.targetDate);
   let paced = 0;
   let dailyTotal = 0;
   for (const c of liveNow) {
-    const daily = pacedDailyBudget(Math.floor(ideal / liveNow.length), 1, c.dailyBudgetCents);
+    // Under CBO the campaign budget has to cover its ad sets' spend minimums.
+    const floor = c.campaignBudgetCents
+      ? c.adsets.filter((a) => a.status === "ACTIVE").reduce((sum, a) => sum + a.minDailyCents, 0)
+      : 0;
+    const daily = Math.max(floor, pacedDailyBudget(Math.floor(ideal / liveNow.length), 1, c.dailyBudgetCents));
     dailyTotal += daily;
     paced += await paceCampaign(c, daily);
   }
