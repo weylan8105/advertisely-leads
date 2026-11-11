@@ -10,6 +10,7 @@
 export const TEXT_VERIFIED_FORM_IDS = new Set<string>([
   "1519246773375371", // EWWS - Nurse Lead Form 11/11 - SMS Verified
   "1405276628037816", // EWWS - Nurse Lead Form 11/11 v2 - LP Questions + SMS Verified
+  "1453178320339815", // EWWS - Blue Collar Lead Form 11/11 v2 - LP Questions + SMS Verified
 ]);
 
 function asObject(value: unknown): Record<string, unknown> | null {
