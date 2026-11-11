@@ -15,6 +15,7 @@ import { CRMIntegrationCard } from "@/components/settings/CRMIntegrationCard";
 import { GoogleSheetsConnectCard } from "@/components/settings/GoogleSheetsConnectCard";
 import { GoogleCalendarConnectCard } from "@/components/settings/GoogleCalendarConnectCard";
 import { SendblueConnectCard } from "@/components/settings/SendblueConnectCard";
+import { RingyConnectCard } from "@/components/settings/RingyConnectCard";
 import { GoldmineSettingsCard } from "@/components/settings/GoldmineSettingsCard";
 import { integrations } from "@/data/integrations";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
@@ -116,6 +117,8 @@ export default function SettingsPage({
                 </div>
               </CardContent>
             </Card>
+
+            <RingyConnectCard />
 
             <SendblueConnectCard />
 

@@ -27,8 +27,30 @@ export function RingyKeysModal({
 }) {
   const [sid, setSid] = useState("");
   const [authToken, setAuthToken] = useState("");
-  const [busy, setBusy] = useState<"save" | "disconnect" | null>(null);
+  const [busy, setBusy] = useState<"save" | "disconnect" | "test" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function sendTest() {
+    setBusy("test"); setErr(null); setTestMsg(null);
+    try {
+      const res = await fetch("/api/integrations/ringy/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setTestMsg(
+        d.ok
+          ? { ok: true, text: `Test lead sent. Ringy accepted it${d.vendorResponseId ? ` (ref ${d.vendorResponseId})` : ""}. Look for "Advertisely Test Lead (delete me)" in Ringy.` }
+          : { ok: false, text: `Ringy didn't take the test lead: ${d.error ?? `HTTP ${res.status}`}` },
+      );
+    } catch (e: any) {
+      setTestMsg({ ok: false, text: e?.message ?? "Couldn't send the test lead." });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function send(method: "POST" | "DELETE", body: Record<string, string>) {
     const res = await fetch(endpoint, {
@@ -103,11 +125,19 @@ export function RingyKeysModal({
             />
           </div>
           {err && <p className="text-xs text-rose-600">{err}</p>}
+          {testMsg && (
+            <p className={testMsg.ok ? "text-xs text-emerald-700" : "text-xs text-rose-600"}>{testMsg.text}</p>
+          )}
           <div className="flex items-center justify-between pt-1">
             {connected ? (
-              <Button size="sm" variant="outline" onClick={disconnect} disabled={!!busy} className="text-rose-600 hover:text-rose-700">
-                {busy === "disconnect" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Disconnect
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={disconnect} disabled={!!busy} className="text-rose-600 hover:text-rose-700">
+                  {busy === "disconnect" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Disconnect
+                </Button>
+                <Button size="sm" variant="outline" onClick={sendTest} disabled={!!busy}>
+                  {busy === "test" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Send test lead
+                </Button>
+              </div>
             ) : <span />}
             <Button size="sm" onClick={save} disabled={!!busy}>
               {busy === "save" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}

@@ -39,3 +39,25 @@ export async function canLinkRingyFor(callerId: string, targetUserId: string): P
   });
   return !!m && m.role !== "OWNER";
 }
+
+/** A clearly fake lead (reserved 555-01xx number) to check someone's Ringy keys. */
+export const RINGY_TEST_LEAD = {
+  name: "Advertisely Test Lead (delete me)",
+  phone: "5555550100",
+  email: "test@advertisely.io",
+  state: "TX",
+  age: 45,
+  occupation: "Test lead from Advertisely, please delete",
+  income: 85000,
+  rawFormData: { monthlyBudget: "$500_–_$1,000", retirementTimeline: "by_55" },
+};
+
+/**
+ * May `callerId` manage `targetUserId`'s Ringy (connect, unlink, send a test
+ * lead)? Themselves, a site admin, or an upline who can link it for them.
+ */
+export async function canManageRingyOf(callerId: string, targetUserId: string, callerRole?: string): Promise<boolean> {
+  if (!targetUserId) return false;
+  if (callerId === targetUserId || callerRole === "ADMIN") return true;
+  return canLinkRingyFor(callerId, targetUserId);
+}

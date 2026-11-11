@@ -328,7 +328,7 @@ export async function deliverLeadToOwner(
     if (ringy?.enabled && isRingyConfigured(cfg)) {
       const full = await prisma.lead.findUnique({
         where: { id: leadId },
-        select: { name: true, phone: true, email: true, state: true, age: true, occupation: true, income: true },
+        select: { name: true, phone: true, email: true, state: true, age: true, occupation: true, income: true, rawFormData: true },
       });
       if (full) {
         const result = await forwardLeadToRingy(full, cfg);

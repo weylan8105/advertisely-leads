@@ -77,3 +77,25 @@ describe("linking Ringy for downlines", () => {
     expect(await canLinkRingyFor("upline", "nobody")).toBe(false);
   });
 });
+
+import { formAnswer } from "@/lib/ringy";
+import { canManageRingyOf } from "@/lib/ringyAccess";
+
+describe("managing someone's Ringy", () => {
+  it("allows yourself, site admins, and uplines with Ringy", async () => {
+    expect(await canManageRingyOf("agent", "agent")).toBe(true);
+    expect(await canManageRingyOf("stranger", "agent", "ADMIN")).toBe(true);
+    expect(await canManageRingyOf("upline", "agent")).toBe(true);
+    expect(await canManageRingyOf("stranger", "agent")).toBe(false);
+    expect(await canManageRingyOf("agent", "upline")).toBe(false);
+  });
+});
+
+describe("Ringy monthly_payment / retire_age", () => {
+  it("reads quiz and Meta form answers, ignoring case and underscores", () => {
+    expect(formAnswer({ monthlyBudget: "$500_–_$1,000" }, ["monthlyBudget"])).toBe("$500 – $1,000");
+    expect(formAnswer({ "Desired Retirement Age": "", retirement_timeline: "by_55" }, ["Desired Retirement Age", "retirementTimeline"])).toBe("by 55");
+    expect(formAnswer({ "when_would_you_ideally_like_to_retire?": "60" }, ["When would you ideally like to retire?"])).toBe("60");
+    expect(formAnswer(null, ["monthlyBudget"])).toBe("");
+  });
+});

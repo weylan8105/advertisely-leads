@@ -21,6 +21,42 @@ export interface RingyLeadFields {
   age: number | null;
   occupation: string | null;
   income: number | null;
+  /** The lead's form answers, for monthly_payment and retire_age. */
+  rawFormData?: unknown;
+}
+
+// Form answers Ringy has fields for, by the names our funnels and Meta forms use.
+const MONTHLY_PAYMENT_KEYS = [
+  "monthlyBudget",
+  "quiz_monthly_contribution",
+  "Desired Monthly Contribution",
+  "How much could you comfortably put towards building your tax-free retirement each month?",
+  "How much could you comfortably put towards building your tax-advantaged retirement each month?",
+];
+const RETIRE_AGE_KEYS = [
+  "retirementTimeline",
+  "Desired Retirement Age",
+  "What age would you ideally like to retire?",
+  "When would you ideally like to retire?",
+  "When would you like to retire?",
+];
+
+const norm = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** First non-empty answer among `keys` (matched ignoring case, spaces and underscores), made readable. */
+export function formAnswer(raw: unknown, keys: string[]): string {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "";
+  const byKey = new Map<string, unknown>();
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const n = norm(k);
+    if (!byKey.has(n) || byKey.get(n) === "") byKey.set(n, v);
+  }
+  for (const k of keys) {
+    const v = byKey.get(norm(k));
+    const text = Array.isArray(v) ? v.join(", ") : v == null ? "" : String(v);
+    if (text.trim()) return text.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  }
+  return "";
 }
 
 export interface RingyResult {
@@ -52,6 +88,8 @@ export async function forwardLeadToRingy(lead: RingyLeadFields, cfg: RingyConfig
     age: lead.age != null ? String(lead.age) : "",
     occupation: lead.occupation ?? "",
     income: lead.income != null ? String(lead.income) : "",
+    monthly_payment: formAnswer(lead.rawFormData, MONTHLY_PAYMENT_KEYS),
+    retire_age: formAnswer(lead.rawFormData, RETIRE_AGE_KEYS),
   };
 
   try {
