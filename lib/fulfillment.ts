@@ -511,11 +511,11 @@ const ABCA_EVENT_BOOST = {
   enabled: true,
   endsAt: new Date("2026-11-12T06:00:00Z"), // Nov 12 00:00 America/Chicago (CST)
   oneInEveryToRotation: 4, // every 4th matching lead → normal rotation; the other 3 → house
-  // Paused for the rest of Nov 10 (owner request): Ryan's team is calling old
-  // leads today, so ABCA leads go through the normal rotation and the buyers
-  // with open orders (Luke) get their usual share. The boost resumes on its own
-  // at Nov 11 00:00 America/Chicago and still ends Nov 12.
-  pausedUntil: new Date("2026-11-11T06:00:00Z"),
+  // Paused from the afternoon of Nov 10 and again for the rest of Nov 11 (owner
+  // request): ABCA leads go through the normal rotation so the buyers with open
+  // orders (Luke) take even turns with the house. The pause now runs to endsAt,
+  // so the boost does not come back before it expires.
+  pausedUntil: new Date("2026-11-12T06:00:00Z"),
 };
 const ABCA_EVENT_CURSOR_ID = "abca:event-boost";
 
