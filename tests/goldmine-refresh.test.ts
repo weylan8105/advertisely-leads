@@ -73,11 +73,16 @@ describe("GET /api/leads?pipeline=goldmine&since", () => {
     expect(prismaMock.lead.findMany).toHaveBeenCalledTimes(2);
   });
 
-  it("since does nothing on the main board", async () => {
-    prismaMock.lead.findMany.mockResolvedValue([{ id: "mine" }]);
-    const d = await get(`since=${encodeURIComponent(new Date().toISOString())}`);
-    expect(d.ids).toBeUndefined();
-    expect(prismaMock.lead.findMany.mock.calls[0][0].where.OR).toBeUndefined();
+  it("the main CRM board refreshes the same way, limited to the agent's own leads", async () => {
+    prismaMock.lead.findMany
+      .mockResolvedValueOnce([{ id: "new" }]) // changed (a lead that just dripped in)
+      .mockResolvedValueOnce([{ id: "mine" }, { id: "new" }]); // ids
+    const d = await get(`since=${encodeURIComponent(new Date(Date.now() - 15_000).toISOString())}`);
+    expect(d.leads).toEqual([{ id: "new" }]);
+    expect(d.ids).toEqual(["mine", "new"]);
+    const where = prismaMock.lead.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({ assignedUserId: "agent", pipeline: "main", trashedAt: null });
+    expect(where.OR).toBeDefined();
   });
 
   it("a member with Goldmine switched off still gets nothing", async () => {

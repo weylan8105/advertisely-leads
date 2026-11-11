@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/types";
+import { useLiveLeads } from "@/lib/useLiveLeads";
 
 interface TeamMember { userId: string; name: string | null; email: string; isSelf?: boolean }
 
@@ -39,9 +40,6 @@ function LeadsPageInner() {
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const isOwner = isAdmin && LEAD_COST_OWNER_EMAILS.includes(String((session?.user as any)?.email ?? "").toLowerCase());
   const [view, setView] = useState<"list" | "kanban">("kanban");
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // Team owners can switch between their own leads and a read-only view of a
   // downline agent's leads. "me" = my own leads (the default for everyone).
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -81,26 +79,10 @@ function LeadsPageInner() {
       .catch(() => {});
   }, []);
 
-  // (Re)load leads for the current view — mine by default, or a downline agent.
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    const url = viewing && viewing !== "me" ? `/api/leads?agent=${encodeURIComponent(viewing)}` : "/api/leads";
-    fetch(url)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((data) => {
-        if (active) setLeads(data.leads ?? []);
-      })
-      .catch((e) => {
-        if (active) setError(e.message);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [viewing]);
+  // Leads for the current view — mine by default, or a downline agent — kept
+  // live: new leads drip in and changes show up every 15 seconds.
+  const leadsUrl = viewing && viewing !== "me" ? `/api/leads?agent=${encodeURIComponent(viewing)}` : "/api/leads";
+  const { leads, setLeads, loading, error } = useLiveLeads(leadsUrl);
 
   // Load the pipeline stages for whichever board is shown (mine, or a downline
   // agent's when a manager is viewing theirs).

@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
  * Optional query params:
  *   - status: filter by UI status label or DB enum (e.g. "New" / "NEW")
  *   - email:  ADMIN only — fetch another user's leads by their account email
- *   - since:  pipeline=goldmine only — the `asOf` from a previous response. Returns
- *             just the leads changed since then plus the ids of every lead still in
- *             Goldmine, so teammates' boards can refresh every few seconds cheaply.
+ *   - since:  the `asOf` from a previous response. Returns just the leads changed
+ *             since then plus the ids of every lead still on the board, so CRM
+ *             boards (15s) and Goldmine (10s) can refresh live cheaply.
  */
 export async function GET(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) {
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     activity: { orderBy: { createdAt: "desc" as const } },
   };
 
-  const since = pipelineParam === "goldmine" ? deltaSince(searchParams.get("since"), asOf) : null;
+  const since = deltaSince(searchParams.get("since"), asOf);
   if (since) {
     const [changed, current] = await Promise.all([
       prisma.lead.findMany({

@@ -10,6 +10,7 @@ import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { ClientOrdersModal } from "@/components/admin/ClientOrdersModal";
 import { ViewAsClientButton } from "@/components/admin/ViewAsClient";
 import { RingyKeysModal } from "@/components/RingyKeysModal";
+import { useLiveLeads } from "@/lib/useLiveLeads";
 import { matchesWords, searchWords } from "@/lib/leadSearch";
 import type { Lead } from "@/types";
 import type { AdSpendSummary } from "@/lib/adSpend";
@@ -533,16 +534,8 @@ export function AdminAccounts() {
 }
 
 function AccountBoardModal({ account, onClose }: { account: Account; onClose: () => void }) {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/leads?email=${encodeURIComponent(account.email)}`)
-      .then((r) => r.json())
-      .then((d) => setLeads(Array.isArray(d.leads) ? d.leads : []))
-      .catch(() => setLeads([]))
-      .finally(() => setLoading(false));
-  }, [account.email]);
+  // Live like the client's own CRM: refreshes every 15 seconds.
+  const { leads, setLeads, loading } = useLiveLeads(`/api/leads?email=${encodeURIComponent(account.email)}`);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
