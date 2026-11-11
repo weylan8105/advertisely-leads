@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem, CalendarClock, Workflow, ChevronDown } from "lucide-react";
+import { X, Phone, Mail, MapPin, ShieldCheck, ClipboardList, RefreshCw, Loader2, Check, StickyNote, DollarSign, Copy, MessageSquare, Gem, CalendarClock, Workflow, ChevronDown, BadgeCheck } from "lucide-react";
 import type { Lead, LeadNote } from "@/types";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -471,6 +471,14 @@ export function LeadDetailModal({
               >
                 {lead.originLabel}
               </span>
+              {lead.textVerified && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                  title="This lead confirmed their phone number with a code sent by text"
+                >
+                  <BadgeCheck className="h-3 w-3" /> Text verified
+                </span>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               {/* Phone icon = call; the number = copy. */}

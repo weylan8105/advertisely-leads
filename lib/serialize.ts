@@ -6,6 +6,7 @@ import type { Lead, LeadStatus, LeadPackageId } from "@/types";
 import { leadPackages } from "@/data/packages";
 import { ageRangeFromRaw } from "./age";
 import { leadOriginLabel } from "./leadOrigin";
+import { isTextVerified } from "@/lib/textVerified";
 
 const STATUS_LABEL: Record<string, LeadStatus> = {
   NEW: "New",
@@ -60,6 +61,7 @@ export function serializeLead(l: any): Lead {
     campaignName: l.campaignName ?? undefined,
     adsetName: l.adsetName ?? undefined,
     adName: l.adName ?? undefined,
+    textVerified: isTextVerified(l) || undefined,
     tags: Array.isArray(l.tags) ? l.tags : [],
     consent: {
       captured: !!l.consentTime,

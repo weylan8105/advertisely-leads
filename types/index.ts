@@ -108,6 +108,8 @@ export interface Lead {
   campaignName?: string;
   adsetName?: string;
   adName?: string;
+  /** Confirmed their phone number with a code texted by Meta's instant form (lib/textVerified.ts). */
+  textVerified?: boolean;
   tags: string[];
   consent: {
     captured: boolean;

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search, CalendarClock, ChevronDown } from "lucide-react";
+import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search, CalendarClock, ChevronDown, BadgeCheck } from "lucide-react";
 import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -640,6 +640,14 @@ export function PipelineBoard({
                             {lead.draftDate && <DraftDateTag date={lead.draftDate} />}
 
                             <div className="mt-1.5 flex flex-wrap gap-1">
+                              {lead.textVerified && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold rounded px-1.5 py-0.5 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                  title="This lead confirmed their phone number with a code sent by text"
+                                >
+                                  <BadgeCheck className="h-2.5 w-2.5" /> Text verified
+                                </span>
+                              )}
                               <span className={cn("text-[10px] rounded px-1.5 py-0.5", leadTypeTagClass(lead.leadType))}>
                                 {lead.leadTypeLabel}
                               </span>
