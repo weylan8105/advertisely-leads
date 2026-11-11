@@ -41,9 +41,14 @@ const ALIASES: Record<string, string[]> = {
   utmMedium: ["utm_medium", "utmmedium"],
   utmCampaign: ["utm_campaign", "utmcampaign"],
   campaignName: ["campaign_name", "campaignname", "campaign"],
-  adsetId: ["adset_id", "adsetid", "adset", "adset_name", "ad_set"],
+  adsetId: ["adset_id", "adsetid", "adset", "ad_set", "ad_set_id"],
   creativeId: ["creative_id", "creativeid", "ad_id", "adid", "creative"],
+  adName: ["ad_name", "adname", "ad name"],
+  adsetName: ["adset_name", "adsetname", "ad_set_name", "adset name"],
 };
+
+// Meta ids (ads, ad sets, leads) are 15-19 digit numbers (newer ad ids have 18).
+const META_ID = /^\d{15,19}$/;
 
 export interface NormalizedInboundLead {
   standardized: {
@@ -65,6 +70,8 @@ export interface NormalizedInboundLead {
     campaignName?: string;
     adsetId?: string;
     creativeId?: string;
+    adName?: string;
+    adsetName?: string;
   };
   packageId: string;
   source: string;
@@ -86,6 +93,22 @@ function asObject(value: unknown): Record<string, unknown> | null {
     try { obj = JSON.parse(value); } catch { return null; }
   }
   return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : null;
+}
+
+/**
+ * GHL's attribution for the submission that triggered this webhook (its
+ * `lastAttributionSource`, falling back to the first touch), when it was a
+ * Facebook lead ad. GHL puts the ad name in utmContent and the ad set name in
+ * utmMedium there; nothing else on the payload carries them.
+ */
+export function ghlAdAttribution(body: Record<string, unknown>): { adId: string; adName: string; adsetName: string } | null {
+  const contact = asObject(body?.contact);
+  for (const src of [body?.lastAttributionSource, contact?.lastAttributionSource, body?.attributionSource, contact?.attributionSource]) {
+    const a = asObject(src);
+    if (!a?.adId) continue;
+    return { adId: String(a.adId).trim(), adName: toStringValue(a.utmContent), adsetName: toStringValue(a.utmMedium) };
+  }
+  return null;
 }
 
 /**
@@ -163,6 +186,12 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
   const incomeMatch = incomeRaw.replace(/,/g, "").match(/\d+/);
   const income = incomeMatch ? parseInt(incomeMatch[0], 10) : undefined;
 
+  // Which ad the lead came from. The quiz funnel passes Meta's ad id as
+  // utm_content ({{ad.id}} in the ad's URL), so that counts as the ad id too.
+  const ghlAd = ghlAdAttribution(body);
+  const utmContent = lookup["utm_content"] || lookup["utmcontent"] || "";
+  const creativeId = pick("creativeId") || ghlAd?.adId || (META_ID.test(utmContent) ? utmContent : "");
+
   const requestedPackage = pick("packageId");
   const basePackage = requestedPackage && findPackage(requestedPackage)
     ? requestedPackage
@@ -204,7 +233,9 @@ export function normalizeInboundLead(body: Record<string, unknown>): NormalizedI
       utmCampaign: pick("utmCampaign") || undefined,
       campaignName: pick("campaignName") || undefined,
       adsetId: pick("adsetId") || undefined,
-      creativeId: pick("creativeId") || undefined,
+      creativeId: creativeId || undefined,
+      adName: (pick("adName") || ghlAd?.adName) || undefined,
+      adsetName: (pick("adsetName") || ghlAd?.adsetName) || undefined,
     },
     packageId,
     // Display label only (not used in routing). Prefer an explicit form name

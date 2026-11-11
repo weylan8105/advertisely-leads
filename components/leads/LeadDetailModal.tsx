@@ -776,6 +776,25 @@ export function LeadDetailModal({
             </div>
           </div>
 
+          {/* Which ad brought the lead in (admins only; agents don't see ad plumbing). */}
+          {context === "admin" && (lead.campaignName || lead.adsetName || lead.adName) && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Ad attribution</div>
+              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                {(
+                  [["Campaign", lead.campaignName], ["Ad set", lead.adsetName], ["Ad", lead.adName]] as [string, string | undefined][]
+                )
+                  .filter(([, v]) => v)
+                  .map(([k, v]) => (
+                    <div key={k} className="flex w-full justify-between gap-3 border-b border-slate-100 py-1.5">
+                      <span className="text-muted-foreground">{k}</span>
+                      <span className="font-medium text-right break-words">{v}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* Text the lead (iMessage/SMS via Sendblue). */}
           <LeadMessages leadId={lead.id} leadName={lead.name} />
 

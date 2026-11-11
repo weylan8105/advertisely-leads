@@ -57,6 +57,9 @@ export function serializeLead(l: any): Lead {
     stageRank: l.stageRank ?? undefined,
     workingUserId: l.workingUserId ?? undefined,
     source: l.source,
+    campaignName: l.campaignName ?? undefined,
+    adsetName: l.adsetName ?? undefined,
+    adName: l.adName ?? undefined,
     tags: Array.isArray(l.tags) ? l.tags : [],
     consent: {
       captured: !!l.consentTime,

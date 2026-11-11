@@ -29,9 +29,11 @@ export type LeadAdColumns = {
   utmCampaign?: string | null;
   adsetId?: string | null;
   creativeId?: string | null;
+  adName?: string | null;
+  adsetName?: string | null;
 };
 
-type LeadAd = Pick<MetaLeadDetail, "ad_id" | "adset_id" | "campaign_id" | "campaign_name">;
+type LeadAd = Pick<MetaLeadDetail, "ad_id" | "ad_name" | "adset_id" | "adset_name" | "campaign_id" | "campaign_name">;
 
 /**
  * What a CRM event needs to know about an instant form lead. `note` says how the
@@ -68,7 +70,7 @@ export async function listFormLeads(formId: string, token: string, since: Date):
 
 /** The campaign and ad Meta has on file for a form lead. */
 async function fetchLeadAd(leadId: string, token: string): Promise<LeadAd> {
-  const qs = new URLSearchParams({ fields: "ad_id,adset_id,campaign_id,campaign_name", access_token: token });
+  const qs = new URLSearchParams({ fields: "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name", access_token: token });
   const res = await fetch(`${GRAPH}/${encodeURIComponent(leadId)}?${qs}`, { cache: "no-store" });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || data?.error) throw new Error(data?.error?.message ?? `Graph API ${res.status}`);
@@ -82,6 +84,8 @@ export function adColumnsToFill(lead: LeadAdColumns, ad: LeadAd): LeadAdColumns 
   if (!lead.utmCampaign && ad.campaign_name) fill.utmCampaign = ad.campaign_name;
   if (!lead.adsetId && ad.adset_id) fill.adsetId = ad.adset_id;
   if (!lead.creativeId && ad.ad_id) fill.creativeId = ad.ad_id;
+  if (!lead.adName && ad.ad_name) fill.adName = ad.ad_name;
+  if (!lead.adsetName && ad.adset_name) fill.adsetName = ad.adset_name;
   return fill;
 }
 

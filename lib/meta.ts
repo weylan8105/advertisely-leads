@@ -34,7 +34,9 @@ export interface MetaLeadDetail {
   id: string;
   created_time: string;
   ad_id?: string;
+  ad_name?: string;
   adset_id?: string;
+  adset_name?: string;
   campaign_id?: string;
   campaign_name?: string;
   form_id: string;
@@ -42,7 +44,7 @@ export interface MetaLeadDetail {
 }
 
 // Meta leaves the ad and campaign off a lead unless they're asked for by name.
-export const META_LEAD_FIELDS = "id,created_time,ad_id,adset_id,campaign_id,campaign_name,form_id,field_data";
+export const META_LEAD_FIELDS = "id,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,field_data";
 
 /**
  * Verify the X-Hub-Signature-256 header Meta sends on every webhook delivery.

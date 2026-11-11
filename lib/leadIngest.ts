@@ -52,7 +52,9 @@ export async function ingestLeadFromFields(opts: {
   meta?: {
     campaignId?: string;
     adsetId?: string;
+    adsetName?: string;
     adId?: string;
+    adName?: string;
     createdTime?: Date;
     campaignName?: string;
     formId?: string;
@@ -118,7 +120,9 @@ export async function ingestLeadFromFields(opts: {
       campaignName: opts.meta?.campaignName,
       utmCampaign: opts.meta?.campaignName,
       adsetId: opts.meta?.adsetId,
+      adsetName: opts.meta?.adsetName,
       creativeId: opts.meta?.adId,
+      adName: opts.meta?.adName,
       consentMethod: "TCPA_WEB_FORM",
       consentTime: opts.meta?.createdTime ?? new Date(),
       // The form and campaign ids are what CRM events and Ad Performance read.

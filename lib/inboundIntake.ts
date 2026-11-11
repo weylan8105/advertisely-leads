@@ -1,3 +1,4 @@
+import { fillAdNames } from "@/lib/adNames";
 import { prisma } from "@/lib/prisma";
 import type { NormalizedInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
@@ -70,7 +71,9 @@ export async function createInboundLead(
         tags: lead.tags,
         campaignName: lead.attribution.campaignName,
         adsetId: lead.attribution.adsetId,
+        adsetName: lead.attribution.adsetName,
         creativeId: lead.attribution.creativeId,
+        adName: lead.attribution.adName,
         utmSource: lead.attribution.utmSource,
         utmMedium: lead.attribution.utmMedium,
         utmCampaign: lead.attribution.utmCampaign,
@@ -105,6 +108,10 @@ export async function createInboundLead(
   } catch (err) {
     return { status: "failed", error: (err as Error).message.slice(0, 200) };
   }
+
+  // Which ad the lead came from, by name, when the connector only sent the id
+  // (the quiz funnel). Best effort; the lead carries on without it.
+  await fillAdNames(record);
 
   // Advertiser-exclusive routing: when the connector tags this lead with an
   // owner, it belongs solely to that advertiser. Deliver it straight into their

@@ -104,6 +104,10 @@ export interface Lead {
   /** Teammate working this lead (initials badge on the card). */
   workingUserId?: string;
   source: string;
+  /** Meta attribution (admins see these on the lead card). */
+  campaignName?: string;
+  adsetName?: string;
+  adName?: string;
   tags: string[];
   consent: {
     captured: boolean;

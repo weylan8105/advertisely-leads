@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
   const packageId = searchParams.get("packageId");
   const source = searchParams.get("source");
   const campaign = searchParams.get("campaign");
+  const ad = searchParams.get("ad");
   const occupation = searchParams.get("occupation");
   const status = searchParams.get("status");
   const dateFrom = searchParams.get("dateFrom"); // YYYY-MM-DD (lead generated on/after)
@@ -58,10 +59,10 @@ export async function GET(req: NextRequest) {
   const sortByRaw = searchParams.get("sortBy") ?? "receivedAt";
   const SORT_FIELD: Record<string, string> = {
     name: "name", state: "state", occupation: "occupation", age: "age",
-    campaign: "campaignName", source: "source", assigned: "assignedUserId", receivedAt: "receivedAt",
+    campaign: "campaignName", ad: "adName", source: "source", assigned: "assignedUserId", receivedAt: "receivedAt",
     delivered: "assignedAt",
   };
-  const NULLABLE = new Set(["occupation", "age", "campaign", "assigned", "delivered"]);
+  const NULLABLE = new Set(["occupation", "age", "campaign", "ad", "assigned", "delivered"]);
   const sortField = SORT_FIELD[sortByRaw] ?? "receivedAt";
   const orderBy: any = NULLABLE.has(sortByRaw)
     ? { [sortField]: { sort: sortDir, nulls: "last" } }
@@ -75,6 +76,7 @@ export async function GET(req: NextRequest) {
   if (packageId && packageId !== "all") where.packageId = packageId;
   if (source && source !== "all") where.source = source;
   if (campaign && campaign !== "all") where.campaignName = campaign;
+  if (ad && ad !== "all") where.adName = ad;
   if (occupation && occupation !== "all") where.occupation = occupation;
   if (status && status !== "all") where.status = status.toUpperCase().replace(/ /g, "_");
 
@@ -106,7 +108,7 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const [rows, total, assignedCount, matchedCount, srcRows, campRows, occRows] = await Promise.all([
+  const [rows, total, assignedCount, matchedCount, srcRows, campRows, adRows, occRows] = await Promise.all([
     prisma.lead.findMany({
       where,
       orderBy,
@@ -119,6 +121,7 @@ export async function GET(req: NextRequest) {
     // Distinct filter options across the WHOLE database (not just this page).
     prisma.lead.findMany({ distinct: ["source"], select: { source: true } }),
     prisma.lead.findMany({ distinct: ["campaignName"], select: { campaignName: true } }),
+    prisma.lead.findMany({ distinct: ["adName"], select: { adName: true } }),
     prisma.lead.findMany({ distinct: ["occupation"], select: { occupation: true } }),
   ]);
 
@@ -140,6 +143,8 @@ export async function GET(req: NextRequest) {
     source: l.source,
     originLabel: leadOriginLabel(l.source, l.rawFormData),
     campaignName: l.campaignName,
+    adName: l.adName,
+    adsetName: l.adsetName,
     receivedAt: l.receivedAt,
     assignedAt: l.assignedAt,
     orderId: l.orderId,
@@ -156,6 +161,7 @@ export async function GET(req: NextRequest) {
     counts: { total, assigned: assignedCount, unassigned: total - assignedCount },
     sources: clean(srcRows.map((r) => r.source)),
     campaigns: clean(campRows.map((r) => r.campaignName)),
+    ads: clean(adRows.map((r) => r.adName)),
     occupations: clean(occRows.map((r) => r.occupation)),
   });
 }

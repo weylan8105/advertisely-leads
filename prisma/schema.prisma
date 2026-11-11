@@ -234,6 +234,10 @@ model Lead {
   campaignName     String?
   adsetId          String?
   creativeId       String?
+  // Ad and ad set names, so admins can see which ad a lead came from without a
+  // Meta lookup. GHL sends them in its attribution; Meta sends them on the lead.
+  adName           String?
+  adsetName        String?
   utmSource        String?
   utmMedium        String?
   utmCampaign      String?

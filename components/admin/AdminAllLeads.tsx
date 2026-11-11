@@ -22,13 +22,14 @@ interface AdminLead {
   id: string; name: string; phone: string; email: string; state: string;
   age: number | null; ageRange?: string | null; occupation: string | null; income: number | null; packageName: string;
   status: string; source: string; originLabel: string; campaignName: string | null; receivedAt: string;
+  adName: string | null; adsetName: string | null;
   assignedAt: string | null;
   assignedTo: { name: string | null; email: string } | null;
 }
 interface Counts { total: number; assigned: number; unassigned: number; }
 
 const DEFAULTS = {
-  pkg: "all", source: "all", campaign: "all", occupation: "all",
+  pkg: "all", source: "all", campaign: "all", ad: "all", occupation: "all",
   dateFrom: "", dateTo: "", deliveredFrom: "", deliveredTo: "",
   ageMin: "", ageMax: "", incomeMin: "", search: "",
 };
@@ -46,6 +47,7 @@ export function AdminAllLeads({
   const [matched, setMatched] = useState(0);
   const [sources, setSources] = useState<string[]>([]);
   const [campaigns, setCampaigns] = useState<string[]>([]);
+  const [ads, setAds] = useState<string[]>([]);
   const [occupations, setOccupations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export function AdminAllLeads({
     if (f.pkg !== "all") qs.set("packageId", f.pkg);
     if (f.source !== "all") qs.set("source", f.source);
     if (f.campaign !== "all") qs.set("campaign", f.campaign);
+    if (f.ad !== "all") qs.set("ad", f.ad);
     if (f.occupation !== "all") qs.set("occupation", f.occupation);
     if (f.dateFrom) qs.set("dateFrom", f.dateFrom);
     if (f.dateTo) qs.set("dateTo", f.dateTo);
@@ -99,6 +102,7 @@ export function AdminAllLeads({
         setMatched(d.matched ?? (d.leads?.length ?? 0));
         if (d.sources?.length) setSources(d.sources);
         if (d.campaigns?.length) setCampaigns(d.campaigns);
+        if (d.ads?.length) setAds(d.ads);
         if (d.occupations?.length) setOccupations(d.occupations);
       })
       .catch(() => setLeads([]))
@@ -267,6 +271,15 @@ export function AdminAllLeads({
             </SelectContent>
           </Select>
         )}
+        {ads.length > 0 && (
+          <Select value={f.ad} onValueChange={(v) => set("ad", v)}>
+            <SelectTrigger className="w-[200px] h-9"><SelectValue placeholder="Ad" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All ads</SelectItem>
+              {ads.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         {occupations.length > 0 && (
           <Select value={f.occupation} onValueChange={(v) => set("occupation", v)}>
             <SelectTrigger className="w-[170px] h-9"><SelectValue placeholder="Occupation" /></SelectTrigger>
@@ -333,6 +346,7 @@ export function AdminAllLeads({
               {sortHead("Occupation", "occupation", "hidden md:table-cell")}
               {sortHead("Age", "age", "hidden lg:table-cell")}
               {sortHead("Campaign", "campaign", "hidden lg:table-cell")}
+              {sortHead("Ad", "ad", "hidden lg:table-cell")}
               {sortHead("Source", "source", "hidden xl:table-cell")}
               {sortHead("CRM", "assigned")}
               {sortHead("Generated", "receivedAt", "hidden md:table-cell")}
@@ -342,11 +356,11 @@ export function AdminAllLeads({
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-10">
+              <TableRow><TableCell colSpan={11} className="text-center py-10">
                 <Loader2 className="h-5 w-5 animate-spin inline text-muted-foreground" />
               </TableCell></TableRow>
             ) : leads.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-10 text-sm text-muted-foreground">
+              <TableRow><TableCell colSpan={11} className="text-center py-10 text-sm text-muted-foreground">
                 <Database className="h-5 w-5 mx-auto mb-2 opacity-40" />
                 No leads match these filters.
               </TableCell></TableRow>
@@ -385,6 +399,16 @@ export function AdminAllLeads({
                   <TableCell className="hidden md:table-cell text-sm">{l.occupation ?? "—"}</TableCell>
                   <TableCell className="hidden lg:table-cell text-sm">{l.ageRange || l.age || "—"}</TableCell>
                   <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">{l.campaignName ?? "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell text-xs">
+                    {l.adName ? (
+                      <>
+                        <div className="text-foreground">{l.adName}</div>
+                        {l.adsetName && <div className="text-muted-foreground">{l.adsetName}</div>}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">{l.source}</TableCell>
                   <TableCell className="text-sm">
                     {l.assignedTo ? (
