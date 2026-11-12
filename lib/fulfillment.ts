@@ -11,6 +11,14 @@ import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 import { leadOrigin } from "@/lib/leadOrigin";
+import {
+  TEMP_ROTATION_GUEST,
+  routeEwTextVerifiedToGuest,
+  getRotationGuest,
+  guestLicensedFor,
+  isAbcaLandingPageLead,
+  assignLeadToGuest,
+} from "@/lib/tempRotationGuest";
 
 /**
  * Attempt to fulfill one order by finding unassigned leads matching its filters.
@@ -583,6 +591,9 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // Owner-only pages: Enhanced Wealth + Essential Workers (EWWS) instant-form
   // leads go 100% to the house (Ryan) — never to a buyer, overflow admin, or
   // team. Runs before all buyer distribution; the quiz funnels fall through.
+  // TEMP_ROTATION_GUEST (Nov 2026): text-verified Enhanced Wealth Blue Collar
+  // leads alternate Ryan / Kyle while the toggle in lib/tempRotationGuest.ts is on.
+  if (await routeEwTextVerifiedToGuest(lead)) return;
   if (await routePageLeadToHouse(lead)) return;
 
   // Replacements get FIRST claim (owner directive, Oct 2026): a lead owed to a
@@ -661,6 +672,13 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
   const rotation = [...buyerIds, ...adminIds];
 
+  // TEMP_ROTATION_GUEST (Nov 2026): Kyle is one more slot in the ABCA
+  // landing-page round-robin while the toggle in lib/tempRotationGuest.ts is on.
+  const guest = TEMP_ROTATION_GUEST.enabled && isAbcaLandingPageLead(lead.source) ? await getRotationGuest() : null;
+  const guestSlot =
+    guest && guestLicensedFor(guest.licensedStates, lead.state) && !rotation.includes(guest.userId) ? guest : null;
+  if (guestSlot) rotation.push(guestSlot.userId);
+
   if (rotation.length > 0) {
     const cursorKey = `st:${lead.state}`;
     const cursor = await prisma.distributionCursor.findUnique({ where: { id: cursorKey } });
@@ -675,6 +693,13 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     // Start at the slot AFTER whoever got the last lead; take the first that accepts.
     for (let step = 1; step <= rotation.length; step++) {
       const rid = rotation[(lastIdx + step) % rotation.length];
+      if (guestSlot && rid === guestSlot.userId) {
+        if (await assignLeadToGuest(leadId, guestSlot, "ABCA landing-page round-robin")) {
+          await setCursor(rid);
+          return;
+        }
+        continue;
+      }
       const adminSlot = adminById.get(rid);
       if (adminSlot) {
         // An admin's overflow turn (fresh-only). Replacements already had first
