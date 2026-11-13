@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "@/lib/ringy";
-import { canManageRingyOf, RINGY_TEST_LEAD } from "@/lib/ringyAccess";
+import { canManageRingyOf, ringyTestLead } from "@/lib/ringyAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ringy isn't connected for this account." }, { status: 400 });
   }
 
-  const result = await forwardLeadToRingy(RINGY_TEST_LEAD, cfg);
+  const result = await forwardLeadToRingy(ringyTestLead(), cfg);
   if (result.ok) await prisma.integration.update({ where: { id: row.id }, data: { lastUsedAt: new Date() } });
   return NextResponse.json(
     { ok: result.ok, status: result.status ?? null, vendorResponseId: result.vendorResponseId ?? null, error: result.error ?? null },

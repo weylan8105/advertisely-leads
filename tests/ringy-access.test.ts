@@ -165,3 +165,13 @@ describe("Ringy payload field names", () => {
     expect(body.retire_by).toBe("by 60");
   });
 });
+
+describe("ringyTestLead", () => {
+  it("uses a reserved 555-01xx number and a timestamped name, so Ringy can't merge repeat tests", async () => {
+    const { ringyTestLead } = await import("@/lib/ringyAccess");
+    const a = ringyTestLead(new Date("2026-11-13T20:05:00Z"));
+    expect(a.phone).toMatch(/^55555501\d\d$/);
+    expect(a.name).toBe("Advertisely Test Lead Nov 13, 2:05 PM (delete me)");
+    expect(a.rawFormData).toBeDefined();
+  });
+});

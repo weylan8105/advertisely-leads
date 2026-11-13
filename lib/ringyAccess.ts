@@ -40,7 +40,11 @@ export async function canLinkRingyFor(callerId: string, targetUserId: string): P
   return !!m && m.role !== "OWNER";
 }
 
-/** A clearly fake lead (reserved 555-01xx number) to check someone's Ringy keys. */
+/**
+ * A clearly fake lead (reserved 555-01xx number) to check someone's Ringy keys.
+ * Send ringyTestLead() rather than this directly: Ringy merges leads with the
+ * same phone number, so a repeat test with one fixed number never shows up.
+ */
 export const RINGY_TEST_LEAD = {
   name: "Advertisely Test Lead (delete me)",
   phone: "5555550100",
@@ -57,6 +61,13 @@ export const RINGY_TEST_LEAD = {
     "How much could you comfortably put towards building your tax-free retirement each month? (old)": "$500 – $1,000",
   },
 };
+
+/** A fresh test lead each time: its own 555-01xx number and the time in the name. */
+export function ringyTestLead(now = new Date()) {
+  const nn = String(Math.floor(Math.random() * 100)).padStart(2, "0");
+  const when = now.toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return { ...RINGY_TEST_LEAD, name: `Advertisely Test Lead ${when} (delete me)`, phone: `55555501${nn}` };
+}
 
 /**
  * May `callerId` manage `targetUserId`'s Ringy (connect, unlink, send a test
