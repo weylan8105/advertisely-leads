@@ -12,6 +12,7 @@ import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
+import { SHARED_POOL, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, type ClientSlot } from "@/lib/sharedPool";
 import {
   TEMP_ROTATION_GUEST,
   routeEwTextVerifiedToGuest,
@@ -600,8 +601,13 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // TEMP_ROTATION_GUEST (Nov 2026): text-verified Enhanced Wealth Blue Collar
   // leads take turns between Ryan and the guests (Kyle, Angelo) while the toggle
   // in lib/tempRotationGuest.ts is on.
-  if (await routeEwTextVerifiedToGuest(lead)) return;
-  if (await routePageLeadToHouse(lead)) return;
+  // SHARED_POOL (Nov 2026): Enhanced Wealth Blue Collar and ABCA quiz leads go
+  // through the round-robin below, advertiser clients included (lib/sharedPool.ts).
+  const pool = SHARED_POOL.enabled ? sharedPoolOf(lead) : null;
+  if (pool !== "ew") {
+    if (await routeEwTextVerifiedToGuest(lead)) return;
+    if (await routePageLeadToHouse(lead)) return;
+  }
 
   // Replacements get FIRST claim (owner directive, Oct 2026): a lead owed to a
   // paying client as an approved replacement outranks filling outstanding orders
@@ -685,7 +691,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // HOUSE_PAUSE: while Ryan is away the guests also take turns on the Blue
   // Collar page leads (Enhanced Wealth, text-verified, EWWS) that now come here.
   const guestTakesTurn =
-    isAbcaLandingPageLead(lead.source) || (isHousePaused() && lead.packageId === "blue-collar-iul");
+    isAbcaLandingPageLead(lead.source) || pool !== null || (isHousePaused() && lead.packageId === "blue-collar-iul");
   const guests = TEMP_ROTATION_GUEST.enabled && guestTakesTurn ? await getRotationGuests() : [];
   const guestById = new Map<string, (typeof guests)[number]>();
   for (const g of guests) {
@@ -693,6 +699,17 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     if (!guestLicensedFor(g.licensedStates, lead.state) || rotation.includes(g.userId)) continue;
     guestById.set(g.userId, g);
     rotation.push(g.userId);
+  }
+
+  // SHARED_POOL: every advertiser client with ad budget left for one lead is a
+  // slot too; their turn is charged at the source campaign's cost per lead.
+  const clientById = new Map<string, ClientSlot>();
+  if (pool) {
+    for (const c of await sharedClientSlots(lead.state, pool)) {
+      if (rotation.includes(c.userId)) continue; // already a buyer / admin / guest slot
+      clientById.set(c.userId, c);
+      rotation.push(c.userId);
+    }
   }
 
   if (rotation.length > 0) {
@@ -718,6 +735,14 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
         }
         continue;
       }
+      const clientSlot = clientById.get(rid);
+      if (clientSlot && pool) {
+        if (await deliverSharedLeadToClient(leadId, clientSlot, pool)) {
+          await setCursor(rid);
+          return;
+        }
+        continue;
+      }
       const adminSlot = adminById.get(rid);
       if (adminSlot) {
         // An admin's overflow turn (fresh-only). Replacements already had first
@@ -733,6 +758,10 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
       // That buyer's order filled concurrently — advance to the next slot.
     }
   }
+
+  // SHARED_POOL: an Enhanced Wealth lead nobody could take goes to the house as
+  // before (routePageLeadToHouse does nothing while HOUSE_PAUSE holds it).
+  if (pool === "ew" && (await routePageLeadToHouse(lead))) return;
 
   // Not claimed by any buyer order, and no admin under their weekly target took
   // it → leave it in the BANK (unassigned) as sellable stock for its state.

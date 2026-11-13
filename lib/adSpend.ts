@@ -24,6 +24,9 @@ export const SERVICE_FEE_THRESHOLD_CENTS = 1_500_000; // $15,000 of spend per ca
 export const MIN_TOP_UP_CENTS = 10_000; // $100
 export const MAX_TOP_UP_CENTS = 5_000_000; // $50,000
 export const AD_SPEND_KIND = "ad-spend"; // Stripe metadata.kind on top-ups
+// AdSpendPayment.method for a shared-pool lead charge (negative amount): counted
+// as spend, never as a payment (lib/sharedPool.ts).
+export const SHARED_LEAD_METHOD = "shared-lead";
 
 export const CLIENT_CAMPAIGN_PREFIX = "Advertisely Advertiser - ";
 
@@ -282,7 +285,10 @@ export const MANUAL_PAYMENT_METHODS = ["zelle", "check", "wire", "bank", "cash",
 /** Payments an admin recorded for money sent outside Stripe. No card fee. */
 async function manualPayments(userId: string): Promise<ClientPayment[]> {
   if (!prisma) return [];
-  const rows = await prisma.adSpendPayment.findMany({ where: { userId }, orderBy: { receivedAt: "desc" } });
+  const rows = await prisma.adSpendPayment.findMany({
+    where: { userId, method: { not: SHARED_LEAD_METHOD } },
+    orderBy: { receivedAt: "desc" },
+  });
   return rows.map((r) => ({
     id: r.id,
     at: r.receivedAt.toISOString(),
@@ -291,6 +297,16 @@ async function manualPayments(userId: string): Promise<ClientPayment[]> {
     method: r.method,
     processingFeeCents: 0,
   }));
+}
+
+/** What shared-pool leads have cost this client, in cents (a positive number). */
+async function sharedLeadCharges(userId: string): Promise<number> {
+  if (!prisma) return 0;
+  const agg = await prisma.adSpendPayment.aggregate({
+    where: { userId, method: SHARED_LEAD_METHOD },
+    _sum: { amountCents: true },
+  });
+  return -(agg._sum.amountCents ?? 0);
 }
 
 // The account's charges from the last year, shared across clients for a minute.
@@ -437,7 +453,8 @@ export interface AdSpendSummary {
   payments: ClientPayment[]; // what funds the campaign: ad-spend card payments + Zelle etc.
   otherStripePayments: ClientPayment[]; // service subscription, lead orders: not ad budget
   months: MonthCharge[]; // newest first
-  spendCents: number; // Meta spend
+  spendCents: number; // Meta spend + shared-pool lead charges
+  sharedLeadCents: number; // of which: leads from the shared pool (lib/sharedPool.ts)
   serviceFeeCents: number;
   chargedCents: number; // spend + service fees
   balanceCents: number; // available − charged
@@ -520,6 +537,8 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     }),
     teamFunding(user.id).catch(() => [] as TeamFunding[]),
   ]);
+  // Leads from the shared pool, charged at that campaign's cost per lead.
+  const sharedCents = await sharedLeadCharges(user.id).catch(() => 0);
   if (!stripe) errors.push("Stripe isn't connected.");
   // A failed read must never look like a $0 balance (and pause a campaign).
   if (READ_TOKEN && !meta.campaigns.length && !errors.length) errors.push("No campaign found for this client.");
@@ -533,7 +552,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   const payments = [...cardPayments.adSpend, ...otherPayments, ...teamPayments].sort((a, b) => b.at.localeCompare(a.at));
   const paidCents = payments.reduce((s, p) => s + p.amountCents, 0);
   const processing = payments.reduce((s, p) => s + p.processingFeeCents, 0);
-  const chargedCents = sum("chargedCents");
+  const chargedCents = sum("chargedCents") + sharedCents;
   const balanceCents = paidCents - processing - chargedCents;
   const activeBudget = meta.campaigns
     .filter((c) => c.status === "ACTIVE" || user.adSpendPausedCampaignIds.includes(c.id))
@@ -554,14 +573,15 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     payments,
     otherStripePayments: cardPayments.other,
     months,
-    spendCents: sum("spendCents"),
+    spendCents: sum("spendCents") + sharedCents,
+    sharedLeadCents: sharedCents,
     serviceFeeCents: sum("serviceFeeCents"),
     chargedCents,
     balanceCents,
     thisMonth,
     leads: leads.total,
     leadsThisMonth: leads.thisMonth,
-    costPerLeadCents: leads.total > 0 ? Math.round(sum("spendCents") / leads.total) : null,
+    costPerLeadCents: leads.total > 0 ? Math.round((sum("spendCents") + sharedCents) / leads.total) : null,
     dailyBudgetCents: activeBudget || null,
     daysLeft: activeBudget > 0 ? Math.max(0, Math.floor(balanceCents / activeBudget)) : null,
     targetDate,

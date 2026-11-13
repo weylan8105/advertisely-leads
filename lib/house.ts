@@ -229,6 +229,7 @@ export async function deliverLeadToOwner(
   leadId: string,
   ownerUserId: string,
   reason: string,
+  opts: { skipTeamFunding?: boolean } = {},
 ): Promise<boolean> {
   if (!prisma) return false;
   const owner = await prisma.user.findUnique({
@@ -263,7 +264,8 @@ export async function deliverLeadToOwner(
   // the advertiser, paying the campaign's cost per lead (lib/teamAdSpend.ts).
   let funded: { userId: string; cplCents: number } | null = null;
   try {
-    if (organizationId && (await teamHasFundedMembers(ownerUserId, organizationId))) {
+    // Shared-pool leads are paid from the client's own balance, not a downline's credit.
+    if (!opts.skipTeamFunding && organizationId && (await teamHasFundedMembers(ownerUserId, organizationId))) {
       const cplCents = await campaignCplCents(ownerUserId);
       const pick = cplCents
         ? await fundedTeamRecipient(ownerUserId, organizationId, lead?.state ?? "", cplCents, label)
