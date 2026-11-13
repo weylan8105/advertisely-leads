@@ -10,6 +10,7 @@ import { prisma } from "./prisma";
 //  - Leads from forms Ryan owns as an advertiser (the EWWS forms) take the same
 //    route instead of being delivered to him.
 //  - Ryan's overflow slot in the rotation is skipped.
+//  - Replacements owed to Ryan wait: they do not claim fresh leads on intake.
 // A lead no client can take (no open order or guest covers its state, or it is
 // not a Blue Collar lead) stays unassigned in the bank; it is not sent to Ryan.
 //

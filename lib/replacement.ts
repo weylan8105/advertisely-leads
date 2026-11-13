@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { findPackage, leadPoolIdsFor } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
+import { isPausedHouseUser } from "@/lib/housePause";
 
 // Replacements are fresh-only: a candidate must have entered the CRM within the
 // last 48 hours (owner directive Sep 30 2026). Module-scoped so both the
@@ -254,7 +255,7 @@ export async function tryReplacementForFreshLead(
   // is the gate. Un-reviewed pending requests wait for an approve/deny decision.
   const pending = await prisma.replacementRequest.findMany({
     where: { status: "PENDING", autoApproved: true },
-    include: { lead: { select: { state: true, packageId: true, status: true, trashedAt: true } } },
+    include: { lead: { select: { state: true, packageId: true, status: true, trashedAt: true, assignedUserId: true } } },
     orderBy: { createdAt: "asc" }, // FIFO: the longest-waiting request first
   });
 
@@ -271,6 +272,9 @@ export async function tryReplacementForFreshLead(
     .sort((a, b) => Number(b.lead!.state === lead.state) - Number(a.lead!.state === lead.state));
 
   for (const req of candidates) {
+    // HOUSE_PAUSE: a replacement owed to Ryan waits until he is back; it must
+    // not claim a fresh lead for him while routing to the house is paused.
+    if (await isPausedHouseUser(req.lead!.assignedUserId ?? req.requestedById)) continue;
     const outcome = await fulfillReplacement(req.id, { onlyLeadId: leadId, notify: opts.notify });
     if (outcome.ok) return req.id;
     // A non-ok outcome just means this lead didn't satisfy that request (its
