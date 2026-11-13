@@ -15,7 +15,7 @@ import { isHousePaused } from "@/lib/housePause";
 import {
   TEMP_ROTATION_GUEST,
   routeEwTextVerifiedToGuest,
-  getRotationGuest,
+  getRotationGuests,
   guestLicensedFor,
   isAbcaLandingPageLead,
   assignLeadToGuest,
@@ -598,7 +598,8 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // leads go 100% to the house (Ryan) — never to a buyer, overflow admin, or
   // team. Runs before all buyer distribution; the quiz funnels fall through.
   // TEMP_ROTATION_GUEST (Nov 2026): text-verified Enhanced Wealth Blue Collar
-  // leads alternate Ryan / Kyle while the toggle in lib/tempRotationGuest.ts is on.
+  // leads take turns between Ryan and the guests (Kyle, Angelo) while the toggle
+  // in lib/tempRotationGuest.ts is on.
   if (await routeEwTextVerifiedToGuest(lead)) return;
   if (await routePageLeadToHouse(lead)) return;
 
@@ -678,16 +679,21 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
   const rotation = [...buyerIds, ...adminIds];
 
-  // TEMP_ROTATION_GUEST (Nov 2026): Kyle is one more slot in the ABCA
-  // landing-page round-robin while the toggle in lib/tempRotationGuest.ts is on.
-  // HOUSE_PAUSE: while Ryan is away the guest also takes turns on the Blue
+  // TEMP_ROTATION_GUEST (Nov 2026): each guest (Kyle, Angelo) is one more slot
+  // in the ABCA landing-page round-robin while the toggle in
+  // lib/tempRotationGuest.ts is on.
+  // HOUSE_PAUSE: while Ryan is away the guests also take turns on the Blue
   // Collar page leads (Enhanced Wealth, text-verified, EWWS) that now come here.
   const guestTakesTurn =
     isAbcaLandingPageLead(lead.source) || (isHousePaused() && lead.packageId === "blue-collar-iul");
-  const guest = TEMP_ROTATION_GUEST.enabled && guestTakesTurn ? await getRotationGuest() : null;
-  const guestSlot =
-    guest && guestLicensedFor(guest.licensedStates, lead.state) && !rotation.includes(guest.userId) ? guest : null;
-  if (guestSlot) rotation.push(guestSlot.userId);
+  const guests = TEMP_ROTATION_GUEST.enabled && guestTakesTurn ? await getRotationGuests() : [];
+  const guestById = new Map<string, (typeof guests)[number]>();
+  for (const g of guests) {
+    // Licensed in this state, and not already in the rotation as a buyer.
+    if (!guestLicensedFor(g.licensedStates, lead.state) || rotation.includes(g.userId)) continue;
+    guestById.set(g.userId, g);
+    rotation.push(g.userId);
+  }
 
   if (rotation.length > 0) {
     const cursorKey = `st:${lead.state}`;
@@ -703,7 +709,8 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     // Start at the slot AFTER whoever got the last lead; take the first that accepts.
     for (let step = 1; step <= rotation.length; step++) {
       const rid = rotation[(lastIdx + step) % rotation.length];
-      if (guestSlot && rid === guestSlot.userId) {
+      const guestSlot = guestById.get(rid);
+      if (guestSlot) {
         const what = isAbcaLandingPageLead(lead.source) ? "ABCA landing-page round-robin" : "Blue Collar round-robin";
         if (await assignLeadToGuest(leadId, guestSlot, what)) {
           await setCursor(rid);

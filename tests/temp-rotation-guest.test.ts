@@ -3,12 +3,13 @@ import {
   isEwTextVerifiedLead,
   isAbcaLandingPageLead,
   guestLicensedFor,
-  isGuestTurn,
+  guestTurnIndex,
+  TEMP_ROTATION_GUEST,
 } from "@/lib/tempRotationGuest";
 
 const ghl = (formId: string) => ({ lastAttributionSource: { formId } });
 
-describe("temporary guest rotation (Kyle)", () => {
+describe("temporary guest rotation (Kyle, Angelo)", () => {
   it("only the Enhanced Wealth OTP form counts as a text-verified EW lead", () => {
     expect(isEwTextVerifiedLead({ rawFormData: ghl("1491493996376938") })).toBe(true);
     // EWWS text-verified forms stay with the house.
@@ -25,8 +26,17 @@ describe("temporary guest rotation (Kyle)", () => {
     expect(isAbcaLandingPageLead(null)).toBe(false);
   });
 
-  it("alternates Ryan and Kyle one for one", () => {
-    expect([1, 2, 3, 4].map(isGuestTurn)).toEqual([true, false, true, false]);
+  it("one guest alternates with Ryan one for one", () => {
+    expect([1, 2, 3, 4].map((n) => guestTurnIndex(n, 1))).toEqual([0, -1, 0, -1]);
+  });
+
+  it("two guests and Ryan take even turns", () => {
+    expect([1, 2, 3, 4, 5, 6].map((n) => guestTurnIndex(n, 2))).toEqual([0, 1, -1, 0, 1, -1]);
+    expect(guestTurnIndex(1, 0)).toBe(-1);
+  });
+
+  it("Kyle and Angelo are both in the rotation", () => {
+    expect(TEMP_ROTATION_GUEST.guests.map((g) => g.name)).toEqual(["Kyle", "Angelo"]);
   });
 
   it("respects licensed states, with none on file meaning everywhere", () => {

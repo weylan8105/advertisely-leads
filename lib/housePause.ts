@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 // Ryan is travelling, so while this is on NOTHING new is routed to his CRM:
 //  - Enhanced Wealth + Essential Workers (EWWS) page leads stop being house-only
 //    and go through the normal per-state rotation instead: clients with an open
-//    order, plus the temporary rotation guest (lib/tempRotationGuest.ts). That
+//    order, plus the temporary rotation guests (lib/tempRotationGuest.ts). That
 //    includes the text-verified Enhanced Wealth Blue Collar form, which stops
 //    alternating Ryan / guest and joins the same rotation.
 //  - Leads from forms Ryan owns as an advertiser (the EWWS forms) take the same

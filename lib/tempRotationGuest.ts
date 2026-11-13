@@ -5,24 +5,35 @@ import { leadFormId } from "./textVerified";
 import { findPackage } from "@/data/packages";
 import { isHousePaused } from "./housePause";
 
-// ─── TEMPORARY: guest agent in the lead rotation (owner request, Nov 11 2026) ──
-// Kyle Vietzke (David Layton's team) gets leads while his new ad creatives pick
-// up traction. Until the owner says to stop, he takes turns on:
+// ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
+// Kyle Vietzke (David Layton's team, since Nov 11) and Angelo Rodriguez (since
+// Nov 13) get leads while their own campaigns ramp up. Until the owner says to
+// stop, each of them takes turns on:
 //  - Text-verified Enhanced Wealth Blue Collar leads (the OTP form below):
-//    these normally go 100% to the house (Ryan); now Ryan and Kyle alternate.
-//  - ABCA landing-page leads (the early-retirement-quiz funnel): Kyle is one
-//    more slot in the per-state round-robin, next to the open buyer orders and
-//    admin overflow slots.
+//    these normally go 100% to the house (Ryan); now Ryan and the guests take
+//    even turns (Kyle, Angelo, Ryan, Kyle, …).
+//  - ABCA landing-page leads (the early-retirement-quiz funnel): each guest is
+//    one more slot in the per-state round-robin, next to the open buyer orders
+//    and admin overflow slots.
+// While HOUSE_PAUSE (lib/housePause.ts) is on there are no Ryan turns: every
+// Blue Collar lead goes to the per-state round-robin and the guests are slots.
 //
-// TO TURN IT OFF: set `enabled: false` below and deploy. Nothing else changes —
-// leads already delivered to Kyle stay with him, and routing goes straight back
-// to normal. To remove it entirely, delete this file and its two call sites in
-// lib/fulfillment.ts (search "TEMP_ROTATION_GUEST"). The alternation counter in
+// TO TURN IT OFF: set `enabled: false` below and deploy (or remove one guest
+// from the list to stop just theirs). Nothing else changes — leads already
+// delivered stay where they are, and routing goes straight back to normal. To
+// remove it entirely, delete this file and its two call sites in
+// lib/fulfillment.ts (search "TEMP_ROTATION_GUEST"). The turn counter in
 // DistributionCursor id "temp-guest:ew-otp" is harmless to leave behind.
 export const TEMP_ROTATION_GUEST = {
   enabled: true,
-  email: "kylevitz@gmail.com",
-  reason: "temporary rotation for Kyle while his new creatives ramp up",
+  guests: [
+    { email: "kylevitz@gmail.com", name: "Kyle", reason: "temporary rotation for Kyle while his new creatives ramp up" },
+    {
+      email: "angeloo.rodriguez05@gmail.com",
+      name: "Angelo",
+      reason: "temporary rotation for Angelo while his campaign ramps up",
+    },
+  ],
 };
 
 // Enhanced Wealth page forms with the one-time-passcode (text) check. EWWS's
@@ -48,36 +59,53 @@ export function guestLicensedFor(licensedStates: string[], state: string | null)
   return licensedStates.length === 0 || (!!state && licensedStates.includes(state));
 }
 
-/** The guest's turn on the Ryan/guest alternation: every other lead (1st, 3rd, 5th …). */
-export function isGuestTurn(n: number): boolean {
-  return n % 2 === 1;
+/**
+ * Whose turn the nth text-verified lead is, with `guests` guests taking even
+ * turns with Ryan: the guest's index (0-based), or -1 for Ryan's turn. One
+ * guest gives guest, Ryan, guest, Ryan …; two give guest A, guest B, Ryan, ….
+ */
+export function guestTurnIndex(n: number, guests: number): number {
+  if (guests <= 0) return -1;
+  return (n % (guests + 1)) - 1;
 }
 
-export type RotationGuest = { userId: string; organizationId: string | null; licensedStates: string[] };
+export type RotationGuest = {
+  userId: string;
+  organizationId: string | null;
+  licensedStates: string[];
+  name: string;
+  reason: string;
+};
 
-/** The guest agent while the toggle is on, else null. */
-export async function getRotationGuest(): Promise<RotationGuest | null> {
-  if (!prisma || !TEMP_ROTATION_GUEST.enabled) return null;
-  const u = await prisma.user.findFirst({
-    where: { email: { equals: TEMP_ROTATION_GUEST.email, mode: "insensitive" } },
-    select: {
-      id: true,
-      licensedStates: true,
-      defaultOrganizationId: true,
-      memberships: { select: { organizationId: true }, orderBy: { createdAt: "asc" }, take: 1 },
-    },
-  });
-  if (!u) return null;
-  return {
-    userId: u.id,
-    organizationId: u.memberships[0]?.organizationId ?? u.defaultOrganizationId ?? null,
-    licensedStates: u.licensedStates ?? [],
-  };
+/** The guest agents while the toggle is on (in list order), else none. */
+export async function getRotationGuests(): Promise<RotationGuest[]> {
+  if (!prisma || !TEMP_ROTATION_GUEST.enabled) return [];
+  const out: RotationGuest[] = [];
+  for (const g of TEMP_ROTATION_GUEST.guests) {
+    const u = await prisma.user.findFirst({
+      where: { email: { equals: g.email, mode: "insensitive" } },
+      select: {
+        id: true,
+        licensedStates: true,
+        defaultOrganizationId: true,
+        memberships: { select: { organizationId: true }, orderBy: { createdAt: "asc" }, take: 1 },
+      },
+    });
+    if (!u) continue;
+    out.push({
+      userId: u.id,
+      organizationId: u.memberships[0]?.organizationId ?? u.defaultOrganizationId ?? null,
+      licensedStates: u.licensedStates ?? [],
+      name: g.name,
+      reason: g.reason,
+    });
+  }
+  return out;
 }
 
 /**
- * Enhanced Wealth text-verified lead: alternate Ryan / guest. Returns true if the
- * guest took it; false leaves it to the normal house routing (Ryan).
+ * Enhanced Wealth text-verified lead: Ryan and the guests take even turns.
+ * Returns true if a guest took it; false leaves it to the normal house routing (Ryan).
  */
 export async function routeEwTextVerifiedToGuest(lead: {
   id: string;
@@ -88,8 +116,9 @@ export async function routeEwTextVerifiedToGuest(lead: {
   // HOUSE_PAUSE: with Ryan away there is no Ryan / guest alternation. The lead
   // goes to the per-state rotation instead, where the guest is one of the slots.
   if (isHousePaused()) return false;
-  const guest = await getRotationGuest();
-  if (!guest || !guestLicensedFor(guest.licensedStates, lead.state)) return false;
+  // Only guests licensed in the lead's state take turns on it.
+  const guests = (await getRotationGuests()).filter((g) => guestLicensedFor(g.licensedStates, lead.state));
+  if (guests.length === 0) return false;
 
   const row = await prisma.distributionCursor.findUnique({ where: { id: EW_CURSOR_ID } });
   const prev = parseInt(row?.lastRecipientId ?? "0", 10);
@@ -99,8 +128,9 @@ export async function routeEwTextVerifiedToGuest(lead: {
     update: { lastRecipientId: String(n) },
     create: { id: EW_CURSOR_ID, lastRecipientId: String(n) },
   });
-  if (!isGuestTurn(n)) return false;
-  return assignLeadToGuest(lead.id, guest, "text-verified Enhanced Wealth Blue Collar lead");
+  const turn = guestTurnIndex(n, guests.length);
+  if (turn < 0) return false; // Ryan's turn
+  return assignLeadToGuest(lead.id, guests[turn], "text-verified Enhanced Wealth Blue Collar lead");
 }
 
 /**
@@ -119,7 +149,7 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
   });
   if (res.count === 0) return false;
   await prisma.leadActivity.create({
-    data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to Kyle — ${what} (${TEMP_ROTATION_GUEST.reason}).` },
+    data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to ${guest.name} — ${what} (${guest.reason}).` },
   });
 
   const full = await prisma.lead.findUnique({
@@ -143,7 +173,7 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
         data: {
           leadId,
           type: "LEAD_RECEIVED",
-          body: result.ok ? "Forwarded to Kyle's Ringy CRM." : `Ringy forward failed — ${result.error ?? "unknown error"}.`,
+          body: result.ok ? `Forwarded to ${guest.name}'s Ringy CRM.` : `Ringy forward failed — ${result.error ?? "unknown error"}.`,
         },
       });
       await prisma.integration.update({ where: { id: ringy.id }, data: { lastUsedAt: new Date() } });
