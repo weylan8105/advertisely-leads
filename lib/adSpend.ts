@@ -454,6 +454,8 @@ export interface AdSpendSummary {
   periods: AdSpendPeriod[]; // each ad-spend payment and the week it's spent in (none when a target date is set)
   teamFunding: TeamFunding[]; // downlines who added spend (lib/teamAdSpend.ts)
   teamCreditCents: number; // their unspent credit, part of balanceCents
+  teamDirectCents: number; // members' money paid to the advertiser directly (already inside their own payments)
+  ownPaidCents: number; // the advertiser's own payments (card + manual), before card processing
   subscriptions: ClientSubscription[];
   campaigns: ClientCampaign[];
   autoPause: boolean;
@@ -568,6 +570,8 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     periods,
     teamFunding: team,
     teamCreditCents: team.reduce((t, f) => t + Math.max(0, f.creditCents), 0),
+    teamDirectCents: team.reduce((t, f) => t + f.directCents, 0),
+    ownPaidCents: [...cardPayments.adSpend, ...otherPayments].reduce((s, p) => s + p.amountCents, 0),
     subscriptions: cardPayments.subscriptions,
     campaigns: meta.campaigns,
     autoPause: user.adSpendAutoPause,

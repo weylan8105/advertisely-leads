@@ -11,6 +11,8 @@ interface TeamCampaign {
   advertiserName: string;
   creditCents: number;
   addedCents: number;
+  directCents: number; // paid to the upline directly, not on the site
+  access: boolean; // upline has spend switched on for them
   leads: number;
   leadCostCents: number;
   cplCents: number | null;
@@ -28,7 +30,8 @@ const usd0 = (cents: number) =>
 
 /**
  * A downline's card for adding spend to their advertiser upline's campaign
- * (lib/teamAdSpend.ts). Only shows when an upline has switched it on for them.
+ * (lib/teamAdSpend.ts). Shows when an upline has switched it on for them, or
+ * (read-only) when they've already paid into that campaign.
  */
 export function TeamAdSpendCard() {
   const [campaigns, setCampaigns] = useState<TeamCampaign[] | null>(null);
@@ -114,10 +117,22 @@ function CampaignCard({ c }: { c: TeamCampaign }) {
           <div className="rounded-lg border border-slate-200 p-3">
             <dt className="text-xs text-muted-foreground">You&apos;ve added</dt>
             <dd className="text-lg font-semibold tabular-nums">{usd0(c.addedCents)}</dd>
-            <dd className="text-xs text-muted-foreground">Before the 3% card fee</dd>
+            <dd className="text-xs text-muted-foreground">
+              {c.directCents > 0
+                ? c.directCents === c.addedCents
+                  ? `Paid to ${c.advertiserName} directly`
+                  : `Incl. ${usd0(c.directCents)} paid to ${c.advertiserName} directly`
+                : "Before the 3% card fee"}
+            </dd>
           </div>
         </dl>
 
+        {!c.access ? (
+          <p className="self-start rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-muted-foreground">
+            {c.advertiserName} hasn&apos;t switched on campaign spend for you yet, so campaign leads aren&apos;t taken from
+            your credit right now. Ask them to turn it on from their Team page.
+          </p>
+        ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {PRESETS.map((p) => (
@@ -157,6 +172,7 @@ function CampaignCard({ c }: { c: TeamCampaign }) {
           )}
           {error && <p className="text-xs text-rose-600">{error}</p>}
         </div>
+        )}
       </CardContent>
     </Card>
   );

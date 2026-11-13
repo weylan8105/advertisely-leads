@@ -20,12 +20,23 @@ export async function GET() {
   const userId = session?.user?.id;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Campaigns they can add to now, plus any they've already paid into (shown
+  // read-only while their upline has spend switched off for them).
+  const paidInto = await prisma.teamAdSpend.findMany({ where: { userId }, select: { advertiserId: true }, distinct: ["advertiserId"] });
   const memberships = await prisma.membership.findMany({
-    where: { userId, adSpendAccess: true, organization: { owner: { isAdvertiser: true }, ownerId: { not: userId } } },
-    select: { organization: { select: { ownerId: true, owner: { select: { name: true, email: true } } } } },
+    where: {
+      userId,
+      organization: { owner: { isAdvertiser: true }, ownerId: { not: userId } },
+      OR: [{ adSpendAccess: true }, { organization: { ownerId: { in: paidInto.map((r) => r.advertiserId) } } }],
+    },
+    orderBy: { adSpendAccess: "desc" }, // a switched-on team wins over a switched-off one
+    select: { adSpendAccess: true, organization: { select: { ownerId: true, owner: { select: { name: true, email: true } } } } },
   });
   const campaigns = [];
+  const seen = new Set<string>();
   for (const m of memberships) {
+    if (seen.has(m.organization.ownerId)) continue;
+    seen.add(m.organization.ownerId);
     const advertiserId = m.organization.ownerId;
     const [funding, cplCents] = await Promise.all([teamFunding(advertiserId), campaignCplCents(advertiserId)]);
     const mine = funding.find((f) => f.userId === userId);
@@ -35,6 +46,8 @@ export async function GET() {
       advertiserName: m.organization.owner.name?.trim() || m.organization.owner.email,
       creditCents,
       addedCents: mine?.addedCents ?? 0,
+      directCents: mine?.directCents ?? 0,
+      access: m.adSpendAccess,
       leads: mine?.leads ?? 0,
       leadCostCents: mine?.leadCostCents ?? 0,
       cplCents,

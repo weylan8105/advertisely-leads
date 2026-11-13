@@ -206,6 +206,22 @@ describe("summary", () => {
     expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([30_000]);
   });
 
+  it("shows members who paid the advertiser directly, without adding it to the budget twice", async () => {
+    team = [
+      { id: "d1", advertiserId: "JACE", userId: "DANA", kind: "direct-payment", amountCents: 70_000, grossCents: 70_000, processingFeeCents: 0, createdAt: new Date("2026-11-13T12:00:00Z") },
+    ];
+    charges = [paid(1000)]; // Jace's own payment, which already includes Dana's $700
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(100_000);
+    expect(s.payments.some((p) => p.method === "team")).toBe(false);
+    expect(s.teamFunding).toEqual([
+      expect.objectContaining({ userId: "DANA", addedCents: 70_000, directCents: 70_000, leads: 0, creditCents: 70_000 }),
+    ]);
+    expect(s.teamDirectCents).toBe(70_000);
+    expect(s.ownPaidCents).toBe(100_000);
+  });
+
   it("finds guest payments by billing email, without counting one twice", async () => {
     const shared = paid(1000);
     charges = [shared];

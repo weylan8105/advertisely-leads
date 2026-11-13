@@ -22,6 +22,14 @@ import type { ClientPayment } from "./adSpend";
  */
 
 export const TEAM_AD_SPEND_KIND = "team-ad-spend"; // Stripe metadata.kind on downline top-ups
+/**
+ * Ledger kind for money a downline paid the advertiser directly (before team
+ * funding existed, or off the site). It's credit like a "payment", but it is
+ * NOT added to the advertiser's budget: the advertiser already paid it in
+ * with their own ad-spend payments.
+ */
+export const DIRECT_PAYMENT_KIND = "direct-payment";
+const PAID_KINDS = new Set(["payment", DIRECT_PAYMENT_KIND]);
 const LAST_TURN_LOOKBACK_MS = 30 * 86_400_000;
 
 /** Every downline's credit on this advertiser's campaign, in cents. */
@@ -40,7 +48,8 @@ export async function teamBalances(advertiserId: string): Promise<Map<string, nu
 export interface TeamFunding {
   userId: string;
   name: string;
-  addedCents: number; // charged, before card processing
+  addedCents: number; // charged, before card processing (direct payments included)
+  directCents: number; // part of addedCents they paid the advertiser directly
   creditAddedCents: number; // after card processing
   leads: number;
   leadCostCents: number;
@@ -67,11 +76,13 @@ export async function teamFunding(advertiserId: string): Promise<TeamFunding[]> 
     .map((userId) => {
       const mine = rows.filter((r) => r.userId === userId);
       const leads = mine.filter((r) => r.kind === "lead");
+      const paid = mine.filter((r) => PAID_KINDS.has(r.kind));
       return {
         userId,
         name: nameOf.get(userId) ?? "Former member",
-        addedCents: mine.filter((r) => r.kind === "payment").reduce((s, r) => s + (r.grossCents ?? r.amountCents), 0),
-        creditAddedCents: mine.filter((r) => r.kind === "payment").reduce((s, r) => s + r.amountCents, 0),
+        addedCents: paid.reduce((s, r) => s + (r.grossCents ?? r.amountCents), 0),
+        directCents: paid.filter((r) => r.kind === DIRECT_PAYMENT_KIND).reduce((s, r) => s + r.amountCents, 0),
+        creditAddedCents: paid.reduce((s, r) => s + r.amountCents, 0),
         leads: leads.length,
         leadCostCents: -leads.reduce((s, r) => s + r.amountCents, 0),
         creditCents: mine.reduce((s, r) => s + r.amountCents, 0),
@@ -81,7 +92,10 @@ export async function teamFunding(advertiserId: string): Promise<TeamFunding[]> 
     .sort((a, b) => b.addedCents - a.addedCents);
 }
 
-/** Downline payments into this advertiser's campaign, as budget payments. */
+/**
+ * Downline payments into this advertiser's campaign, as budget payments.
+ * Direct payments are left out: that money is already in the advertiser's own payments.
+ */
 export async function teamFundingPayments(advertiserId: string): Promise<ClientPayment[]> {
   if (!prisma) return [];
   const rows = await prisma.teamAdSpend.findMany({

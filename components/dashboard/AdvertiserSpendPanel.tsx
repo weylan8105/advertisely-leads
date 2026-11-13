@@ -248,6 +248,12 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                   Your team&apos;s spend: members you&apos;ve switched on add to this budget and get campaign leads in
                   rotation with you, each at the campaign&apos;s cost per lead.
                   {summary.teamCreditCents > 0 && <> Budget left includes {usd(summary.teamCreditCents)} of their unused credit.</>}
+                  {summary.teamDirectCents > 0 && (
+                    <>
+                      {" "}{usd(summary.teamDirectCents)} of your own payments came from members who paid you directly
+                      {summary.ownPaidCents > summary.teamDirectCents && <>, so {usd(summary.ownPaidCents - summary.teamDirectCents)} is yours</>}.
+                    </>
+                  )}
                 </p>
                 <table className="w-full text-sm">
                   <thead>
@@ -265,7 +271,14 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                           {f.name}
                           {!f.access && <span className="ml-1 text-xs text-muted-foreground">(switched off)</span>}
                         </td>
-                        <td className="py-1.5 text-right">{usd(f.addedCents)}</td>
+                        <td className="py-1.5 text-right">
+                          {usd(f.addedCents)}
+                          {f.directCents > 0 && (
+                            <span className="block text-xs text-muted-foreground">
+                              {f.directCents === f.addedCents ? "paid you directly" : `${usd(f.directCents)} paid you directly`}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-1.5 text-right">{f.leads}</td>
                         <td className="py-1.5 text-right">{usd(Math.max(0, f.creditCents))}</td>
                       </tr>
