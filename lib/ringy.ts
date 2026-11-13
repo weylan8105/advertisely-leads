@@ -41,7 +41,34 @@ const RETIRE_AGE_KEYS = [
   "When would you like to retire?",
 ];
 
-const norm = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, "");
+const INCOME_KEYS = [
+  "income",
+  "householdIncome",
+  "What's your current household income?",
+  "What's your current annual income?",
+  "What is your annual earned income?",
+];
+const AGE_KEYS = ["age", "What's your age range?"];
+
+// GoHighLevel suffixes some custom-field names with " (old)" when a field was
+// replaced, so "When would you ideally like to retire? (old)" must still match.
+const norm = (k: string) => k.toLowerCase().replace(/\(old\)\s*$/, "").replace(/[^a-z0-9]/g, "");
+
+/** A form value as plain text; GHL sends multi-selects as a JSON-array string like ["By 55"]. */
+function answerText(v: unknown): string {
+  if (Array.isArray(v)) return v.map((x) => String(x)).join(", ");
+  if (v == null) return "";
+  const s = String(v).trim();
+  if (s.startsWith("[") && s.endsWith("]")) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) return arr.map((x) => String(x)).join(", ");
+    } catch {
+      /* not JSON — use as-is */
+    }
+  }
+  return s;
+}
 
 /** First non-empty answer among `keys` (matched ignoring case, spaces and underscores), made readable. */
 export function formAnswer(raw: unknown, keys: string[]): string {
@@ -49,11 +76,11 @@ export function formAnswer(raw: unknown, keys: string[]): string {
   const byKey = new Map<string, unknown>();
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     const n = norm(k);
-    if (!byKey.has(n) || byKey.get(n) === "") byKey.set(n, v);
+    if (!answerText(byKey.get(n))) byKey.set(n, v);
   }
   for (const k of keys) {
     const v = byKey.get(norm(k));
-    const text = Array.isArray(v) ? v.join(", ") : v == null ? "" : String(v);
+    const text = answerText(v);
     if (text.trim()) return text.replace(/_/g, " ").replace(/\s+/g, " ").trim();
   }
   return "";
@@ -85,9 +112,9 @@ export async function forwardLeadToRingy(lead: RingyLeadFields, cfg: RingyConfig
     full_name: lead.name ?? "",
     email: lead.email ?? "",
     state: lead.state ?? "",
-    age: lead.age != null ? String(lead.age) : "",
+    age: lead.age != null ? String(lead.age) : formAnswer(lead.rawFormData, AGE_KEYS),
     occupation: lead.occupation ?? "",
-    income: lead.income != null ? String(lead.income) : "",
+    income: lead.income != null ? String(lead.income) : formAnswer(lead.rawFormData, INCOME_KEYS),
     monthly_budget: formAnswer(lead.rawFormData, MONTHLY_PAYMENT_KEYS),
     retire_by: formAnswer(lead.rawFormData, RETIRE_AGE_KEYS),
   };

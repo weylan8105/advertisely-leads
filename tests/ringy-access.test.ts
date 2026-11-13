@@ -100,6 +100,47 @@ describe("Ringy monthly_budget / retire_by", () => {
   });
 });
 
+describe("Ringy with GoHighLevel-shaped leads", () => {
+  it("reads (old)-suffixed answers, JSON-array answers, and income ranges", async () => {
+    let body: any = null;
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (_u: any, init: any) => {
+      body = JSON.parse(init.body);
+      return new Response("{}", { status: 200 });
+    }) as any;
+    try {
+      await forwardLeadToRingy(
+        {
+          name: "A", phone: "1", email: null, state: "TX", age: null, occupation: "Lineman", income: null,
+          rawFormData: {
+            "What's your current household income?": "",
+            "What's your current household income? (old)": "$75,000 – $125,000",
+            "When would you ideally like to retire? (old)": '["By 55"]',
+            "What's your age range? (old)": "40–49",
+            "How much could you comfortably put towards building your tax-free retirement each month? (old)": "$300 – $500",
+          },
+        },
+        { sid: "s", authToken: "t" },
+      );
+    } finally {
+      globalThis.fetch = orig;
+    }
+    expect(body.income).toBe("$75,000 – $125,000");
+    expect(body.retire_by).toBe("By 55");
+    expect(body.monthly_budget).toBe("$300 – $500");
+    expect(body.age).toBe("40–49");
+  });
+
+  it("the test lead fills every Ringy field", async () => {
+    const { RINGY_TEST_LEAD } = await import("@/lib/ringyAccess");
+    let body: any = null;
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (_u: any, init: any) => { body = JSON.parse(init.body); return new Response("{}", { status: 200 }); }) as any;
+    try { await forwardLeadToRingy(RINGY_TEST_LEAD, { sid: "s", authToken: "t" }); } finally { globalThis.fetch = orig; }
+    for (const k of ["phone_number", "full_name", "email", "state", "age", "occupation", "income", "retire_by", "monthly_budget"]) expect(body[k], k).not.toBe("");
+  });
+});
+
 describe("Ringy payload field names", () => {
   it("posts Ringy's documented keys, incl. retire_by and monthly_budget", async () => {
     let body: any = null;

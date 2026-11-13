@@ -48,8 +48,14 @@ export const RINGY_TEST_LEAD = {
   state: "TX",
   age: 45,
   occupation: "Test lead from Advertisely, please delete",
-  income: 85000,
-  rawFormData: { monthlyBudget: "$500_–_$1,000", retirementTimeline: "by_55" },
+  // Shaped like a real GoHighLevel lead: no numeric income, answers under
+  // " (old)"-suffixed question names, multi-selects as JSON-array strings.
+  income: null as number | null,
+  rawFormData: {
+    "What's your current household income? (old)": "$75,000 – $125,000",
+    "When would you ideally like to retire? (old)": '["By 55"]',
+    "How much could you comfortably put towards building your tax-free retirement each month? (old)": "$500 – $1,000",
+  },
 };
 
 /**
