@@ -21,7 +21,7 @@ export interface RingyLeadFields {
   age: number | null;
   occupation: string | null;
   income: number | null;
-  /** The lead's form answers, for monthly_payment and retire_age. */
+  /** The lead's form answers, for monthly_budget and retire_by. */
   rawFormData?: unknown;
 }
 
@@ -88,8 +88,8 @@ export async function forwardLeadToRingy(lead: RingyLeadFields, cfg: RingyConfig
     age: lead.age != null ? String(lead.age) : "",
     occupation: lead.occupation ?? "",
     income: lead.income != null ? String(lead.income) : "",
-    monthly_payment: formAnswer(lead.rawFormData, MONTHLY_PAYMENT_KEYS),
-    retire_age: formAnswer(lead.rawFormData, RETIRE_AGE_KEYS),
+    monthly_budget: formAnswer(lead.rawFormData, MONTHLY_PAYMENT_KEYS),
+    retire_by: formAnswer(lead.rawFormData, RETIRE_AGE_KEYS),
   };
 
   try {
