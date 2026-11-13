@@ -11,6 +11,7 @@ import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 import { leadOrigin } from "@/lib/leadOrigin";
+import { isHousePaused } from "@/lib/housePause";
 import {
   TEMP_ROTATION_GUEST,
   routeEwTextVerifiedToGuest,
@@ -96,9 +97,11 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
   // the bank (e.g. older unassigned leads or CSV imports). These are exactly the
   // non-quiz "import"-origin leads (lib/leadOrigin); the ABCA / HWA quiz funnels
   // stay sellable.
-  const candidates = rawCandidates.filter(
-    (l) => leadOrigin(l.source, l.rawFormData) !== "import",
-  );
+  // HOUSE_PAUSE (lib/housePause.ts): while Ryan is away these page leads are
+  // routed to clients instead, so the filter is lifted until it is switched off.
+  const candidates = isHousePaused()
+    ? rawCandidates
+    : rawCandidates.filter((l) => leadOrigin(l.source, l.rawFormData) !== "import");
 
   if (candidates.length === 0) return 0;
 
@@ -360,6 +363,7 @@ function leadAgeEligibleForOrder(
  */
 async function routeHeldBackTagToHouse(lead: { id: string; tags: string[] }): Promise<boolean> {
   if (!prisma || HOLDBACK_TAGS_TO_HOUSE.length === 0) return false;
+  if (isHousePaused()) return false; // HOUSE_PAUSE: nothing new goes to Ryan
   const tags = (lead.tags ?? []).map((t) => t.toLowerCase());
   const matched = HOLDBACK_TAGS_TO_HOUSE.find((h) => tags.some((t) => t.includes(h.toLowerCase())));
   if (!matched) return false;
@@ -402,6 +406,8 @@ async function routePageLeadToHouse(lead: {
   rawFormData: unknown;
 }): Promise<boolean> {
   if (!prisma) return false;
+  // HOUSE_PAUSE: while Ryan is away, page leads fall through to the rotation.
+  if (isHousePaused()) return false;
   if (leadOrigin(lead.source, lead.rawFormData) !== "import") return false;
   const house = await getHouseAccount();
   if (!house) return false;
@@ -674,7 +680,11 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
 
   // TEMP_ROTATION_GUEST (Nov 2026): Kyle is one more slot in the ABCA
   // landing-page round-robin while the toggle in lib/tempRotationGuest.ts is on.
-  const guest = TEMP_ROTATION_GUEST.enabled && isAbcaLandingPageLead(lead.source) ? await getRotationGuest() : null;
+  // HOUSE_PAUSE: while Ryan is away the guest also takes turns on the Blue
+  // Collar page leads (Enhanced Wealth, text-verified, EWWS) that now come here.
+  const guestTakesTurn =
+    isAbcaLandingPageLead(lead.source) || (isHousePaused() && lead.packageId === "blue-collar-iul");
+  const guest = TEMP_ROTATION_GUEST.enabled && guestTakesTurn ? await getRotationGuest() : null;
   const guestSlot =
     guest && guestLicensedFor(guest.licensedStates, lead.state) && !rotation.includes(guest.userId) ? guest : null;
   if (guestSlot) rotation.push(guestSlot.userId);
@@ -694,7 +704,8 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
     for (let step = 1; step <= rotation.length; step++) {
       const rid = rotation[(lastIdx + step) % rotation.length];
       if (guestSlot && rid === guestSlot.userId) {
-        if (await assignLeadToGuest(leadId, guestSlot, "ABCA landing-page round-robin")) {
+        const what = isAbcaLandingPageLead(lead.source) ? "ABCA landing-page round-robin" : "Blue Collar round-robin";
+        if (await assignLeadToGuest(leadId, guestSlot, what)) {
           await setCursor(rid);
           return;
         }

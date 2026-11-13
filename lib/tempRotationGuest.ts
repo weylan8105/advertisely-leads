@@ -3,6 +3,7 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
 import { leadFormId } from "./textVerified";
 import { findPackage } from "@/data/packages";
+import { isHousePaused } from "./housePause";
 
 // ─── TEMPORARY: guest agent in the lead rotation (owner request, Nov 11 2026) ──
 // Kyle Vietzke (David Layton's team) gets leads while his new ad creatives pick
@@ -84,6 +85,9 @@ export async function routeEwTextVerifiedToGuest(lead: {
   rawFormData: unknown;
 }): Promise<boolean> {
   if (!prisma || !TEMP_ROTATION_GUEST.enabled || !isEwTextVerifiedLead(lead)) return false;
+  // HOUSE_PAUSE: with Ryan away there is no Ryan / guest alternation. The lead
+  // goes to the per-state rotation instead, where the guest is one of the slots.
+  if (isHousePaused()) return false;
   const guest = await getRotationGuest();
   if (!guest || !guestLicensedFor(guest.licensedStates, lead.state)) return false;
 

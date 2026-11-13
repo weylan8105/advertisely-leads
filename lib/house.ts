@@ -8,6 +8,7 @@ import { assignFundedLead, fundedTeamRecipient, teamHasFundedMembers } from "./t
 import { campaignCplCents } from "./adSpend";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { primaryOwnedTeam } from "./org";
+import { HOUSE_EMAIL, isHousePaused } from "./housePause";
 
 // Ryan's house CRM only ever takes NEW/fresh leads (the Real-Time window),
 // never aged inventory — so his profile doesn't fill with old leads.
@@ -16,7 +17,7 @@ const HOUSE_FRESH_DAYS = 2;
 // Ryan's account is the house. Picked by email: "oldest admin" stopped meaning
 // Ryan once Weylan, who signed up first, became an admin, and every house lead
 // went to Weylan. HOUSE_ACCOUNT_EMAIL can point it elsewhere.
-const HOUSE_EMAIL = (process.env.HOUSE_ACCOUNT_EMAIL || "ryanrush129@gmail.com").trim().toLowerCase();
+// (HOUSE_EMAIL lives in lib/housePause.ts so the pause switch can use it too.)
 
 /**
  * The "house" account — the platform admin's own CRM (Ryan). Any lead whose
@@ -53,6 +54,7 @@ export async function getEligibleAdminSlots(): Promise<
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
+      email: true,
       weeklyLeadTarget: true,
       licensedStates: true,
       ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 },
@@ -62,6 +64,8 @@ export async function getEligibleAdminSlots(): Promise<
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
   const slots: { userId: string; organizationId: string | null; licensedStates: string[] }[] = [];
   for (const a of admins) {
+    // HOUSE_PAUSE: Ryan takes no overflow turns while he is away.
+    if (isHousePaused() && (a.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) continue;
     const orgId = a.ownedOrganizations[0]?.id;
     const got = await prisma.lead.count({
       where: {
@@ -391,6 +395,7 @@ export async function sweepOrphansToHouse(): Promise<{
   skippedCoveredStates: string[];
 }> {
   if (!prisma) return { moved: 0, byState: {}, skippedCoveredStates: [] };
+  if (isHousePaused()) return { moved: 0, byState: {}, skippedCoveredStates: [] }; // HOUSE_PAUSE
   const house = await getHouseAccount();
   if (!house) return { moved: 0, byState: {}, skippedCoveredStates: [] };
 

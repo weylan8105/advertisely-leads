@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { mapLeadFields } from "./meta";
 import { tryFulfillForNewLead } from "./fulfillment";
 import { deliverLeadToOwner } from "./house";
+import { isPausedHouseUser } from "./housePause";
 import { fireMetaLeadEvent } from "./metaCapi";
 import { isTestLead } from "./testLeads";
 
@@ -157,7 +158,11 @@ export async function ingestLeadFromFields(opts: {
   // Advertiser-owned form: this lead belongs solely to the form's owner. Deliver
   // it straight into their CRM and skip marketplace distribution entirely — it
   // can never land in the sellable bank or on any buyer's order.
-  if (opts.ownerUserId) {
+  // HOUSE_PAUSE: a form Ryan owns is not delivered to him while he is away; its
+  // lead goes through the normal rotation below instead (no Meta event, same as
+  // any other owned form).
+  const ownerPaused = await isPausedHouseUser(opts.ownerUserId);
+  if (opts.ownerUserId && !ownerPaused) {
     const delivered = await deliverLeadToOwner(
       created.id,
       opts.ownerUserId,
@@ -168,7 +173,7 @@ export async function ingestLeadFromFields(opts: {
 
   // Same order as the inbound path: tell Meta first, so a failed assignment below
   // can't lose the event. Admin simulations have no Meta lead to report.
-  if (opts.meta) {
+  if (opts.meta && !ownerPaused) {
     try {
       await fireMetaLeadEvent(created);
     } catch (err) {
