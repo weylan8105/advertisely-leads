@@ -4,6 +4,9 @@ import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy
 import { leadFormId } from "./textVerified";
 import { findPackage } from "@/data/packages";
 import { isHousePaused } from "./housePause";
+import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
+import { sharedPoolOf, sharedCplCents } from "./sharedPool";
+import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 
 // ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
 // Kyle Vietzke (David Layton's team, since Nov 11) and Angelo Rodriguez (since
@@ -27,7 +30,17 @@ import { isHousePaused } from "./housePause";
 export const TEMP_ROTATION_GUEST = {
   enabled: true,
   guests: [
-    { email: "kylevitz@gmail.com", name: "Kyle", reason: "temporary rotation for Kyle while his new creatives ramp up" },
+    {
+      email: "kylevitz@gmail.com",
+      name: "Kyle",
+      reason: "temporary rotation for Kyle while his new creatives ramp up",
+      // Owner request (Nov 13 2026): Kyle's next 10 leads (counted from
+      // countFrom, any route) stay free; after that each guest turn Kyle takes is
+      // charged to David's ad-spend balance at the source campaign's cost per
+      // lead, and the card carries David's name like his campaign leads do. If
+      // David's balance can't cover a lead, Kyle's guest slot is skipped.
+      billTo: { email: "dclayton1235@gmail.com", freeLeads: 10, countFrom: "2026-11-14T00:59:40Z" },
+    },
     {
       email: "angeloo.rodriguez05@gmail.com",
       name: "Angelo",
@@ -69,13 +82,21 @@ export function guestTurnIndex(n: number, guests: number): number {
   return (n % (guests + 1)) - 1;
 }
 
+export type GuestBillTo = { email: string; freeLeads: number; countFrom: string };
+
 export type RotationGuest = {
   userId: string;
   organizationId: string | null;
   licensedStates: string[];
   name: string;
   reason: string;
+  billTo?: GuestBillTo;
 };
+
+/** Is this guest past their free leads (so the lead is charged to the payer)? */
+export function guestIsBilled(billTo: GuestBillTo | undefined, receivedSinceCountFrom: number): boolean {
+  return !!billTo && receivedSinceCountFrom >= billTo.freeLeads;
+}
 
 /** The guest agents while the toggle is on (in list order), else none. */
 export async function getRotationGuests(): Promise<RotationGuest[]> {
@@ -98,6 +119,7 @@ export async function getRotationGuests(): Promise<RotationGuest[]> {
       licensedStates: u.licensedStates ?? [],
       name: g.name,
       reason: g.reason,
+      ...("billTo" in g && g.billTo ? { billTo: g.billTo } : {}),
     });
   }
   return out;
@@ -139,18 +161,64 @@ export async function routeEwTextVerifiedToGuest(lead: {
  */
 export async function assignLeadToGuest(leadId: string, guest: RotationGuest, what: string): Promise<boolean> {
   if (!prisma) return false;
+
+  // Past their free leads, a billed guest's lead is charged to the payer.
+  let bill: { payerId: string; payerName: string; cplCents: number } | null = null;
+  if (guest.billTo) {
+    const received = await prisma.lead.count({
+      where: { assignedUserId: guest.userId, trashedAt: null, assignedAt: { gte: new Date(guest.billTo.countFrom) } },
+    });
+    if (guestIsBilled(guest.billTo, received)) {
+      const payer = await prisma.user.findFirst({
+        where: { email: { equals: guest.billTo.email, mode: "insensitive" } },
+        select: { id: true, name: true, email: true },
+      });
+      const lead = await prisma.lead.findUnique({
+        where: { id: leadId },
+        select: { source: true, rawFormData: true, campaignName: true, packageId: true },
+      });
+      if (!payer || !lead) return false;
+      const cplCents = await sharedCplCents(sharedPoolOf(lead) ?? "ew");
+      const s = await getAdSpendSummary(payer.id).catch(() => null);
+      // Never hand out a lead the payer can't cover, or on a balance we couldn't read.
+      if (!s || s.errors.length || s.balanceCents < cplCents) return false;
+      bill = { payerId: payer.id, payerName: payer.name?.trim() || payer.email, cplCents };
+    }
+  }
+
+  const current = bill
+    ? await prisma.lead.findUnique({ where: { id: leadId }, select: { rawFormData: true } })
+    : null;
+  const raw = current?.rawFormData && typeof current.rawFormData === "object" && !Array.isArray(current.rawFormData)
+    ? (current.rawFormData as Record<string, unknown>)
+    : {};
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
     data: {
       assignedUserId: guest.userId,
       assignedAt: new Date(),
       ...(guest.organizationId ? { organizationId: guest.organizationId } : {}),
+      // A billed lead carries the payer's name, like their own campaign's leads.
+      ...(bill ? { rawFormData: { ...raw, [ADVERTISER_NAME_KEY]: bill.payerName } as any } : {}),
     },
   });
   if (res.count === 0) return false;
+  const cost = bill ? (bill.cplCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" }) : "";
   await prisma.leadActivity.create({
-    data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to ${guest.name} — ${what} (${guest.reason}).` },
+    data: {
+      leadId,
+      type: "LEAD_ASSIGNED",
+      body: bill
+        ? `Routed to ${guest.name} — ${what}; ${cost} cost per lead taken from ${bill.payerName}'s ad-spend balance.`
+        : `Routed to ${guest.name} — ${what} (${guest.reason}).`,
+    },
   });
+  if (bill) {
+    await prisma.adSpendPayment.create({
+      data: { userId: bill.payerId, amountCents: -bill.cplCents, method: SHARED_LEAD_METHOD, note: `${guest.name}'s guest lead ${leadId}` },
+    });
+    forgetAdSpendSummary(bill.payerId);
+  }
 
   const full = await prisma.lead.findUnique({
     where: { id: leadId },

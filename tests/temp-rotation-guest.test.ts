@@ -45,3 +45,20 @@ describe("temporary guest rotation (Kyle, Angelo)", () => {
     expect(guestLicensedFor(["TX"], "CA")).toBe(false);
   });
 });
+
+describe("billed guest (Kyle → David after 10 free leads)", async () => {
+  const { guestIsBilled, TEMP_ROTATION_GUEST } = await import("@/lib/tempRotationGuest");
+  it("stays free for the first 10, then bills", () => {
+    const billTo = { email: "payer@example.com", freeLeads: 10, countFrom: "2026-11-14T00:00:00Z" };
+    expect(guestIsBilled(billTo, 0)).toBe(false);
+    expect(guestIsBilled(billTo, 9)).toBe(false);
+    expect(guestIsBilled(billTo, 10)).toBe(true);
+    expect(guestIsBilled(undefined, 50)).toBe(false);
+  });
+  it("Kyle is billed to David; Angelo is not billed", () => {
+    const kyle = TEMP_ROTATION_GUEST.guests.find((g) => g.email === "kylevitz@gmail.com") as any;
+    const angelo = TEMP_ROTATION_GUEST.guests.find((g) => g.email === "angeloo.rodriguez05@gmail.com") as any;
+    expect(kyle.billTo).toMatchObject({ email: "dclayton1235@gmail.com", freeLeads: 10 });
+    expect(angelo.billTo).toBeUndefined();
+  });
+});
