@@ -9,7 +9,7 @@ import {
 
 const ghl = (formId: string) => ({ lastAttributionSource: { formId } });
 
-describe("temporary guest rotation (Kyle, Angelo)", () => {
+describe("temporary guest rotation (Kyle)", () => {
   it("only the Enhanced Wealth OTP form counts as a text-verified EW lead", () => {
     expect(isEwTextVerifiedLead({ rawFormData: ghl("1491493996376938") })).toBe(true);
     // EWWS text-verified forms stay with the house.
@@ -35,8 +35,8 @@ describe("temporary guest rotation (Kyle, Angelo)", () => {
     expect(guestTurnIndex(1, 0)).toBe(-1);
   });
 
-  it("Kyle and Angelo are both in the rotation", () => {
-    expect(TEMP_ROTATION_GUEST.guests.map((g) => g.name)).toEqual(["Kyle", "Angelo"]);
+  it("Kyle is the only free guest; Angelo pays per lead as a client", () => {
+    expect(TEMP_ROTATION_GUEST.guests.map((g) => g.name)).toEqual(["Kyle"]);
   });
 
   it("respects licensed states, with none on file meaning everywhere", () => {
@@ -55,10 +55,8 @@ describe("billed guest (Kyle → David after 10 free leads)", async () => {
     expect(guestIsBilled(billTo, 10)).toBe(true);
     expect(guestIsBilled(undefined, 50)).toBe(false);
   });
-  it("Kyle is billed to David; Angelo is not billed", () => {
+  it("Kyle is billed to David", () => {
     const kyle = TEMP_ROTATION_GUEST.guests.find((g) => g.email === "kylevitz@gmail.com") as any;
-    const angelo = TEMP_ROTATION_GUEST.guests.find((g) => g.email === "angeloo.rodriguez05@gmail.com") as any;
     expect(kyle.billTo).toMatchObject({ email: "dclayton1235@gmail.com", freeLeads: 10 });
-    expect(angelo.billTo).toBeUndefined();
   });
 });

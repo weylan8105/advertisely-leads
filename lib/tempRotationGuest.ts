@@ -9,12 +9,11 @@ import { sharedPoolOf, sharedCplCents } from "./sharedPool";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 
 // ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
-// Kyle Vietzke (David Layton's team, since Nov 11) and Angelo Rodriguez (since
-// Nov 13) get leads while their own campaigns ramp up. Until the owner says to
+// Kyle Vietzke (David Layton's team, since Nov 11) gets leads while their own campaigns ramp up. Until the owner says to
 // stop, each of them takes turns on:
 //  - Text-verified Enhanced Wealth Blue Collar leads (the OTP form below):
 //    these normally go 100% to the house (Ryan); now Ryan and the guests take
-//    even turns (Kyle, Angelo, Ryan, Kyle, …).
+//    even turns (Kyle, Ryan, Kyle, …).
 //  - ABCA landing-page leads (the early-retirement-quiz funnel): each guest is
 //    one more slot in the per-state round-robin, next to the open buyer orders
 //    and admin overflow slots.
@@ -41,11 +40,9 @@ export const TEMP_ROTATION_GUEST = {
       // David's balance can't cover a lead, Kyle's guest slot is skipped.
       billTo: { email: "dclayton1235@gmail.com", freeLeads: 10, countFrom: "2026-11-14T00:59:40Z" },
     },
-    {
-      email: "angeloo.rodriguez05@gmail.com",
-      name: "Angelo",
-      reason: "temporary rotation for Angelo while his campaign ramps up",
-    },
+    // Angelo was a free guest Nov 13; removed the same day (owner: his leads come
+    // out of his ad spend). He still gets leads as an advertiser client in the
+    // shared pool (lib/sharedPool.ts), charged per lead.
   ],
 };
 

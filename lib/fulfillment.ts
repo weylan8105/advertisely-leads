@@ -599,7 +599,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // leads go 100% to the house (Ryan) — never to a buyer, overflow admin, or
   // team. Runs before all buyer distribution; the quiz funnels fall through.
   // TEMP_ROTATION_GUEST (Nov 2026): text-verified Enhanced Wealth Blue Collar
-  // leads take turns between Ryan and the guests (Kyle, Angelo) while the toggle
+  // leads take turns between Ryan and the guests (Kyle) while the toggle
   // in lib/tempRotationGuest.ts is on.
   // SHARED_POOL (Nov 2026): Enhanced Wealth Blue Collar and ABCA quiz leads go
   // through the round-robin below, advertiser clients included (lib/sharedPool.ts).
@@ -685,7 +685,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
   const rotation = [...buyerIds, ...adminIds];
 
-  // TEMP_ROTATION_GUEST (Nov 2026): each guest (Kyle, Angelo) is one more slot
+  // TEMP_ROTATION_GUEST (Nov 2026): each guest (Kyle) is one more slot
   // in the ABCA landing-page round-robin while the toggle in
   // lib/tempRotationGuest.ts is on.
   // HOUSE_PAUSE: while Ryan is away the guests also take turns on the Blue
