@@ -93,7 +93,30 @@ export async function sharedCplCents(pool: SharedPool): Promise<number> {
 }
 
 // ── Client slots ────────────────────────────────────────────────────────────
-export type ClientSlot = { userId: string; name: string; cplCents: number };
+// Owner request (Nov 13 2026): these clients get FREE leads (no charge, but
+// counted on their dashboard as their leads) while their average cost per lead
+// is above the target; at or below it, leads are charged per lead as usual.
+// Applies to their shared-pool turns and to guest turns billed to them
+// (lib/tempRotationGuest.ts). Empty the list to stop it.
+export const FREE_UNTIL_CPL = {
+  targetCents: 3500,
+  emails: ["dclayton1235@gmail.com", "angeloo.rodriguez05@gmail.com"],
+};
+
+/** Does this client's dashboard cost per lead sit above the target (so the next lead is free)? */
+export function needsFreeLeads(
+  s: { costPerLeadCents: number | null; spendCents: number; leads: number },
+  targetCents = FREE_UNTIL_CPL.targetCents,
+): boolean {
+  if (s.leads <= 0) return s.spendCents > 0;
+  return (s.costPerLeadCents ?? 0) > targetCents;
+}
+
+export function isFreeUntilCplClient(email: string | null | undefined): boolean {
+  return FREE_UNTIL_CPL.emails.includes((email ?? "").trim().toLowerCase());
+}
+
+export type ClientSlot = { userId: string; name: string; cplCents: number; free?: boolean };
 
 export function licensedIn(states: string[], state: string | null): boolean {
   return states.length === 0 || (!!state && states.includes(state));
@@ -123,7 +146,13 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
     const teamLicensed = c.ownedOrganizations.some((o) => o.memberships.some((m) => licensedIn(m.user.licensedStates ?? [], state)));
     if (!licensedIn(c.licensedStates ?? [], state) && !teamLicensed) continue;
     const s = await getAdSpendSummary(c.id).catch(() => null);
-    if (!s || s.errors.length || s.balanceCents < cplCents) continue;
+    if (!s || s.errors.length) continue;
+    // Free while their cost per lead is above the target (no balance needed).
+    if (isFreeUntilCplClient(c.email) && needsFreeLeads(s)) {
+      out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents: 0, free: true });
+      continue;
+    }
+    if (s.balanceCents < cplCents) continue;
     out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents });
   }
   return out;
@@ -137,10 +166,16 @@ export async function deliverSharedLeadToClient(leadId: string, slot: ClientSlot
   const ok = await deliverLeadToOwner(
     leadId,
     slot.userId,
-    `Shared ${label} round-robin — ${cost} cost per lead taken from the ad-spend balance.`,
+    slot.free
+      ? `Shared ${label} round-robin — free lead (no charge) while the cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
+      : `Shared ${label} round-robin — ${cost} cost per lead taken from the ad-spend balance.`,
     { skipTeamFunding: true },
   );
   if (!ok) return false;
+  if (slot.free) {
+    forgetAdSpendSummary(slot.userId); // the new lead lowers their cost per lead
+    return true;
+  }
   await prisma.adSpendPayment.create({
     data: {
       userId: slot.userId,

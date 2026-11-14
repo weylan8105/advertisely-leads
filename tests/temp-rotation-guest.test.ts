@@ -46,17 +46,21 @@ describe("temporary guest rotation (Kyle)", () => {
   });
 });
 
-describe("billed guest (Kyle → David after 10 free leads)", async () => {
-  const { guestIsBilled, TEMP_ROTATION_GUEST } = await import("@/lib/tempRotationGuest");
-  it("stays free for the first 10, then bills", () => {
-    const billTo = { email: "payer@example.com", freeLeads: 10, countFrom: "2026-11-14T00:00:00Z" };
-    expect(guestIsBilled(billTo, 0)).toBe(false);
-    expect(guestIsBilled(billTo, 9)).toBe(false);
-    expect(guestIsBilled(billTo, 10)).toBe(true);
-    expect(guestIsBilled(undefined, 50)).toBe(false);
+describe("free until $35 a lead (David via Kyle, Angelo)", async () => {
+  const { TEMP_ROTATION_GUEST } = await import("@/lib/tempRotationGuest");
+  const { needsFreeLeads, isFreeUntilCplClient } = await import("@/lib/sharedPool");
+  it("free while the dashboard cost per lead is above $35, charged at or below", () => {
+    expect(needsFreeLeads({ costPerLeadCents: 9699, spendCents: 116382, leads: 12 })).toBe(true);
+    expect(needsFreeLeads({ costPerLeadCents: 3500, spendCents: 35000, leads: 10 })).toBe(false);
+    expect(needsFreeLeads({ costPerLeadCents: 3233, spendCents: 116382, leads: 36 })).toBe(false);
+    expect(needsFreeLeads({ costPerLeadCents: null, spendCents: 5000, leads: 0 })).toBe(true);
+    expect(needsFreeLeads({ costPerLeadCents: null, spendCents: 0, leads: 0 })).toBe(false);
   });
-  it("Kyle is billed to David", () => {
+  it("applies to David and Angelo only; Kyle's guest leads count as David's", () => {
+    expect(isFreeUntilCplClient("dclayton1235@gmail.com")).toBe(true);
+    expect(isFreeUntilCplClient("Angeloo.Rodriguez05@gmail.com")).toBe(true);
+    expect(isFreeUntilCplClient("jljensen38@gmail.com")).toBe(false);
     const kyle = TEMP_ROTATION_GUEST.guests.find((g) => g.email === "kylevitz@gmail.com") as any;
-    expect(kyle.billTo).toMatchObject({ email: "dclayton1235@gmail.com", freeLeads: 10 });
+    expect(kyle.billTo).toEqual({ email: "dclayton1235@gmail.com" });
   });
 });

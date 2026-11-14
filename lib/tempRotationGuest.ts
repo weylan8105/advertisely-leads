@@ -5,7 +5,7 @@ import { leadFormId } from "./textVerified";
 import { findPackage } from "@/data/packages";
 import { isHousePaused } from "./housePause";
 import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
-import { sharedPoolOf, sharedCplCents } from "./sharedPool";
+import { sharedPoolOf, sharedCplCents, needsFreeLeads, FREE_UNTIL_CPL } from "./sharedPool";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 
 // ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
@@ -33,12 +33,12 @@ export const TEMP_ROTATION_GUEST = {
       email: "kylevitz@gmail.com",
       name: "Kyle",
       reason: "temporary rotation for Kyle while his new creatives ramp up",
-      // Owner request (Nov 13 2026): Kyle's next 10 leads (counted from
-      // countFrom, any route) stay free; after that each guest turn Kyle takes is
-      // charged to David's ad-spend balance at the source campaign's cost per
-      // lead, and the card carries David's name like his campaign leads do. If
-      // David's balance can't cover a lead, Kyle's guest slot is skipped.
-      billTo: { email: "dclayton1235@gmail.com", freeLeads: 10, countFrom: "2026-11-14T00:59:40Z" },
+      // Owner request (Nov 13 2026): every lead Kyle takes here counts as
+      // David's (David's name on the card, on David's dashboard). It's free
+      // while David's cost per lead is above FREE_UNTIL_CPL (lib/sharedPool.ts);
+      // at or below it, it's charged to David's ad-spend balance at the source
+      // campaign's cost per lead, and skipped if David can't cover it.
+      billTo: { email: "dclayton1235@gmail.com" },
     },
     // Angelo was a free guest Nov 13; removed the same day (owner: his leads come
     // out of his ad spend). He still gets leads as an advertiser client in the
@@ -79,7 +79,7 @@ export function guestTurnIndex(n: number, guests: number): number {
   return (n % (guests + 1)) - 1;
 }
 
-export type GuestBillTo = { email: string; freeLeads: number; countFrom: string };
+export type GuestBillTo = { email: string };
 
 export type RotationGuest = {
   userId: string;
@@ -90,10 +90,6 @@ export type RotationGuest = {
   billTo?: GuestBillTo;
 };
 
-/** Is this guest past their free leads (so the lead is charged to the payer)? */
-export function guestIsBilled(billTo: GuestBillTo | undefined, receivedSinceCountFrom: number): boolean {
-  return !!billTo && receivedSinceCountFrom >= billTo.freeLeads;
-}
 
 /** The guest agents while the toggle is on (in list order), else none. */
 export async function getRotationGuests(): Promise<RotationGuest[]> {
@@ -159,27 +155,29 @@ export async function routeEwTextVerifiedToGuest(lead: {
 export async function assignLeadToGuest(leadId: string, guest: RotationGuest, what: string): Promise<boolean> {
   if (!prisma) return false;
 
-  // Past their free leads, a billed guest's lead is charged to the payer.
-  let bill: { payerId: string; payerName: string; cplCents: number } | null = null;
+  // A billed guest's lead counts as the payer's: free while the payer's cost
+  // per lead is above the target, charged to them once it's at or below it.
+  let bill: { payerId: string; payerName: string; cplCents: number; free: boolean } | null = null;
   if (guest.billTo) {
-    const received = await prisma.lead.count({
-      where: { assignedUserId: guest.userId, trashedAt: null, assignedAt: { gte: new Date(guest.billTo.countFrom) } },
+    const payer = await prisma.user.findFirst({
+      where: { email: { equals: guest.billTo.email, mode: "insensitive" } },
+      select: { id: true, name: true, email: true },
     });
-    if (guestIsBilled(guest.billTo, received)) {
-      const payer = await prisma.user.findFirst({
-        where: { email: { equals: guest.billTo.email, mode: "insensitive" } },
-        select: { id: true, name: true, email: true },
-      });
-      const lead = await prisma.lead.findUnique({
-        where: { id: leadId },
-        select: { source: true, rawFormData: true, campaignName: true, packageId: true },
-      });
-      if (!payer || !lead) return false;
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { source: true, rawFormData: true, campaignName: true, packageId: true },
+    });
+    if (!payer || !lead) return false;
+    const s = await getAdSpendSummary(payer.id).catch(() => null);
+    // Never decide on a balance we couldn't read.
+    if (!s || s.errors.length) return false;
+    const payerName = payer.name?.trim() || payer.email;
+    if (needsFreeLeads(s)) {
+      bill = { payerId: payer.id, payerName, cplCents: 0, free: true };
+    } else {
       const cplCents = await sharedCplCents(sharedPoolOf(lead) ?? "ew");
-      const s = await getAdSpendSummary(payer.id).catch(() => null);
-      // Never hand out a lead the payer can't cover, or on a balance we couldn't read.
-      if (!s || s.errors.length || s.balanceCents < cplCents) return false;
-      bill = { payerId: payer.id, payerName: payer.name?.trim() || payer.email, cplCents };
+      if (s.balanceCents < cplCents) return false; // can't cover it: skip this slot
+      bill = { payerId: payer.id, payerName, cplCents, free: false };
     }
   }
 
@@ -206,11 +204,14 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
       leadId,
       type: "LEAD_ASSIGNED",
       body: bill
-        ? `Routed to ${guest.name} — ${what}; ${cost} cost per lead taken from ${bill.payerName}'s ad-spend balance.`
+        ? bill.free
+          ? `Routed to ${guest.name} — ${what}; free lead for ${bill.payerName} (no charge) while their cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
+          : `Routed to ${guest.name} — ${what}; ${cost} cost per lead taken from ${bill.payerName}'s ad-spend balance.`
         : `Routed to ${guest.name} — ${what} (${guest.reason}).`,
     },
   });
-  if (bill) {
+  if (bill?.free) forgetAdSpendSummary(bill.payerId);
+  if (bill && !bill.free) {
     await prisma.adSpendPayment.create({
       data: { userId: bill.payerId, amountCents: -bill.cplCents, method: SHARED_LEAD_METHOD, note: `${guest.name}'s guest lead ${leadId}` },
     });

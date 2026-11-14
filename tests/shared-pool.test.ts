@@ -52,6 +52,12 @@ describe("shared lead pool", () => {
     expect(payments).toEqual([expect.objectContaining({ userId: "JACE", amountCents: -2045, method: "shared-lead" })]);
   });
 
+  it("a free slot delivers the lead without charging", async () => {
+    payments.length = 0;
+    expect(await deliverSharedLeadToClient("L2", { userId: "DAVID", name: "David", cplCents: 0, free: true }, "ew")).toBe(true);
+    expect(payments).toEqual([]);
+  });
+
   it("charges nothing when the lead was already taken", async () => {
     payments.length = 0;
     expect(await deliverSharedLeadToClient("TAKEN", { userId: "JACE", name: "Jace", cplCents: 2045 }, "abca")).toBe(false);
