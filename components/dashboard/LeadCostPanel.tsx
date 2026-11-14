@@ -224,7 +224,7 @@ export function LeadCostPanel() {
                       ["Leads billed", `${quote.leads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
                     ] as [string, string, string][])
                   : []),
-                [`Avg. cost per lead (${usd0(quote.adSpendCents)} ad spend ÷ ${quote.leadsGenerated} leads)`, usd(quote.cplCents), "text-muted-foreground"],
+                [`Avg. cost per lead (${usd0(quote.adSpendCents)} ad spend ÷ ${quote.leadsGenerated} leads Meta counted)`, usd(quote.cplCents), "text-muted-foreground"],
                 ["Quote total", usd(ledger.owedCents), "font-semibold"],
                 ["Paid", `− ${usd(ledger.paidCents)}`, "text-muted-foreground"],
                 ["Still owed", usd(stillOwed), "font-semibold border-t border-slate-100 pt-1.5 text-rose-600"],

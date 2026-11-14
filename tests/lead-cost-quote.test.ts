@@ -34,7 +34,8 @@ describe("lock-in quote", () => {
     expect(sum(LOCKIN_QUOTE.clients)).toBe(LOCKIN_QUOTE.clientLeads);
     expect(LOCKIN_QUOTE.leads).toBe(LOCKIN_QUOTE.sentLeads - LOCKIN_QUOTE.clientLeads);
     expect(LOCKIN_QUOTE.leads).toBe(192);
-    expect(LOCKIN_QUOTE.totalCents).toBe(561_792);
+    expect(LOCKIN_QUOTE.cplCents).toBe(2805);
+    expect(LOCKIN_QUOTE.totalCents).toBe(538_560);
     expect(LOCKIN_QUOTE.totalCents).toBe(LOCKIN_QUOTE.leads * LOCKIN_QUOTE.cplCents);
     expect(LOCKIN_QUOTE.cplCents).toBe(Math.round(LOCKIN_QUOTE.adSpendCents / LOCKIN_QUOTE.leadsGenerated));
   });

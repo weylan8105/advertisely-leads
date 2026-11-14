@@ -72,23 +72,27 @@ export interface LeadCostQuote {
  * LEAD_ASSIGNED activity: 215 leads reached him first; one was a bad lead that
  * was swapped for a replacement, which leaves 214 before the client leads.
  *
- * Cost per lead = ad spend on our own campaigns Nov 9–12 ÷ the leads those
- * campaigns produced in that time = $7,489.28 ÷ 256 = $29.26.
- *   Enhanced Wealth    $3,261.21  (Blue Collar ER)
- *   ABCA               $1,931.10  (Team Use $1,706.45 + Text message Test $224.65)
- *   Essential Workers  $2,296.97  (Nurses $1,166.59 + Blue Collar $1,130.38)
+ * Cost per lead = ad spend on our own campaigns Nov 9–12 ÷ the leads Meta
+ * reports for those campaigns in that time = $7,489.28 ÷ 267 = $28.05.
+ *   Enhanced Wealth    $3,261.21, 89 leads  (Blue Collar ER)
+ *   ABCA               $1,931.10, 99 leads  (Team Use $1,706.45, 94 + Text message Test $224.65, 5)
+ *   Essential Workers  $2,296.97, 79 leads  (Nurses $1,166.59, 66 + Blue Collar $1,130.38, 13)
  * "Advertisely Advertiser - …" campaigns belong to clients and are left out of
  * both the spend and the lead count.
  *
- * Payments: the $2,300.32 recorded on Nov 10 answered that week's pop-up, which
- * billed the week BEFORE the lock-in (Nov 2–8: 88 leads × $26.14). It is shown
- * as an earlier payment and not applied here. To credit it to this quote
- * instead, set `paymentsFromIso` to `fromIso`.
+ * The divisor is Meta's own lead count (owner's choice, Nov 13), not the 256
+ * leads that are in the CRM: 4 more were bad leads that were replaced and 7
+ * never reached the CRM, and the ad spend paid for all of them. The first
+ * version of this quote divided by 256, which gave $29.26.
+ *
+ * Payments: only transfers recorded after the lock-in closed count
+ * (`paymentsFromIso`). Nothing has been paid toward it yet; a $2,300.32 entry
+ * from Nov 10 was removed on the owner's word that it was never sent.
  */
 const QUOTE_SENT_LEADS = 214;
 const QUOTE_CLIENT_LEADS = 22;
 const QUOTE_LEADS = QUOTE_SENT_LEADS - QUOTE_CLIENT_LEADS;
-const QUOTE_CPL_CENTS = 2926;
+const QUOTE_CPL_CENTS = 2805;
 export const LOCKIN_QUOTE: LeadCostQuote = {
   fromIso: LEDGER_START.toISOString(),
   toIso: "2026-11-13T06:00:00.000Z",
@@ -106,7 +110,7 @@ export const LOCKIN_QUOTE: LeadCostQuote = {
   cplCents: QUOTE_CPL_CENTS,
   totalCents: QUOTE_LEADS * QUOTE_CPL_CENTS,
   adSpendCents: 748_928,
-  leadsGenerated: 256,
+  leadsGenerated: 267,
   lines: [
     { label: "Enhanced Wealth Blue Collar page", leads: 78 },
     { label: "Essential Workers forms (nurses and blue collar)", leads: 77 },
