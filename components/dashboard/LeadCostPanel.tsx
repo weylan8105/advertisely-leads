@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Wallet, TrendingUp, Users, Target, Loader2, AlertTriangle, Info, Banknote, CheckCircle2, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Wallet, TrendingUp, Users, Target, Loader2, Info, Banknote, CheckCircle2, Trash2 } from "lucide-react";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,18 @@ const usd = (cents: number) =>
 const usd0 = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-function dateLabel(iso: string) {
+function dateLabel(iso: string | number) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
+}
+// A plain calendar day ("2026-11-09") — no time zone shifting.
+function dayLabel(ymd: string) {
+  return new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 /**
- * Ryan's Enhanced Wealth lead-cost panel — advertiser-style, but it tracks what
- * he owes Advertisely for the leads he's fronting, against the bank transfers he
- * records. Titled "Cost for Enhanced Wealth Lock In" during the lock-in; after it
- * ends Wednesday night it reads as his ongoing lead-cost account.
+ * Ryan's Enhanced Wealth lock-in quote: one fixed bill for every lead that was
+ * first sent to him during the lock-in week, against the bank transfers he
+ * records. It stays on his dashboard until it is paid in full, then goes away.
  */
 export function LeadCostPanel() {
   const [ledger, setLedger] = useState<LeadCostLedger | null>(null);
@@ -29,15 +32,20 @@ export function LeadCostPanel() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [cplInput, setCplInput] = useState("");
-  const [cplSaving, setCplSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  // Already paid when the page loaded: nothing to show. Paid off just now: keep
+  // a short "paid in full" note on screen for this visit.
+  const settledOnLoad = useRef(false);
 
   useEffect(() => {
     fetch("/api/admin/lead-cost")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setLedger(d?.ledger ?? null))
+      .then((d) => {
+        const l: LeadCostLedger | null = d?.ledger ?? null;
+        settledOnLoad.current = !!l?.settled;
+        setLedger(l);
+      })
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
@@ -51,11 +59,14 @@ export function LeadCostPanel() {
       </Card>
     );
   }
-  if (!ledger) return null;
+  if (!ledger || !ledger.quote) return null;
+  if (ledger.settled && settledOnLoad.current) return null;
 
-  const owes = ledger.balanceCents < 0;
-  const title = ledger.lockInActive ? "Cost for Enhanced Wealth Lock In" : "Enhanced Wealth — Lead Cost";
-  const coveredPct = ledger.owedCents > 0 ? Math.min(100, Math.round((ledger.paidCents / ledger.owedCents) * 100)) : ledger.paidCents > 0 ? 100 : 0;
+  const quote = ledger.quote;
+  const range = `${dateLabel(quote.fromIso)} – ${dateLabel(new Date(quote.toIso).getTime() - 1)}`;
+  const title = `Quote · Enhanced Wealth Lock In, ${range}`;
+  const stillOwed = Math.max(0, -ledger.balanceCents);
+  const coveredPct = ledger.owedCents > 0 ? Math.min(100, Math.round((ledger.paidCents / ledger.owedCents) * 100)) : 100;
 
   async function recordPayment() {
     const dollars = Number(amount.replace(/[^0-9.\-]/g, ""));
@@ -93,65 +104,82 @@ export function LeadCostPanel() {
     else setError(data.error ?? "Could not remove that payment.");
   }
 
-  async function saveCpl() {
-    const dollars = Number(cplInput.replace(/[^0-9.]/g, ""));
-    if (!dollars) {
-      setError("Enter a cost per lead.");
-      return;
-    }
-    setError(null);
-    setCplSaving(true);
-    try {
-      const res = await fetch("/api/admin/lead-cost", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cplDollars: dollars }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Could not set the cost per lead.");
-      setLedger(data.ledger);
-      setCplInput("");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setCplSaving(false);
-    }
+  const paymentsTable = ledger.payments.length > 0 && (
+    <div className="overflow-x-auto">
+      <p className="mb-1 text-xs text-muted-foreground">Payments recorded</p>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-muted-foreground">
+            <th className="py-1.5 font-medium">Date</th>
+            <th className="py-1.5 font-medium">Note</th>
+            <th className="py-1.5 text-right font-medium">Amount</th>
+            <th className="py-1.5" />
+          </tr>
+        </thead>
+        <tbody>
+          {ledger.payments.map((p) => (
+            <tr key={p.id} className="border-t border-slate-100">
+              <td className="py-1.5">{new Date(p.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+              <td className="py-1.5 text-muted-foreground">{p.note ?? "—"}</td>
+              <td className="py-1.5 text-right">{usd(p.amountCents)}</td>
+              <td className="py-1.5 text-right">
+                <button onClick={() => deletePayment(p.id)} className="text-muted-foreground hover:text-rose-600" aria-label="Remove payment">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  // Paid off during this visit: a short confirmation, gone on the next load.
+  if (ledger.settled) {
+    return (
+      <Card className="mb-6 border-l-4 border-l-emerald-500">
+        <CardContent className="space-y-3 py-4">
+          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" /> Lock-in quote paid in full: {usd(ledger.paidCents)} of {usd(ledger.owedCents)}. Thank you.
+          </p>
+          <p className="text-xs text-muted-foreground">This panel won&apos;t show again. Recorded an amount by mistake? Remove it below and the quote comes back.</p>
+          {paymentsTable}
+          {error && <p className="text-xs text-rose-600">{error}</p>}
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
     <div className="mb-6 space-y-4">
-      {/* Headline bar: what's owed vs paid */}
-      <Card className={cn("border-l-4", owes ? "border-l-rose-500" : "border-l-emerald-500")}>
+      {/* Headline bar: the quote vs what's been paid */}
+      <Card className="border-l-4 border-l-rose-500">
         <CardContent className="py-4">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <div>
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
               <span className="text-sm">
-                <span className="font-semibold">{usd0(ledger.paidCents)}</span>
-                <span className="text-muted-foreground"> paid of {usd0(ledger.owedCents)} in lead cost</span>
+                <span className="font-semibold">{usd(ledger.paidCents)}</span>
+                <span className="text-muted-foreground"> paid of {usd(ledger.owedCents)}</span>
               </span>
             </div>
-            <span className={cn("text-sm font-semibold tabular-nums", owes ? "text-rose-600" : "text-emerald-600")}>
-              {owes ? `${usd(-ledger.balanceCents)} still owed` : ledger.balanceCents > 0 ? `${usd(ledger.balanceCents)} credit` : "All settled"}
-            </span>
+            <span className="text-sm font-semibold tabular-nums text-rose-600">{usd(stillOwed)} still owed</span>
           </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-sky-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={coveredPct} aria-label="Lead cost paid">
-            <div className={cn("h-full rounded-full transition-all", owes ? "bg-rose-500" : "bg-emerald-500")} style={{ width: `${coveredPct}%` }} />
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-sky-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={coveredPct} aria-label="Lock-in quote paid">
+            <div className="h-full rounded-full bg-rose-500 transition-all" style={{ width: `${coveredPct}%` }} />
           </div>
           <div className="mt-1.5 text-xs text-muted-foreground">
-            {coveredPct}% covered
-            {ledger.cplCents !== null ? ` · ${usd(ledger.cplCents)} per lead${ledger.cplSource === "meta" ? "" : " (stored rate)"}` : " · set a cost per lead below"}
-            {ledger.lockInActive ? ` · lock-in through ${dateLabel(ledger.lockInEndIso)}` : ""}
+            {coveredPct}% paid · {quote.leads} leads × {usd(quote.cplCents)} per lead · stays here until it&apos;s paid
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <DashboardStatCard label="Leads fronted" value={ledger.totalLeads} hint={`${ledger.leadsToHouse} yours · ${ledger.leadsToTeam} team`} icon={<Users className="h-4 w-4" />} accent="violet" />
-        <DashboardStatCard label="Avg. cost per lead" value={ledger.cplCents !== null ? usd(ledger.cplCents) : "—"} hint={ledger.cplSource === "meta" ? "Ad spend ÷ leads" : ledger.cplSource === "manual" ? "Stored rate (ad spend not read)" : "Not set"} icon={<Target className="h-4 w-4" />} accent="amber" />
-        <DashboardStatCard label="Total lead cost" value={usd(ledger.owedCents)} hint="Leads × cost per lead" icon={<TrendingUp className="h-4 w-4" />} accent="blue" />
-        <DashboardStatCard label="Paid back" value={usd(ledger.paidCents)} hint="Your recorded transfers" icon={<Wallet className="h-4 w-4" />} accent="emerald" />
-        <DashboardStatCard label={owes ? "Still owed" : "Balance"} value={owes ? usd(-ledger.balanceCents) : usd(ledger.balanceCents)} hint={owes ? "Pay this to settle" : "Credit on account"} icon={<Banknote className="h-4 w-4" />} accent={owes ? "amber" : "emerald"} />
+        <DashboardStatCard label="Leads sent to you" value={quote.leads} hint={range} icon={<Users className="h-4 w-4" />} accent="violet" />
+        <DashboardStatCard label="Avg. cost per lead" value={usd(quote.cplCents)} hint="Ad spend ÷ leads" icon={<Target className="h-4 w-4" />} accent="amber" />
+        <DashboardStatCard label="Quote total" value={usd(ledger.owedCents)} hint="Leads × cost per lead" icon={<TrendingUp className="h-4 w-4" />} accent="blue" />
+        <DashboardStatCard label="Paid" value={usd(ledger.paidCents)} hint="Your recorded transfers" icon={<Wallet className="h-4 w-4" />} accent="emerald" />
+        <DashboardStatCard label="Still owed" value={usd(stillOwed)} hint="Pay this to settle" icon={<Banknote className="h-4 w-4" />} accent="amber" />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -165,7 +193,7 @@ export function LeadCostPanel() {
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red" aria-label="Amount paid" />
+                <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={(stillOwed / 100).toFixed(2)} className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red" aria-label="Amount paid" />
               </div>
               <Button onClick={recordPayment} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Record"}
@@ -174,107 +202,50 @@ export function LeadCostPanel() {
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional, e.g. wire ref)" className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-brand-red" aria-label="Payment note" />
             {ok && <p className="flex items-center gap-1.5 text-xs text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> {ok}</p>}
             {error && <p className="text-xs text-rose-600">{error}</p>}
-
-            {ledger.cplSource !== "meta" && (
-              <div className={cn("rounded-md border p-3", ledger.cplSource === "none" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50")}>
-                <p className={cn("mb-2 flex items-start gap-1.5 text-xs", ledger.cplSource === "none" ? "text-amber-800" : "text-muted-foreground")}>
-                  {ledger.cplSource === "none" ? (
-                    <><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> No cost per lead set yet, so the total shows $0. Set the rate you&apos;re billed to see what you owe.</>
-                  ) : (
-                    <><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Billed at {usd(ledger.cplCents ?? 0)} per lead. Change it here anytime.</>
-                  )}
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                    <input inputMode="decimal" value={cplInput} onChange={(e) => setCplInput(e.target.value)} placeholder={ledger.cplCents != null ? (ledger.cplCents / 100).toFixed(2) : "cost per lead"} className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red" aria-label="Cost per lead" />
-                  </div>
-                  <Button variant="outline" onClick={saveCpl} disabled={cplSaving}>
-                    {cplSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set rate"}
-                  </Button>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
         {/* Breakdown + payments */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>{ledger.lockInActive ? "Lock-in leads so far" : "Leads since Nov 9"}</CardTitle>
-            <CardDescription>Every fresh lead delivered to you or your team since the lock-in began{ledger.cplCents !== null ? `, at ${usd(ledger.cplCents)} each` : ""}. Leads sold to outside buyers and clients&apos; own campaign leads aren&apos;t included.</CardDescription>
+            <CardTitle>Lock-in leads, {range}</CardTitle>
+            <CardDescription>
+              Every lead that was first sent to you from the start of the lock-in until your routing was paused, at {usd(quote.cplCents)} each. A lead counts wherever it went afterwards: your pipeline, the Goldmine, a teammate, or a client while you&apos;re away. Clients&apos; own campaign leads aren&apos;t included.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <dl className="space-y-1.5 text-sm">
               {([
-                ["Your CRM", `${ledger.leadsToHouse} leads`, ""],
-                ["Your team", `${ledger.leadsToTeam} leads`, ""],
-                ["Total fronted", `${ledger.totalLeads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
-                ...(ledger.adSpendCents !== null && ledger.leadsGenerated !== null
-                  ? [[`Avg. cost per lead (${usd0(ledger.adSpendCents)} ad spend ÷ ${ledger.leadsGenerated} leads)`, usd(ledger.cplCents ?? 0), "text-muted-foreground"]]
-                  : [["Cost per lead", ledger.cplCents !== null ? usd(ledger.cplCents) : "—", "text-muted-foreground"]]),
-                ["Total lead cost", usd(ledger.owedCents), "font-semibold"],
-                ["Paid back", `− ${usd(ledger.paidCents)}`, "text-muted-foreground"],
-                [owes ? "Still owed" : "Credit", owes ? usd(-ledger.balanceCents) : usd(ledger.balanceCents), cn("font-semibold border-t border-slate-100 pt-1.5", owes && "text-rose-600")],
+                ...quote.lines.map((l) => [l.label, `${l.leads} leads`, ""] as [string, string, string]),
+                ["Total leads", `${quote.leads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
+                [`Avg. cost per lead (${usd0(quote.adSpendCents)} ad spend ÷ ${quote.leadsGenerated} leads)`, usd(quote.cplCents), "text-muted-foreground"],
+                ["Quote total", usd(ledger.owedCents), "font-semibold"],
+                ["Paid", `− ${usd(ledger.paidCents)}`, "text-muted-foreground"],
+                ["Still owed", usd(stillOwed), "font-semibold border-t border-slate-100 pt-1.5 text-rose-600"],
               ] as [string, string, string][]).map(([label, value, clsName]) => (
                 <div key={label} className={cn("flex justify-between gap-4", clsName)}>
                   <dt>{label}</dt>
-                  <dd>{value}</dd>
+                  <dd className="shrink-0">{value}</dd>
                 </div>
               ))}
             </dl>
 
-            {ledger.team.length > 0 && (
-              <div className="overflow-x-auto">
-                <p className="mb-1 text-xs text-muted-foreground">Leads given to your team</p>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="py-1.5 font-medium">Agent</th>
-                      <th className="py-1.5 text-right font-medium">Leads</th>
-                      <th className="py-1.5 text-right font-medium">Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ledger.team.map((t) => (
-                      <tr key={t.userId} className="border-t border-slate-100">
-                        <td className="py-1.5">{t.name}</td>
-                        <td className="py-1.5 text-right">{t.leads}</td>
-                        <td className="py-1.5 text-right">{ledger.cplCents !== null ? usd(t.leads * ledger.cplCents) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <p className="text-xs text-muted-foreground">
+              By day: {quote.days.map((d) => `${dayLabel(d.date)} · ${d.leads}`).join(", ")}
+            </p>
 
-            {ledger.payments.length > 0 && (
-              <div className="overflow-x-auto">
-                <p className="mb-1 text-xs text-muted-foreground">Payments recorded</p>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="py-1.5 font-medium">Date</th>
-                      <th className="py-1.5 font-medium">Note</th>
-                      <th className="py-1.5 text-right font-medium">Amount</th>
-                      <th className="py-1.5" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ledger.payments.map((p) => (
-                      <tr key={p.id} className="border-t border-slate-100">
-                        <td className="py-1.5">{new Date(p.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
-                        <td className="py-1.5 text-muted-foreground">{p.note ?? "—"}</td>
-                        <td className="py-1.5 text-right">{usd(p.amountCents)}</td>
-                        <td className="py-1.5 text-right">
-                          <button onClick={() => deletePayment(p.id)} className="text-muted-foreground hover:text-rose-600" aria-label="Remove payment">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {paymentsTable}
+
+            {ledger.earlierPayments.length > 0 && (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-muted-foreground">
+                <p className="mb-1 font-medium text-slate-700">Earlier payment{ledger.earlierPayments.length > 1 ? "s" : ""}, not applied to this quote</p>
+                {ledger.earlierPayments.map((p) => (
+                  <p key={p.id}>
+                    {usd(p.amountCents)} on {dateLabel(p.at)}
+                    {p.note ? ` (${p.note})` : ""}
+                  </p>
+                ))}
+                <p className="mt-1">{quote.earlierPaymentsNote}</p>
               </div>
             )}
           </CardContent>
@@ -284,7 +255,7 @@ export function LeadCostPanel() {
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          Enhanced Wealth is fronting the ad cost for these leads. The total is the leads delivered to you and your team since the lock-in began, at the average cost per lead: what our own campaigns have spent since the lock-in began, divided by the leads they produced. Record each bank transfer you send and your balance updates — no receipts or verification needed.
+          This is a fixed quote for the lock-in week, so it won&apos;t change as leads move around. The cost per lead is what our own campaigns spent {range}, divided by the leads they produced. Record each bank transfer you send and the balance updates — no receipts or verification needed. Once it&apos;s paid in full, this panel goes away.
         </span>
       </p>
     </div>

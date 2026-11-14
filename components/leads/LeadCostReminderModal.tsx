@@ -8,7 +8,7 @@ import type { LeadCostLedger } from "@/lib/leadCostLedger";
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function dateLabel(iso: string) {
+function dateLabel(iso: string | number) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 }
 
@@ -19,9 +19,9 @@ function chicagoDow(now = new Date()): number {
 }
 
 /**
- * A once-a-week nudge in Ryan's pipeline to pay for last week's leads. Shows
- * Tuesday through Sunday while he still owes for leads from the completed week,
- * and stays dismissed for that week once he closes it or records a payment.
+ * A once-a-week nudge in Ryan's pipeline to pay the lock-in quote. Shows Tuesday
+ * through Sunday, starting the week after the lock-in, while any of the quote is
+ * still owed. Closing it or recording a payment dismisses it for that week.
  */
 export function LeadCostReminderModal({ enabled }: { enabled: boolean }) {
   const [ledger, setLedger] = useState<LeadCostLedger | null>(null);
@@ -64,6 +64,8 @@ export function LeadCostReminderModal({ enabled }: { enabled: boolean }) {
 
   const owed = -ledger.balanceCents; // positive when he owes
   const suggested = ledger.lastWeek.owedCents > 0 ? ledger.lastWeek.owedCents : owed;
+  const quote = ledger.quote;
+  const quoteRange = `${dateLabel(quote.fromIso)} – ${dateLabel(new Date(quote.toIso).getTime() - 1)}`;
 
   async function recordPayment() {
     const dollars = Number((amount || String(suggested / 100)).replace(/[^0-9.\-]/g, ""));
@@ -77,7 +79,7 @@ export function LeadCostReminderModal({ enabled }: { enabled: boolean }) {
       const res = await fetch("/api/admin/lead-cost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountCents: Math.round(dollars * 100), note: "Weekly lead-cost bank transfer" }),
+        body: JSON.stringify({ amountCents: Math.round(dollars * 100), note: "Lock-in quote bank transfer" }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Could not record the payment.");
       setDone(true);
@@ -93,7 +95,7 @@ export function LeadCostReminderModal({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Pay for last week's leads">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Pay for the lock-in leads">
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
         <div className="flex items-start justify-between border-b border-slate-100 p-5">
           <div className="flex items-center gap-2">
@@ -101,8 +103,8 @@ export function LeadCostReminderModal({ enabled }: { enabled: boolean }) {
               <Banknote className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold">Pay for last week&apos;s leads</h2>
-              <p className="text-xs text-muted-foreground">{dateLabel(ledger.lastWeek.startIso)} – {dateLabel(ledger.lastWeek.endIso)}</p>
+              <h2 className="text-base font-semibold">Pay for the lock-in leads</h2>
+              <p className="text-xs text-muted-foreground">{quoteRange}</p>
             </div>
           </div>
           <button onClick={dismiss} className="text-muted-foreground hover:text-slate-700" aria-label="Close">
@@ -118,20 +120,20 @@ export function LeadCostReminderModal({ enabled }: { enabled: boolean }) {
         ) : (
           <div className="space-y-4 p-5">
             <p className="text-sm text-muted-foreground">
-              It&apos;s Tuesday — time to settle up with Advertisely for the Enhanced Wealth leads from last week.
+              Time to settle up with Advertisely for the Enhanced Wealth lock-in leads. The full quote is on your dashboard.
             </p>
             <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
               <div className="flex justify-between py-0.5">
-                <span className="text-muted-foreground">Last week&apos;s leads</span>
-                <span className="font-medium">{ledger.lastWeek.leads}{ledger.cplCents !== null ? ` × ${usd(ledger.cplCents)}` : ""}</span>
+                <span className="text-muted-foreground">Lock-in leads</span>
+                <span className="font-medium">{quote.leads} × {usd(quote.cplCents)}</span>
               </div>
               <div className="flex justify-between py-0.5">
-                <span className="text-muted-foreground">Last week&apos;s cost</span>
-                <span className="font-semibold">{usd(ledger.lastWeek.owedCents)}</span>
+                <span className="text-muted-foreground">Quote total</span>
+                <span className="font-semibold">{usd(ledger.owedCents)}</span>
               </div>
-              {owed !== ledger.lastWeek.owedCents && (
+              {owed !== ledger.owedCents && (
                 <div className="mt-1 flex justify-between border-t border-slate-200 pt-1.5">
-                  <span className="text-muted-foreground">Total still owed</span>
+                  <span className="text-muted-foreground">Still owed</span>
                   <span className="font-semibold text-rose-600">{usd(owed)}</span>
                 </div>
               )}

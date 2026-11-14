@@ -15,17 +15,90 @@ import { getHouseAccount } from "./house";
  * that belong to other advertiser clients' own campaigns, are NOT his cost and
  * are excluded.
  *
- * owed  = (house + team leads since the lock-in start) × CPL
- * paid  = the bank transfers Ryan records (AdSpendPayment)
+ * Since Nov 13 2026 the bill is a FIXED QUOTE (LOCKIN_QUOTE below) instead of a
+ * live count, shown on Ryan's dashboard until it is paid:
+ *
+ * owed  = quote leads × quote cost per lead
+ * paid  = the bank transfers recorded after the lock-in closed (AdSpendPayment)
  * balance = paid − owed  (may go NEGATIVE — Ryan's account is the only one
  *           allowed to; a negative balance means he still owes that much)
  */
 
 // The lock-in started Nov 9 2026 00:00 America/Chicago (CST) and the surge
-// auto-reverts Nov 12 00:00 CST. The ledger keeps accruing after that — the
-// lock-in flag only changes the panel's title.
+// auto-reverted Nov 12 00:00 CST.
 export const LEDGER_START = new Date("2026-11-09T06:00:00Z");
 export const LOCKIN_END = new Date("2026-11-12T06:00:00Z");
+
+export interface LeadCostQuote {
+  fromIso: string;
+  toIso: string; // exclusive
+  leads: number;
+  cplCents: number;
+  totalCents: number;
+  adSpendCents: number;
+  leadsGenerated: number;
+  /** Where the leads came from. Adds up to `leads`. */
+  lines: { label: string; leads: number }[];
+  /** Leads per day (America/Chicago). Adds up to `leads`. */
+  days: { date: string; leads: number }[];
+  /** Only transfers recorded from this moment on count toward the quote. */
+  paymentsFromIso: string;
+  /** Shown beside any transfer recorded before `paymentsFromIso`. */
+  earlierPaymentsNote: string;
+}
+
+/**
+ * The lock-in quote (owner request, Nov 13 2026): one fixed bill for every lead
+ * that was FIRST sent to Ryan from the start of the lock-in until routing to
+ * him was switched off late on Nov 12 (lib/housePause.ts). Where a lead went
+ * afterwards (the Goldmine, a teammate, a client while he is away) makes no
+ * difference: it counts if it reached him first.
+ *
+ * Frozen on purpose. The live count this replaces read "who holds the lead
+ * now", which stopped being true once leads were moved out of his pipeline and
+ * guest agents began taking turns. Counted on Nov 13 from each lead's first
+ * LEAD_ASSIGNED activity: 215 leads reached him first; one was a bad lead that
+ * was swapped for a replacement, so 214 are billed.
+ *
+ * Cost per lead = ad spend on our own campaigns Nov 9–12 ÷ the leads those
+ * campaigns produced in that time = $7,489.28 ÷ 256 = $29.26.
+ *   Enhanced Wealth    $3,261.21  (Blue Collar ER)
+ *   ABCA               $1,931.10  (Team Use $1,706.45 + Text message Test $224.65)
+ *   Essential Workers  $2,296.97  (Nurses $1,166.59 + Blue Collar $1,130.38)
+ * "Advertisely Advertiser - …" campaigns belong to clients and are left out of
+ * both the spend and the lead count.
+ *
+ * Payments: the $2,300.32 recorded on Nov 10 answered that week's pop-up, which
+ * billed the week BEFORE the lock-in (Nov 2–8: 88 leads × $26.14). It is shown
+ * as an earlier payment and not applied here. To credit it to this quote
+ * instead, set `paymentsFromIso` to `fromIso`.
+ */
+const QUOTE_LEADS = 214;
+const QUOTE_CPL_CENTS = 2926;
+export const LOCKIN_QUOTE: LeadCostQuote = {
+  fromIso: LEDGER_START.toISOString(),
+  toIso: "2026-11-13T06:00:00.000Z",
+  leads: QUOTE_LEADS,
+  cplCents: QUOTE_CPL_CENTS,
+  totalCents: QUOTE_LEADS * QUOTE_CPL_CENTS,
+  adSpendCents: 748_928,
+  leadsGenerated: 256,
+  lines: [
+    { label: "Enhanced Wealth Blue Collar page", leads: 78 },
+    { label: "Essential Workers forms (nurses and blue collar)", leads: 77 },
+    { label: "ABCA, lock-in boost", leads: 37 },
+    { label: "ABCA, your turns in the rotation", leads: 21 },
+    { label: "Replacement for a bad lead (the bad one isn't charged)", leads: 1 },
+  ],
+  days: [
+    { date: "2026-11-09", leads: 58 },
+    { date: "2026-11-10", leads: 56 },
+    { date: "2026-11-11", leads: 67 },
+    { date: "2026-11-12", leads: 33 },
+  ],
+  paymentsFromIso: "2026-11-13T06:00:00.000Z",
+  earlierPaymentsNote: "Paid for the week before the lock-in (Nov 2–8), so it isn't part of this quote.",
+};
 
 export const LEAD_COST_PAYMENT_METHOD = "bank";
 
@@ -89,7 +162,9 @@ export interface LeadCostLedger {
   paidCents: number;
   balanceCents: number; // paid − owed (negative = still owes)
 
-  // Last completed Mon–Sun week, for the "pay for last week" reminder.
+  // Last completed Mon–Sun week, for the weekly pay reminder. `leads` stays 0
+  // (no reminder) until the lock-in week is a completed week and while nothing
+  // is owed; `owedCents` is what is still owed on the quote.
   lastWeek: {
     startIso: string;
     endIso: string;
@@ -97,7 +172,13 @@ export interface LeadCostLedger {
     owedCents: number;
   };
 
-  payments: LeadCostPayment[];
+  /** The fixed lock-in quote everything above is taken from. */
+  quote: LeadCostQuote;
+  /** Paid in full: the dashboard panel and the reminder go away. */
+  settled: boolean;
+
+  payments: LeadCostPayment[]; // counted toward the quote
+  earlierPayments: LeadCostPayment[]; // recorded before the quote, not applied
 }
 
 // ─── Average cost per lead (ad spend ÷ leads) ────────────────────────────────
@@ -212,39 +293,6 @@ export async function resolveCplCents(
     : { cplCents: null, cplSource: "none", adSpendCents: null, leadsGenerated: null };
 }
 
-/** House + team leads (delivered, not sold to outside buyers) received in a window. */
-async function countFrontedLeads(houseUserId: string, since: Date, until: Date) {
-  if (!prisma) return { house: 0, team: 0, teamLines: [] as LeadCostTeamLine[] };
-  const base = {
-    receivedAt: { gte: since, lt: until },
-    trashedAt: null,
-    orderId: null, // exclude leads sold to outside buyers — those aren't Ryan's cost
-    assignedUserId: { not: null },
-  } as const;
-
-  const house = await prisma.lead.count({ where: { ...base, assignedUserId: houseUserId } });
-
-  const grouped = await prisma.lead.groupBy({
-    by: ["assignedUserId"],
-    // Other advertisers (clients running their own campaign) pay for their own
-    // leads, so those are never part of what Ryan fronts.
-    where: { ...base, NOT: { assignedUserId: houseUserId }, assignedUser: { isAdvertiser: false } },
-    _count: { _all: true },
-  });
-  const team = grouped.reduce((s, g) => s + g._count._all, 0);
-
-  const ids = grouped.map((g) => g.assignedUserId).filter((x): x is string => !!x);
-  const names = ids.length
-    ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } })
-    : [];
-  const nameOf = new Map(names.map((u) => [u.id, u.name ?? u.email ?? "—"]));
-  const teamLines: LeadCostTeamLine[] = grouped
-    .map((g) => ({ userId: g.assignedUserId as string, name: nameOf.get(g.assignedUserId as string) ?? "—", leads: g._count._all }))
-    .sort((a, b) => b.leads - a.leads);
-
-  return { house, team, teamLines };
-}
-
 /** Previous completed Monday–Sunday week in America/Chicago, as UTC instants. */
 function lastWeekRange(now: Date): { start: Date; end: Date } {
   // Day-of-week in Chicago.
@@ -265,46 +313,57 @@ export async function buildLeadCostLedger(now = new Date()): Promise<LeadCostLed
   const house = await getHouseAccount();
   if (!house) return null;
 
-  const { cplCents, cplSource, adSpendCents, leadsGenerated } = await resolveCplCents(house.userId, now);
-
-  const { house: leadsToHouse, team: leadsToTeam, teamLines } = await countFrontedLeads(house.userId, LEDGER_START, now);
-  const totalLeads = leadsToHouse + leadsToTeam;
-  const owedCents = cplCents != null ? totalLeads * cplCents : 0;
+  const quote = LOCKIN_QUOTE;
+  const owedCents = quote.totalCents;
 
   const payRows = await prisma.adSpendPayment.findMany({
     where: { userId: house.userId },
     orderBy: { receivedAt: "desc" },
     take: 50,
   });
-  const paidCents = payRows.reduce((s, p) => s + p.amountCents, 0);
+  const toPayment = (p: (typeof payRows)[number]): LeadCostPayment => ({
+    id: p.id,
+    amountCents: p.amountCents,
+    method: p.method,
+    note: p.note,
+    at: p.receivedAt.toISOString(),
+  });
+  const countsFrom = new Date(quote.paymentsFromIso).getTime();
+  const counted = payRows.filter((p) => p.receivedAt.getTime() >= countsFrom);
+  const earlier = payRows.filter((p) => p.receivedAt.getTime() < countsFrom);
+  const paidCents = counted.reduce((s, p) => s + p.amountCents, 0);
+  const stillOwedCents = Math.max(0, owedCents - paidCents);
 
+  // The weekly pop-up starts once the lock-in week is a completed week.
   const { start, end } = lastWeekRange(now);
-  const lw = await countFrontedLeads(house.userId, start, end);
-  const lwLeads = lw.house + lw.team;
+  const reminderDue = end.getTime() >= new Date(quote.toIso).getTime() && stillOwedCents > 0;
 
   return {
     userId: house.userId,
-    lockInActive: now.getTime() < LOCKIN_END.getTime(),
-    ledgerStartIso: LEDGER_START.toISOString(),
+    lockInActive: false,
+    ledgerStartIso: quote.fromIso,
     lockInEndIso: LOCKIN_END.toISOString(),
     nowIso: now.toISOString(),
-    cplCents,
-    cplSource,
-    adSpendCents,
-    leadsGenerated,
-    leadsToHouse,
-    leadsToTeam,
-    totalLeads,
-    team: teamLines,
+    cplCents: quote.cplCents,
+    cplSource: "meta",
+    adSpendCents: quote.adSpendCents,
+    leadsGenerated: quote.leadsGenerated,
+    leadsToHouse: quote.leads,
+    leadsToTeam: 0,
+    totalLeads: quote.leads,
+    team: [],
     owedCents,
     paidCents,
     balanceCents: paidCents - owedCents,
     lastWeek: {
       startIso: start.toISOString(),
       endIso: end.toISOString(),
-      leads: lwLeads,
-      owedCents: cplCents != null ? lwLeads * cplCents : 0,
+      leads: reminderDue ? quote.leads : 0,
+      owedCents: reminderDue ? stillOwedCents : 0,
     },
-    payments: payRows.map((p) => ({ id: p.id, amountCents: p.amountCents, method: p.method, note: p.note, at: p.receivedAt.toISOString() })),
+    quote,
+    settled: stillOwedCents === 0,
+    payments: counted.map(toPayment),
+    earlierPayments: earlier.map(toPayment),
   };
 }
