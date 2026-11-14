@@ -10,7 +10,8 @@ import { ReplacementReasonDialog } from "@/components/leads/ReplacementReasonDia
 import { LeadMessages } from "@/components/leads/LeadMessages";
 import { replacementWindowClosed, REPLACEMENT_WINDOW_HOURS } from "@/lib/replacementReasons";
 import { reportDial } from "@/lib/dials";
-import { isGoldmineEligibleStage, WON_STAGE_ID, type PipelineStage } from "@/data/pipeline";
+import { isGoldmineEligibleStage, isConversionStage, type PipelineStage } from "@/data/pipeline";
+import { useDealApPrompt } from "@/components/leads/DealApDialog";
 
 // Colored dot for the pipeline-stage dropdown (mirrors the board's column dots).
 const STAGE_TONE_DOT: Record<string, string> = {
@@ -347,21 +348,29 @@ export function LeadDetailModal({
   // the card across the board (GHL-style). Uses the same endpoint as the drag.
   const stageList = stages ?? [];
   const [stageId, setStageId] = useState(lead.pipelineStage);
+  const { ask: askAp, dialog: apDialog } = useDealApPrompt();
   const [stageSaving, setStageSaving] = useState(false);
   const [stageMsg, setStageMsg] = useState<"saved" | "error" | null>(null);
   const currentStage = stageList.find((s) => s.id === stageId);
   async function changeStage(next: string) {
     if (!next || next === stageId) return;
-    // Marking a policy sold (the won stage) captures the annual premium for P&L.
+    // Underwriting and every later deal stage needs the AP, confirmed in a pop-up
+    // (it becomes the lead's value; Issued PAID also logs it for P&L).
     let premiumCents: number | undefined;
-    if (next === WON_STAGE_ID) {
-      const input = window.prompt(
-        "Policy sold! Enter the annual premium (AP) in dollars — this feeds your Profit & Loss:",
-        "",
-      );
-      if (input === null) return; // cancelled — leave the stage as-is
-      const dollars = parseFloat(input.replace(/[^0-9.]/g, ""));
-      premiumCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+    if (isConversionStage(next)) {
+      const currentCents = (() => {
+        const n = parseFloat(valueInput.replace(/[^0-9.]/g, ""));
+        return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : lead.valueCents;
+      })();
+      const ap = await askAp({
+        leadName: lead.name,
+        stageId: next,
+        stageLabel: stageList.find((s) => s.id === next)?.label ?? next,
+        fromStageId: stageId,
+        initialCents: currentCents,
+      });
+      if (ap == null) return; // cancelled — leave the stage as-is
+      premiumCents = ap;
     }
     const prev = stageId;
     setStageId(next);
@@ -376,6 +385,10 @@ export function LeadDetailModal({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't change the stage.");
       setStageMsg("saved");
       setTimeout(() => setStageMsg((m) => (m === "saved" ? null : m)), 1600);
+      if (premiumCents != null) {
+        setValueInput(String(premiumCents / 100));
+        onValueChanged?.(lead.id, premiumCents);
+      }
       try { localStorage.setItem("pipeline_active_lead", lead.id); } catch { /* ignore */ }
       onStageChanged?.(lead.id, next);
     } catch (e: any) {
@@ -446,6 +459,7 @@ export function LeadDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
+      {apDialog}
       <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-slate-200 flex items-start justify-between gap-4">

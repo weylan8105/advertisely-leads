@@ -7,6 +7,9 @@
 //   Contacts       leads moved to Contacted / Follow up / Call Back or further
 //   Appointments   leads moved to Call Back / Appointment or further
 //   Presentations  leads moved to Presentation Ran or further (incl. Underwriting…)
+//   Apps / Submitted AP  deals submitted in the period: a lead's FIRST move into
+//                  Underwriting or a later deal stage, credited to whoever moved it,
+//                  at the lead's AP (agents must enter it to make that move)
 //   Policies / AP  leads sold (Issued PAID, Lead.soldAt) in the period + their premium
 //
 // Stage moves come from the "STATUS_CHANGED" lead activity. New moves carry
@@ -18,7 +21,7 @@
 // current owner.
 
 import { prisma } from "./prisma";
-import { WON_STAGE_ID } from "@/data/pipeline";
+import { WON_STAGE_ID, CONVERSION_STAGE_IDS } from "@/data/pipeline";
 
 export const ACTIVITY_TZ = "America/Chicago";
 export const PERIODS = ["today", "wtd", "mtd", "ytd", "all"] as const;
@@ -34,12 +37,14 @@ export interface ActivityStats {
   contacts: number;
   appointments: number;
   presentations: number;
+  apps: number;
+  submittedApCents: number;
   policies: number;
   apCents: number;
 }
 
 export const emptyStats = (): ActivityStats => ({
-  leads: 0, dials: 0, contacts: 0, appointments: 0, presentations: 0, policies: 0, apCents: 0,
+  leads: 0, dials: 0, contacts: 0, appointments: 0, presentations: 0, apps: 0, submittedApCents: 0, policies: 0, apCents: 0,
 });
 
 export function addStats(a: ActivityStats, b: ActivityStats): ActivityStats {
@@ -49,6 +54,8 @@ export function addStats(a: ActivityStats, b: ActivityStats): ActivityStats {
     contacts: a.contacts + b.contacts,
     appointments: a.appointments + b.appointments,
     presentations: a.presentations + b.presentations,
+    apps: a.apps + b.apps,
+    submittedApCents: a.submittedApCents + b.submittedApCents,
     policies: a.policies + b.policies,
     apCents: a.apCents + b.apCents,
   };
@@ -165,7 +172,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
   };
   const sinceTs = since ?? new Date(0);
 
-  const [leadRows, soldRows, events, dials] = await Promise.all([
+  const [leadRows, soldRows, events, dials, submitted] = await Promise.all([
     prisma.lead.groupBy({
       by: ["assignedUserId"],
       where: {
@@ -196,6 +203,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
       FROM "LeadActivity" a
       JOIN "Lead" l ON l.id = a."leadId"
       WHERE a.type = 'CALL_MADE' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
+    submittedDeals(sinceTs),
   ]);
 
   for (const r of leadRows) if (r.assignedUserId) get(r.assignedUserId).leads = r._count._all;
@@ -207,7 +215,44 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
   }
 
   addFunnelStats(events, dials, get, userIds ? new Set(userIds) : null);
+  const allowed = userIds ? new Set(userIds) : null;
+  for (const d of submitted) {
+    if (!d.userId || (allowed && !allowed.has(d.userId))) continue;
+    const s = get(d.userId);
+    s.apps++;
+    s.submittedApCents += d.apCents;
+  }
   return out;
+}
+
+export interface SubmittedDeal {
+  leadId: string;
+  userId: string | null; // who moved it (older moves: the lead's owner)
+  apCents: number;
+  at: Date;
+}
+
+/**
+ * Deals submitted since `since`: each lead's first move into Underwriting or a
+ * later deal stage (ever), when that first move falls in the period. AP is the
+ * lead's current value, so a corrected AP shows everywhere.
+ */
+export async function submittedDeals(since: Date): Promise<SubmittedDeal[]> {
+  if (!prisma) return [];
+  const stages = [...CONVERSION_STAGE_IDS];
+  const rows = await prisma.$queryRaw<{ leadId: string; userId: string | null; apCents: number | null; at: Date }[]>`
+    SELECT f."leadId", COALESCE(f.actor, l."assignedUserId") AS "userId",
+           COALESCE(l."valueCents", l."soldPremiumCents", f.ap, 0)::int AS "apCents", f.at
+    FROM (
+      SELECT DISTINCT ON (a."leadId") a."leadId", a."createdAt" AS at,
+             a.metadata->>'actorId' AS actor, (a.metadata->>'apCents')::int AS ap
+      FROM "LeadActivity" a
+      WHERE a.type = 'STATUS_CHANGED' AND a.metadata->>'stage' = ANY(${stages})
+      ORDER BY a."leadId", a."createdAt" ASC
+    ) f
+    JOIN "Lead" l ON l.id = f."leadId"
+    WHERE f.at >= ${since} AND l."trashedAt" IS NULL`;
+  return rows.map((r) => ({ leadId: r.leadId, userId: r.userId, apCents: Number(r.apCents ?? 0), at: new Date(r.at) }));
 }
 
 export function hasActivity(s: ActivityStats): boolean {

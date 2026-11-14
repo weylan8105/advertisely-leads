@@ -1,3 +1,4 @@
+import { isConversionStage } from "@/data/pipeline";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true },
+    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true, pipelineStage: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
@@ -43,6 +44,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "You can only set the value on your own leads." }, { status: 403 });
   }
 
+  // A submitted deal (Underwriting or later) always keeps its AP.
+  if (isConversionStage(lead.pipelineStage ?? "") && !valueCents) {
+    return NextResponse.json(
+      { error: "Submitted deals need an annual premium (AP). Enter the AP instead of clearing it." },
+      { status: 400 },
+    );
+  }
   await prisma.lead.update({ where: { id: lead.id }, data: { valueCents } });
   return NextResponse.json({ ok: true, valueCents });
 }

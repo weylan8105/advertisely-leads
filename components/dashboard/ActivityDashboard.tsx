@@ -27,13 +27,14 @@ export function ActivityDashboard() {
     return () => { alive = false; };
   }, [period]);
 
-  const s = stats ?? { leads: 0, dials: 0, contacts: 0, appointments: 0, presentations: 0, policies: 0, apCents: 0 };
+  const s = stats ?? { leads: 0, dials: 0, contacts: 0, appointments: 0, presentations: 0, apps: 0, submittedApCents: 0, policies: 0, apCents: 0 };
   const tiles: { label: string; value: string; hint?: string }[] = [
     { label: "Leads", value: String(s.leads) },
     { label: "Dials", value: String(s.dials) },
     { label: "Contacts", value: String(s.contacts), hint: `${pct(s.contacts, s.dials)} of dials` },
     { label: "Appointments", value: String(s.appointments), hint: `${pct(s.appointments, s.contacts)} of contacts` },
     { label: "Presentations", value: String(s.presentations), hint: `${pct(s.presentations, s.appointments)} of appts` },
+    { label: "Apps", value: String(s.apps), hint: `${formatAp(s.submittedApCents)} submitted AP` },
     { label: "Policies", value: String(s.policies), hint: `${pct(s.policies, s.presentations)} close` },
   ];
 
@@ -49,7 +50,7 @@ export function ActivityDashboard() {
         </div>
         <PeriodPills value={period} onChange={setPeriod} />
       </div>
-      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 transition-opacity", loading && stats && "opacity-60")}>
+      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8 transition-opacity", loading && stats && "opacity-60")}>
         {tiles.map((t) => (
           <div key={t.label} className="flex min-h-[132px] flex-col rounded-xl border border-slate-200 bg-white p-5">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t.label}</div>

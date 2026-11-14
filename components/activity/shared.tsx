@@ -11,6 +11,8 @@ export interface ActivityStats {
   contacts: number;
   appointments: number;
   presentations: number;
+  apps: number; // deals submitted (first reached Underwriting or later)
+  submittedApCents: number;
   policies: number;
   apCents: number;
 }

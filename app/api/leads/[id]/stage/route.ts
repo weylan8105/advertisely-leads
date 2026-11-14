@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { WON_STAGE_ID } from "@/data/pipeline";
+import { WON_STAGE_ID, CONVERSION_STAGE_IDS, isConversionStage } from "@/data/pipeline";
 import { stagesForUser, labelForStage } from "@/lib/pipelineStages";
 import { canActOnLead } from "@/lib/leadAccess";
 import { fireMetaStageEvent } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_AP_CENTS = 1_000_000_00; // $1,000,000, same cap as the lead value field
 
 /**
  * PATCH /api/leads/:id/stage — move a lead to a CRM pipeline stage.
@@ -30,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const lead = await prisma.lead.findUnique({
     where: { id: params.id },
-    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true },
+    select: { id: true, assignedUserId: true, organizationId: true, pipeline: true, pipelineStage: true },
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
@@ -57,11 +59,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
   }
 
-  // Marking a policy sold (the reserved "won" stage) captures the annual
-  // premium for P&L; moving off that stage clears it.
+  // Underwriting and every stage after it is a submitted deal: the agent must
+  // enter its annual premium (AP), which becomes the lead's value and counts on
+  // the leaderboards right away. Marking it sold (the reserved "won" stage) also
+  // logs that AP for P&L; moving off that stage clears it.
   const isSold = stage === WON_STAGE_ID;
-  const premiumCents =
-    isSold && body.premiumCents != null ? Math.max(0, Math.round(Number(body.premiumCents))) : null;
+  const isDeal = isConversionStage(stage);
+  const rawAp = Math.round(Number(body.premiumCents));
+  const apCents = Number.isFinite(rawAp) && rawAp > 0 ? Math.min(rawAp, MAX_AP_CENTS) : null;
+  if (isDeal && apCents == null) {
+    return NextResponse.json(
+      { error: "Enter the annual premium (AP) for this deal before moving it. If this keeps happening, refresh the page." },
+      { status: 400 },
+    );
+  }
+  const premiumCents = isSold ? apCents : null;
+  // The lead's first move into a deal stage is its submission (live deal alerts +
+  // leaderboard "Submitted AP"); moving it along afterwards isn't a new deal.
+  const firstSubmission =
+    isDeal &&
+    !isConversionStage(lead.pipelineStage ?? "") &&
+    (await prisma.leadActivity.count({
+      where: {
+        leadId: lead.id,
+        type: "STATUS_CHANGED",
+        OR: CONVERSION_STAGE_IDS.map((id) => ({ metadata: { path: ["stage"], equals: id } })),
+      },
+    })) === 0;
   // Goldmine P&L credit goes to the CLOSER: when a downline moves a Goldmine
   // lead to the won stage, reassign it to them so the sale counts in their book.
   const creditCloser = isSold && lead.pipeline === "goldmine" && lead.assignedUserId !== userId;
@@ -69,6 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data: {
       pipelineStage: stage,
+      ...(isDeal ? { valueCents: apCents } : {}),
       soldPremiumCents: isSold ? premiumCents : null,
       soldAt: isSold ? new Date() : null,
       ...(creditCloser ? { assignedUserId: userId, assignedAt: new Date() } : {}),
@@ -83,7 +108,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       type: "STATUS_CHANGED",
       author: session?.user?.name ?? null,
       body: `Moved to "${label}" in the pipeline.`,
-      metadata: { stage, label, actorId: userId },
+      metadata: {
+        stage,
+        label,
+        actorId: userId,
+        ...(isDeal ? { apCents } : {}),
+        ...(firstSubmission ? { submitted: true } : {}),
+      },
     },
   });
 
@@ -92,5 +123,5 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // like this lead. No-op for other stages, or if CAPI isn't configured yet.
   await fireMetaStageEvent(params.id, stage, isSold ? premiumCents : null);
 
-  return NextResponse.json({ ok: true, stage });
+  return NextResponse.json({ ok: true, stage, valueCents: isDeal ? apCents : undefined });
 }

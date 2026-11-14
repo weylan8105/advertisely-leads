@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Phone, GripVertical, MapPin, Clock, AlarmClock, Mail, Copy, Check, Users, X, Search, CalendarClock, ChevronDown, BadgeCheck } from "lucide-react";
-import { PIPELINE_STAGES, DEFAULT_STAGE, WON_STAGE_ID, type PipelineStage, type PipelineSort } from "@/data/pipeline";
+import { PIPELINE_STAGES, DEFAULT_STAGE, isConversionStage, type PipelineStage, type PipelineSort } from "@/data/pipeline";
+import { useDealApPrompt } from "@/components/leads/DealApDialog";
 import { localTimeForState, stateName, stateCode } from "@/data/states";
 import { cn, formatCurrency } from "@/lib/utils";
 import { reportDial } from "@/lib/dials";
@@ -81,6 +82,7 @@ export function PipelineBoard({
 }) {
   const cols = stages && stages.length ? stages : PIPELINE_STAGES;
   const colIds = new Set(cols.map((s) => s.id));
+  const { ask: askAp, dialog: apDialog } = useDealApPrompt();
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   // Edge auto-scroll while dragging a card: hold the pointer near (or past) the
@@ -330,20 +332,28 @@ export function PipelineBoard({
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.pipelineStage === stageId) return false;
 
+    // Underwriting and every later deal stage needs the AP, confirmed in a pop-up.
     let premiumCents: number | undefined;
-    if (stageId === WON_STAGE_ID) {
-      const input = window.prompt(
-        "Policy sold! Enter the annual premium (AP) in dollars — this feeds your Profit & Loss:",
-        "",
-      );
-      if (input === null) return false;
-      const dollars = parseFloat(input.replace(/[^0-9.]/g, ""));
-      premiumCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+    if (isConversionStage(stageId)) {
+      const ap = await askAp({
+        leadName: lead.name,
+        stageId,
+        stageLabel: cols.find((s) => s.id === stageId)?.label ?? stageId,
+        fromStageId: lead.pipelineStage,
+        initialCents: lead.valueCents,
+      });
+      if (ap == null) return false;
+      premiumCents = ap;
     }
 
     markActive(leadId);
     const prev = lead.pipelineStage;
-    setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: stageId } : l)));
+    const prevValue = lead.valueCents;
+    setLeads((cur) =>
+      cur.map((l) =>
+        l.id === leadId ? { ...l, pipelineStage: stageId, ...(premiumCents != null ? { valueCents: premiumCents } : {}) } : l,
+      ),
+    );
     try {
       const res = await fetch(`/api/leads/${leadId}/stage`, {
         method: "PATCH",
@@ -353,7 +363,7 @@ export function PipelineBoard({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Move failed");
       return true;
     } catch (e: any) {
-      setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: prev } : l)));
+      setLeads((cur) => cur.map((l) => (l.id === leadId ? { ...l, pipelineStage: prev, valueCents: prevValue } : l)));
       alert(e.message ?? "Could not move lead");
       return false;
     }
@@ -365,6 +375,7 @@ export function PipelineBoard({
 
   return (
     <>
+      {apDialog}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-semibold text-foreground">
           <Users className="h-4 w-4 text-brand-red" />
