@@ -28,8 +28,13 @@ beforeEach(() => {
 describe("lock-in quote", () => {
   it("adds up: sources and days both equal the billed leads, and the total is leads × rate", () => {
     const sum = (rows: { leads: number }[]) => rows.reduce((s, r) => s + r.leads, 0);
-    expect(sum(LOCKIN_QUOTE.lines)).toBe(LOCKIN_QUOTE.leads);
-    expect(sum(LOCKIN_QUOTE.days)).toBe(LOCKIN_QUOTE.leads);
+    expect(sum(LOCKIN_QUOTE.lines)).toBe(LOCKIN_QUOTE.sentLeads);
+    expect(sum(LOCKIN_QUOTE.days)).toBe(LOCKIN_QUOTE.sentLeads);
+    // Leads handed on to clients are the clients' cost and come off the bill.
+    expect(sum(LOCKIN_QUOTE.clients)).toBe(LOCKIN_QUOTE.clientLeads);
+    expect(LOCKIN_QUOTE.leads).toBe(LOCKIN_QUOTE.sentLeads - LOCKIN_QUOTE.clientLeads);
+    expect(LOCKIN_QUOTE.leads).toBe(192);
+    expect(LOCKIN_QUOTE.totalCents).toBe(561_792);
     expect(LOCKIN_QUOTE.totalCents).toBe(LOCKIN_QUOTE.leads * LOCKIN_QUOTE.cplCents);
     expect(LOCKIN_QUOTE.cplCents).toBe(Math.round(LOCKIN_QUOTE.adSpendCents / LOCKIN_QUOTE.leadsGenerated));
   });

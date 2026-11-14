@@ -32,14 +32,20 @@ export const LOCKIN_END = new Date("2026-11-12T06:00:00Z");
 export interface LeadCostQuote {
   fromIso: string;
   toIso: string; // exclusive
+  /** Leads billed: `sentLeads` − `clientLeads`. */
   leads: number;
+  /** Leads that were first sent to Ryan. */
+  sentLeads: number;
+  /** Of those, the ones later handed to clients, who pay for them instead. */
+  clientLeads: number;
+  clients: { name: string; leads: number }[];
   cplCents: number;
   totalCents: number;
   adSpendCents: number;
   leadsGenerated: number;
-  /** Where the leads came from. Adds up to `leads`. */
+  /** Where the leads came from. Adds up to `sentLeads`. */
   lines: { label: string; leads: number }[];
-  /** Leads per day (America/Chicago). Adds up to `leads`. */
+  /** Leads per day (America/Chicago). Adds up to `sentLeads`. */
   days: { date: string; leads: number }[];
   /** Only transfers recorded from this moment on count toward the quote. */
   paymentsFromIso: string;
@@ -50,15 +56,21 @@ export interface LeadCostQuote {
 /**
  * The lock-in quote (owner request, Nov 13 2026): one fixed bill for every lead
  * that was FIRST sent to Ryan from the start of the lock-in until routing to
- * him was switched off late on Nov 12 (lib/housePause.ts). Where a lead went
- * afterwards (the Goldmine, a teammate, a client while he is away) makes no
- * difference: it counts if it reached him first.
+ * him was switched off late on Nov 12 (lib/housePause.ts). A lead counts if it
+ * reached him first, whether it then stayed in his pipeline, went to the
+ * Goldmine or was passed to a teammate.
+ *
+ * One exception (owner, same day): leads later handed on to clients are the
+ * clients' cost, not his. 22 were redistributed out of his pipeline on Nov 13
+ * while he was away, to buyers' paid orders and to advertisers' ad-spend
+ * balances, so those come off: 214 − 22 = 192 billed. If more of these leads
+ * are handed to clients later, lower `QUOTE_CLIENT_LEADS` and `clients` again.
  *
  * Frozen on purpose. The live count this replaces read "who holds the lead
  * now", which stopped being true once leads were moved out of his pipeline and
  * guest agents began taking turns. Counted on Nov 13 from each lead's first
  * LEAD_ASSIGNED activity: 215 leads reached him first; one was a bad lead that
- * was swapped for a replacement, so 214 are billed.
+ * was swapped for a replacement, which leaves 214 before the client leads.
  *
  * Cost per lead = ad spend on our own campaigns Nov 9–12 ÷ the leads those
  * campaigns produced in that time = $7,489.28 ÷ 256 = $29.26.
@@ -73,12 +85,24 @@ export interface LeadCostQuote {
  * as an earlier payment and not applied here. To credit it to this quote
  * instead, set `paymentsFromIso` to `fromIso`.
  */
-const QUOTE_LEADS = 214;
+const QUOTE_SENT_LEADS = 214;
+const QUOTE_CLIENT_LEADS = 22;
+const QUOTE_LEADS = QUOTE_SENT_LEADS - QUOTE_CLIENT_LEADS;
 const QUOTE_CPL_CENTS = 2926;
 export const LOCKIN_QUOTE: LeadCostQuote = {
   fromIso: LEDGER_START.toISOString(),
   toIso: "2026-11-13T06:00:00.000Z",
   leads: QUOTE_LEADS,
+  sentLeads: QUOTE_SENT_LEADS,
+  clientLeads: QUOTE_CLIENT_LEADS,
+  clients: [
+    { name: "Jace Jensen", leads: 5 },
+    { name: "Angelo Rodriguez", leads: 4 },
+    { name: "Luke Scheffers", leads: 4 },
+    { name: "Mario Alvarado", leads: 4 },
+    { name: "Kyle Vietzke", leads: 3 },
+    { name: "David Layton", leads: 2 },
+  ],
   cplCents: QUOTE_CPL_CENTS,
   totalCents: QUOTE_LEADS * QUOTE_CPL_CENTS,
   adSpendCents: 748_928,

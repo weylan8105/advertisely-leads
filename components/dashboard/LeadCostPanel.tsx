@@ -175,7 +175,7 @@ export function LeadCostPanel() {
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <DashboardStatCard label="Leads sent to you" value={quote.leads} hint={range} icon={<Users className="h-4 w-4" />} accent="violet" />
+        <DashboardStatCard label="Leads billed" value={quote.leads} hint={quote.clientLeads > 0 ? `${quote.sentLeads} sent to you − ${quote.clientLeads} to clients` : range} icon={<Users className="h-4 w-4" />} accent="violet" />
         <DashboardStatCard label="Avg. cost per lead" value={usd(quote.cplCents)} hint="Ad spend ÷ leads" icon={<Target className="h-4 w-4" />} accent="amber" />
         <DashboardStatCard label="Quote total" value={usd(ledger.owedCents)} hint="Leads × cost per lead" icon={<TrendingUp className="h-4 w-4" />} accent="blue" />
         <DashboardStatCard label="Paid" value={usd(ledger.paidCents)} hint="Your recorded transfers" icon={<Wallet className="h-4 w-4" />} accent="emerald" />
@@ -210,14 +210,20 @@ export function LeadCostPanel() {
           <CardHeader>
             <CardTitle>Lock-in leads, {range}</CardTitle>
             <CardDescription>
-              Every lead that was first sent to you from the start of the lock-in until your routing was paused, at {usd(quote.cplCents)} each. A lead counts wherever it went afterwards: your pipeline, the Goldmine, a teammate, or a client while you&apos;re away. Clients&apos; own campaign leads aren&apos;t included.
+              Every lead that was first sent to you from the start of the lock-in until your routing was paused, at {usd(quote.cplCents)} each. A lead counts whether it stayed in your pipeline, went to the Goldmine or was passed to a teammate. Leads handed on to clients are their cost, so they come off. Clients&apos; own campaign leads were never included.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <dl className="space-y-1.5 text-sm">
               {([
                 ...quote.lines.map((l) => [l.label, `${l.leads} leads`, ""] as [string, string, string]),
-                ["Total leads", `${quote.leads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
+                ["Sent to you first", `${quote.sentLeads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
+                ...(quote.clientLeads > 0
+                  ? ([
+                      ["Handed on to clients, who pay for them", `− ${quote.clientLeads} leads`, "text-muted-foreground"],
+                      ["Leads billed", `${quote.leads} leads`, "font-medium border-t border-slate-100 pt-1.5"],
+                    ] as [string, string, string][])
+                  : []),
                 [`Avg. cost per lead (${usd0(quote.adSpendCents)} ad spend ÷ ${quote.leadsGenerated} leads)`, usd(quote.cplCents), "text-muted-foreground"],
                 ["Quote total", usd(ledger.owedCents), "font-semibold"],
                 ["Paid", `− ${usd(ledger.paidCents)}`, "text-muted-foreground"],
@@ -231,7 +237,13 @@ export function LeadCostPanel() {
             </dl>
 
             <p className="text-xs text-muted-foreground">
-              By day: {quote.days.map((d) => `${dayLabel(d.date)} · ${d.leads}`).join(", ")}
+              Sent to you by day: {quote.days.map((d) => `${dayLabel(d.date)} · ${d.leads}`).join(", ")}
+              {quote.clients.length > 0 && (
+                <>
+                  <br />
+                  Handed on to clients: {quote.clients.map((c) => `${c.name} · ${c.leads}`).join(", ")}
+                </>
+              )}
             </p>
 
             {paymentsTable}
@@ -255,7 +267,7 @@ export function LeadCostPanel() {
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          This is a fixed quote for the lock-in week, so it won&apos;t change as leads move around. The cost per lead is what our own campaigns spent {range}, divided by the leads they produced. Record each bank transfer you send and the balance updates — no receipts or verification needed. Once it&apos;s paid in full, this panel goes away.
+          This is a fixed quote for the lock-in week: the leads first sent to you, less the ones handed on to clients. The cost per lead is what our own campaigns spent {range}, divided by the leads they produced. Record each bank transfer you send and the balance updates — no receipts or verification needed. Once it&apos;s paid in full, this panel goes away.
         </span>
       </p>
     </div>
