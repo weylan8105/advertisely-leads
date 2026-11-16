@@ -18,8 +18,11 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/metaCapi", () => ({
   INSTANT_FORM_LEAD_EVENT: "Contact",
   STAGE_EVENTS: { underwriting: { event: "Purchase" }, approved: { event: "Purchase" }, "issued-not-paid": { event: "Purchase" }, "issued-paid": { event: "Purchase" } },
+  QUALIFIED_LEAD_EVENT: "Subscribe",
   fireMetaStageEvent: fired.stage,
   fireMetaLeadEvent: fired.lead,
+  fireMetaQualifiedLeadEvent: vi.fn(async () => ({ ok: true })),
+  isIncomeQualified: () => null,
 }));
 
 import { POST } from "../app/api/admin/meta-resend/route";

@@ -191,6 +191,21 @@ describe("new instant form leads", () => {
     expect(logged[0].step).toBe(200);
   });
 
+  it("adds the Qualified Lead signal for $3,000+/month, and only then", async () => {
+    const q = "What is your gross monthly income?";
+    await fireMetaLeadEvent(instantLead({ rawFormData: { attributionSource: attribution, [q]: "$3,000 to $5,000" } }));
+    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Contact", "Subscribe"]);
+    const qual = sent[1].body.data[0];
+    expect(qual.event_id).toBe("qual_L1");
+    expect(qual.custom_data).toEqual({ event_source: "crm", lead_event_source: "Advertisely" });
+    expect(sent[1].text).toContain(`"lead_id":${META_ID}`);
+    expect(logged.map((l) => l.cta)).toContain("ok Subscribe rcvd:1 id:found lead:L1");
+
+    sent.length = 0;
+    await fireMetaLeadEvent(instantLead({ id: "L2", rawFormData: { attributionSource: attribution, [q]: "Under $3,000" } }));
+    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Contact"]);
+  });
+
   it("never reports as a plain pixel Lead, which website ad sets optimize on", async () => {
     await fireMetaLeadEvent(instantLead());
     expect(sent.map((s) => s.body.data[0].event_name)).not.toContain("Lead");

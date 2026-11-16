@@ -3,7 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { CONVERSION_STAGE_IDS, stageLabel } from "@/data/pipeline";
-import { INSTANT_FORM_LEAD_EVENT, STAGE_EVENTS, fireMetaLeadEvent, fireMetaStageEvent } from "@/lib/metaCapi";
+import {
+  INSTANT_FORM_LEAD_EVENT,
+  QUALIFIED_LEAD_EVENT,
+  STAGE_EVENTS,
+  fireMetaLeadEvent,
+  fireMetaQualifiedLeadEvent,
+  fireMetaStageEvent,
+  isIncomeQualified,
+} from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +79,14 @@ export async function POST() {
     jobs.push(() => fireMetaStageEvent(move.leadId, stage, null, move.createdAt));
   }
   for (const lead of leads) {
-    if (sent.has(`${INSTANT_FORM_LEAD_EVENT}:${lead.id}`)) continue;
+    if (sent.has(`${INSTANT_FORM_LEAD_EVENT}:${lead.id}`)) {
+      // Lead already reported: still backfill its "Qualified Lead" signal if missing.
+      if (isIncomeQualified(lead.rawFormData) === true && !sent.has(`${QUALIFIED_LEAD_EVENT}:${lead.id}`)) {
+        jobs.push(() => fireMetaQualifiedLeadEvent(lead, lead.receivedAt));
+      }
+      continue;
+    }
+    // fireMetaLeadEvent sends the "Qualified Lead" signal too when it applies.
     jobs.push(() => fireMetaLeadEvent(lead, lead.receivedAt));
   }
 

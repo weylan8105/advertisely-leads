@@ -11,6 +11,11 @@ import { instantFormContext, type InstantFormContext } from "./metaLeadId";
  *                         pixel via the quiz's event_id).
  *   • "Contact"         — when an instant form lead is created. Meta already counts
  *                         the submission; this is the first stage of its CRM funnel.
+ *   • "Subscribe"       — our "Qualified Lead" signal: an instant form lead whose
+ *                         gross monthly income answer is $3,000 or more (see
+ *                         QUALIFIED_LEAD_EVENT). Sent right after "Contact", so
+ *                         Meta gets a high-volume quality signal it can optimize
+ *                         on long before there are enough purchases.
  *   • "Purchase"        — once per lead, the first time it reaches a closing stage
  *                         (Underwriting, Approved, Issued Not Paid or Issued PAID;
  *                         see STAGE_EVENTS). Carries the premium as value when it's
@@ -49,6 +54,36 @@ const PURCHASE_EVENT = process.env.META_PURCHASE_EVENT || "Purchase";
 // service), which drops custom event names even though Meta answers 200. Not "Lead":
 // that would also count as a pixel Lead for website ad sets optimizing on this pixel.
 export const INSTANT_FORM_LEAD_EVENT = "Contact";
+// Owner (Nov 16 2026): a qualified lead = answered "What is your gross monthly
+// income?" with the second option or better ($3,000 to $5,000, or more).
+// Standard name for the same reason as above (custom names are dropped); nothing
+// else sends "Subscribe", so in Meta it means exactly this.
+export const QUALIFIED_LEAD_EVENT = "Subscribe";
+export const QUALIFIED_MIN_MONTHLY_INCOME = 3000;
+
+/** The lead's answer to the gross monthly income question, or null if it wasn't asked. */
+export function monthlyIncomeAnswer(rawFormData: unknown): string | null {
+  if (!rawFormData || typeof rawFormData !== "object") return null;
+  const raw = rawFormData as Record<string, unknown>;
+  const key = Object.keys(raw).find((k) => /gross[\s_]*monthly[\s_]*income/i.test(k));
+  const v = key ? String(raw[key] ?? "").trim() : "";
+  return v || null;
+}
+
+/**
+ * Qualified on income? true at $3,000/month or more, false below it, null when
+ * the form didn't ask (we never guess). "Under $3,000" is below; "$3,000 to
+ * $5,000", "$5,000 to $7,500", "$7,500 to $10,000" and "$10,000+" qualify.
+ */
+export function isIncomeQualified(rawFormData: unknown): boolean | null {
+  const answer = monthlyIncomeAnswer(rawFormData);
+  if (!answer) return null;
+  if (/\b(under|less than|below)\b/i.test(answer)) return false;
+  const m = answer.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k)?/i);
+  if (!m) return null;
+  const amount = parseFloat(m[1]) * (m[2] ? 1000 : 1);
+  return amount >= QUALIFIED_MIN_MONTHLY_INCOME;
+}
 const CRM_NAME = "Advertisely";
 // A new lead waits on this lookup before it's delivered, so keep it short. Stage
 // moves can afford the default, and retry when this one comes up empty.
@@ -258,7 +293,36 @@ export async function fireMetaLeadEvent(lead: LeadLike, occurredAt?: Date): Prom
     result = { ok: false, skipped: "not an ad click (no fbclid/fbc/fbp)" };
   }
   await recordCapiResult(lead, eventName, result, crm?.note);
+  // A qualified instant form lead also sends the "Qualified Lead" signal.
+  if (crm && isIncomeQualified(lead.rawFormData) === true) {
+    await sendQualifiedLead(lead, crm, occurredAt);
+  }
   return result;
+}
+
+async function sendQualifiedLead(lead: LeadLike, crm: InstantFormContext, occurredAt?: Date): Promise<SendResult> {
+  const result = await sendMetaEvent(lead, {
+    eventName: QUALIFIED_LEAD_EVENT,
+    eventId: `qual_${lead.id}`, // one per lead
+    actionSource: "system_generated",
+    crm,
+    eventTime: occurredAt,
+  }).catch(sendFailed);
+  await recordCapiResult(lead, QUALIFIED_LEAD_EVENT, result, crm.note);
+  return result;
+}
+
+/**
+ * Send only the "Qualified Lead" signal for an existing instant form lead (used
+ * to backfill leads that came in before it existed). No-op unless qualified.
+ */
+export async function fireMetaQualifiedLeadEvent(lead: LeadLike, occurredAt?: Date): Promise<SendResult> {
+  if (isIncomeQualified(lead.rawFormData) !== true) return { ok: false, skipped: "not income-qualified" };
+  const raw = (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, string>;
+  if (lead.fbclid || raw["fbc"] || raw["fbp"]) return { ok: false, skipped: "website lead, not an instant form" };
+  const crm = await instantFormContext(lead).catch(() => null);
+  if (!crm) return { ok: false, skipped: "no instant form context" };
+  return sendQualifiedLead(lead, crm, occurredAt);
 }
 
 /** Fire the server-side "Purchase" event when a lead is marked Issued PAID. */
