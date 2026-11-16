@@ -24,6 +24,7 @@ interface SubData {
   currentPeriodEnd?: string | null;
   cancelAt?: string | null;
   canCancel?: boolean;
+  endsAfterMinimum?: boolean;
   totalDelivered?: number;
   weeksDelivered?: number;
   thisWeek?: { quantity: number; fulfilled: number } | null;
@@ -233,7 +234,19 @@ export function SubscriptionPanel() {
               <span className="text-muted-foreground">States: </span>
               <span className="font-medium">{(data.filterStates ?? []).join(", ") || "—"}</span>
             </div>
-            {data.cancelAt ? (
+            {data.endsAfterMinimum ? (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Subscribe &amp; Save has been replaced by the Advertiser Program, so this subscription doesn&apos;t renew after its{" "}
+                {minWeeks}-week minimum.{" "}
+                {data.cancelAt ? (
+                  <>It ends on <span className="font-semibold">{fmtDate(data.cancelAt)}</span> and nothing is charged after that. You keep getting leads until then.</>
+                ) : (
+                  <>It ends a week after your {minWeeks === 4 ? "4th" : `${minWeeks}th`} payment ({Math.min(data.weeksBilled ?? 0, minWeeks)} of {minWeeks} made), with no charge after that.</>
+                )}{" "}
+                To keep leads coming afterwards, join the{" "}
+                <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertiser Program</a> whenever you&apos;re ready. It doesn&apos;t start on its own.
+              </div>
+            ) : data.cancelAt ? (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 Scheduled to end on <span className="font-semibold">{fmtDate(data.cancelAt)}</span>. You keep getting leads until then.
               </div>

@@ -1,6 +1,10 @@
 // "Subscribe & save" weekly lead subscription.
 //   $500/week → fresh leads at $55/lead = 9 leads/week, the ~$5 remainder rolls
-//   over so nothing is lost. 4-week ($2,000) minimum, then auto-renews weekly.
+//   over so nothing is lost. 4-week ($2,000) minimum.
+// Replaced by the Advertiser Program (owner, Nov 16 2026): nobody new can
+// subscribe, and an existing subscription no longer renews past its minimum.
+// Once its last minimum week is paid it is set to end with that week
+// (endSubscriptionAfterMinimum). Joining the program afterwards is up to them.
 // Backed by a Stripe subscription; each paid weekly invoice spawns one fresh-lead
 // Order that flows through normal round-robin fulfillment.
 
@@ -79,8 +83,15 @@ function mapStatus(s: Stripe.Subscription.Status): string {
   return "incomplete";
 }
 
-const periodEnd = (sub: Stripe.Subscription): Date | null =>
-  (sub as any).current_period_end ? new Date((sub as any).current_period_end * 1000) : null;
+// The period end moved onto the subscription item in newer API versions.
+const periodEnd = (sub: Stripe.Subscription): Date | null => {
+  const end = (sub as any).items?.data?.[0]?.current_period_end ?? (sub as any).current_period_end ?? null;
+  return end ? new Date(end * 1000) : null;
+};
+
+/** When Stripe will end the subscription, if it's set to. */
+const endsAt = (sub: Stripe.Subscription): Date | null =>
+  sub.cancel_at ? new Date(sub.cancel_at * 1000) : sub.cancel_at_period_end ? periodEnd(sub) : null;
 
 /**
  * Upsert the local LeadSubscription record from a Stripe Subscription object.
@@ -105,7 +116,7 @@ export async function upsertLocalSubscription(sub: Stripe.Subscription) {
     update: {
       status: mapStatus(sub.status),
       currentPeriodEnd: periodEnd(sub),
-      cancelAt: sub.cancel_at ? new Date(sub.cancel_at * 1000) : null,
+      cancelAt: endsAt(sub),
       canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000) : null,
       stripeCustomerId: customerId,
     },
@@ -182,7 +193,7 @@ export async function processPaidInvoice(
     await fulfillOrder(order.id);
   }
 
-  await prisma.leadSubscription.update({
+  const after = await prisma.leadSubscription.update({
     where: { id: local.id },
     data: {
       rolloverCents: remainder,
@@ -191,6 +202,50 @@ export async function processPaidInvoice(
       status: "active",
     },
   });
+  // That was the last week of the minimum: no renewal after it.
+  await endSubscriptionAfterMinimum(after).catch((e) => console.warn("[lead subscription] end failed", (e as Error).message));
 
   return { created: leads > 0, leads, orderId };
+}
+
+/**
+ * A subscription whose minimum weeks are all paid stops renewing: it ends with
+ * the week that was just paid for, so there is no further charge. Returns the
+ * end date when it set one. Does nothing inside the minimum, or when an end is
+ * already set. Their leads for the paid weeks still deliver as usual.
+ */
+export async function endSubscriptionAfterMinimum(sub: {
+  id: string;
+  stripeSubscriptionId: string;
+  status: string;
+  weeksBilled: number;
+  minWeeks: number;
+  cancelAt: Date | null;
+}): Promise<Date | null> {
+  if (!stripe || !prisma) return null;
+  if (sub.status === "canceled" || sub.cancelAt || sub.weeksBilled < sub.minWeeks) return null;
+  const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: true });
+  const when = endsAt(updated) ?? periodEnd(updated) ?? new Date();
+  await prisma.leadSubscription.update({ where: { id: sub.id }, data: { cancelAt: when, currentPeriodEnd: periodEnd(updated) } });
+  console.log(`[lead subscription] ${sub.stripeSubscriptionId}: ${sub.weeksBilled}/${sub.minWeeks} weeks paid, ends ${when.toISOString()}`);
+  return when;
+}
+
+/**
+ * Catch-up for every subscription that has already paid its minimum (the
+ * webhook does it as each last payment lands). Cheap when there is nothing to
+ * do; never throws.
+ */
+export async function endDueSubscriptions(): Promise<number> {
+  if (!stripe || !prisma) return 0;
+  let ended = 0;
+  try {
+    const subs = await prisma.leadSubscription.findMany({ where: { status: { not: "canceled" }, cancelAt: null } });
+    for (const s of subs.filter((x) => x.weeksBilled >= x.minWeeks)) {
+      if (await endSubscriptionAfterMinimum(s).catch((e) => (console.warn("[lead subscription] end failed", (e as Error).message), null))) ended++;
+    }
+  } catch (e) {
+    console.warn("[lead subscription] end sweep failed", (e as Error).message);
+  }
+  return ended;
 }

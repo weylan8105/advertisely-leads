@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
-import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents } from "@/lib/leadSubscription";
+import { SUB_MIN_WEEKLY_CENTS, SUB_PRICE_PER_LEAD_CENTS, SUB_MIN_WEEKS, leadsForCents, endSubscriptionAfterMinimum } from "@/lib/leadSubscription";
 import { LEAD_SUBSCRIPTIONS_PUBLIC } from "@/lib/flags";
 
 export const runtime = "nodejs";
@@ -36,6 +36,9 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
   if (!sub) return NextResponse.json({ ...withLicensed, subscribed: false });
+  // Minimum paid: it ends with the current week instead of renewing.
+  const endsNow = await endSubscriptionAfterMinimum(sub).catch(() => null);
+  if (endsNow) sub.cancelAt = endsNow;
 
   // Delivery so far across this subscription's weekly orders.
   const orders = await prisma.order.findMany({
@@ -75,6 +78,9 @@ export async function GET() {
     cancelAt: sub.cancelAt,
     canceledAt: sub.canceledAt,
     canCancel: sub.weeksBilled >= sub.minWeeks && !sub.cancelAt,
+    // Replaced by the Advertiser Program: ends once the minimum is paid, no renewal.
+    endsAfterMinimum: true,
+    minWeeks: sub.minWeeks,
     totalDelivered,
     weeksDelivered: orders.length,
     thisWeek: latest ? { quantity: latest.quantity, fulfilled: latest.fulfilledCount } : null,

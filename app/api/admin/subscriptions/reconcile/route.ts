@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
-import { processPaidInvoice } from "@/lib/leadSubscription";
+import { processPaidInvoice, endDueSubscriptions } from "@/lib/leadSubscription";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -73,8 +73,12 @@ export async function POST() {
     results.push(row);
   }
 
+  // Subscriptions that have paid their minimum stop renewing (the Advertiser Program replaced them).
+  const ended = await endDueSubscriptions();
+
   return NextResponse.json({
     ok: true,
+    ended,
     subscriptions: subs.length,
     invoicesProcessed,
     ordersCreated,

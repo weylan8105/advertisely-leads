@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { deliveredCounts } from "@/lib/orderProgress";
-import { weeklyLeadAllotment } from "@/lib/leadSubscription";
+import { weeklyLeadAllotment, endDueSubscriptions } from "@/lib/leadSubscription";
 import { PIPELINE_STAGES } from "@/data/pipeline";
 import { compareAccounts } from "@/lib/adminAccountSort";
 
@@ -94,6 +94,9 @@ export async function GET() {
   // 8 days); if none exist yet, we fall back to the weekly allotment as the
   // denominator so a brand-new subscriber still shows a 0/allotment bar.
   const SUB_ORDER_WINDOW_MS = 8 * 86_400_000;
+  // A subscription that has paid its minimum stops renewing. The webhook sets
+  // that as the last payment lands; this catches any it missed.
+  await endDueSubscriptions();
   const activeSubs = await prisma.leadSubscription.findMany({
     where: { status: { not: "canceled" } },
     select: { userId: true, status: true, weeklyCents: true },
