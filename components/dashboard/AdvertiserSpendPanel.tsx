@@ -12,7 +12,7 @@ import { adSpendProgress } from "@/lib/adSpendProgress";
 const PRESETS = [500, 1000, 2500, 5000];
 const MIN_DOLLARS = 100;
 const PROCESSING_RATE = 0.03; // lib/adSpend.ts PROCESSING_FEE_RATE
-const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team", program: "Advertiser Program" };
+const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team", program: "Advertiser Program", "team-fee": "Management fee (20%)" };
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getAdSpendSummary, enforceAdSpend, manageIfStale } from "@/lib/adSpend";
+import { reconcileTeamFeeWithin } from "@/lib/teamPaidInFee";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,8 @@ export async function GET(req: NextRequest) {
 
   // Budget pacing runs daily by cron; this keeps it going if the cron doesn't.
   if (userId === me) await manageIfStale(userId).catch((e) => console.warn("ad spend pacing failed:", e));
+  // A team on the paid-in management fee: charge any fee a new payment owes before showing the balance.
+  await reconcileTeamFeeWithin(userId, 6_000);
   const summary = await getAdSpendSummary(userId);
   if (!summary) return NextResponse.json({ error: "Not found" }, { status: 404 });
   // Coming back from Stripe: apply the new balance to the campaign right away.

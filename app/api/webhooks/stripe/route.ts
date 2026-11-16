@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { reconcileTeamFeeWithin } from "@/lib/teamPaidInFee";
 import { processPaidInvoice, upsertLocalSubscription } from "@/lib/leadSubscription";
 import { placeCheckoutOrders, type PaidLine } from "@/lib/checkoutOrders";
 import { clawbackReferralBucks } from "@/lib/referral";
@@ -72,8 +73,10 @@ export async function POST(req: NextRequest) {
         const s = event.data.object as Stripe.Checkout.Session;
         // An advertiser added ad spend: lift their campaign's cap / resume it.
         if (s.metadata?.kind === AD_SPEND_KIND && s.metadata.userId) {
+          // A team on the paid-in management fee: take 20% of what's past the month's $15,000.
+          const fees = await reconcileTeamFeeWithin(s.metadata.userId, 8_000, { force: true });
           const r = await enforceAdSpend(s.metadata.userId);
-          console.log("Stripe webhook: ad spend added", s.id, r.action, r.detail);
+          console.log("Stripe webhook: ad spend added", s.id, r.action, r.detail, fees ? `${fees} team fee(s)` : "");
           break;
         }
         // A downline funded their advertiser upline's campaign: credit them
@@ -94,7 +97,8 @@ export async function POST(req: NextRequest) {
               processingFeeCents: processingFeeCents(grossCents),
               stripeRef: pi ?? s.id,
             });
-            console.log("Stripe webhook: team checkout credited to the member's own account", s.id, own ? "recorded" : "already recorded");
+            const fees = await reconcileTeamFeeWithin(s.metadata.userId, 8_000, { force: true });
+            console.log("Stripe webhook: team checkout credited to the member's own account", s.id, own ? "recorded" : "already recorded", fees ? `${fees} team fee(s)` : "");
             break;
           }
           const added = await recordTeamPayment({

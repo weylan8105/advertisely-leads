@@ -17,6 +17,7 @@ import { prisma } from "./prisma";
 import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding } from "./teamAdSpend";
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
+import { isPaidInFeeAdvertiser } from "./paidInFeeTeams";
 import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram } from "./advertiserProgram";
 
 export const PROCESSING_FEE_RATE = 0.03; // of each payment
@@ -70,7 +71,8 @@ export interface MonthCharge {
 export const processingFeeCents = (amountCents: number) => Math.round(amountCents * PROCESSING_FEE_RATE);
 
 /** What a calendar month of Meta spend uses of the client's budget. */
-export function chargeForMonth(month: string, spendCents: number): MonthCharge {
+export function chargeForMonth(month: string, spendCents: number, noFee = false): MonthCharge {
+  if (noFee) return { month, spendCents, serviceFeeCents: 0, chargedCents: spendCents };
   const serviceFeeCents = Math.round(Math.max(0, spendCents - SERVICE_FEE_THRESHOLD_CENTS) * SERVICE_FEE_RATE);
   return { month, spendCents, serviceFeeCents, chargedCents: spendCents + serviceFeeCents };
 }
@@ -79,8 +81,9 @@ export function chargeForMonth(month: string, spendCents: number): MonthCharge {
  * How much more Meta spend a balance covers this month, given what the month
  * has already spent: $1 per dollar up to $15,000, then $1.20 per dollar.
  */
-export function affordableSpendCents(balanceCents: number, monthSpendCents: number): number {
+export function affordableSpendCents(balanceCents: number, monthSpendCents: number, noFee = false): number {
   if (balanceCents <= 0) return 0;
+  if (noFee) return Math.floor(balanceCents);
   const belowThreshold = Math.max(0, SERVICE_FEE_THRESHOLD_CENTS - monthSpendCents);
   if (balanceCents <= belowThreshold) return Math.floor(balanceCents);
   return Math.floor(belowThreshold + (balanceCents - belowThreshold) / (1 + SERVICE_FEE_RATE));
@@ -582,10 +585,12 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   if (!sharedPoolOnly && READ_TOKEN && !meta.campaigns.length && !errors.length) errors.push("No campaign found for this client.");
 
   const thisMonthKey = monthKey(new Date());
+  // A team on the paid-in fee (lib/paidInFeeTeams.ts) pays 20% on payments instead, never on spend too.
+  const feeOnPayments = isPaidInFeeAdvertiser(user.id);
   const months = Object.entries(meta.monthlySpendCents)
-    .map(([m, cents]) => chargeForMonth(m, cents))
+    .map(([m, cents]) => chargeForMonth(m, cents, feeOnPayments))
     .sort((a, b) => b.month.localeCompare(a.month));
-  const thisMonth = months.find((m) => m.month === thisMonthKey) ?? chargeForMonth(thisMonthKey, 0);
+  const thisMonth = months.find((m) => m.month === thisMonthKey) ?? chargeForMonth(thisMonthKey, 0, feeOnPayments);
   const sum = (k: keyof Omit<MonthCharge, "month">) => months.reduce((s, m) => s + m[k], 0);
   const payments = [...cardPayments.adSpend, ...otherPayments, ...teamPayments].sort((a, b) => b.at.localeCompare(a.at));
   const paidCents = payments.reduce((s, p) => s + p.amountCents, 0);
@@ -599,7 +604,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   const targetDateSet = !!user.adSpendTargetDate && targetDate === user.adSpendTargetDate.toISOString().slice(0, 10);
   // A target date set for the client spends what's left evenly through it; otherwise each payment over its week.
   const periods = targetDateSet ? [] : paymentPeriods(payments);
-  const remaining = affordableSpendCents(balanceCents, thisMonth.spendCents);
+  const remaining = affordableSpendCents(balanceCents, thisMonth.spendCents, feeOnPayments);
 
   const summary: AdSpendSummary = {
     userId: user.id,
@@ -721,7 +726,7 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
   // Paused ones are capped too, so turning one back on by hand stays inside the budget.
   const cappable = s.campaigns.filter((c) => c.status !== "ARCHIVED" && c.status !== "DELETED");
   // Past their November cover, or a lapsed member: runs nothing until they join the Advertiser Program.
-  const allowedCents = s.program.mustJoin ? 0 : affordableSpendCents(s.balanceCents, s.thisMonth.spendCents);
+  const allowedCents = s.program.mustJoin ? 0 : affordableSpendCents(s.balanceCents, s.thisMonth.spendCents, isPaidInFeeAdvertiser(userId));
 
   if (allowedCents < PAUSE_BELOW_CENTS) {
     const toPause = live.filter((c) => c.status === "ACTIVE");

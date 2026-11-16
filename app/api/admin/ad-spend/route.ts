@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getAdSpendSummary, enforceAdSpend } from "@/lib/adSpend";
+import { reconcileAllTeamFees } from "@/lib/teamPaidInFee";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const fresh = req.nextUrl.searchParams.get("quick") !== "1";
+  if (fresh) await reconcileAllTeamFees().catch(() => 0);
   const users = await prisma.user.findMany({ where: { isAdvertiser: true }, select: { id: true }, orderBy: { createdAt: "asc" } });
   const summaries = [];
   for (const u of users) summaries.push(await getAdSpendSummary(u.id, { fresh }));
