@@ -1,17 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ShoppingBag, Repeat } from "lucide-react";
+import { ShoppingBag, Repeat, Megaphone } from "lucide-react";
 import { MarketplaceStore } from "@/components/marketplace/MarketplaceStore";
 import { SubscriptionPanel } from "@/components/marketplace/SubscriptionPanel";
+import { AdvertiserProgramPanel } from "@/components/marketplace/AdvertiserProgramPanel";
 import { cn } from "@/lib/utils";
 
 export function MarketplaceTabs() {
-  const [tab, setTab] = useState<"buy" | "subscribe">(() => {
-    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "subscribe") {
-      return "subscribe";
-    }
-    return "buy";
+  const [tab, setTab] = useState<"buy" | "subscribe" | "advertise">(() => {
+    const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+    return t === "subscribe" || t === "advertise" ? t : "buy";
   });
 
   return (
@@ -31,6 +30,13 @@ export function MarketplaceTabs() {
         >
           <Repeat className="h-3.5 w-3.5" /> Subscribe &amp; Save
         </button>
+        <button
+          onClick={() => setTab("advertise")}
+          className={cn("inline-flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+            tab === "advertise" ? "bg-brand-red text-white" : "text-muted-foreground hover:text-foreground")}
+        >
+          <Megaphone className="h-3.5 w-3.5" /> Advertiser Program
+        </button>
       </div>
 
       {tab === "buy" ? (
@@ -43,8 +49,10 @@ export function MarketplaceTabs() {
           </div>
           <MarketplaceStore />
         </>
-      ) : (
+      ) : tab === "subscribe" ? (
         <SubscriptionPanel />
+      ) : (
+        <AdvertiserProgramPanel />
       )}
     </div>
   );

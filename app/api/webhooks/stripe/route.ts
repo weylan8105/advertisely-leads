@@ -6,6 +6,8 @@ import { placeCheckoutOrders, type PaidLine } from "@/lib/checkoutOrders";
 import { clawbackReferralBucks } from "@/lib/referral";
 import { AD_SPEND_KIND, enforceAdSpend, forgetAdSpendSummary, processingFeeCents } from "@/lib/adSpend";
 import { TEAM_AD_SPEND_KIND, recordTeamPayment } from "@/lib/teamAdSpend";
+import { ADVERTISER_PROGRAM_KIND } from "@/lib/advertiserProgram";
+import { enrollProgramMember, recordProgramInvoice } from "@/lib/advertiserProgramBilling";
 import Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -91,6 +93,13 @@ export async function POST(req: NextRequest) {
           console.log("Stripe webhook: team ad spend added", s.id, added ? "recorded" : "already recorded", r.action, r.detail);
           break;
         }
+        // Joined the Advertiser Program: an advertiser from now on. The payment
+        // itself is credited from its invoice (invoice.paid below).
+        if (s.metadata?.kind === ADVERTISER_PROGRAM_KIND && s.metadata.userId) {
+          await enrollProgramMember(s.metadata.userId);
+          console.log("Stripe webhook: advertiser program joined", s.id);
+          break;
+        }
         if (s.mode === "subscription" && s.subscription && stripe) {
           const subId = typeof s.subscription === "string" ? s.subscription : s.subscription.id;
           await upsertLocalSubscription(await stripe.subscriptions.retrieve(subId));
@@ -101,7 +110,14 @@ export async function POST(req: NextRequest) {
       case "invoice.payment_succeeded":
         // Each paid weekly invoice → that week's fresh-lead order (idempotent).
         // Both event types are handled so the integration works whichever one
-        // the Stripe endpoint is subscribed to.
+        // the Stripe endpoint is subscribed to. Advertiser Program invoices
+        // become balance instead.
+        if (
+          await recordProgramInvoice(event.data.object as Stripe.Invoice).catch((e) => {
+            console.error("Stripe webhook: advertiser program invoice failed", (e as Error).message);
+            return false;
+          })
+        ) break;
         await processPaidInvoice(event.data.object as Stripe.Invoice);
         break;
       case "customer.subscription.updated":

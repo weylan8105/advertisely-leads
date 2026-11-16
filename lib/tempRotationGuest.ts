@@ -5,7 +5,7 @@ import { leadFormId } from "./textVerified";
 import { findPackage } from "@/data/packages";
 import { isHousePaused } from "./housePause";
 import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
-import { sharedPoolOf, sharedCplCents, needsFreeLeads, FREE_UNTIL_CPL } from "./sharedPool";
+import { sharedPoolOf, sharedCplCents, needsFreeLeads, clientLeadPriceCents, FREE_UNTIL_CPL } from "./sharedPool";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 
 // ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
@@ -171,11 +171,13 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
     const s = await getAdSpendSummary(payer.id).catch(() => null);
     // Never decide on a balance we couldn't read.
     if (!s || s.errors.length) return false;
+    // The payer is a November fee client past their renewal date who hasn't joined the Advertiser Program.
+    if (s.program.mustJoin) return false;
     const payerName = payer.name?.trim() || payer.email;
     if (needsFreeLeads(s)) {
       bill = { payerId: payer.id, payerName, cplCents: 0, free: true };
     } else {
-      const cplCents = await sharedCplCents(sharedPoolOf(lead) ?? "ew");
+      const cplCents = clientLeadPriceCents(await sharedCplCents(sharedPoolOf(lead) ?? "ew"), s);
       if (s.balanceCents < cplCents) return false; // can't cover it: skip this slot
       bill = { payerId: payer.id, payerName, cplCents, free: false };
     }

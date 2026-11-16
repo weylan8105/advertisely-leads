@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
-import { AD_SPEND_KIND, MIN_TOP_UP_CENTS, MAX_TOP_UP_CENTS } from "@/lib/adSpend";
+import { AD_SPEND_KIND, MIN_TOP_UP_CENTS, MAX_TOP_UP_CENTS, getAdSpendSummary } from "@/lib/adSpend";
+import { legacyRetainerEnds } from "@/lib/advertiserProgram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,17 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdvertiser: true, email: true, name: true } });
   if (!user?.isAdvertiser) return NextResponse.json({ error: "Not an advertiser account." }, { status: 403 });
+
+  // Advertiser Program members add money through the program (lib/advertiserProgram.ts),
+  // and so must a November fee client once their month is up.
+  const summary = await getAdSpendSummary(userId).catch(() => null);
+  const legacyEnded = (legacyRetainerEnds(user.email)?.getTime() ?? Infinity) <= Date.now();
+  if (summary?.program.joined || summary?.program.mustJoin || (!summary && legacyEnded)) {
+    return NextResponse.json(
+      { error: "Your leads are funded through the Advertisely Advertiser Program. Manage it in the marketplace.", program: true },
+      { status: 403 },
+    );
+  }
 
   const body = (await req.json().catch(() => ({}))) as { amountCents?: number };
   const amountCents = Math.round(Number(body.amountCents) || 0);

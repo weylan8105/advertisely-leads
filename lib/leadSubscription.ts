@@ -9,6 +9,7 @@ import { stripe } from "./stripe";
 import { prisma } from "./prisma";
 import { fulfillOrder } from "./fulfillment";
 import { findPackage } from "@/data/packages";
+import { ADVERTISER_PROGRAM_KIND } from "./advertiserProgram";
 
 export const SUB_MIN_WEEKLY_CENTS = 50_000; // $500/week — the MINIMUM; agents can set more
 export const SUB_MAX_WEEKLY_CENTS = 2_000_000; // $20,000/week sanity cap (typo/abuse guard)
@@ -90,6 +91,8 @@ export async function upsertLocalSubscription(sub: Stripe.Subscription) {
   const md = sub.metadata ?? {};
   const userId = md.userId;
   if (!userId) return null;
+  // The Advertiser Program bills through Stripe too, but it isn't a lead subscription.
+  if (md.kind === ADVERTISER_PROGRAM_KIND) return null;
   const filterStates = md.filterStates ? md.filterStates.split(",").filter(Boolean) : [];
   const organizationId = md.organizationId || null;
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;

@@ -3,6 +3,7 @@ import { leadOrigin, ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
 import { deliverLeadToOwner } from "./house";
 import { HOUSE_EMAIL } from "./housePause";
+import { programLeadPriceCents } from "./advertiserProgram";
 
 // ─── Shared lead pool (owner directive, Nov 13 2026) ─────────────────────────
 // Only two lead sources come in at a reasonable price: the Enhanced Wealth page
@@ -116,7 +117,15 @@ export function isFreeUntilCplClient(email: string | null | undefined): boolean 
   return FREE_UNTIL_CPL.emails.includes((email ?? "").trim().toLowerCase());
 }
 
-export type ClientSlot = { userId: string; name: string; cplCents: number; free?: boolean };
+export type ClientSlot = { userId: string; name: string; cplCents: number; free?: boolean; program?: boolean };
+
+/**
+ * What a client pays for one shared lead: the pool's cost per lead, plus the
+ * card fee for Advertiser Program members (lib/advertiserProgram.ts).
+ */
+export function clientLeadPriceCents(poolCplCents: number, s: { program: { joined: boolean } }): number {
+  return s.program.joined ? programLeadPriceCents(poolCplCents) : poolCplCents;
+}
 
 export function licensedIn(states: string[], state: string | null): boolean {
   return states.length === 0 || (!!state && states.includes(state));
@@ -152,13 +161,16 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
   for (const [i, c] of licensed.entries()) {
     const s = summaries[i];
     if (!s || s.errors.length) continue;
+    // November fee client past their renewal date: nothing until they join the Advertiser Program.
+    if (s.program.mustJoin) continue;
     // Free while their cost per lead is above the target (no balance needed).
     if (isFreeUntilCplClient(c.email) && needsFreeLeads(s)) {
       out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents: 0, free: true });
       continue;
     }
-    if (s.balanceCents < cplCents) continue;
-    out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents });
+    const price = clientLeadPriceCents(cplCents, s);
+    if (s.balanceCents < price) continue;
+    out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents: price, ...(s.program.joined ? { program: true } : {}) });
   }
   return out;
 }
@@ -173,7 +185,7 @@ export async function deliverSharedLeadToClient(leadId: string, slot: ClientSlot
     slot.userId,
     slot.free
       ? `Shared ${label} round-robin — free lead (no charge) while the cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
-      : `Shared ${label} round-robin — ${cost} cost per lead taken from the ad-spend balance.`,
+      : `Shared ${label} round-robin — ${cost}${slot.program ? " (cost per lead + 3% card fee)" : " cost per lead"} taken from the ad-spend balance.`,
     { skipTeamFunding: true },
   );
   if (!ok) return false;

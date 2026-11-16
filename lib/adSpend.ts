@@ -17,6 +17,7 @@ import { prisma } from "./prisma";
 import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding } from "./teamAdSpend";
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
+import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyRetainerEnds, mustJoinProgram } from "./advertiserProgram";
 
 export const PROCESSING_FEE_RATE = 0.03; // of each payment
 export const SERVICE_FEE_RATE = 0.2;
@@ -141,6 +142,10 @@ export interface ClientSubscription {
   id: string;
   status: string;
   adSpend: boolean;
+  program: boolean; // the Advertiser Program (lib/advertiserProgram.ts)
+  startedAt: string | null;
+  currentPeriodEnd: string | null; // next payment
+  cancelAtPeriodEnd: boolean;
   lines: { description: string; amountCents: number; periodEnd: string | null }[];
 }
 
@@ -379,10 +384,16 @@ async function clientSubscriptions(customerIds: string[]): Promise<ClientSubscri
     for (const sub of subs.data as any[]) {
       const inv = sub.latest_invoice;
       const lines = (inv?.lines?.data ?? []) as any[];
+      // The period end moved onto the subscription item in newer API versions.
+      const periodEnd = sub.items?.data?.[0]?.current_period_end ?? sub.current_period_end ?? null;
       const record: ClientSubscription = {
         id: sub.id,
         status: sub.status,
         adSpend: false,
+        program: sub.metadata?.kind === ADVERTISER_PROGRAM_KIND,
+        startedAt: sub.start_date ? new Date(sub.start_date * 1000).toISOString() : null,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        cancelAtPeriodEnd: !!sub.cancel_at_period_end || !!sub.cancel_at,
         lines: lines.map((l) => ({
           description: String(l.description ?? ""),
           amountCents: l.amount ?? 0,
@@ -484,6 +495,12 @@ export interface AdSpendSummary {
   subscriptions: ClientSubscription[];
   campaigns: ClientCampaign[];
   sharedPoolOnly: boolean; // no campaign of their own: leads come from the shared pool only
+  program: {
+    member: boolean; // paying into the Advertiser Program now
+    joined: boolean; // ever paid in (their leads cost the card fee more)
+    mustJoin: boolean; // November fee client past their renewal date: no leads until they join
+    legacyUntil: string | null; // that renewal date, for November fee clients
+  };
   autoPause: boolean;
   pausedForBudget: boolean;
   errors: string[];
@@ -607,6 +624,12 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     subscriptions: cardPayments.subscriptions,
     campaigns: meta.campaigns,
     sharedPoolOnly,
+    program: {
+      member: isProgramMember(cardPayments.subscriptions),
+      joined: hasJoinedProgram(cardPayments.subscriptions),
+      mustJoin: mustJoinProgram(user.email, cardPayments.subscriptions),
+      legacyUntil: legacyRetainerEnds(user.email)?.toISOString() ?? null,
+    },
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,
     errors,
@@ -683,7 +706,8 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
   const live = s.campaigns.filter((c) => c.status === "ACTIVE" || pausedByUs.has(c.id));
   // Paused ones are capped too, so turning one back on by hand stays inside the budget.
   const cappable = s.campaigns.filter((c) => c.status !== "ARCHIVED" && c.status !== "DELETED");
-  const allowedCents = affordableSpendCents(s.balanceCents, s.thisMonth.spendCents);
+  // A November fee client past their renewal date runs nothing until they join the Advertiser Program.
+  const allowedCents = s.program.mustJoin ? 0 : affordableSpendCents(s.balanceCents, s.thisMonth.spendCents);
 
   if (allowedCents < PAUSE_BELOW_CENTS) {
     const toPause = live.filter((c) => c.status === "ACTIVE");

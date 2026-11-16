@@ -12,7 +12,7 @@ import { adSpendProgress } from "@/lib/adSpendProgress";
 const PRESETS = [500, 1000, 2500, 5000];
 const MIN_DOLLARS = 100;
 const PROCESSING_RATE = 0.03; // lib/adSpend.ts PROCESSING_FEE_RATE
-const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team" };
+const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team", program: "Advertiser Program" };
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,6 +38,8 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
   const low = summary.balanceCents <= 0;
   const typedCents = Math.round((Number(amount.replace(/[^0-9.]/g, "")) || 0) * 100);
   const runningLow = !low && summary.daysLeft !== null && summary.daysLeft <= 3;
+  // Advertiser Program members (and November fee clients past their renewal) add money through the program.
+  const viaProgram = summary.program.joined || summary.program.mustJoin;
 
   async function addSpend() {
     const dollars = Number(amount.replace(/[^0-9.]/g, ""));
@@ -64,7 +66,27 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
 
   return (
     <div className="mb-6 space-y-4">
-      {(low || runningLow || summary.pausedForBudget) && (
+      {summary.program.mustJoin && (
+        <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Your leads are paused. Your November advertiser fee has run its month, and advertiser leads now come through the{" "}
+            <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a>.
+          </span>
+        </div>
+      )}
+      {!summary.program.joined && !summary.program.mustJoin && summary.program.legacyUntil && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Your November advertiser fee covers you until{" "}
+            <strong>{new Date(summary.program.legacyUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</strong>.
+            From then on, leads come through the{" "}
+            <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a> ($500 every 2 weeks).
+          </span>
+        </div>
+      )}
+      {!summary.program.mustJoin && (low || runningLow || summary.pausedForBudget) && (
         <div
           className={cn(
             "flex items-start gap-2 rounded-lg border px-4 py-3 text-sm",
@@ -73,7 +95,11 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         >
           {summary.pausedForBudget ? <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
           <span>
-            {summary.pausedForBudget
+            {viaProgram
+              ? low || summary.pausedForBudget
+                ? "Your balance is used up. Your next Advertiser Program payment adds to it, and leads pick back up."
+                : "Your balance is running low. Your next Advertiser Program payment adds to it."
+              : summary.pausedForBudget
               ? "Your campaign is paused because your budget is used up. Add spend below and it turns back on automatically."
               : low
                 ? summary.sharedPoolOnly
@@ -149,6 +175,27 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
       )}
 
       <div className="grid lg:grid-cols-3 gap-5">
+        {viaProgram ? (
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle>Advertiser Program</CardTitle>
+            <CardDescription>
+              {summary.program.member
+                ? "$500 every 2 weeks: $100 management fee, $400 to your leads. Each lead costs its campaign's cost per lead plus the 3% card fee."
+                : summary.program.mustJoin
+                  ? "Join for $500 every 2 weeks to keep getting leads."
+                  : "Your membership has ended. Your balance keeps buying leads until it runs out."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <a href="/marketplace?tab=advertise">
+              <Button variant={summary.program.member ? "outline" : "default"}>
+                {summary.program.member ? "Manage membership" : "Join the program"}
+              </Button>
+            </a>
+          </CardContent>
+        </Card>
+        ) : (
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Add spend</CardTitle>
@@ -194,6 +241,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
             {error && <p className="text-xs text-rose-600">{error}</p>}
           </CardContent>
         </Card>
+        )}
 
         <Card className="lg:col-span-2">
           <CardHeader>
