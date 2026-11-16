@@ -62,11 +62,11 @@ export function AnnouncementModal() {
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]" onClick={() => dismiss()} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="relative max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
         {/* Accent header */}
         <div className="bg-gradient-to-r from-brand-red to-brand-redDark px-6 py-5 text-white">
           <div className="flex items-start justify-between gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">New feature</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{item.eyebrow ?? "New feature"}</div>
             <button onClick={() => dismiss()} className="text-white/70 hover:text-white" aria-label="Close">
               <X className="h-5 w-5" />
             </button>
@@ -88,13 +88,40 @@ export function AnnouncementModal() {
             </ul>
           )}
 
+          {item.breakdown && (
+            <div className="mt-4 rounded-xl border border-slate-200">
+              <table className="w-full text-sm">
+                <tbody>
+                  {item.breakdown.rows.map((r) => (
+                    <tr key={r.label} className="border-b border-slate-100 last:border-0">
+                      <td className="px-3 py-2 align-top">
+                        <div className="text-foreground">{r.label}</div>
+                        {r.detail && <div className="text-[11px] text-muted-foreground">{r.detail}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-right align-top font-medium tabular-nums">{r.amount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td className="px-3 py-2 font-semibold">{item.breakdown.totalLabel}</td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">{item.breakdown.total}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          {item.breakdown?.footnote && <p className="mt-2 text-[11px] text-muted-foreground">{item.breakdown.footnote}</p>}
+
           <div className="mt-6 flex items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => dismiss()}>
-              Maybe later
-            </Button>
+            {!item.noSecondary && (
+              <Button variant="outline" size="sm" onClick={() => dismiss()}>
+                Maybe later
+              </Button>
+            )}
             <Button size="sm" onClick={() => dismiss(item.ctaHref)}>
               {item.ctaLabel}
-              <ArrowRight className="h-4 w-4" />
+              {item.ctaHref && <ArrowRight className="h-4 w-4" />}
             </Button>
           </div>
         </div>

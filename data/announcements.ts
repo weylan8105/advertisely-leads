@@ -23,7 +23,16 @@ export interface Announcement {
   /** Up to a few bullet highlights. */
   highlights?: string[];
   ctaLabel: string;
-  ctaHref: string;
+  /** Where the button goes. Omit for a plain "Got it" that only closes it. */
+  ctaHref?: string;
+  /** Small label above the title (default "New feature"). */
+  eyebrow?: string;
+  /** Hide the "Maybe later" button (account notices, not feature promos). */
+  noSecondary?: boolean;
+  /** Only these accounts see it (User ids). Omit for everyone. */
+  userIds?: string[];
+  /** An itemized list of amounts, shown as a small table under the body. */
+  breakdown?: { rows: { label: string; detail?: string; amount: string }[]; totalLabel: string; total: string; footnote?: string };
   /**
    * Who sees this. "all" (default) = every agent. "working_leads" = only agents
    * who currently have leads to work (an open order or assigned leads) — resolved
@@ -32,7 +41,34 @@ export interface Announcement {
   audience?: "all" | "working_leads";
 }
 
+// Jace Jensen's account (owner request, Nov 16 2026): his team passed the
+// $15,000 November ad-spend line. Amounts are card amounts before the 3% fee.
+const JACE_JENSEN_ID = "cmvzxhs4x0003l1085fm43fkq";
+
 export const ANNOUNCEMENTS: Announcement[] = [
+  {
+    key: "jace-team-adspend-15k-2026-11",
+    userIds: [JACE_JENSEN_ID],
+    eyebrow: "Account update",
+    noSecondary: true,
+    title: "Your team passed $15,000 in November ad spend",
+    body: "You and your team have added $17,100 in ad spend so far this November. That's past the $15,000 monthly limit, so per our agreement a 20% management fee is deducted from your team's ad spend above $15,000.",
+    breakdown: {
+      rows: [
+        { label: "Jace Jensen", detail: "Includes the $2,400 Adrian, Marcos and Chris paid you directly", amount: "$6,100" },
+        { label: "Jacob Moreno", amount: "$3,500" },
+        { label: "Daniel Munoz", amount: "$3,000" },
+        { label: "Marcos Mellado", amount: "$1,250" },
+        { label: "James Wideman", amount: "$1,250" },
+        { label: "Adrian Colman", amount: "$1,000" },
+        { label: "Baylor Brown", amount: "$1,000" },
+      ],
+      totalLabel: "Team total, November",
+      total: "$17,100",
+      footnote: "Amounts are what each person paid, before the 3% card fee.",
+    },
+    ctaLabel: "Got it",
+  },
   {
     key: "blue-collar-iul-script-2026-10",
     title: "New: Blue-Collar IUL Calling Script 📄",

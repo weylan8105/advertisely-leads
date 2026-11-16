@@ -16,7 +16,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { announcementsSeen: true } });
   const seen = new Set(user?.announcementsSeen ?? []);
-  let pending = ANNOUNCEMENTS.filter((a) => !seen.has(a.key));
+  let pending = ANNOUNCEMENTS.filter((a) => !seen.has(a.key) && (!a.userIds || a.userIds.includes(userId)));
 
   // Audience targeting: a "working_leads" announcement is shown only to agents who
   // currently have leads to work — an open order (as buyer or recipient) or any
