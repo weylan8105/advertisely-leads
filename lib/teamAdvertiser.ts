@@ -19,6 +19,58 @@ export function teamAdvertiserActive(ownerEmail: string | null | undefined, now 
   return !!ends && now < ends;
 }
 
+/**
+ * On these teams a member's ad spend is always their own (owner, Nov 16 2026):
+ * it never goes into the owner's campaign or onto the owner's account, before
+ * or after the owner's fee runs out. So the "add spend to your upline's
+ * campaign" path (lib/teamAdSpend.ts) is closed for them.
+ */
+export function membersFundThemselves(ownerEmail: string | null | undefined): boolean {
+  return LEGACY_TEAM_ADVERTISER_OWNERS.has(norm(ownerEmail));
+}
+
+/**
+ * A member paid through the old "fund your upline's campaign" checkout on a
+ * team where members fund themselves (a page left open, or a checkout already
+ * in flight). The money is theirs: credit their own ad-spend balance, less the
+ * card fee, once per payment, and make sure they are set up as an advertiser.
+ */
+export async function creditOwnSpendFromTeamCheckout(p: {
+  userId: string;
+  grossCents: number;
+  processingFeeCents: number;
+  stripeRef: string;
+  paidAt?: Date;
+}): Promise<boolean> {
+  if (!prisma || p.grossCents <= 0) return false;
+  const ref = `team-checkout:${p.stripeRef}`;
+  const usd = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const recorded = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ref}))`;
+    const existing = await tx.adSpendPayment.findFirst({ where: { userId: p.userId, note: { contains: ref } }, select: { id: true } });
+    if (existing) return false;
+    await tx.adSpendPayment.create({
+      data: {
+        userId: p.userId,
+        amountCents: p.grossCents - p.processingFeeCents,
+        method: "other",
+        receivedAt: p.paidAt ?? new Date(),
+        note: `Card payment of ${usd(p.grossCents)} less ${usd(p.processingFeeCents)} card processing, added to your own account [${ref}]`,
+      },
+    });
+    return true;
+  });
+  const u = await prisma.user.findUnique({ where: { id: p.userId }, select: { isAdvertiser: true, adCampaignIds: true } });
+  if (u && !u.isAdvertiser) {
+    await prisma.user.update({
+      where: { id: p.userId },
+      data: { isAdvertiser: true, adCampaignIds: u.adCampaignIds.length ? u.adCampaignIds : [SHARED_POOL_ONLY] },
+    });
+  }
+  forgetAdSpendSummary(p.userId);
+  return recorded;
+}
+
 /** The owners of the teams this user is on (not their own), for mustJoinProgram's cover check. */
 export async function uplineOwnerEmails(userId: string): Promise<string[]> {
   if (!prisma) return [];

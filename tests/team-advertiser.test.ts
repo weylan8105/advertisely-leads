@@ -8,7 +8,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const users: Record<string, any> = {};
 const orgs: Record<string, any> = {};
 const memberships: any[] = [];
+const payments: any[] = [];
+const tx = {
+  $executeRaw: vi.fn(async () => 0),
+  adSpendPayment: {
+    findFirst: vi.fn(async ({ where }: any) => payments.find((p) => p.userId === where.userId && p.note.includes(where.note.contains)) ?? null),
+    create: vi.fn(async ({ data }: any) => { payments.push(data); return data; }),
+  },
+};
 const db = {
+  ...tx,
+  $transaction: vi.fn(async (fn: any) => fn(tx)),
   organization: { findUnique: vi.fn(async ({ where }: any) => orgs[where.id] ?? null) },
   membership: {
     updateMany: vi.fn(async ({ where, data }: any) => {
@@ -25,13 +35,14 @@ const db = {
 vi.mock("@/lib/prisma", () => ({ isDatabaseConfigured: true, get prisma() { return db; } }));
 vi.mock("@/lib/adSpend", () => ({ SHARED_POOL_ONLY: "shared-pool", forgetAdSpendSummary: vi.fn() }));
 
-const { applyTeamJoinDefaults, teamAdvertiserActive } = await import("@/lib/teamAdvertiser");
+const { applyTeamJoinDefaults, teamAdvertiserActive, membersFundThemselves, creditOwnSpendFromTeamCheckout } = await import("@/lib/teamAdvertiser");
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-20T18:00:00Z"));
   for (const k of Object.keys(users)) delete users[k];
   memberships.length = 0;
+  payments.length = 0;
   orgs.JACE_TEAM = { ownerId: "JACE", owner: { email: "jljensen38@gmail.com" } };
   orgs.OTHER_TEAM = { ownerId: "DAVE", owner: { email: "dclayton1235@gmail.com" } };
   users.NEW = { isAdvertiser: false, adCampaignIds: [] };
@@ -66,5 +77,23 @@ describe("team join defaults", () => {
     expect(await applyTeamJoinDefaults("NEW", "JACE_TEAM")).toBe(false);
     expect(memberships[0].goldmineBlocked).toBe(false);
     expect(users.NEW.isAdvertiser).toBe(false);
+  });
+});
+
+describe("a member's ad spend on Jace's team is their own", () => {
+  it("the fund-your-upline path is closed for his team, before and after his fee ends", () => {
+    expect(membersFundThemselves("JLJensen38@gmail.com ")).toBe(true);
+    expect(membersFundThemselves("dclayton1235@gmail.com")).toBe(false);
+    expect(membersFundThemselves(null)).toBe(false);
+  });
+
+  it("a payment made through the old team checkout lands on the member's own balance, once", async () => {
+    const pay = { userId: "NEW", grossCents: 125_000, processingFeeCents: 3_750, stripeRef: "pi_1" };
+    expect(await creditOwnSpendFromTeamCheckout(pay)).toBe(true);
+    expect(await creditOwnSpendFromTeamCheckout(pay)).toBe(false); // webhook retry
+    expect(payments).toEqual([
+      expect.objectContaining({ userId: "NEW", amountCents: 121_250, method: "other", note: expect.stringContaining("team-checkout:pi_1") }),
+    ]);
+    expect(users.NEW).toEqual({ isAdvertiser: true, adCampaignIds: ["shared-pool"] });
   });
 });

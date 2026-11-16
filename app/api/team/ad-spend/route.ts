@@ -5,6 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { MIN_TOP_UP_CENTS, MAX_TOP_UP_CENTS, campaignCplCents } from "@/lib/adSpend";
 import { TEAM_AD_SPEND_KIND, fundableMembership, teamFunding } from "@/lib/teamAdSpend";
+import { membersFundThemselves } from "@/lib/teamAdvertiser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,8 @@ export async function GET() {
   for (const m of memberships) {
     if (seen.has(m.organization.ownerId)) continue;
     seen.add(m.organization.ownerId);
+    // On this team a member's ad spend is their own: they add it from their dashboard, not here.
+    if (membersFundThemselves(m.organization.owner.email)) continue;
     const advertiserId = m.organization.ownerId;
     const [funding, cplCents] = await Promise.all([teamFunding(advertiserId), campaignCplCents(advertiserId)]);
     const mine = funding.find((f) => f.userId === userId);
@@ -87,6 +90,12 @@ export async function POST(req: NextRequest) {
     prisma.user.findUnique({ where: { id: body.advertiserId }, select: { email: true, name: true } }),
   ]);
   if (!user || !advertiser) return NextResponse.json({ error: "Account not found." }, { status: 404 });
+  if (membersFundThemselves(advertiser.email)) {
+    return NextResponse.json(
+      { error: "On this team your ad spend goes to your own account. Add it with the Add spend card on your dashboard." },
+      { status: 403 },
+    );
+  }
   const advertiserName = advertiser.name?.trim() || advertiser.email;
 
   // The member's own Stripe customer; the webhook credits the upline's campaign
