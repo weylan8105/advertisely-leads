@@ -106,6 +106,25 @@ describe("POST /api/quiz/submit", () => {
     expect(data.rawFormData).not.toHaveProperty("contact_id");
   });
 
+  it("keeps landing page B's instant-form answers under their labels", async () => {
+    await submit(payload({
+      quiz_variant: "instant-form-questions",
+      "What trade do you work in?": "Lineman",
+      "What is your gross monthly income?": "$3,000 to $5,000",
+      "What's your age?": "45",
+      "Beneficiary name": "Jane Doe",
+    }));
+    const data = prismaMock.lead.create.mock.calls[0][0].data;
+    expect(data.source).toBe("early-retirement-quiz");
+    expect(data.rawFormData).toMatchObject({
+      quiz_variant: "instant-form-questions",
+      "What trade do you work in?": "Lineman",
+      "What is your gross monthly income?": "$3,000 to $5,000",
+      "What's your age?": "45",
+      "Beneficiary name": "Jane Doe",
+    });
+  });
+
   it("falls back to the observed IP for consent when the browser sent none", async () => {
     await submit(payload({ consent_ip: "" }), { ip: "192.0.2.55" });
     expect(prismaMock.lead.create.mock.calls[0][0].data.consentIp).toBe("192.0.2.55");

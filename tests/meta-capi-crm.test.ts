@@ -280,6 +280,19 @@ describe("leads that stay out of the CRM format", () => {
     expect(logged[0].cta).toBe("ok Lead rcvd:1 lead:Q1");
   });
 
+  it("sends a website Qualified Lead for a qualifying landing page B lead", async () => {
+    await fireMetaLeadEvent({
+      id: "Q2",
+      source: "early-retirement-quiz",
+      fbclid: "abc",
+      email: "q@example.com",
+      rawFormData: { event_id: "evt2", "What is your gross monthly income?": "$5,000 to $7,500", "What's your age?": "41" },
+    });
+    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Lead", "Subscribe"]);
+    expect(sent[1].body.data[0].action_source).toBe("website");
+    expect(sent[1].body.data[0].event_id).toBe("qual_Q2");
+  });
+
   it("skips a lead with no click and no form", async () => {
     const res = await fireMetaLeadEvent({ id: "X1", source: "referral", rawFormData: {} });
     expect(res.skipped).toContain("not an ad click");

@@ -5,6 +5,8 @@
 const ABCA_HOSTS = ["americanbluecollaradvantage.com", "www.americanbluecollaradvantage.com"];
 const ABCA_PAGES = [
   { source: "/", destination: "/abca-quiz.html" },
+  // Landing page B of the Nov 2026 test: the instant form's questions.
+  { source: "/qualify", destination: "/abca-quiz-if.html" },
   { source: "/privacy", destination: "/abca-privacy.html" },
   { source: "/terms", destination: "/abca-terms.html" },
 ];

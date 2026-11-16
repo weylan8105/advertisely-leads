@@ -321,9 +321,21 @@ export async function fireMetaLeadEvent(lead: LeadLike, occurredAt?: Date): Prom
     result = { ok: false, skipped: "not an ad click (no fbclid/fbc/fbp)" };
   }
   await recordCapiResult(lead, eventName, result, crm?.note);
-  // A qualified instant form lead also sends the "Qualified Lead" signal.
-  if (crm && isQualifiedLead(lead.rawFormData) === true) {
-    await sendQualifiedLead(lead, crm, occurredAt);
+  // A qualified lead also sends the "Qualified Lead" signal: instant form leads in
+  // Meta's CRM format, website leads (ABCA page B asks the same questions) as a
+  // website event on the funnel's pixel.
+  if (isQualifiedLead(lead.rawFormData) === true) {
+    if (crm) await sendQualifiedLead(lead, crm, occurredAt);
+    else if (clicked && result.ok) {
+      const q = await sendMetaEvent(lead, {
+        eventName: QUALIFIED_LEAD_EVENT,
+        eventId: `qual_${lead.id}`,
+        actionSource: "website",
+        eventSourceUrl: raw["landing_url"] || undefined,
+        eventTime: occurredAt,
+      }).catch(sendFailed);
+      await recordCapiResult(lead, QUALIFIED_LEAD_EVENT, q);
+    }
   }
   return result;
 }
