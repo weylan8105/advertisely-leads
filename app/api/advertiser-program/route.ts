@@ -3,14 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
-import { getAdSpendSummary } from "@/lib/adSpend";
+import { getAdSpendSummary, isSharedPoolOnly } from "@/lib/adSpend";
+import { uplineOwnerEmails } from "@/lib/teamAdvertiser";
 import { sharedCplCents } from "@/lib/sharedPool";
 import {
   ADVERTISER_PROGRAM,
   programCreditCents,
   programFeeCents,
   programLeadPriceCents,
-  legacyRetainerEnds,
+  legacyCoverEnds,
   mustJoinProgram,
 } from "@/lib/advertiserProgram";
 import { findProgramSubscriptions, syncProgramMember } from "@/lib/advertiserProgramBilling";
@@ -32,7 +33,7 @@ export async function GET() {
   const userId = (session?.user as any)?.id as string | undefined;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, licensedStates: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, licensedStates: true, adCampaignIds: true } });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const subs = isStripeConfigured ? await findProgramSubscriptions(userId, user.email).catch(() => []) : [];
@@ -44,7 +45,8 @@ export async function GET() {
   const summary = fresh?.isAdvertiser ? await getAdSpendSummary(userId, { fresh: true }).catch(() => null) : null;
   const programSubs = subs.map((s) => ({ program: true, status: s.status }));
   const [abca, ew] = await Promise.all([sharedCplCents("abca"), sharedCplCents("ew")]);
-  const legacyUntil = legacyRetainerEnds(user.email);
+  const uplineEmails = await uplineOwnerEmails(userId);
+  const cover = legacyCoverEnds(user.email, uplineEmails);
 
   return NextResponse.json({
     available: isStripeConfigured,
@@ -67,8 +69,9 @@ export async function GET() {
         }
       : null,
     joined: programSubs.some((s) => s.status !== "incomplete" && s.status !== "incomplete_expired"),
-    legacyUntil: legacyUntil?.toISOString() ?? null,
-    mustJoin: mustJoinProgram(user.email, programSubs),
+    legacyUntil: cover?.ends.toISOString() ?? null,
+    legacyViaTeam: cover?.viaTeam ?? false,
+    mustJoin: mustJoinProgram(user.email, programSubs, new Date(), { uplineEmails, sharedPoolOnly: isSharedPoolOnly(user.adCampaignIds) }),
     licensedStates: user.licensedStates ?? [],
     balance: summary
       ? { balanceCents: summary.balanceCents, leads: summary.leads, costPerLeadCents: summary.costPerLeadCents, errors: summary.errors.length > 0 }

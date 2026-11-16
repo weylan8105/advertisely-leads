@@ -87,6 +87,24 @@ describe("program rules", () => {
     expect(program.legacyRetainerEnds("jljensen38@gmail.com")?.toISOString().slice(0, 10)).toBe("2026-12-02");
     expect(program.legacyRetainerEnds("angeloo.rodriguez05@gmail.com")?.toISOString().slice(0, 10)).toBe("2026-12-01");
   });
+
+  it("Jace's team members are covered by his fee until Dec 2, then must join like he does", () => {
+    const member = "agent@team.test";
+    const jace = ["Jljensen38@gmail.com "];
+    expect(program.legacyCoverEnds(member, jace)).toEqual({ ends: new Date("2026-12-02T06:00:00Z"), viaTeam: true });
+    expect(program.mustJoinProgram(member, [], DEC(1), { uplineEmails: jace, sharedPoolOnly: true })).toBe(false);
+    expect(program.mustJoinProgram(member, [], DEC(2), { uplineEmails: jace, sharedPoolOnly: true })).toBe(true);
+    expect(program.mustJoinProgram(member, [sub("active")], DEC(2), { uplineEmails: jace, sharedPoolOnly: true })).toBe(false);
+    // Only teams on the list: David's fee doesn't cover his agents.
+    expect(program.legacyCoverEnds(member, ["dclayton1235@gmail.com"])).toBeNull();
+    // Their own fee wins over an upline's.
+    expect(program.legacyCoverEnds("dclayton1235@gmail.com", jace)?.viaTeam).toBe(false);
+    // Left the team: a shared-pool-only advertiser with no cover needs the Program right away.
+    expect(program.mustJoinProgram(member, [], DEC(1), { uplineEmails: [], sharedPoolOnly: true })).toBe(true);
+    expect(program.mustJoinProgram(member, [sub("canceled")], DEC(1), { uplineEmails: [], sharedPoolOnly: true })).toBe(false);
+    // An advertiser with their own campaign and no fee on the list is never held back.
+    expect(program.mustJoinProgram(member, [], DEC(20), { uplineEmails: [], sharedPoolOnly: false })).toBe(false);
+  });
 });
 
 describe("recordProgramInvoice", () => {

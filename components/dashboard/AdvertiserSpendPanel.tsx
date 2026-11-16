@@ -70,7 +70,13 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Your leads are paused. Your November advertiser fee has run its month, and advertiser leads now come through the{" "}
+            Your leads are paused.{" "}
+            {summary.program.legacyViaTeam
+              ? "Your upline's advertiser month has ended"
+              : summary.program.legacyUntil
+                ? "Your November advertiser fee has run its month"
+                : "You're no longer covered by a team's advertiser month"}
+            , and advertiser leads now come through the{" "}
             <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a>.
           </span>
         </div>
@@ -79,7 +85,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Your November advertiser fee covers you until{" "}
+            {summary.program.legacyViaTeam ? "Your upline's advertiser month covers you until" : "Your November advertiser fee covers you until"}{" "}
             <strong>{new Date(summary.program.legacyUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</strong>.
             From then on, leads come through the{" "}
             <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a> ($500 every 2 weeks).

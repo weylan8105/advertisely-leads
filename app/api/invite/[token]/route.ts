@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
+import { applyTeamJoinDefaults } from "@/lib/teamAdvertiser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +73,7 @@ export async function POST(_req: NextRequest, { params }: { params: { token: str
     // Switch the user's active context to the team they just joined.
     await tx.user.update({ where: { id: userId }, data: { defaultOrganizationId: invite.organizationId } });
   });
+  await applyTeamJoinDefaults(userId, invite.organizationId);
 
   return NextResponse.json({ ok: true, organization: { id: invite.organization.id, name: invite.organization.name } });
 }

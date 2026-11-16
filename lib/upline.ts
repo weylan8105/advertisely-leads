@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeCode } from "@/lib/referralPricing";
 import { canManageTeam, ensureOwnedOrganization, getOrgContext, personalOrgName, refileOwnOrders } from "@/lib/org";
 import { isEmailConfigured, sendUplineJoinEmail } from "@/lib/email";
+import { applyTeamJoinDefaults } from "@/lib/teamAdvertiser";
 
 /**
  * Upline codes. An agent's Advertisely code (User.referralCode, the same code
@@ -127,6 +128,8 @@ export async function joinUplineTeam(userId: string, raw: unknown): Promise<Join
     throw e;
   }
   const left = await leaveOtherUplineTeams(userId, team.id);
+  // Some teams start their members with Goldmine off and as advertisers (lib/teamAdvertiser.ts).
+  await applyTeamJoinDefaults(userId, team.id);
 
   await notifyUplineOfJoin(team.id, up.uplineUserId, userId).catch((e) =>
     console.warn("[upline] join notification failed", e),

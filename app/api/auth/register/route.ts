@@ -6,6 +6,7 @@ import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { ensureReferralCode } from "@/lib/referral";
 import { joinUplineTeam, resolveUplineCode } from "@/lib/upline";
 import { isAdvertiserInviteToken } from "@/lib/advertiserInvite";
+import { applyTeamJoinDefaults } from "@/lib/teamAdvertiser";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AVAILABLE = new Set(AVAILABLE_STATES);
@@ -125,6 +126,7 @@ export async function POST(req: Request) {
         prisma.invitation.update({ where: { id: invite.id }, data: { status: "ACCEPTED", acceptedAt: new Date() } }),
         prisma.user.update({ where: { id: user.id }, data: { defaultOrganizationId: invite.organizationId } }),
       ]);
+      await applyTeamJoinDefaults(user.id, invite.organizationId);
       joinedTeam = true;
     }
   }

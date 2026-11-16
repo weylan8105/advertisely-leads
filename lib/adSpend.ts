@@ -17,7 +17,7 @@ import { prisma } from "./prisma";
 import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding } from "./teamAdSpend";
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
-import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyRetainerEnds, mustJoinProgram } from "./advertiserProgram";
+import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram } from "./advertiserProgram";
 
 export const PROCESSING_FEE_RATE = 0.03; // of each payment
 export const SERVICE_FEE_RATE = 0.2;
@@ -498,8 +498,9 @@ export interface AdSpendSummary {
   program: {
     member: boolean; // paying into the Advertiser Program now
     joined: boolean; // ever paid in (their leads cost the card fee more)
-    mustJoin: boolean; // November fee client past their renewal date: no leads until they join
-    legacyUntil: string | null; // that renewal date, for November fee clients
+    mustJoin: boolean; // past their (or their upline's) November fee renewal date: no leads until they join
+    legacyUntil: string | null; // that renewal date
+    legacyViaTeam: boolean; // covered by their upline's fee, not their own (lib/teamAdvertiser.ts)
   };
   autoPause: boolean;
   pausedForBudget: boolean;
@@ -537,9 +538,14 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     select: {
       id: true, name: true, email: true, adCampaignIds: true, adSpendAutoPause: true,
       adSpendPausedCampaignIds: true, adSpendTargetDate: true, adSpendEmails: true,
+      // Their uplines: a member of a November fee client's team is covered by that fee.
+      memberships: { select: { organization: { select: { ownerId: true, owner: { select: { email: true } } } } } },
     },
   });
   if (!user) return null;
+  const uplineEmails = (user.memberships ?? [])
+    .filter((m) => m.organization?.ownerId !== user.id)
+    .map((m) => m.organization?.owner?.email);
 
   const errors: string[] = [];
   const sharedPoolOnly = isSharedPoolOnly(user.adCampaignIds);
@@ -627,8 +633,13 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     program: {
       member: isProgramMember(cardPayments.subscriptions),
       joined: hasJoinedProgram(cardPayments.subscriptions),
-      mustJoin: mustJoinProgram(user.email, cardPayments.subscriptions),
-      legacyUntil: legacyRetainerEnds(user.email)?.toISOString() ?? null,
+      mustJoin: mustJoinProgram(user.email, cardPayments.subscriptions, new Date(), {
+        uplineEmails,
+        // Never hold someone back on a Stripe read that failed.
+        sharedPoolOnly: sharedPoolOnly && !errors.some((e) => e.startsWith("Stripe")),
+      }),
+      legacyUntil: legacyCoverEnds(user.email, uplineEmails)?.ends.toISOString() ?? null,
+      legacyViaTeam: legacyCoverEnds(user.email, uplineEmails)?.viaTeam ?? false,
     },
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,

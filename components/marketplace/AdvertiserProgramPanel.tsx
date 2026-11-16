@@ -21,6 +21,7 @@ interface ProgramData {
   member: { status: string; startedAt: string | null; nextPaymentAt: string | null; cancelAtPeriodEnd: boolean } | null;
   joined: boolean;
   legacyUntil: string | null;
+  legacyViaTeam?: boolean;
   mustJoin: boolean;
   licensedStates: string[];
   balance: { balanceCents: number; leads: number; costPerLeadCents: number | null; errors: boolean } | null;
@@ -162,9 +163,9 @@ export function AdvertiserProgramPanel() {
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             {data.mustJoin ? (
-              <>Your November advertiser fee covered you through <strong>{fmtDate(data.legacyUntil)}</strong>. Your leads are paused until you join the Advertiser Program below.</>
+              <>{data.legacyViaTeam ? "Your upline's advertiser month" : "Your November advertiser fee"} covered you through <strong>{fmtDate(data.legacyUntil)}</strong>. Your leads are paused until you join the Advertiser Program below.</>
             ) : (
-              <>Your November advertiser fee covers you until <strong>{fmtDate(data.legacyUntil)}</strong>. From then on, advertiser leads come through the Advertiser Program, so join by that date to keep yours coming.</>
+              <>{data.legacyViaTeam ? "Your upline's advertiser month" : "Your November advertiser fee"} covers you until <strong>{fmtDate(data.legacyUntil)}</strong>. From then on, advertiser leads come through the Advertiser Program, so join by that date to keep yours coming.</>
             )}
           </span>
         </div>

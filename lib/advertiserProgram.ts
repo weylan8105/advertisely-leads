@@ -32,6 +32,12 @@ export const LEGACY_RETAINER_UNTIL: Record<string, string> = {
   "dclayton1235@gmail.com": "2026-12-03", // $3,000 (Nov 3)
 };
 
+// Teams whose members advertise under the owner's November fee (owner directive,
+// Nov 16 2026): joining one makes you an advertiser on the shared pool with
+// Goldmine off (lib/teamAdvertiser.ts), and you are covered until the owner's
+// renewal date above. After it you need the Program for leads, like the owner.
+export const LEGACY_TEAM_ADVERTISER_OWNERS = new Set<string>(["jljensen38@gmail.com"]);
+
 /** The management fee taken from one payment. */
 export const programFeeCents = (paidCents: number) => Math.round(paidCents * ADVERTISER_PROGRAM.feeRate);
 
@@ -62,8 +68,39 @@ export function legacyRetainerEnds(email: string | null | undefined): Date | nul
   return ymd ? new Date(`${ymd}T06:00:00Z`) : null;
 }
 
-/** A November fee client past their renewal date who hasn't joined: no leads, no top-ups. */
-export function mustJoinProgram(email: string | null | undefined, subs: ProgramSub[], now = new Date()): boolean {
-  const ends = legacyRetainerEnds(email);
-  return !!ends && now >= ends && !hasJoinedProgram(subs);
+/**
+ * When this account's cover runs out: their own November fee, or (viaTeam) the
+ * fee of an upline whose team members advertise under it. Null = no cover.
+ */
+export function legacyCoverEnds(
+  email: string | null | undefined,
+  uplineEmails: (string | null | undefined)[] = [],
+): { ends: Date; viaTeam: boolean } | null {
+  const own = legacyRetainerEnds(email);
+  if (own) return { ends: own, viaTeam: false };
+  const team = uplineEmails
+    .filter((e) => LEGACY_TEAM_ADVERTISER_OWNERS.has((e ?? "").trim().toLowerCase()))
+    .map((e) => legacyRetainerEnds(e))
+    .filter((d): d is Date => !!d);
+  if (!team.length) return null;
+  return { ends: new Date(Math.max(...team.map((d) => d.getTime()))), viaTeam: true };
+}
+
+/**
+ * No leads and no top-ups until they join the Program:
+ *  - a November fee client past their renewal date,
+ *  - a member of such a client's team past that same date,
+ *  - a shared-pool-only advertiser with no cover at all (they left that team).
+ * Anyone who has ever joined the Program is never held back by this.
+ */
+export function mustJoinProgram(
+  email: string | null | undefined,
+  subs: ProgramSub[],
+  now = new Date(),
+  opts: { uplineEmails?: (string | null | undefined)[]; sharedPoolOnly?: boolean } = {},
+): boolean {
+  if (hasJoinedProgram(subs)) return false;
+  const cover = legacyCoverEnds(email, opts.uplineEmails);
+  if (cover) return now >= cover.ends;
+  return !!opts.sharedPoolOnly;
 }
