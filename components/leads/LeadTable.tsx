@@ -57,7 +57,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Lead } from "@/types";
-import { AVAILABLE_STATES, US_STATES, stateName, stateCode } from "@/data/states";
+import { stateName, stateCode } from "@/data/states";
 import { leadMatchesSearch, searchWords } from "@/lib/leadSearch";
 
 interface LeadTableProps {
@@ -70,6 +70,8 @@ interface LeadTableProps {
   stages?: PipelineStage[];
   /** Search to start with (the top bar's ?q=). */
   initialQuery?: string;
+  /** The team's shared Goldmine: hides owner-only actions (assign, move to Goldmine, replacements). */
+  goldmine?: boolean;
 }
 
 interface Toast {
@@ -80,11 +82,14 @@ interface Toast {
 
 let toastCounter = 0;
 
-export function LeadTable({ leads, showBulk = true, compact = false, stages, openLeadId, initialQuery = "" }: LeadTableProps) {
+export function LeadTable({ leads, showBulk = true, compact = false, stages, openLeadId, initialQuery = "", goldmine = false }: LeadTableProps) {
   const [search, setSearch] = useState(initialQuery);
   // A new search from the top bar replaces whatever is in the box.
   useEffect(() => setSearch(initialQuery), [initialQuery]);
   const [stageFilter, setStageFilter] = useState<string>("all");
+  const [stateFilter, setStateFilter] = useState<string>("all");
+  // Leads store state as "TX", "Texas", "tx"…, so filter on the 2-letter code.
+  const stateOf = (l: Lead) => stateCode(l.state) ?? (l.state ? l.state.trim().toUpperCase() : "");
 
   // Resolve a lead's pipeline stage (id → label + color), falling back to the
   // default stage for unknown ids so a row always has a stage + tint.
@@ -125,9 +130,21 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
       const effId = stageOverrides[l.id] ?? l.pipelineStage;
       const stageId = stageById.has(effId) ? effId : DEFAULT_STAGE;
       const matchesStage = stageFilter === "all" || stageId === stageFilter;
-      return matchesSearch && matchesStage;
+      const matchesState = stateFilter === "all" || stateOf(l) === stateFilter;
+      return matchesSearch && matchesStage && matchesState;
     });
-  }, [leads, search, stageFilter, stageById, stageOverrides]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, search, stageFilter, stateFilter, stageById, stageOverrides]);
+  // The states these leads are actually in, with how many in each.
+  const stateCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of leads) {
+      const c = stateOf(l);
+      if (c) m.set(c, (m.get(c) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads]);
 
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
@@ -395,31 +412,22 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                 ))}
               </SelectContent>
             </Select>
-            <Select defaultValue="any-state">
-              <SelectTrigger className="w-[140px]">
+            <Select value={stateFilter} onValueChange={setStateFilter}>
+              <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="State" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="any-state">Any state</SelectItem>
-                {US_STATES.map((s) => {
-                  const available = AVAILABLE_STATES.includes(s);
-                  return (
-                    <SelectItem
-                      key={s}
-                      value={s}
-                      title={stateName(s)}
-                      disabled={!available}
-                      className={!available ? "opacity-40" : ""}
-                    >
-                      {s} {!available && "· soon"}
-                    </SelectItem>
-                  );
-                })}
+                <SelectItem value="all">All states</SelectItem>
+                {stateCounts.map(([code, n]) => (
+                  <SelectItem key={code} value={code} title={stateName(code)}>
+                    {code} <span className="text-muted-foreground">· {n}</span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex gap-2">
-            {selected.size > 0 && goldmineOn && (
+            {selected.size > 0 && goldmineOn && !goldmine && (
               <Button
                 variant="outline"
                 size="sm"
@@ -431,7 +439,7 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                 Move to Goldmine ({selected.size})
               </Button>
             )}
-            {selected.size > 0 && canAssign && (
+            {selected.size > 0 && canAssign && !goldmine && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -661,15 +669,15 @@ export function LeadTable({ leads, showBulk = true, compact = false, stages, ope
                         >
                           Push to CRM (GHL)
                         </DropdownMenuItem>
-                        <DropdownMenuItem
+                        {!goldmine && <DropdownMenuItem
                           disabled={replacementWindowClosed(lead.assignedAt)}
                           onClick={() => setRepLead({ id: lead.id, name: lead.name })}
                         >
                           {replacementWindowClosed(lead.assignedAt)
                             ? "Replacement window closed"
                             : "Request replacement"}
-                        </DropdownMenuItem>
-                        {canAssign && members.length > 0 && (
+                        </DropdownMenuItem>}
+                        {canAssign && members.length > 0 && !goldmine && (
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel>Assign to agent</DropdownMenuLabel>

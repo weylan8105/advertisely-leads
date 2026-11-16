@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Gem, Loader2, SlidersHorizontal, Lock } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
+import { LeadTable } from "@/components/leads/LeadTable";
+import { ViewToggle, usePipelineView } from "@/components/leads/ViewToggle";
 import { PipelineEditor } from "@/components/leads/PipelineEditor";
 import { PIPELINE_STAGES, DEFAULT_PIPELINE_SORT, parsePipelineSort, type PipelineStage, type PipelineSort } from "@/data/pipeline";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ export default function GoldminePage() {
   const [enabling, setEnabling] = useState(false);
   // The viewer's own card-order preference (set in Customize stages on their pipeline).
   const [sortMode, setSortMode] = useState<PipelineSort>(DEFAULT_PIPELINE_SORT);
+  const [view, setView] = usePipelineView("goldmine");
 
   useEffect(() => {
     fetch("/api/pipeline/stages")
@@ -166,11 +169,16 @@ export default function GoldminePage() {
         title="Goldmine"
         description="Your team's shared pool of aged leads. Everyone can work and close these — conversions still count."
         actions={
-          config?.enabled && config.canManage ? (
-            <Button variant="outline" size="sm" onClick={() => setShowEditor(true)}>
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Customize stages
-            </Button>
+          config?.enabled ? (
+            <>
+              <ViewToggle view={view} onChange={setView} />
+              {config.canManage && (
+                <Button variant="outline" size="sm" onClick={() => setShowEditor(true)}>
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Customize stages
+                </Button>
+              )}
+            </>
           ) : undefined
         }
       />
@@ -214,13 +222,17 @@ export default function GoldminePage() {
               {" "}Updates every {REFRESH_MS / 1000} seconds.
             </p>
           </div>
-          <PipelineBoard
-            leads={leads}
-            setLeads={setLeads}
-            stages={stages}
-            sortMode={sortMode}
-            presenceMs={REFRESH_MS}
-          />
+          {view === "list" ? (
+            <LeadTable leads={leads} stages={stages} goldmine />
+          ) : (
+            <PipelineBoard
+              leads={leads}
+              setLeads={setLeads}
+              stages={stages}
+              sortMode={sortMode}
+              presenceMs={REFRESH_MS}
+            />
+          )}
         </Card>
       )}
 

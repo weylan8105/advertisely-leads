@@ -3,7 +3,8 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { PlusCircle, Rows3, KanbanSquare, Loader2, Users, SlidersHorizontal, FileText } from "lucide-react";
+import { PlusCircle, Loader2, Users, SlidersHorizontal, FileText } from "lucide-react";
+import { ViewToggle, usePipelineView } from "@/components/leads/ViewToggle";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { PipelineBoard } from "@/components/leads/PipelineBoard";
@@ -18,7 +19,6 @@ import { LEAD_COST_OWNER_EMAILS } from "@/lib/owners";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import type { Lead } from "@/types";
 import { useLiveLeads } from "@/lib/useLiveLeads";
 
@@ -39,7 +39,7 @@ function LeadsPageInner() {
   const initialQuery = useSearchParams().get("q") ?? "";
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const isOwner = isAdmin && LEAD_COST_OWNER_EMAILS.includes(String((session?.user as any)?.email ?? "").toLowerCase());
-  const [view, setView] = useState<"list" | "kanban">("kanban");
+  const [view, setView] = usePipelineView("leads");
   // Team owners can switch between their own leads and a read-only view of a
   // downline agent's leads. "me" = my own leads (the default for everyone).
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -133,30 +133,7 @@ function LeadsPageInner() {
                 </SelectContent>
               </Select>
             )}
-            <div className="inline-flex rounded-md border border-slate-300 overflow-hidden">
-              <button
-                onClick={() => setView("kanban")}
-                className={cn(
-                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors",
-                  view === "kanban"
-                    ? "bg-slate-200 text-foreground"
-                    : "text-muted-foreground hover:bg-slate-100",
-                )}
-              >
-                <KanbanSquare className="h-3.5 w-3.5" /> Pipeline
-              </button>
-              <button
-                onClick={() => setView("list")}
-                className={cn(
-                  "px-3 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-slate-300",
-                  view === "list"
-                    ? "bg-slate-200 text-foreground"
-                    : "text-muted-foreground hover:bg-slate-100",
-                )}
-              >
-                <Rows3 className="h-3.5 w-3.5" /> List
-              </button>
-            </div>
+            <ViewToggle view={view} onChange={setView} />
             <a href="/blue-collar-iul-script.pdf" target="_blank" rel="noopener noreferrer">
               <Button size="sm" variant="outline">
                 <FileText className="h-4 w-4" />
