@@ -322,7 +322,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
    on the updated Blue Collar instant forms (minus the OTP text check). Served at
    /qualify on americanbluecollaradvantage.com; the live page at / is page A.
    Every visit here is tagged "IF" so the funnel dashboard keeps the two apart. */
-window.ABCA_AB_TAG = "IF";
+window.ABCA_AB_TAG = /[?&]abv=/i.test(location.search) ? "QA" : "IF";
 window.ABCA_AB = "B";
 if (window.ABCA_AB === "B") document.documentElement.classList.add("ab-b");
 </script>

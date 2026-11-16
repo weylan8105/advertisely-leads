@@ -355,6 +355,48 @@ window.ABCA_AB = (function(){
   } catch (e) { return "A"; }
 })();
 if (window.ABCA_AB === "B") document.documentElement.classList.add("ab-b");
+
+/* ---- Page test (owner, Nov 16 2026): this page vs page B (/qualify = the updated
+   instant form's questions, no OTP). Same ads, same budget: each visitor is assigned
+   once and keeps that page (saved in the browser; ad clicks are bucketed by click id),
+   and B visitors are sent to /qualify before anything loads or tracks here.
+   IF_SPLIT = share sent to B: 0 = test off (everyone stays here), 0.5 = 50/50.
+   Beacons tag this page "LP" and page B "IF". QA: ?abv=LP or ?abv=IF. */
+var IF_SPLIT = 0.5;
+var IF_KEY = "abca_ab_ifq";
+window.ABCA_REDIRECTING = false;
+(function(){
+  function get(k) { try { var v = localStorage.getItem(k); if (v) return v; } catch (e) {} try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function put(k, v) { try { localStorage.setItem(k, v); return; } catch (e) {} try { sessionStorage.setItem(k, v); } catch (e) {} }
+  try {
+    var q = new URLSearchParams(location.search);
+    var forced = (q.get("abv") || "").toUpperCase();
+    var v;
+    if (forced === "IF" || forced === "LP") v = forced;
+    else if (!(IF_SPLIT > 0)) return;
+    else {
+      v = get(IF_KEY);
+      if (v !== "IF" && v !== "LP") {
+        var fb = q.get("fbclid") || "", x;
+        if (fb.length >= 20) {
+          var h = 7; for (var i = 0; i < fb.length; i++) h = (h * 131 + fb.charCodeAt(i)) >>> 0;
+          x = (h % 10000) / 10000;
+        } else {
+          x = Math.random();
+        }
+        v = x < IF_SPLIT ? "IF" : "LP";
+        put(IF_KEY, v);
+      }
+    }
+    if (v === "IF") {
+      window.ABCA_REDIRECTING = true;
+      document.documentElement.style.visibility = "hidden";
+      location.replace("/qualify" + location.search + location.hash);
+      return;
+    }
+    if (!forced) window.ABCA_AB_TAG = "LP";
+  } catch (e) {}
+})();
 </script>
 </head>
 <body>
@@ -591,6 +633,7 @@ const WEBHOOK_URL = "/api/quiz/submit";
 const TRACK_URL = "/api/track";
 const sessionId = "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
 function trackEvent(type, step, cta) {
+  if (window.ABCA_REDIRECTING) return; // counted on page B instead
   try {
     const fbclid = new URLSearchParams(location.search).get("fbclid") || "";
     // cta = which entry point started the quiz (hero_zip_auto, header, sticky, ...)
@@ -605,7 +648,7 @@ const META_PIXEL_ID = "717587103522110";
 const META_EVENT    = "Lead";
 let   leadIp = "";
 (function(){
-  if(window.fbq) return;
+  if(window.fbq || window.ABCA_REDIRECTING) return;
   !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
   if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
   t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
