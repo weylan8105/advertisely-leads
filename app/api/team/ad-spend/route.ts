@@ -41,6 +41,8 @@ export async function GET() {
     const [funding, cplCents] = await Promise.all([teamFunding(advertiserId), campaignCplCents(advertiserId)]);
     const mine = funding.find((f) => f.userId === userId);
     const creditCents = Math.max(0, mine?.creditCents ?? 0);
+    // Their credit went with them to their own advertiser account: nothing to show here.
+    if (!m.adSpendAccess && creditCents === 0 && (mine?.movedOutCents ?? 0) > 0) continue;
     campaigns.push({
       advertiserId,
       advertiserName: m.organization.owner.name?.trim() || m.organization.owner.email,

@@ -76,7 +76,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
             {summary.pausedForBudget
               ? "Your campaign is paused because your budget is used up. Add spend below and it turns back on automatically."
               : low
-                ? "Your budget is used up. Add spend below to keep your campaign running."
+                ? summary.sharedPoolOnly
+                  ? "Your budget is used up. Add spend below to keep getting leads."
+                  : "Your budget is used up. Add spend below to keep your campaign running."
                 : `About ${summary.daysLeft} day${summary.daysLeft === 1 ? "" : "s"} of budget left at your current daily budget. Add spend to keep your campaign running.`}
           </span>
         </div>
@@ -102,7 +104,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <DashboardStatCard
           label="Ad spend"
           value={usd(summary.chargedCents)}
-          hint={summary.serviceFeeCents ? `Includes ${usd(summary.serviceFeeCents)} service fee` : "What Meta has spent"}
+          hint={summary.serviceFeeCents ? `Includes ${usd(summary.serviceFeeCents)} service fee` : summary.sharedPoolOnly ? "The cost of your leads" : "What Meta has spent"}
           icon={<TrendingUp className="h-4 w-4" />}
           accent="teal"
         />
@@ -150,7 +152,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Add spend</CardTitle>
-            <CardDescription>Adds to your campaign budget. Paid securely through Stripe.</CardDescription>
+            <CardDescription>{summary.sharedPoolOnly ? "Adds to your lead budget." : "Adds to your campaign budget."} Paid securely through Stripe.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -269,7 +271,11 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
                       <tr key={f.userId} className="border-t border-slate-100">
                         <td className="py-1.5">
                           {f.name}
-                          {!f.access && <span className="ml-1 text-xs text-muted-foreground">(switched off)</span>}
+                          {f.movedOutCents > 0 ? (
+                            <span className="ml-1 text-xs text-muted-foreground">(now an advertiser; {usd(f.movedOutCents)} moved to their own account)</span>
+                          ) : (
+                            !f.access && <span className="ml-1 text-xs text-muted-foreground">(switched off)</span>
+                          )}
                         </td>
                         <td className="py-1.5 text-right">
                           {usd(f.addedCents)}

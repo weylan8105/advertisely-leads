@@ -30,6 +30,14 @@ export const SHARED_LEAD_METHOD = "shared-lead";
 
 export const CLIENT_CAMPAIGN_PREFIX = "Advertisely Advertiser - ";
 
+// An advertiser with no Meta campaign of their own (owner directive, Nov 15
+// 2026): they paid a retainer and get their leads from the shared pool only
+// (lib/sharedPool.ts), each charged to their balance. Marked by this value in
+// User.adCampaignIds, so no campaign is looked up and "no campaign found" isn't
+// an error for them. Setting real campaign ids on the account replaces it.
+export const SHARED_POOL_ONLY = "shared-pool";
+export const isSharedPoolOnly = (adCampaignIds: string[] | null | undefined) => (adCampaignIds ?? []).includes(SHARED_POOL_ONLY);
+
 // Meta's minimum campaign spending limit.
 const MIN_SPEND_CAP_CENTS = 10_000;
 // Below this much spend left, pause rather than cap.
@@ -475,6 +483,7 @@ export interface AdSpendSummary {
   ownPaidCents: number; // the advertiser's own payments (card + manual), before card processing
   subscriptions: ClientSubscription[];
   campaigns: ClientCampaign[];
+  sharedPoolOnly: boolean; // no campaign of their own: leads come from the shared pool only
   autoPause: boolean;
   pausedForBudget: boolean;
   errors: string[];
@@ -516,13 +525,16 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   if (!user) return null;
 
   const errors: string[] = [];
+  const sharedPoolOnly = isSharedPoolOnly(user.adCampaignIds);
   const [meta, cardPayments, otherPayments, leads, teamPayments, team] = await Promise.all([
-    READ_TOKEN
-      ? metaSpend(user.name, user.adCampaignIds).catch((e) => {
-          errors.push(`Meta: ${(e as Error).message}`);
-          return { campaigns: [], monthlySpendCents: {} } as MetaSpend;
-        })
-      : (errors.push("Meta isn't connected."), { campaigns: [], monthlySpendCents: {} } as MetaSpend),
+    sharedPoolOnly
+      ? ({ campaigns: [], monthlySpendCents: {} } as MetaSpend) // nothing of theirs to read in Meta
+      : READ_TOKEN
+        ? metaSpend(user.name, user.adCampaignIds).catch((e) => {
+            errors.push(`Meta: ${(e as Error).message}`);
+            return { campaigns: [], monthlySpendCents: {} } as MetaSpend;
+          })
+        : (errors.push("Meta isn't connected."), { campaigns: [], monthlySpendCents: {} } as MetaSpend),
     stripePayments([user.email, ...user.adSpendEmails]).catch((e) => {
       errors.push(`Stripe: ${(e as Error).message}`);
       return { adSpend: [] as ClientPayment[], other: [] as ClientPayment[], subscriptions: [] } as StripeAdSpend;
@@ -541,7 +553,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   const sharedCents = await sharedLeadCharges(user.id).catch(() => 0);
   if (!stripe) errors.push("Stripe isn't connected.");
   // A failed read must never look like a $0 balance (and pause a campaign).
-  if (READ_TOKEN && !meta.campaigns.length && !errors.length) errors.push("No campaign found for this client.");
+  if (!sharedPoolOnly && READ_TOKEN && !meta.campaigns.length && !errors.length) errors.push("No campaign found for this client.");
 
   const thisMonthKey = monthKey(new Date());
   const months = Object.entries(meta.monthlySpendCents)
@@ -594,6 +606,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     ownPaidCents: [...cardPayments.adSpend, ...otherPayments].reduce((s, p) => s + p.amountCents, 0),
     subscriptions: cardPayments.subscriptions,
     campaigns: meta.campaigns,
+    sharedPoolOnly,
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,
     errors,

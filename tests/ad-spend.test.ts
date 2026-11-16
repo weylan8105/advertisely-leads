@@ -10,6 +10,7 @@ let manual: any[] = [];
 let invoices: Record<string, any> = {};
 let guestCharges: any[] = [];
 let team: any[] = [];
+let sharedLeadCents = 0; // what shared-pool leads have cost (a positive number)
 const updates: any[] = [];
 
 vi.mock("@/lib/prisma", () => ({
@@ -25,8 +26,15 @@ vi.mock("@/lib/prisma", () => ({
     order: { findMany: vi.fn(async () => []) },
     membership: { findMany: vi.fn(async () => [{ userId: "DANA" }]) },
     leadSubscription: { findMany: vi.fn(async () => []) },
-    adSpendPayment: { findMany: vi.fn(async () => manual) },
-    teamAdSpend: { findMany: vi.fn(async ({ where }: any) => team.filter((r) => !where?.kind || r.kind === where.kind)) },
+    adSpendPayment: {
+      findMany: vi.fn(async () => manual),
+      aggregate: vi.fn(async () => ({ _sum: { amountCents: -sharedLeadCents } })),
+    },
+    teamAdSpend: {
+      findMany: vi.fn(async ({ where }: any) =>
+        team.filter((r) => !where?.kind || (typeof where.kind === "string" ? r.kind === where.kind : where.kind.in.includes(r.kind))),
+      ),
+    },
     $queryRaw: vi.fn(async () => [{ total: 10n, this_month: 4n }]),
   },
 }));
@@ -96,6 +104,7 @@ beforeEach(() => {
   invoices = {};
   guestCharges = [];
   team = [];
+  sharedLeadCents = 0;
   updates.length = 0;
   campaignStatus = "ACTIVE";
   cbo = false;
@@ -220,6 +229,43 @@ describe("summary", () => {
     ]);
     expect(s.teamDirectCents).toBe(70_000);
     expect(s.ownPaidCents).toBe(100_000);
+  });
+
+  it("takes the credit a member moved to their own advertiser account back out of the budget", async () => {
+    team = [
+      { id: "t1", advertiserId: "JACE", userId: "DANA", kind: "payment", amountCents: 97_000, grossCents: 100_000, processingFeeCents: 3_000, createdAt: new Date("2026-11-08T12:00:00Z") },
+      { id: "t2", advertiserId: "JACE", userId: "DANA", kind: "lead", amountCents: -4_000, cplCents: 4_000, leadId: "L1", createdAt: new Date("2026-11-09T12:00:00Z") },
+      { id: "t3", advertiserId: "JACE", userId: "DANA", kind: "moved-out", amountCents: -93_000, processingFeeCents: 0, createdAt: new Date("2026-11-15T12:00:00Z") },
+    ];
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    // $1,000 own + $1,000 from Dana − the $930 she took with her.
+    expect(s.paidCents).toBe(107_000);
+    expect(s.processingFeeCents).toBe(6_000);
+    expect(s.balanceCents).toBe(107_000 - 6_000 - 50_000); // the $40 lead she got stays paid for
+    expect(s.payments.find((p) => p.amountCents < 0)?.description).toBe("Moved to Dana Downline's own advertiser account");
+    expect(s.teamFunding).toEqual([
+      expect.objectContaining({ userId: "DANA", addedCents: 100_000, leads: 1, creditCents: 0, movedOutCents: 93_000 }),
+    ]);
+    expect(s.teamCreditCents).toBe(0);
+    expect(s.periods.every((p) => p.amountCents > 0)).toBe(true); // a negative entry is never a week to spend
+  });
+
+  it("an advertiser with no campaign of their own: retainer minus shared-pool leads, and no missing-campaign error", async () => {
+    user = { ...user, id: "DANA", name: "Dana Downline", email: "dana@example.com", adCampaignIds: ["shared-pool"], adSpendAutoPause: false };
+    charges = [paid(1000, { description: "Team campaign funding: Jace Jensen", metadata: { kind: "team-ad-spend" } })]; // paid into Jace's campaign: never hers twice
+    manual = [{ id: "m1", amountCents: 93_000, method: "other", note: "Moved from Jace Jensen's campaign", receivedAt: new Date("2026-11-15T12:00:00Z") }];
+    sharedLeadCents = 6_000;
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("DANA", { fresh: true }))!;
+    expect(s.errors).toEqual([]);
+    expect(s.sharedPoolOnly).toBe(true);
+    expect(s.campaigns).toEqual([]);
+    expect(s.paidCents).toBe(93_000);
+    expect(s.processingFeeCents).toBe(0);
+    expect(s.chargedCents).toBe(6_000);
+    expect(s.balanceCents).toBe(87_000);
+    expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([100_000]);
   });
 
   it("finds guest payments by billing email, without counting one twice", async () => {

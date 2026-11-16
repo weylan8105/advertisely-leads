@@ -140,12 +140,17 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
       },
     },
   });
-  const out: ClientSlot[] = [];
-  for (const c of clients) {
-    if ((c.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) continue; // the house isn't a client
+  const licensed = clients.filter((c) => {
+    if ((c.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) return false; // the house isn't a client
     const teamLicensed = c.ownedOrganizations.some((o) => o.memberships.some((m) => licensedIn(m.user.licensedStates ?? [], state)));
-    if (!licensedIn(c.licensedStates ?? [], state) && !teamLicensed) continue;
-    const s = await getAdSpendSummary(c.id).catch(() => null);
+    return licensedIn(c.licensedStates ?? [], state) || teamLicensed;
+  });
+  // Read every balance at once: with more clients in the pool, one at a time
+  // would hold up the lead that's waiting to be routed.
+  const summaries = await Promise.all(licensed.map((c) => getAdSpendSummary(c.id).catch(() => null)));
+  const out: ClientSlot[] = [];
+  for (const [i, c] of licensed.entries()) {
+    const s = summaries[i];
     if (!s || s.errors.length) continue;
     // Free while their cost per lead is above the target (no balance needed).
     if (isFreeUntilCplClient(c.email) && needsFreeLeads(s)) {

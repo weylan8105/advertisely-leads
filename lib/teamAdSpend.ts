@@ -29,6 +29,14 @@ export const TEAM_AD_SPEND_KIND = "team-ad-spend"; // Stripe metadata.kind on do
  * with their own ad-spend payments.
  */
 export const DIRECT_PAYMENT_KIND = "direct-payment";
+/**
+ * Ledger kind for credit that left this campaign because the downline became an
+ * advertiser in their own right (owner directive, Nov 15 2026). A negative
+ * amount: it zeroes their credit here and takes the same amount out of the
+ * advertiser's budget. The member gets it as their own ad-spend balance
+ * (an AdSpendPayment row, see scripts in the Nov 15 notes).
+ */
+export const MOVED_OUT_KIND = "moved-out";
 const PAID_KINDS = new Set(["payment", DIRECT_PAYMENT_KIND]);
 const LAST_TURN_LOOKBACK_MS = 30 * 86_400_000;
 
@@ -54,6 +62,7 @@ export interface TeamFunding {
   leads: number;
   leadCostCents: number;
   creditCents: number; // left
+  movedOutCents: number; // credit that went with them to their own advertiser account
   access: boolean;
 }
 
@@ -86,6 +95,7 @@ export async function teamFunding(advertiserId: string): Promise<TeamFunding[]> 
         leads: leads.length,
         leadCostCents: -leads.reduce((s, r) => s + r.amountCents, 0),
         creditCents: mine.reduce((s, r) => s + r.amountCents, 0),
+        movedOutCents: -mine.filter((r) => r.kind === MOVED_OUT_KIND).reduce((s, r) => s + r.amountCents, 0),
         access: on.has(userId),
       };
     })
@@ -95,11 +105,13 @@ export async function teamFunding(advertiserId: string): Promise<TeamFunding[]> 
 /**
  * Downline payments into this advertiser's campaign, as budget payments.
  * Direct payments are left out: that money is already in the advertiser's own payments.
+ * Credit a member took to their own advertiser account comes back out as a
+ * negative entry, so the advertiser's budget drops by exactly that much.
  */
 export async function teamFundingPayments(advertiserId: string): Promise<ClientPayment[]> {
   if (!prisma) return [];
   const rows = await prisma.teamAdSpend.findMany({
-    where: { advertiserId, kind: "payment" },
+    where: { advertiserId, kind: { in: ["payment", MOVED_OUT_KIND] } },
     orderBy: { createdAt: "desc" },
   });
   if (!rows.length) return [];
@@ -108,14 +120,25 @@ export async function teamFundingPayments(advertiserId: string): Promise<ClientP
     select: { id: true, name: true, email: true },
   });
   const nameOf = new Map(users.map((u) => [u.id, u.name?.trim() || u.email]));
-  return rows.map((r) => ({
-    id: r.id,
-    at: r.createdAt.toISOString(),
-    amountCents: r.grossCents ?? r.amountCents,
-    description: `Added by ${nameOf.get(r.userId) ?? "a team member"}`,
-    method: "team",
-    processingFeeCents: r.processingFeeCents,
-  }));
+  return rows.map((r) =>
+    r.kind === MOVED_OUT_KIND
+      ? {
+          id: r.id,
+          at: r.createdAt.toISOString(),
+          amountCents: r.amountCents, // negative
+          description: `Moved to ${nameOf.get(r.userId) ?? "a team member"}'s own advertiser account`,
+          method: "team",
+          processingFeeCents: 0,
+        }
+      : {
+          id: r.id,
+          at: r.createdAt.toISOString(),
+          amountCents: r.grossCents ?? r.amountCents,
+          description: `Added by ${nameOf.get(r.userId) ?? "a team member"}`,
+          method: "team",
+          processingFeeCents: r.processingFeeCents,
+        },
+  );
 }
 
 /** Record a downline's paid top-up. Idempotent on the Stripe reference. */
