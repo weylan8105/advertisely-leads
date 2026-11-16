@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trophy, X } from "lucide-react";
+import { Trophy, Volume2, VolumeX, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isDealSoundMuted, playChaChing, setDealSoundMuted, unlockDealSound } from "@/lib/dealSound";
 
 interface Deal {
   id: string;
@@ -25,12 +26,35 @@ const usd0 = (cents: number) =>
  * Live deal alerts: whenever anyone submits a deal (moves a lead to
  * Underwriting or later with its AP), every signed-in user gets a pop-up in the
  * bottom-left corner within ~15 seconds. Lower-right is taken by page toasts
- * and the admin user-mode switch.
+ * and the admin user-mode switch. Each new batch plays a "cha-ching" unless
+ * the viewer muted it (per device, via the speaker button on the alert).
  */
 export function DealAlerts() {
   const [shown, setShown] = useState<Deal[]>([]);
   const since = useRef<string | null>(null);
   const seen = useRef(new Set<string>());
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    setMuted(isDealSoundMuted());
+    const unlock = () => unlockDealSound();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  function toggleMute() {
+    const next = !muted;
+    setMuted(next);
+    setDealSoundMuted(next);
+    if (!next) {
+      unlockDealSound();
+      playChaChing();
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +72,7 @@ export function DealAlerts() {
             fresh.forEach((d) => seen.current.add(d.id));
             if (alive && fresh.length) {
               setShown((cur) => [...cur, ...fresh].slice(-MAX_SHOWN));
+              playChaChing();
               fresh.forEach((d) =>
                 setTimeout(() => alive && setShown((cur) => cur.filter((x) => x.id !== d.id)), SHOW_MS),
               );
@@ -101,6 +126,7 @@ export function DealAlerts() {
             </div>
             <div className="text-xs text-muted-foreground">{d.stage} · keep dialing 📞</div>
           </div>
+          <div className="flex shrink-0 flex-col gap-1">
           <button
             type="button"
             onClick={() => setShown((cur) => cur.filter((x) => x.id !== d.id))}
@@ -109,6 +135,16 @@ export function DealAlerts() {
           >
             <X className="h-3.5 w-3.5" />
           </button>
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-slate-100 hover:text-foreground"
+            aria-label={muted ? "Turn deal sound on" : "Mute deal sound"}
+            title={muted ? "Turn deal sound on" : "Mute deal sound"}
+          >
+            {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+          </button>
+          </div>
         </div>
       ))}
     </div>
