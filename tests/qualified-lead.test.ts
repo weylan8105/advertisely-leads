@@ -1,9 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { isIncomeQualified, monthlyIncomeAnswer, QUALIFIED_LEAD_EVENT } from "@/lib/metaCapi";
+import {
+  isIncomeQualified,
+  isQualifiedLead,
+  ageAnswer,
+  monthlyIncomeAnswer,
+  QUALIFIED_LEAD_EVENT,
+  CONTACTED_EVENT,
+  isPickupStage,
+} from "@/lib/metaCapi";
 
 const q = "What is your gross monthly income?";
+const a = "What's your age?";
 
-describe("qualified lead = gross monthly income $3,000+", () => {
+describe("income part: gross monthly income $3,000+", () => {
   it("second option or better qualifies", () => {
     expect(isIncomeQualified({ [q]: "Under $3,000" })).toBe(false);
     expect(isIncomeQualified({ [q]: "$3,000 to $5,000" })).toBe(true);
@@ -20,7 +29,31 @@ describe("qualified lead = gross monthly income $3,000+", () => {
     expect(isIncomeQualified({ [q]: "" })).toBeNull();
     expect(isIncomeQualified(null)).toBeNull();
   });
-  it("goes to Meta as a standard event no other path sends", () => {
+});
+
+describe("Qualified Lead = income $3,000+ AND age 55 or younger", () => {
+  it("needs both", () => {
+    expect(isQualifiedLead({ [q]: "$3,000 to $5,000", [a]: "55" })).toBe(true);
+    expect(isQualifiedLead({ [q]: "$10,000+", [a]: "38" })).toBe(true);
+    expect(isQualifiedLead({ [q]: "$3,000 to $5,000", [a]: "56" })).toBe(false);
+    expect(isQualifiedLead({ [q]: "Under $3,000", [a]: "40" })).toBe(false);
+  });
+  it("fails fast on a known miss, never guesses a missing answer", () => {
+    expect(isQualifiedLead({ [a]: "62" })).toBe(false);
+    expect(isQualifiedLead({ [q]: "$5,000 to $7,500" })).toBeNull();
+    expect(isQualifiedLead({ [a]: "40" })).toBeNull();
+  });
+  it("reads the age question, not an age-range one", () => {
+    expect(ageAnswer({ [a]: "54" })).toBe(54);
+    expect(ageAnswer({ whats_your_age: "47 years" })).toBe(47);
+    expect(ageAnswer({ "What's your age range?": "35-44" })).toBeNull();
+  });
+  it("standard event names no other path sends", () => {
     expect(QUALIFIED_LEAD_EVENT).toBe("Subscribe");
+    expect(CONTACTED_EVENT).toBe("StartTrial");
+  });
+  it("pickup stages: Contacted, Call Back, Presentation Ran and closing stages", () => {
+    for (const s of ["follow-up", "call-back", "presentation-ran", "underwriting", "issued-paid"]) expect(isPickupStage(s)).toBe(true);
+    for (const s of ["new-lead", "aged-lead", "dnc", "chargeback"]) expect(isPickupStage(s)).toBe(false);
   });
 });

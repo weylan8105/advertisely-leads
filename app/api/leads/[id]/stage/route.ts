@@ -5,7 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { WON_STAGE_ID, CONVERSION_STAGE_IDS, isConversionStage } from "@/data/pipeline";
 import { stagesForUser, labelForStage } from "@/lib/pipelineStages";
 import { canActOnLead } from "@/lib/leadAccess";
-import { fireMetaStageEvent } from "@/lib/metaCapi";
+import { fireMetaStageEvent, fireMetaContactedEvent, isPickupStage } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -121,6 +121,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Advancing to a high-intent stage (underwriting/approved/issued-not-paid/
   // issued-paid) signals the conversion back to Meta so it can find more people
   // like this lead. No-op for other stages, or if CAPI isn't configured yet.
+  // The first time a lead is picked up (Contacted, Call Back, Presentation Ran or
+  // a closing stage), Meta also gets the lead's one "Contacted" quality signal.
+  if (isPickupStage(stage)) await fireMetaContactedEvent(params.id).catch(() => {});
   await fireMetaStageEvent(params.id, stage, isSold ? premiumCents : null);
 
   return NextResponse.json({ ok: true, stage, valueCents: isDeal ? apCents : undefined });

@@ -19,10 +19,13 @@ vi.mock("@/lib/metaCapi", () => ({
   INSTANT_FORM_LEAD_EVENT: "Contact",
   STAGE_EVENTS: { underwriting: { event: "Purchase" }, approved: { event: "Purchase" }, "issued-not-paid": { event: "Purchase" }, "issued-paid": { event: "Purchase" } },
   QUALIFIED_LEAD_EVENT: "Subscribe",
+  CONTACTED_EVENT: "StartTrial",
+  PICKUP_STAGES: ["follow-up", "call-back", "presentation-ran", "underwriting", "approved", "issued-not-paid", "issued-paid"],
+  fireMetaContactedEvent: vi.fn(async () => {}),
   fireMetaStageEvent: fired.stage,
   fireMetaLeadEvent: fired.lead,
   fireMetaQualifiedLeadEvent: vi.fn(async () => ({ ok: true })),
-  isIncomeQualified: () => null,
+  isQualifiedLead: () => null,
 }));
 
 import { POST } from "../app/api/admin/meta-resend/route";
@@ -49,7 +52,8 @@ describe("POST /api/admin/meta-resend", () => {
     db.moves = [{ leadId: "L1", body: 'Moved to "Approved" in the pipeline.', createdAt: movedAt }];
     db.leads = [{ id: "L2", receivedAt }];
     const res = await POST();
-    expect(await res.json()).toEqual({ processed: 2, remaining: 0 });
+    // Approved is also a pickup: its lead's one Contacted event is queued too.
+    expect(await res.json()).toEqual({ processed: 3, remaining: 0 });
     expect(fired.stage).toHaveBeenCalledWith("L1", "approved", null, movedAt);
     expect(fired.lead).toHaveBeenCalledWith(db.leads[0], receivedAt);
   });
@@ -57,6 +61,7 @@ describe("POST /api/admin/meta-resend", () => {
   it("skips anything already sent under the current name", async () => {
     db.sends = [
       { cta: "ok Purchase rcvd:1 id:found lead:L1" },
+      { cta: "ok StartTrial rcvd:1 id:found lead:L1" },
       { cta: "ok Contact rcvd:1 id:found lead:L2" },
     ];
     db.moves = [{ leadId: "L1", body: 'Moved to "Issued Not Paid" in the pipeline.', createdAt: movedAt }];
@@ -75,7 +80,8 @@ describe("POST /api/admin/meta-resend", () => {
       { leadId: "L3", body: 'Moved to "Issued PAID 💰" in the pipeline.', createdAt: later },
     ];
     const res = await POST();
-    expect(await res.json()).toEqual({ processed: 2, remaining: 0 });
+    // Two Purchases plus one Contacted per lead (L1 once despite two moves).
+    expect(await res.json()).toEqual({ processed: 4, remaining: 0 });
     expect(fired.stage).toHaveBeenCalledWith("L1", "underwriting", null, movedAt);
     expect(fired.stage).toHaveBeenCalledWith("L3", "issued-paid", null, later);
   });

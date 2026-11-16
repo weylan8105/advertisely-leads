@@ -38,7 +38,7 @@ vi.mock("../lib/prisma", () => {
   return { isDatabaseConfigured: true, prisma };
 });
 
-import { fireMetaLeadEvent, fireMetaStageEvent, fireMetaPurchaseEvent } from "../lib/metaCapi";
+import { fireMetaLeadEvent, fireMetaStageEvent, fireMetaPurchaseEvent, fireMetaContactedEvent } from "../lib/metaCapi";
 import { instantFormContext, adColumnsToFill, fillLeadAd } from "../lib/metaLeadId";
 
 const FORM = "1721027025846342";
@@ -191,9 +191,10 @@ describe("new instant form leads", () => {
     expect(logged[0].step).toBe(200);
   });
 
-  it("adds the Qualified Lead signal for $3,000+/month, and only then", async () => {
+  it("adds the Qualified Lead signal for $3,000+/month and 55 or younger, and only then", async () => {
     const q = "What is your gross monthly income?";
-    await fireMetaLeadEvent(instantLead({ rawFormData: { attributionSource: attribution, [q]: "$3,000 to $5,000" } }));
+    const a = "What's your age?";
+    await fireMetaLeadEvent(instantLead({ rawFormData: { attributionSource: attribution, [q]: "$3,000 to $5,000", [a]: "52" } }));
     expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Contact", "Subscribe"]);
     const qual = sent[1].body.data[0];
     expect(qual.event_id).toBe("qual_L1");
@@ -202,8 +203,20 @@ describe("new instant form leads", () => {
     expect(logged.map((l) => l.cta)).toContain("ok Subscribe rcvd:1 id:found lead:L1");
 
     sent.length = 0;
-    await fireMetaLeadEvent(instantLead({ id: "L2", rawFormData: { attributionSource: attribution, [q]: "Under $3,000" } }));
+    await fireMetaLeadEvent(instantLead({ id: "L2", rawFormData: { attributionSource: attribution, [q]: "Under $3,000", [a]: "40" } }));
     expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Contact"]);
+    sent.length = 0;
+    await fireMetaLeadEvent(instantLead({ id: "L3", rawFormData: { attributionSource: attribution, [q]: "$10,000+", [a]: "61" } }));
+    expect(sent.map((s) => s.body.data[0].event_name)).toEqual(["Contact"]);
+  });
+
+  it("sends one Contacted event the first time a lead is picked up", async () => {
+    leads.set("L1", instantLead());
+    await fireMetaContactedEvent("L1");
+    await fireMetaContactedEvent("L1");
+    const names = sent.map((s) => s.body.data[0].event_name);
+    expect(names).toEqual(["StartTrial"]);
+    expect(sent[0].body.data[0].event_id).toBe("contact_L1");
   });
 
   it("never reports as a plain pixel Lead, which website ad sets optimize on", async () => {

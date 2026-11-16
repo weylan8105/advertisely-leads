@@ -12,10 +12,14 @@ import { instantFormContext, type InstantFormContext } from "./metaLeadId";
  *   • "Contact"         — when an instant form lead is created. Meta already counts
  *                         the submission; this is the first stage of its CRM funnel.
  *   • "Subscribe"       — our "Qualified Lead" signal: an instant form lead whose
- *                         gross monthly income answer is $3,000 or more (see
- *                         QUALIFIED_LEAD_EVENT). Sent right after "Contact", so
- *                         Meta gets a high-volume quality signal it can optimize
- *                         on long before there are enough purchases.
+ *                         gross monthly income answer is $3,000 or more AND
+ *                         who is 55 or younger (see QUALIFIED_LEAD_EVENT). Sent
+ *                         right after "Contact", so Meta gets a high-volume
+ *                         quality signal long before there are enough purchases.
+ *   • "StartTrial"      — our "Contacted" signal: the first time a lead reaches a
+ *                         stage that means we got them on the phone (Contacted,
+ *                         Call Back, Presentation Ran or a closing stage). Once
+ *                         per lead (see CONTACTED_EVENT / PICKUP_STAGES).
  *   • "Purchase"        — once per lead, the first time it reaches a closing stage
  *                         (Underwriting, Approved, Issued Not Paid or Issued PAID;
  *                         see STAGE_EVENTS). Carries the premium as value when it's
@@ -55,11 +59,13 @@ const PURCHASE_EVENT = process.env.META_PURCHASE_EVENT || "Purchase";
 // that would also count as a pixel Lead for website ad sets optimizing on this pixel.
 export const INSTANT_FORM_LEAD_EVENT = "Contact";
 // Owner (Nov 16 2026): a qualified lead = answered "What is your gross monthly
-// income?" with the second option or better ($3,000 to $5,000, or more).
+// income?" with the second option or better ($3,000 to $5,000, or more) AND
+// "What's your age?" with 55 or younger.
 // Standard name for the same reason as above (custom names are dropped); nothing
 // else sends "Subscribe", so in Meta it means exactly this.
 export const QUALIFIED_LEAD_EVENT = "Subscribe";
 export const QUALIFIED_MIN_MONTHLY_INCOME = 3000;
+export const QUALIFIED_MAX_AGE = 55;
 
 /** The lead's answer to the gross monthly income question, or null if it wasn't asked. */
 export function monthlyIncomeAnswer(rawFormData: unknown): string | null {
@@ -68,6 +74,28 @@ export function monthlyIncomeAnswer(rawFormData: unknown): string | null {
   const key = Object.keys(raw).find((k) => /gross[\s_]*monthly[\s_]*income/i.test(k));
   const v = key ? String(raw[key] ?? "").trim() : "";
   return v || null;
+}
+
+/** The lead's answered age (a number), or null if it wasn't asked / isn't a number. */
+export function ageAnswer(rawFormData: unknown): number | null {
+  if (!rawFormData || typeof rawFormData !== "object") return null;
+  const raw = rawFormData as Record<string, unknown>;
+  const key = Object.keys(raw).find((k) => /(what'?s|what is)[\s_]*your[\s_]*age\b(?![\s_]*range)/i.test(k) || /^(quiz_)?age$/i.test(k));
+  const m = key ? String(raw[key] ?? "").match(/\d{2,3}/) : null;
+  return m ? parseInt(m[0], 10) : null;
+}
+
+/**
+ * The full "Qualified Lead" test: income $3,000+/month AND age 55 or younger.
+ * true / false when both were answered (false as soon as either fails), null
+ * when one is missing and nothing failed (we never guess).
+ */
+export function isQualifiedLead(rawFormData: unknown): boolean | null {
+  const income = isIncomeQualified(rawFormData);
+  const age = ageAnswer(rawFormData);
+  if (income === false || (age != null && age > QUALIFIED_MAX_AGE)) return false;
+  if (income === null || age == null) return null;
+  return true;
 }
 
 /**
@@ -294,7 +322,7 @@ export async function fireMetaLeadEvent(lead: LeadLike, occurredAt?: Date): Prom
   }
   await recordCapiResult(lead, eventName, result, crm?.note);
   // A qualified instant form lead also sends the "Qualified Lead" signal.
-  if (crm && isIncomeQualified(lead.rawFormData) === true) {
+  if (crm && isQualifiedLead(lead.rawFormData) === true) {
     await sendQualifiedLead(lead, crm, occurredAt);
   }
   return result;
@@ -317,7 +345,7 @@ async function sendQualifiedLead(lead: LeadLike, crm: InstantFormContext, occurr
  * to backfill leads that came in before it existed). No-op unless qualified.
  */
 export async function fireMetaQualifiedLeadEvent(lead: LeadLike, occurredAt?: Date): Promise<SendResult> {
-  if (isIncomeQualified(lead.rawFormData) !== true) return { ok: false, skipped: "not income-qualified" };
+  if (isQualifiedLead(lead.rawFormData) !== true) return { ok: false, skipped: "not qualified (income $3k+ and age 55 or under)" };
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, string>;
   if (lead.fbclid || raw["fbc"] || raw["fbp"]) return { ok: false, skipped: "website lead, not an instant form" };
   const crm = await instantFormContext(lead).catch(() => null);
@@ -414,6 +442,51 @@ async function purchaseAlreadySent(leadId: string): Promise<boolean> {
   });
   const mine = new RegExp(`lead:${leadId}(\\s|$)`);
   return rows.some((r) => mine.test(r.cta ?? ""));
+}
+
+// Owner (Nov 16 2026): pickups are a quality signal. The first time a lead
+// reaches any stage that means we got them on the phone, Meta gets one
+// "Contacted" event (standard name: custom ones are dropped on this pixel;
+// nothing else sends StartTrial).
+export const CONTACTED_EVENT = "StartTrial";
+export const PICKUP_STAGES = [
+  "follow-up", // shown as "Contacted"
+  "call-back",
+  "presentation-ran",
+  "underwriting",
+  "approved",
+  "issued-not-paid",
+  "issued-paid",
+] as const;
+
+export function isPickupStage(stage: string): boolean {
+  return (PICKUP_STAGES as readonly string[]).includes(stage);
+}
+
+async function eventAlreadySent(eventName: string, leadId: string): Promise<boolean> {
+  const rows = await prisma!.funnelEvent.findMany({
+    where: { source: "meta-capi", cta: { startsWith: `ok ${eventName} `, contains: `lead:${leadId}` } },
+    select: { cta: true },
+  });
+  const mine = new RegExp(`lead:${leadId}(\\s|$)`);
+  return rows.some((r) => mine.test(r.cta ?? ""));
+}
+
+/** Send the one "Contacted" event a lead gets, the first time it's picked up. */
+export async function fireMetaContactedEvent(leadId: string, occurredAt?: Date): Promise<void> {
+  if (!isMetaCapiConfigured || !prisma) return;
+  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  if (!lead) return;
+  if (await eventAlreadySent(CONTACTED_EVENT, lead.id).catch(() => false)) return;
+  const crm = await instantFormContext(lead).catch(() => null);
+  const result = await sendMetaEvent(lead, {
+    eventName: CONTACTED_EVENT,
+    eventId: `contact_${lead.id}`,
+    actionSource: "system_generated",
+    crm,
+    eventTime: occurredAt,
+  }).catch(sendFailed);
+  await recordCapiResult(lead, CONTACTED_EVENT, result, crm?.note);
 }
 
 export function isMetaConversionStage(stage: string): boolean {

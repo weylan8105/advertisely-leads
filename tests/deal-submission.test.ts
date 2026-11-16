@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: db, isDatabaseConfigured: true }));
 vi.mock("next-auth", () => ({ getServerSession: vi.fn(async () => ({ user: { id: "agent", name: "Sam Agent", role: "AGENT" } })) }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/leadAccess", () => ({ canActOnLead: vi.fn(async () => true) }));
-vi.mock("@/lib/metaCapi", () => ({ fireMetaStageEvent: vi.fn(async () => {}) }));
+vi.mock("@/lib/metaCapi", () => ({ fireMetaStageEvent: vi.fn(async () => {}), fireMetaContactedEvent: vi.fn(async () => {}), isPickupStage: () => false }));
 
 const move = async (body: Record<string, unknown>) => {
   const { PATCH } = await import("@/app/api/leads/[id]/stage/route");

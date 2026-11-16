@@ -4,13 +4,16 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { CONVERSION_STAGE_IDS, stageLabel } from "@/data/pipeline";
 import {
+  CONTACTED_EVENT,
   INSTANT_FORM_LEAD_EVENT,
+  PICKUP_STAGES,
   QUALIFIED_LEAD_EVENT,
   STAGE_EVENTS,
+  fireMetaContactedEvent,
   fireMetaLeadEvent,
   fireMetaQualifiedLeadEvent,
   fireMetaStageEvent,
-  isIncomeQualified,
+  isQualifiedLead,
 } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
@@ -25,6 +28,8 @@ const ABCA_SOURCE = "early-retirement-quiz";
 // Every closing stage sends the one Purchase a lead gets; a lead that reached
 // one before that was the rule (or under an old custom name) gets it here.
 const RESEND_STAGES: string[] = [...CONVERSION_STAGE_IDS];
+// Pickup stages: each lead's first one sends its one "Contacted" event.
+const PICKUP: string[] = [...PICKUP_STAGES];
 
 const moveBody = (stage: string) => `Moved to "${stageLabel(stage)}" in the pipeline.`;
 
@@ -49,7 +54,7 @@ export async function POST() {
     prisma.leadActivity.findMany({
       where: {
         createdAt: { gte: since },
-        body: { in: RESEND_STAGES.map(moveBody) },
+        body: { in: [...new Set([...RESEND_STAGES, ...PICKUP])].map(moveBody) },
         lead: { source: { not: ABCA_SOURCE } },
       },
       select: { leadId: true, body: true, createdAt: true },
@@ -72,7 +77,16 @@ export async function POST() {
   const jobs: (() => Promise<unknown>)[] = [];
   const queued = new Set<string>();
   for (const move of moves) {
-    const stage = RESEND_STAGES.find((s) => moveBody(s) === move.body)!;
+    const pickup = PICKUP.find((s) => moveBody(s) === move.body);
+    if (pickup) {
+      const ckey = `${CONTACTED_EVENT}:${move.leadId}`;
+      if (!sent.has(ckey) && !queued.has(ckey)) {
+        queued.add(ckey);
+        jobs.push(() => fireMetaContactedEvent(move.leadId, move.createdAt));
+      }
+    }
+    const stage = RESEND_STAGES.find((s) => moveBody(s) === move.body);
+    if (!stage) continue;
     const key = `${STAGE_EVENTS[stage].event}:${move.leadId}`;
     if (sent.has(key) || queued.has(key)) continue;
     queued.add(key);
@@ -81,7 +95,7 @@ export async function POST() {
   for (const lead of leads) {
     if (sent.has(`${INSTANT_FORM_LEAD_EVENT}:${lead.id}`)) {
       // Lead already reported: still backfill its "Qualified Lead" signal if missing.
-      if (isIncomeQualified(lead.rawFormData) === true && !sent.has(`${QUALIFIED_LEAD_EVENT}:${lead.id}`)) {
+      if (isQualifiedLead(lead.rawFormData) === true && !sent.has(`${QUALIFIED_LEAD_EVENT}:${lead.id}`)) {
         jobs.push(() => fireMetaQualifiedLeadEvent(lead, lead.receivedAt));
       }
       continue;
