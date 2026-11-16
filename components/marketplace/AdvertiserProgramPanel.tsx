@@ -270,12 +270,11 @@ export function AdvertiserProgramPanel() {
           <dl className="mt-4 max-w-md space-y-1.5 text-sm">
             <div className="flex justify-between gap-4"><dt>Program membership, {every}</dt><dd className="font-medium">{usd(offer.amountCents)}</dd></div>
             <div className="flex justify-between gap-4 text-muted-foreground"><dt>Ad spend</dt><dd>separate, you choose the amount</dd></div>
-            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Each lead</dt><dd>our cost + {mgmtPct}% + {cardFeePct}% card fee</dd></div>
+            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Each lead</dt><dd>our cost + {mgmtPct}%</dd></div>
           </dl>
           <p className="mt-3 text-sm text-muted-foreground">
-            Today a lead costs about <span className="font-medium text-foreground">{priceRange}</span> all in. Costs follow our campaigns,
-            so this moves up and down. The membership doesn&apos;t buy leads: after you join, add ad spend on your dashboard to start
-            receiving them.
+            Today a lead costs about <span className="font-medium text-foreground">$20–$40</span>. The membership doesn&apos;t buy
+            leads: after you join, add ad spend on your dashboard to start receiving leads.
           </p>
 
           <h3 className="text-lg font-semibold mt-6">States you&apos;re licensed in</h3>
@@ -299,7 +298,7 @@ export function AdvertiserProgramPanel() {
             Join for {usd0(offer.amountCents)} {every}
           </Button>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Billed {every} until you cancel. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad spend stays on your account.
+            Billed {every} until you cancel. Each lead also includes a {cardFeePct}% card processing fee. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad spend stays on your account.
           </p>
         </Card>
         {howItWorks}
