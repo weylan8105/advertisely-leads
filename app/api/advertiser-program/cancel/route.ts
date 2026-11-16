@@ -34,6 +34,6 @@ export async function POST(req: NextRequest) {
     ok: true,
     message: resume
       ? "You're staying in the Advertiser Program. Payments continue every 2 weeks."
-      : `Your membership ends on ${endLabel}, with no more payments. Any balance you have left keeps buying leads.`,
+      : `Your membership ends on ${endLabel}, with no more payments. Leads stop then, and any ad spend you have left stays on your account for when you rejoin.`,
   });
 }

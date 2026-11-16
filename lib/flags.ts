@@ -21,7 +21,10 @@ export const PURCHASE_PAUSED_MESSAGE =
  * customer.subscription.*) before any real agent can subscribe and be charged.
  * Flip to true to open subscriptions to all agents.
  */
-export const LEAD_SUBSCRIPTIONS_PUBLIC = true;
+// Nov 16 2026 (owner): Subscribe & Save is replaced by the Advertiser Program.
+// Off again, so nobody new can subscribe; existing subscribers keep theirs and
+// can still manage it from the marketplace.
+export const LEAD_SUBSCRIPTIONS_PUBLIC = false;
 
 /**
  * TEMPORARY testing hold-back. Any incoming lead whose tags match one of these

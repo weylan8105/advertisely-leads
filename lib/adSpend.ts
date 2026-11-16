@@ -438,6 +438,8 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
         // A downline funding someone else's campaign: counted there (lib/teamAdSpend.ts), never here.
         const piKind = typeof c.payment_intent === "object" ? c.payment_intent?.metadata?.kind : undefined;
         const isTeamFunding = c.metadata?.kind === TEAM_AD_SPEND_KIND || piKind === TEAM_AD_SPEND_KIND;
+        const piProgram = typeof c.payment_intent === "object" ? c.payment_intent?.metadata?.program : undefined;
+        const programTopUp = c.metadata?.program === "1" || piProgram === "1";
         const isAdSpend = !isTeamFunding && (c.metadata?.kind === AD_SPEND_KIND || titles.some((t) => AD_SPEND_TITLE.test(t)));
         const payment: ClientPayment = {
           id: String(c.id),
@@ -445,7 +447,8 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
           amountCents,
           description: titles.find((t) => AD_SPEND_TITLE.test(t)) ?? titles[titles.length - 1] ?? null,
           method: "card",
-          processingFeeCents: isAdSpend ? processingFeeCents(amountCents) : 0,
+          // A Program member's top-up is credited in full: their card fee is on each lead instead.
+          processingFeeCents: isAdSpend && !programTopUp ? processingFeeCents(amountCents) : 0,
         };
         (isAdSpend ? adSpend : other).push(payment);
       }),
@@ -496,9 +499,9 @@ export interface AdSpendSummary {
   campaigns: ClientCampaign[];
   sharedPoolOnly: boolean; // no campaign of their own: leads come from the shared pool only
   program: {
-    member: boolean; // paying into the Advertiser Program now
-    joined: boolean; // ever paid in (their leads cost the card fee more)
-    mustJoin: boolean; // past their (or their upline's) November fee renewal date: no leads until they join
+    member: boolean; // in the Advertiser Program now (their leads cost the management + card fee more)
+    joined: boolean; // has ever been a member
+    mustJoin: boolean; // no leads or top-ups until they join: November cover ended, or their membership has
     legacyUntil: string | null; // that renewal date
     legacyViaTeam: boolean; // covered by their upline's fee, not their own (lib/teamAdvertiser.ts)
   };
@@ -717,7 +720,7 @@ export async function enforceAdSpend(userId: string): Promise<EnforceResult> {
   const live = s.campaigns.filter((c) => c.status === "ACTIVE" || pausedByUs.has(c.id));
   // Paused ones are capped too, so turning one back on by hand stays inside the budget.
   const cappable = s.campaigns.filter((c) => c.status !== "ARCHIVED" && c.status !== "DELETED");
-  // A November fee client past their renewal date runs nothing until they join the Advertiser Program.
+  // Past their November cover, or a lapsed member: runs nothing until they join the Advertiser Program.
   const allowedCents = s.program.mustJoin ? 0 : affordableSpendCents(s.balanceCents, s.thisMonth.spendCents);
 
   if (allowedCents < PAUSE_BELOW_CENTS) {

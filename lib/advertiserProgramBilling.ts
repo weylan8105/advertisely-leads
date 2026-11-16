@@ -1,18 +1,14 @@
 // Stripe side of the Advertisely Advertiser Program (rules in lib/advertiserProgram.ts):
-// the $500 / 2-week Price, enrolling a member, and turning each paid invoice
-// into balance. Every step is idempotent, so the webhook and the marketplace
-// page's own check can both run it.
+// the $500 / 2-week membership Price and enrolling a member. The membership
+// payment is only the fee to be in the program: none of it becomes ad spend.
+// Every step is idempotent, so the webhook and the marketplace page's own
+// check can both run it.
 
 import type Stripe from "stripe";
 import { stripe } from "./stripe";
 import { prisma } from "./prisma";
-import { ADVERTISER_PROGRAM, ADVERTISER_PROGRAM_KIND, programCreditCents, programFeeCents } from "./advertiserProgram";
+import { ADVERTISER_PROGRAM, ADVERTISER_PROGRAM_KIND } from "./advertiserProgram";
 import { SHARED_POOL_ONLY, enforceAdSpend, forgetAdSpendSummary } from "./adSpend";
-
-// AdSpendPayment.method for a program payment's credit (the payment minus the fee).
-export const PROGRAM_PAYMENT_METHOD = "program";
-
-const usd = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 /** Find-or-create the program's recurring Price. */
 export async function getProgramPriceId(): Promise<string> {
@@ -73,9 +69,10 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 }
 
 /**
- * A paid program invoice: add the payment minus the 20% fee to the member's
- * balance (once per invoice) and apply it. Returns false when the invoice isn't
- * the program's, so the caller can hand it to the lead subscription instead.
+ * A paid program invoice: the membership is running, so make sure the member
+ * is an advertiser and let their own campaign pick that up. Nothing is added
+ * to their ad-spend balance. Returns false when the invoice isn't the
+ * program's, so the caller can hand it to the lead subscription instead.
  */
 export async function recordProgramInvoice(invoice: Stripe.Invoice): Promise<boolean> {
   if (!stripe || !prisma) return false;
@@ -90,51 +87,20 @@ export async function recordProgramInvoice(invoice: Stripe.Invoice): Promise<boo
   const paidCents = typeof inv.amount_paid === "number" ? inv.amount_paid : 0;
   if (!userId || inv.status !== "paid" || paidCents <= 0) return true;
 
-  const ref = `program-invoice:${invoice.id}`;
-  const paidAt = inv.status_transitions?.paid_at ? new Date(inv.status_transitions.paid_at * 1000) : new Date();
-  const recorded = await prisma.$transaction(async (tx) => {
-    // The webhook and the marketplace page can see the same invoice at once.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ref}))`;
-    const existing = await tx.adSpendPayment.findFirst({
-      where: { userId, method: PROGRAM_PAYMENT_METHOD, note: { contains: ref } },
-      select: { id: true },
-    });
-    if (existing) return false;
-    await tx.adSpendPayment.create({
-      data: {
-        userId,
-        amountCents: programCreditCents(paidCents),
-        method: PROGRAM_PAYMENT_METHOD,
-        receivedAt: paidAt,
-        note: `${ADVERTISER_PROGRAM.name}: ${usd(paidCents)} paid, less ${usd(programFeeCents(paidCents))} management fee (20%) [${ref}]`,
-      },
-    });
-    return true;
-  });
-
   await enrollProgramMember(userId);
   forgetAdSpendSummary(userId);
-  // A returning advertiser's own campaign picks the new balance up straight away.
-  if (recorded) await enforceAdSpend(userId).catch((e) => console.warn("[program] enforce failed", (e as Error).message));
+  // A returning advertiser's own campaign resumes now that they are a member.
+  await enforceAdSpend(userId).catch((e) => console.warn("[program] enforce failed", (e as Error).message));
   return true;
 }
 
 /**
- * Catch up on anything the webhook missed: enroll the member and record every
- * paid invoice on their program subscriptions. Safe to run on every page load.
+ * Catch up on anything the webhook missed: someone whose membership has
+ * started is an advertiser. Safe to run on every page load.
  */
 export async function syncProgramMember(userId: string, subs: Stripe.Subscription[]): Promise<void> {
   if (!stripe || !prisma) return;
   const started = subs.filter((s) => s.status !== "incomplete" && s.status !== "incomplete_expired");
   if (!started.length) return;
   await enrollProgramMember(userId);
-  const recorded = (
-    await prisma.adSpendPayment.findMany({ where: { userId, method: PROGRAM_PAYMENT_METHOD }, select: { note: true } })
-  ).map((r) => r.note ?? "").join("\n");
-  for (const sub of started) {
-    const invoices = await stripe.invoices.list({ subscription: sub.id, status: "paid", limit: 30 });
-    for (const inv of invoices.data) {
-      if (!recorded.includes(`program-invoice:${inv.id}`)) await recordProgramInvoice(inv);
-    }
-  }
 }

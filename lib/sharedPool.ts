@@ -121,10 +121,11 @@ export type ClientSlot = { userId: string; name: string; cplCents: number; free?
 
 /**
  * What a client pays for one shared lead: the pool's cost per lead, plus the
- * card fee for Advertiser Program members (lib/advertiserProgram.ts).
+ * 20% management fee and the card fee for Advertiser Program members
+ * (lib/advertiserProgram.ts).
  */
-export function clientLeadPriceCents(poolCplCents: number, s: { program: { joined: boolean } }): number {
-  return s.program.joined ? programLeadPriceCents(poolCplCents) : poolCplCents;
+export function clientLeadPriceCents(poolCplCents: number, s: { program: { member: boolean } }): number {
+  return s.program.member ? programLeadPriceCents(poolCplCents) : poolCplCents;
 }
 
 export function licensedIn(states: string[], state: string | null): boolean {
@@ -161,7 +162,7 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
   for (const [i, c] of licensed.entries()) {
     const s = summaries[i];
     if (!s || s.errors.length) continue;
-    // November fee client past their renewal date: nothing until they join the Advertiser Program.
+    // Past their November cover, or their membership has ended: nothing until they join the Advertiser Program.
     if (s.program.mustJoin) continue;
     // Free while their cost per lead is above the target (no balance needed).
     if (isFreeUntilCplClient(c.email) && needsFreeLeads(s)) {
@@ -170,7 +171,7 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
     }
     const price = clientLeadPriceCents(cplCents, s);
     if (s.balanceCents < price) continue;
-    out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents: price, ...(s.program.joined ? { program: true } : {}) });
+    out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents: price, ...(s.program.member ? { program: true } : {}) });
   }
   return out;
 }
@@ -185,7 +186,7 @@ export async function deliverSharedLeadToClient(leadId: string, slot: ClientSlot
     slot.userId,
     slot.free
       ? `Shared ${label} round-robin — free lead (no charge) while the cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
-      : `Shared ${label} round-robin — ${cost}${slot.program ? " (cost per lead + 3% card fee)" : " cost per lead"} taken from the ad-spend balance.`,
+      : `Shared ${label} round-robin — ${cost}${slot.program ? " (cost per lead + 20% management + 3% card fee)" : " cost per lead"} taken from the ad-spend balance.`,
     { skipTeamFunding: true },
   );
   if (!ok) return false;

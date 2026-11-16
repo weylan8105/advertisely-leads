@@ -268,6 +268,18 @@ describe("summary", () => {
     expect(s.otherStripePayments.map((p) => p.amountCents)).toEqual([100_000]);
   });
 
+  it("credits an Advertiser Program member's ad-spend top-up in full (their card fee is on each lead)", async () => {
+    charges = [
+      paid(1000), // before they were a member: 3% comes off the payment
+      paid(500, { description: "Advertisely campaign ad spend", payment_intent: { id: "pi_prog", metadata: { kind: "ad-spend", program: "1" } } }),
+    ];
+    const { getAdSpendSummary } = await import("@/lib/adSpend");
+    const s = (await getAdSpendSummary("JACE", { fresh: true }))!;
+    expect(s.paidCents).toBe(150_000);
+    expect(s.processingFeeCents).toBe(3_000);
+    expect(s.payments.find((p) => p.amountCents === 50_000)?.processingFeeCents).toBe(0);
+  });
+
   it("finds guest payments by billing email, without counting one twice", async () => {
     const shared = paid(1000);
     charges = [shared];

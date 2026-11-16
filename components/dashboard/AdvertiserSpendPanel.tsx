@@ -38,8 +38,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
   const low = summary.balanceCents <= 0;
   const typedCents = Math.round((Number(amount.replace(/[^0-9.]/g, "")) || 0) * 100);
   const runningLow = !low && summary.daysLeft !== null && summary.daysLeft <= 3;
-  // Advertiser Program members (and November fee clients past their renewal) add money through the program.
-  const viaProgram = summary.program.joined || summary.program.mustJoin;
+  // Someone who has to join (or rejoin) the Advertiser Program can't add ad spend until they do.
+  const viaProgram = summary.program.mustJoin;
+  const member = summary.program.member;
 
   async function addSpend() {
     const dollars = Number(amount.replace(/[^0-9.]/g, ""));
@@ -75,7 +76,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
               ? "Your upline's advertiser month has ended"
               : summary.program.legacyUntil
                 ? "Your November advertiser fee has run its month"
-                : "You're no longer covered by a team's advertiser month"}
+                : summary.program.joined
+                  ? "Your program membership has ended"
+                  : "You're no longer covered by a team's advertiser month"}
             , and advertiser leads now come through the{" "}
             <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a>.
           </span>
@@ -186,18 +189,14 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
           <CardHeader>
             <CardTitle>Advertiser Program</CardTitle>
             <CardDescription>
-              {summary.program.member
-                ? "$500 every 2 weeks: $100 management fee, $400 to your leads. Each lead costs its campaign's cost per lead plus the 3% card fee."
-                : summary.program.mustJoin
-                  ? "Join for $500 every 2 weeks to keep getting leads."
-                  : "Your membership has ended. Your balance keeps buying leads until it runs out."}
+              {summary.program.joined
+                ? "Your membership has ended, so your leads are paused. Rejoin for $500 every 2 weeks; your unused ad spend is still here."
+                : "Join for $500 every 2 weeks to get leads. Ad spend is separate and is added here once you're a member."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <a href="/marketplace?tab=advertise">
-              <Button variant={summary.program.member ? "outline" : "default"}>
-                {summary.program.member ? "Manage membership" : "Join the program"}
-              </Button>
+              <Button>{summary.program.joined ? "Rejoin the program" : "Join the program"}</Button>
             </a>
           </CardContent>
         </Card>
@@ -205,7 +204,13 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Add spend</CardTitle>
-            <CardDescription>{summary.sharedPoolOnly ? "Adds to your lead budget." : "Adds to your campaign budget."} Paid securely through Stripe.</CardDescription>
+            <CardDescription>
+              {member
+                ? "Buys your leads. Separate from your $500 program membership."
+                : summary.sharedPoolOnly ? "Adds to your lead budget." : "Adds to your campaign budget."}{" "}
+              Paid securely through Stripe.
+              {member && <> <a href="/marketplace?tab=advertise" className="underline">Manage membership</a></>}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -240,8 +245,14 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
             </div>
             {typedCents >= MIN_DOLLARS * 100 && (
               <p className="text-xs text-muted-foreground">
-                {usd(typedCents)} adds {usd(typedCents - Math.round(typedCents * PROCESSING_RATE))} to your ad budget after the
-                3% card processing fee.
+                {member ? (
+                  <>All {usd(typedCents)} goes to leads. Each lead costs our cost plus the 20% management fee and 3% card fee.</>
+                ) : (
+                  <>
+                    {usd(typedCents)} adds {usd(typedCents - Math.round(typedCents * PROCESSING_RATE))} to your ad budget after the
+                    3% card processing fee.
+                  </>
+                )}
               </p>
             )}
             {error && <p className="text-xs text-rose-600">{error}</p>}

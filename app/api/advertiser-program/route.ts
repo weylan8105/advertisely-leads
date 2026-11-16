@@ -8,8 +8,6 @@ import { uplineOwnerEmails } from "@/lib/teamAdvertiser";
 import { sharedCplCents } from "@/lib/sharedPool";
 import {
   ADVERTISER_PROGRAM,
-  programCreditCents,
-  programFeeCents,
   programLeadPriceCents,
   legacyCoverEnds,
   mustJoinProgram,
@@ -54,10 +52,9 @@ export async function GET() {
       name: ADVERTISER_PROGRAM.name,
       amountCents: ADVERTISER_PROGRAM.amountCents,
       intervalWeeks: ADVERTISER_PROGRAM.intervalWeeks,
-      feeCents: programFeeCents(ADVERTISER_PROGRAM.amountCents),
-      creditCents: programCreditCents(ADVERTISER_PROGRAM.amountCents),
+      managementRate: ADVERTISER_PROGRAM.managementRate,
       cardFeeRate: ADVERTISER_PROGRAM.cardFeeRate,
-      // What a member pays per lead today (cost per lead + card fee), per source campaign.
+      // What a member pays per lead today (cost per lead + management fee + card fee), per source campaign.
       leadPriceCents: { low: programLeadPriceCents(Math.min(abca, ew)), high: programLeadPriceCents(Math.max(abca, ew)) },
     },
     member: live

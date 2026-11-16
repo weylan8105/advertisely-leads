@@ -13,8 +13,7 @@ interface ProgramData {
     name: string;
     amountCents: number;
     intervalWeeks: number;
-    feeCents: number;
-    creditCents: number;
+    managementRate: number;
     cardFeeRate: number;
     leadPriceCents: { low: number; high: number };
   };
@@ -60,7 +59,7 @@ export function AdvertiserProgramPanel() {
     load();
     try {
       const p = new URLSearchParams(window.location.search).get("status");
-      if (p === "success") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Your balance is ready and leads start with the next one in your states." });
+      if (p === "success") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Add ad spend on your dashboard and your leads start with the next one in your states." });
       if (p === "cancel") setBanner({ ok: false, text: "Checkout canceled. You weren't charged." });
       if (p) {
         const u = new URL(window.location.href);
@@ -92,7 +91,7 @@ export function AdvertiserProgramPanel() {
   }
 
   async function setCancel(resume: boolean) {
-    if (!resume && !window.confirm("Cancel the Advertiser Program? There are no more payments after this 2-week period, and any balance you have left keeps buying leads.")) return;
+    if (!resume && !window.confirm("Cancel the Advertiser Program? There are no more payments after this 2-week period. Your leads stop when it ends, and any ad spend you have left stays on your account for when you rejoin.")) return;
     setBusy(true);
     setError(null);
     try {
@@ -139,14 +138,12 @@ export function AdvertiserProgramPanel() {
 
   const { offer } = data;
   const every = `every ${offer.intervalWeeks} weeks`;
-  const leadsLow = Math.floor(offer.creditCents / Math.max(1, offer.leadPriceCents.high));
-  const leadsHigh = Math.floor(offer.creditCents / Math.max(1, offer.leadPriceCents.low));
-  const leadRange = leadsLow === leadsHigh ? `${leadsLow}` : `${leadsLow}–${leadsHigh}`;
   const priceRange =
     offer.leadPriceCents.low === offer.leadPriceCents.high
       ? usd(offer.leadPriceCents.low)
       : `${usd(offer.leadPriceCents.low)}–${usd(offer.leadPriceCents.high)}`;
   const cardFeePct = Math.round(offer.cardFeeRate * 100);
+  const mgmtPct = Math.round(offer.managementRate * 100);
 
   const banners = (
     <>
@@ -177,11 +174,11 @@ export function AdvertiserProgramPanel() {
     <Card className="p-6">
       <div className="text-sm font-semibold mb-2">How it works</div>
       <ul className="space-y-2 text-sm text-muted-foreground">
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Leads come from our Blue Collar campaigns, shared in a round robin between advertisers licensed in the lead&apos;s state.</li>
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Each lead costs what we paid for it, plus the {cardFeePct}% card fee. No markup on the leads.</li>
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Leads land in your pipeline the moment they come in, with an email for each one.</li>
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Your dashboard shows your balance, leads and cost per lead.</li>
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Cancel anytime. Whatever balance is left keeps buying leads.</li>
+        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {usd0(offer.amountCents)} {every} is your membership. It keeps you in the program and is separate from your ad spend.</li>
+        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> You add ad spend on your dashboard, any amount, whenever you like. All of it goes to leads.</li>
+        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Each lead costs what we paid for it, plus a {mgmtPct}% management fee and the {cardFeePct}% card fee.</li>
+        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Leads come from our Blue Collar campaigns, shared in a round robin between advertisers licensed in the lead&apos;s state, and land in your pipeline the moment they come in.</li>
+        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Cancel anytime. Leads keep coming until the 2 weeks you paid for run out, and any unused ad spend stays on your account for when you rejoin.</li>
       </ul>
     </Card>
   );
@@ -209,10 +206,10 @@ export function AdvertiserProgramPanel() {
               <div className="rounded-lg border border-slate-200 p-3">
                 <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Megaphone className="h-3 w-3" /> {every[0].toUpperCase() + every.slice(1)}</div>
                 <div className="text-xl font-semibold">{usd0(offer.amountCents)}</div>
-                <div className="text-[11px] text-muted-foreground">{usd0(offer.creditCents)} goes to leads</div>
+                <div className="text-[11px] text-muted-foreground">membership</div>
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Wallet className="h-3 w-3" /> Balance</div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Wallet className="h-3 w-3" /> Ad spend left</div>
                 <div className="text-xl font-semibold">{data.balance && !data.balance.errors ? usd(data.balance.balanceCents) : "—"}</div>
                 <div className="text-[11px] text-muted-foreground">for your next leads</div>
               </div>
@@ -234,7 +231,9 @@ export function AdvertiserProgramPanel() {
               </p>
             )}
             <p className="mt-4 text-sm text-muted-foreground">
-              Full details of your payments and leads are on your <a href="/dashboard" className="font-medium text-brand-red hover:underline">dashboard</a>.
+              Add ad spend and see your leads on your <a href="/dashboard" className="font-medium text-brand-red hover:underline">dashboard</a>.
+              Today a lead costs about <span className="font-medium text-foreground">{priceRange}</span> (our cost + {mgmtPct}% management + {cardFeePct}% card fee).
+              {ending && <> Leads stop on your last day; unused ad spend stays on your account.</>}
             </p>
             {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
             <div className="mt-4">
@@ -265,18 +264,18 @@ export function AdvertiserProgramPanel() {
         <Card className="p-6 md:col-span-2">
           <h3 className="text-lg font-semibold">{offer.name}</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Become an advertiser right here: your money runs through our campaigns and buys leads at our cost. We keep a 20%
-            management fee and that&apos;s it.
+            Become an advertiser right here. Your membership puts you in our campaigns&apos; round robin, and the ad spend you add
+            buys leads at our cost plus a {mgmtPct}% management fee.
           </p>
-          <dl className="mt-4 max-w-sm space-y-1.5 text-sm">
-            <div className="flex justify-between gap-4"><dt>You pay {every}</dt><dd className="font-medium">{usd(offer.amountCents)}</dd></div>
-            <div className="flex justify-between gap-4 text-muted-foreground"><dt>Management fee (20%)</dt><dd>− {usd(offer.feeCents)}</dd></div>
-            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Goes to your leads</dt><dd>{usd(offer.creditCents)}</dd></div>
+          <dl className="mt-4 max-w-md space-y-1.5 text-sm">
+            <div className="flex justify-between gap-4"><dt>Program membership, {every}</dt><dd className="font-medium">{usd(offer.amountCents)}</dd></div>
+            <div className="flex justify-between gap-4 text-muted-foreground"><dt>Ad spend</dt><dd>separate, you choose the amount</dd></div>
+            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Each lead</dt><dd>our cost + {mgmtPct}% + {cardFeePct}% card fee</dd></div>
           </dl>
           <p className="mt-3 text-sm text-muted-foreground">
-            Today a lead costs about <span className="font-medium text-foreground">{priceRange}</span> including the {cardFeePct}% card fee,
-            so {usd0(offer.creditCents)} is about <span className="font-medium text-foreground">{leadRange} leads</span> {every}. Costs follow our
-            campaigns, so this moves up and down.
+            Today a lead costs about <span className="font-medium text-foreground">{priceRange}</span> all in. Costs follow our campaigns,
+            so this moves up and down. The membership doesn&apos;t buy leads: after you join, add ad spend on your dashboard to start
+            receiving them.
           </p>
 
           <h3 className="text-lg font-semibold mt-6">States you&apos;re licensed in</h3>
@@ -300,7 +299,7 @@ export function AdvertiserProgramPanel() {
             Join for {usd0(offer.amountCents)} {every}
           </Button>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Billed {every} until you cancel. Cancel anytime; whatever balance is left keeps buying leads.
+            Billed {every} until you cancel. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad spend stays on your account.
           </p>
         </Card>
         {howItWorks}

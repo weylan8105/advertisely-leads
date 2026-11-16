@@ -93,8 +93,8 @@ export async function POST(req: NextRequest) {
           console.log("Stripe webhook: team ad spend added", s.id, added ? "recorded" : "already recorded", r.action, r.detail);
           break;
         }
-        // Joined the Advertiser Program: an advertiser from now on. The payment
-        // itself is credited from its invoice (invoice.paid below).
+        // Joined the Advertiser Program: an advertiser from now on. The payment is
+        // the membership only; ad spend is added separately from the dashboard.
         if (s.metadata?.kind === ADVERTISER_PROGRAM_KIND && s.metadata.userId) {
           await enrollProgramMember(s.metadata.userId);
           console.log("Stripe webhook: advertiser program joined", s.id);
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
         // Each paid weekly invoice → that week's fresh-lead order (idempotent).
         // Both event types are handled so the integration works whichever one
         // the Stripe endpoint is subscribed to. Advertiser Program invoices
-        // become balance instead.
+        // are membership payments and never become lead orders.
         if (
           await recordProgramInvoice(event.data.object as Stripe.Invoice).catch((e) => {
             console.error("Stripe webhook: advertiser program invoice failed", (e as Error).message);

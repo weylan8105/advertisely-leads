@@ -20,16 +20,18 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdvertiser: true, email: true, name: true } });
   if (!user?.isAdvertiser) return NextResponse.json({ error: "Not an advertiser account." }, { status: 403 });
 
-  // Advertiser Program members add money through the program (lib/advertiserProgram.ts),
-  // and so must a November fee client once their month is up.
+  // Ad spend is separate from the Advertiser Program membership (lib/advertiserProgram.ts),
+  // but someone who has to join the program first can't add any until they do.
   const summary = await getAdSpendSummary(userId).catch(() => null);
   const legacyEnded = (legacyRetainerEnds(user.email)?.getTime() ?? Infinity) <= Date.now();
-  if (summary?.program.joined || summary?.program.mustJoin || (!summary && legacyEnded)) {
+  if (summary?.program.mustJoin || (!summary && legacyEnded)) {
     return NextResponse.json(
-      { error: "Your leads are funded through the Advertisely Advertiser Program. Manage it in the marketplace.", program: true },
+      { error: "Join the Advertisely Advertiser Program in the marketplace first. Then you can add ad spend.", program: true },
       { status: 403 },
     );
   }
+  // A member's top-up is credited in full; their card fee is on each lead instead.
+  const programMember = !!summary?.program.member;
 
   const body = (await req.json().catch(() => ({}))) as { amountCents?: number };
   const amountCents = Math.round(Number(body.amountCents) || 0);
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
   const existing = (await stripe.customers.list({ email: user.email, limit: 1 })).data[0];
   const customer = existing ?? (await stripe.customers.create({ email: user.email, name: user.name ?? undefined, metadata: { userId } }));
   const base = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
-  const metadata = { kind: AD_SPEND_KIND, userId };
+  const metadata = { kind: AD_SPEND_KIND, userId, ...(programMember ? { program: "1" } : {}) };
 
   try {
     const checkout = await stripe.checkout.sessions.create({

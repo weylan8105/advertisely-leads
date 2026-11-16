@@ -1,15 +1,17 @@
-// ─── Advertisely Advertiser Program (owner directive, Nov 15 2026) ──────────
-// Anyone can become an advertiser from the marketplace: $500 every 2 weeks, of
-// which 20% is our management fee and the other $400 goes to their ad-spend
-// balance. That balance buys leads at cost from the shared pool
-// (lib/sharedPool.ts): each lead is the source campaign's cost per lead plus the
-// 3% card fee (owner: the card fee goes on their cost per lead, not on us).
-// Cancel anytime; whatever balance is left keeps buying leads until it runs out.
+// ─── Advertisely Advertiser Program (owner directive, Nov 15–16 2026) ───────
+// Anyone can become an advertiser from the marketplace. Two separate things:
+//  - $500 every 2 weeks is the fee to be IN the program. None of it buys leads.
+//  - Ad spend is added on its own, any amount, from the dashboard. It buys leads
+//    from the shared pool (lib/sharedPool.ts) at the source campaign's cost per
+//    lead plus a 20% management fee plus the 3% card fee (owner: the card fee
+//    goes on their cost per lead, not on us). Ad spend is credited in full.
+// A member who stops paying keeps getting leads until the 2 weeks they paid
+// for run out. Then leads stop, and their unused ad spend waits on their
+// account for when they rejoin.
 //
 // Billing is a Stripe subscription (metadata.kind = ADVERTISER_PROGRAM_KIND).
-// Each paid invoice becomes an AdSpendPayment row (method "program") worth the
-// payment minus the fee (lib/advertiserProgramBilling.ts). Stripe is the record
-// of who is a member; nothing about membership is stored in our database.
+// Stripe is the record of who is a member; nothing about membership is stored
+// in our database.
 //
 // Clients who paid the $3,000 monthly Advertisely Advertiser fee for November
 // keep their setup until their renewal date. From then on they get leads only
@@ -19,10 +21,10 @@ export const ADVERTISER_PROGRAM_KIND = "advertiser-program";
 
 export const ADVERTISER_PROGRAM = {
   name: "Advertisely Advertiser Program",
-  amountCents: 50_000,
+  amountCents: 50_000, // the membership, every 2 weeks; separate from ad spend
   intervalWeeks: 2,
-  feeRate: 0.2,
-  cardFeeRate: 0.03,
+  managementRate: 0.2, // added to each lead's cost
+  cardFeeRate: 0.03, // added to each lead's cost
 };
 
 // Renewal date of each client's November $3,000 fee (email → YYYY-MM-DD, Central).
@@ -38,14 +40,9 @@ export const LEGACY_RETAINER_UNTIL: Record<string, string> = {
 // renewal date above. After it you need the Program for leads, like the owner.
 export const LEGACY_TEAM_ADVERTISER_OWNERS = new Set<string>(["jljensen38@gmail.com"]);
 
-/** The management fee taken from one payment. */
-export const programFeeCents = (paidCents: number) => Math.round(paidCents * ADVERTISER_PROGRAM.feeRate);
-
-/** What one payment adds to the member's balance. */
-export const programCreditCents = (paidCents: number) => Math.max(0, paidCents - programFeeCents(paidCents));
-
-/** A member's price for a lead: the campaign's cost per lead plus the card fee. */
-export const programLeadPriceCents = (cplCents: number) => Math.round(cplCents * (1 + ADVERTISER_PROGRAM.cardFeeRate));
+/** A member's price for a lead: the campaign's cost per lead, plus the management fee, plus the card fee. */
+export const programLeadPriceCents = (cplCents: number) =>
+  Math.round(cplCents * (1 + ADVERTISER_PROGRAM.managementRate) * (1 + ADVERTISER_PROGRAM.cardFeeRate));
 
 /** A Stripe subscription as the program checks it (ClientSubscription in lib/adSpend.ts fits). */
 export interface ProgramSub {
@@ -59,7 +56,7 @@ const NEVER_STARTED = new Set(["incomplete", "incomplete_expired"]);
 /** Paying right now (or retrying a failed payment). */
 export const isProgramMember = (subs: ProgramSub[]) => subs.some((s) => s.program && LIVE.has(s.status));
 
-/** Has ever paid into the program, including members who have since cancelled. */
+/** Has ever been in the program, including members whose membership has since ended. */
 export const hasJoinedProgram = (subs: ProgramSub[]) => subs.some((s) => s.program && !NEVER_STARTED.has(s.status));
 
 /** When a November fee client's month runs out (start of that day, Central), or null. */
@@ -87,11 +84,13 @@ export function legacyCoverEnds(
 }
 
 /**
- * No leads and no top-ups until they join the Program:
+ * No leads and no ad-spend top-ups until they join (or rejoin) the Program:
  *  - a November fee client past their renewal date,
  *  - a member of such a client's team past that same date,
- *  - a shared-pool-only advertiser with no cover at all (they left that team).
- * Anyone who has ever joined the Program is never held back by this.
+ *  - a shared-pool-only advertiser with no cover at all (they left that team),
+ *  - a member whose membership has ended (their unused ad spend waits).
+ * A paying member is never held back, and neither is anyone still inside
+ * their November cover.
  */
 export function mustJoinProgram(
   email: string | null | undefined,
@@ -99,8 +98,8 @@ export function mustJoinProgram(
   now = new Date(),
   opts: { uplineEmails?: (string | null | undefined)[]; sharedPoolOnly?: boolean } = {},
 ): boolean {
-  if (hasJoinedProgram(subs)) return false;
+  if (isProgramMember(subs)) return false;
   const cover = legacyCoverEnds(email, opts.uplineEmails);
   if (cover) return now >= cover.ends;
-  return !!opts.sharedPoolOnly;
+  return !!opts.sharedPoolOnly || hasJoinedProgram(subs);
 }

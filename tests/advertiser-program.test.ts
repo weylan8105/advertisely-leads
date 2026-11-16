@@ -58,11 +58,10 @@ beforeEach(() => {
 });
 
 describe("program rules", () => {
-  it("$500: $100 management fee, $400 to leads; leads cost +3% card fee", () => {
-    expect(program.programFeeCents(50_000)).toBe(10_000);
-    expect(program.programCreditCents(50_000)).toBe(40_000);
-    expect(program.programLeadPriceCents(2_500)).toBe(2_575);
-    expect(program.programLeadPriceCents(3_228)).toBe(3_325);
+  it("$500 every 2 weeks is the membership; a lead costs our cost + 20% management + 3% card fee", () => {
+    expect(program.ADVERTISER_PROGRAM.amountCents).toBe(50_000);
+    expect(program.programLeadPriceCents(2_500)).toBe(3_090); // $25.00 → $30.90
+    expect(program.programLeadPriceCents(3_228)).toBe(3_990);
   });
 
   it("members: paying now vs ever joined", () => {
@@ -81,7 +80,10 @@ describe("program rules", () => {
     expect(program.mustJoinProgram(david, [], DEC(3))).toBe(true);
     expect(program.mustJoinProgram("DClayton1235@gmail.com ", [], DEC(3))).toBe(true);
     expect(program.mustJoinProgram(david, [sub("active")], DEC(3))).toBe(false);
-    expect(program.mustJoinProgram(david, [sub("canceled")], DEC(20))).toBe(false); // joined, then cancelled
+    expect(program.mustJoinProgram(david, [sub("canceled")], DEC(20))).toBe(true); // membership ended: leads stop
+    expect(program.mustJoinProgram(david, [sub("canceled")], DEC(2))).toBe(false); // still inside his November month
+    expect(program.mustJoinProgram("someone@new.test", [sub("canceled")], DEC(20))).toBe(true); // a lapsed member waits
+    expect(program.mustJoinProgram("someone@new.test", [sub("past_due")], DEC(20))).toBe(false); // payment being retried
     expect(program.mustJoinProgram(david, [sub("incomplete")], DEC(3))).toBe(true);
     expect(program.mustJoinProgram("someone@new.test", [], DEC(20))).toBe(false);
     expect(program.legacyRetainerEnds("jljensen38@gmail.com")?.toISOString().slice(0, 10)).toBe("2026-12-02");
@@ -101,7 +103,7 @@ describe("program rules", () => {
     expect(program.legacyCoverEnds("dclayton1235@gmail.com", jace)?.viaTeam).toBe(false);
     // Left the team: a shared-pool-only advertiser with no cover needs the Program right away.
     expect(program.mustJoinProgram(member, [], DEC(1), { uplineEmails: [], sharedPoolOnly: true })).toBe(true);
-    expect(program.mustJoinProgram(member, [sub("canceled")], DEC(1), { uplineEmails: [], sharedPoolOnly: true })).toBe(false);
+    expect(program.mustJoinProgram(member, [sub("active")], DEC(1), { uplineEmails: [], sharedPoolOnly: true })).toBe(false);
     // An advertiser with their own campaign and no fee on the list is never held back.
     expect(program.mustJoinProgram(member, [], DEC(20), { uplineEmails: [], sharedPoolOnly: false })).toBe(false);
   });
@@ -118,16 +120,13 @@ describe("recordProgramInvoice", () => {
       ...o,
     }) as any;
 
-  it("credits $400 once per invoice and makes a new member a shared-pool advertiser", async () => {
+  it("the $500 is the membership only: nothing goes to ad spend, and a new member becomes a shared-pool advertiser", async () => {
     users.NEW = { id: "NEW", isAdvertiser: false, adCampaignIds: [] };
     expect(await recordProgramInvoice(invoice())).toBe(true);
     expect(await recordProgramInvoice(invoice())).toBe(true); // webhook retry / page sync
-    expect(payments).toEqual([
-      expect.objectContaining({ userId: "NEW", amountCents: 40_000, method: "program", note: expect.stringContaining("program-invoice:in_1") }),
-    ]);
-    expect(payments[0].note).toContain("$100.00 management fee");
+    expect(payments).toEqual([]);
     expect(users.NEW).toMatchObject({ isAdvertiser: true, adCampaignIds: ["shared-pool"] });
-    expect(enforceAdSpend).toHaveBeenCalledTimes(1);
+    expect(enforceAdSpend).toHaveBeenCalled();
   });
 
   it("an existing advertiser keeps their own campaigns", async () => {
@@ -135,7 +134,7 @@ describe("recordProgramInvoice", () => {
     const inv = invoice({ parent: { subscription_details: { subscription: "sub_2", metadata: { kind: "advertiser-program", userId: "DAVID" } } } });
     expect(await recordProgramInvoice(inv)).toBe(true);
     expect(db.user.update).not.toHaveBeenCalled();
-    expect(payments[0]).toMatchObject({ userId: "DAVID", amountCents: 40_000 });
+    expect(payments).toEqual([]);
   });
 
   it("reads the subscription when the invoice doesn't carry its metadata", async () => {
@@ -143,7 +142,7 @@ describe("recordProgramInvoice", () => {
     subscriptionsRetrieve.mockResolvedValue({ metadata: { kind: "advertiser-program", userId: "NEW" } });
     expect(await recordProgramInvoice(invoice({ parent: null, subscription: "sub_1" }))).toBe(true);
     expect(subscriptionsRetrieve).toHaveBeenCalledWith("sub_1");
-    expect(payments).toHaveLength(1);
+    expect(users.NEW.isAdvertiser).toBe(true);
   });
 
   it("leaves other subscriptions' invoices alone", async () => {
@@ -153,11 +152,12 @@ describe("recordProgramInvoice", () => {
     expect(payments).toEqual([]);
   });
 
-  it("an unpaid or $0 program invoice credits nothing", async () => {
+  it("an unpaid or $0 program invoice doesn't enroll anyone", async () => {
     users.NEW = { id: "NEW", isAdvertiser: false, adCampaignIds: [] };
     expect(await recordProgramInvoice(invoice({ status: "open" }))).toBe(true);
     expect(await recordProgramInvoice(invoice({ amount_paid: 0 }))).toBe(true);
     expect(payments).toEqual([]);
+    expect(users.NEW.isAdvertiser).toBe(false);
   });
 
   it("the lead subscription never adopts a program subscription", async () => {
@@ -172,12 +172,13 @@ describe("shared pool for members", () => {
     program: { member: false, joined: false, mustJoin: false, legacyUntil: null }, ...o,
   });
 
-  it("members pay cost per lead + 3%; others pay cost per lead", () => {
-    expect(clientLeadPriceCents(2_045, summary({ program: { joined: true } }) as any)).toBe(2_106);
+  it("members pay cost per lead + 20% + 3%; others pay cost per lead", () => {
+    expect(clientLeadPriceCents(2_045, summary({ program: { member: true } }) as any)).toBe(2_528);
+    expect(clientLeadPriceCents(2_045, summary({ program: { member: false, joined: true } }) as any)).toBe(2_045);
     expect(clientLeadPriceCents(2_045, summary() as any)).toBe(2_045);
   });
 
-  it("skips a November fee client who must join, and prices members with the card fee", async () => {
+  it("skips a November fee client who must join, and prices members with the management and card fees", async () => {
     users.MEMBER = { id: "MEMBER", name: "Member", email: "m@new.test", licensedStates: ["TX"], ownedOrganizations: [] };
     users.LEGACY = { id: "LEGACY", name: "David", email: "dclayton1235@gmail.com", licensedStates: ["TX"], ownedOrganizations: [] };
     users.OTHER = { id: "OTHER", name: "Other", email: "o@new.test", licensedStates: ["TX"], ownedOrganizations: [] };
@@ -197,7 +198,13 @@ describe("shared pool for members", () => {
 
   it("a member whose balance can't cover the marked-up price waits", async () => {
     users.MEMBER = { id: "MEMBER", name: "Member", email: "m@new.test", licensedStates: [], ownedOrganizations: [] };
-    getAdSpendSummary.mockResolvedValue(summary({ balanceCents: 2_050, program: { member: true, joined: true, mustJoin: false, legacyUntil: null } }));
-    expect(await sharedClientSlots("TX", "abca")).toEqual([]); // $20.50 < $21.06
+    getAdSpendSummary.mockResolvedValue(summary({ balanceCents: 2_500, program: { member: true, joined: true, mustJoin: false, legacyUntil: null } }));
+    expect(await sharedClientSlots("TX", "abca")).toEqual([]); // $25.00 < $25.28
+  });
+
+  it("a member whose membership has ended gets no leads, even with ad spend left", async () => {
+    users.MEMBER = { id: "MEMBER", name: "Member", email: "m@new.test", licensedStates: [], ownedOrganizations: [] };
+    getAdSpendSummary.mockResolvedValue(summary({ balanceCents: 90_000, program: { member: false, joined: true, mustJoin: true, legacyUntil: null } }));
+    expect(await sharedClientSlots("TX", "abca")).toEqual([]);
   });
 });
