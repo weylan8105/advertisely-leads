@@ -22,6 +22,7 @@ interface ProgramData {
     startedAt: string | null;
     nextPaymentAt: string | null;
     cancelAtPeriodEnd: boolean;
+    freeUntil?: string | null;
     feeWaived?: boolean;
     savedCents?: number;
   } | null;
@@ -46,6 +47,7 @@ export function AdvertiserProgramPanel() {
   const [loading, setLoading] = useState(true);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [states, setStates] = useState<string[]>([]);
+  const [promo, setPromo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
@@ -90,7 +92,7 @@ export function AdvertiserProgramPanel() {
       const r = await fetch("/api/advertiser-program/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ states }),
+        body: JSON.stringify({ states, promoCode: promo.trim() || undefined }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.url) throw new Error(d.error ?? "Could not start checkout");
@@ -239,6 +241,18 @@ export function AdvertiserProgramPanel() {
               </span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Member since {fmtDate(m.startedAt)}.</p>
+            {m.freeUntil && !m.feeWaived && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                <div>
+                  <div className="font-semibold">Your first month is free</div>
+                  <div className="text-emerald-800">
+                    Your promo code covers your membership until <strong>{fmtDate(m.freeUntil)}</strong>.
+                    {ending ? " Your membership ends that day." : <> Your first {usd0(offer.amountCents)} payment is that day, then {every}.</>}
+                  </div>
+                </div>
+              </div>
+            )}
             {m.feeWaived && waiver && (
               <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                 <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
@@ -281,7 +295,7 @@ export function AdvertiserProgramPanel() {
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[11px] text-muted-foreground flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {ending ? "Last day" : m.feeWaived ? "Renews" : "Next payment"}</div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {ending ? "Last day" : m.feeWaived ? "Renews" : m.freeUntil ? "First payment" : "Next payment"}</div>
                 <div className="text-sm font-semibold mt-1">{fmtDate(m.nextPaymentAt)}</div>
                 {m.feeWaived && !ending && <div className="text-[11px] text-emerald-700">$0, waived</div>}
               </div>
@@ -498,6 +512,20 @@ export function AdvertiserProgramPanel() {
               );
             })}
           </div>
+
+          {!waiver && (
+            <div className="mt-6">
+              <label htmlFor="program-promo" className="text-sm font-semibold">Promo code <span className="font-normal text-muted-foreground">(optional)</span></label>
+              <input id="program-promo" type="text" value={promo} onChange={(e) => setPromo(e.target.value)} autoComplete="off" autoCapitalize="characters"
+                placeholder="Enter your code"
+                className="mt-1.5 block w-full sm:w-64 rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase placeholder:normal-case focus:border-brand-red focus:outline-none" />
+              {promo.trim() && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  We check your code when you join. Your free time shows on the checkout page before you confirm, and your card isn&apos;t charged until it ends.
+                </p>
+              )}
+            </div>
+          )}
 
           {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
           <Button size="lg" className="mt-6 w-full sm:w-auto" onClick={join} disabled={busy || states.length === 0}>

@@ -84,6 +84,8 @@ export async function GET() {
           startedAt: live.start_date ? new Date(live.start_date * 1000).toISOString() : null,
           nextPaymentAt: periodEnd(live) ? new Date(periodEnd(live) * 1000).toISOString() : null,
           cancelAtPeriodEnd: !!live.cancel_at_period_end || !!live.cancel_at,
+          // Joined with a promo code: no membership payment until this date.
+          freeUntil: live.status === "trialing" && live.trial_end ? new Date(live.trial_end * 1000).toISOString() : null,
           feeWaived: waived(live),
           // Membership fees they haven't paid since joining on a waived membership.
           savedCents: waived(live)

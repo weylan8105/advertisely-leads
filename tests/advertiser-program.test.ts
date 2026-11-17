@@ -129,6 +129,26 @@ describe("program rules", () => {
   });
 });
 
+describe("one-time promo code", () => {
+  const LUKE = "cmu1muk4m0000jp043c27hqht";
+  it("gives the named account 28 free days, however the code is typed", () => {
+    expect(program.programPromo("LUKE1000", LUKE, [])).toEqual({ ok: true, code: "LUKE1000", freeDays: 28 });
+    expect(program.programPromo(" luke-1000 ", LUKE, [])).toMatchObject({ ok: true, freeDays: 28 });
+    // A checkout they started and never finished doesn't use the code up.
+    expect(program.programPromo("LUKE1000", LUKE, [{ program: true, status: "incomplete_expired" }])).toMatchObject({ ok: true });
+  });
+  it("is refused on any other account and for unknown codes", () => {
+    expect(program.programPromo("LUKE1000", "someone-else", [])).toMatchObject({ ok: false });
+    expect(program.programPromo("FREE", LUKE, [])).toMatchObject({ ok: false });
+    expect(program.programPromo("", LUKE, [])).toMatchObject({ ok: false });
+  });
+  it("works once: refused after they have been in the program", () => {
+    for (const status of ["trialing", "active", "canceled"]) {
+      expect(program.programPromo("LUKE1000", LUKE, [{ program: true, status }])).toEqual({ ok: false, error: "That promo code has already been used." });
+    }
+  });
+});
+
 describe("recordProgramInvoice", () => {
   const invoice = (o: Record<string, unknown> = {}) =>
     ({

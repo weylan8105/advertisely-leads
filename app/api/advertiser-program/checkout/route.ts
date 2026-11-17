@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { AVAILABLE_STATES } from "@/data/states";
-import { ADVERTISER_PROGRAM, ADVERTISER_PROGRAM_KIND } from "@/lib/advertiserProgram";
+import { ADVERTISER_PROGRAM, ADVERTISER_PROGRAM_KIND, programPromo } from "@/lib/advertiserProgram";
 import { enforceAdSpend, forgetAdSpendSummary } from "@/lib/adSpend";
 import {
   enrollProgramMember,
@@ -18,9 +18,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/advertiser-program/checkout { states } — join the Advertiser Program
- * ($500 every 2 weeks). On the Enhanced Wealth team the membership is waived:
+ * POST /api/advertiser-program/checkout { states, promoCode? } — join the Advertiser
+ * Program ($500 every 2 weeks). On the Enhanced Wealth team the membership is waived:
  * they join on the spot with no checkout (lib/advertiserProgram.ts FEE_WAIVER).
+ * A one-time promo code (PROGRAM_PROMO_CODES) starts the membership with free days.
  */
 export async function POST(req: NextRequest) {
   if (!isStripeConfigured || !stripe) return NextResponse.json({ error: "Payments aren't set up yet." }, { status: 503 });
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = (await req.json().catch(() => ({}))) as { states?: string[] };
+  const body = (await req.json().catch(() => ({}))) as { states?: string[]; promoCode?: string };
   const valid = new Set(AVAILABLE_STATES.map((s) => String(s).toUpperCase()));
   const states = [...new Set((body.states ?? []).map((s) => String(s).toUpperCase()).filter((s) => valid.has(s)))];
   if (states.length === 0) return NextResponse.json({ error: "Pick the states you're licensed in." }, { status: 400 });
@@ -43,6 +44,15 @@ export async function POST(req: NextRequest) {
   const stale = onWaiverTeam ? [] : live.filter((s) => !!s.metadata?.feeWaived);
   if (live.length > stale.length) {
     return NextResponse.json({ error: "You're already in the Advertiser Program." }, { status: 400 });
+  }
+
+  // A promo code is checked before anything changes, so a bad one costs them nothing.
+  // On the waiver team the membership is already $0, so a code isn't used up there.
+  let promo: { code: string; freeDays: number } | null = null;
+  if (!onWaiverTeam && String(body.promoCode ?? "").trim()) {
+    const checked = programPromo(body.promoCode, userId, subs.map((s) => ({ program: true, status: s.status })));
+    if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
+    promo = checked;
   }
   for (const s of stale) await stripe.subscriptions.cancel(s.id).catch((e) => console.warn("[program] ending a stale waived membership failed", e?.message));
 
@@ -74,8 +84,13 @@ export async function POST(req: NextRequest) {
       mode: "subscription",
       customer: customer.id,
       line_items: [{ price: await getProgramPriceId(), quantity: 1 }],
-      subscription_data: { metadata, description: ADVERTISER_PROGRAM.name },
-      metadata,
+      subscription_data: {
+        metadata: promo ? { ...metadata, promoCode: promo.code } : metadata,
+        description: ADVERTISER_PROGRAM.name,
+        // Card on file, $0 today; the first membership payment comes when the free days end.
+        ...(promo ? { trial_period_days: promo.freeDays } : {}),
+      },
+      metadata: promo ? { ...metadata, promoCode: promo.code } : metadata,
       success_url: `${base}/marketplace?tab=advertise&status=success`,
       cancel_url: `${base}/marketplace?tab=advertise&status=cancel`,
     });

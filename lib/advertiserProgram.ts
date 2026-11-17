@@ -71,6 +71,31 @@ export function waivedSavingsCents(startedAt: Date | string | null | undefined, 
   return (Math.floor((now.getTime() - start) / periodMs) + 1) * ADVERTISER_PROGRAM.amountCents;
 }
 
+// ─── One-time promo codes (owner directive, Nov 16 2026) ─────────────────────
+// A code gives one account its first weeks in the program free, as a Stripe
+// free trial: card on file, $0 today, then the regular $500 every 2 weeks. A
+// code works only on the account it names, and only for someone who has never
+// been in the program, so it can't be used twice or handed to someone else.
+export const PROGRAM_PROMO_CODES: Record<string, { userId: string; freeDays: number; why: string }> = {
+  // Luke Scheffers paid the owner $1,000 directly: one full month (two memberships) free.
+  LUKE1000: { userId: "cmu1muk4m0000jp043c27hqht", freeDays: 28, why: "paid $1,000 directly (Nov 2026)" },
+};
+
+export const normalizePromoCode = (code: unknown) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/** Check a promo code for this account: the free days it gives, or why it can't be used. */
+export function programPromo(
+  code: unknown,
+  userId: string,
+  subs: ProgramSub[],
+): { ok: true; code: string; freeDays: number } | { ok: false; error: string } {
+  const key = normalizePromoCode(code);
+  const promo = PROGRAM_PROMO_CODES[key];
+  if (!promo || promo.userId !== userId) return { ok: false, error: "That promo code isn't valid for this account." };
+  if (hasJoinedProgram(subs)) return { ok: false, error: "That promo code has already been used." };
+  return { ok: true, code: key, freeDays: promo.freeDays };
+}
+
 /** A member's price for a lead: the campaign's cost per lead, plus the management fee, plus the card fee. */
 export const programLeadPriceCents = (cplCents: number) =>
   Math.round(cplCents * (1 + ADVERTISER_PROGRAM.managementRate) * (1 + ADVERTISER_PROGRAM.cardFeeRate));
