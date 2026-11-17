@@ -206,6 +206,49 @@ export async function leadFormTokens(formId: string): Promise<string[]> {
   return tokens;
 }
 
+/**
+ * Why (or whether) the System User can read an instant form's leads, step by
+ * step, with Meta's own error at the step that fails. Read-only; never returns
+ * a token.
+ */
+export async function diagnoseLeadFormAccess(formId: string): Promise<{
+  formId: string;
+  pageId?: string;
+  pageName?: string;
+  pageToken: boolean;
+  leadsReadable: boolean;
+  recentLeads?: number;
+  error?: string;
+  step?: "form" | "page-token" | "leads";
+}> {
+  const out: Awaited<ReturnType<typeof diagnoseLeadFormAccess>> = { formId, pageToken: false, leadsReadable: false };
+  let pageId: string | undefined;
+  try {
+    const form = await graphGet<{ page?: { id?: string; name?: string } }>(encodeURIComponent(formId), { fields: "page{id,name}" });
+    pageId = form.page?.id;
+    out.pageId = pageId;
+    out.pageName = form.page?.name;
+  } catch (e) {
+    return { ...out, step: "form", error: (e as Error).message };
+  }
+  if (!pageId) return { ...out, step: "form", error: "Meta returned no Page for this form." };
+  let token: string | undefined;
+  try {
+    const p = await graphGet<{ access_token?: string }>(encodeURIComponent(pageId), { fields: "access_token" });
+    token = p.access_token;
+  } catch (e) {
+    return { ...out, step: "page-token", error: (e as Error).message };
+  }
+  if (!token) return { ...out, step: "page-token", error: "Meta returned no Page token (the System User lacks a task on this Page)." };
+  out.pageToken = true;
+  try {
+    const data = await graphGet<{ data?: unknown[] }>(`${encodeURIComponent(formId)}/leads`, { fields: "id,created_time", limit: "25" }, token);
+    return { ...out, leadsReadable: true, recentLeads: data.data?.length ?? 0 };
+  } catch (e) {
+    return { ...out, step: "leads", error: (e as Error).message };
+  }
+}
+
 export interface LeadFormOption {
   id: string;
   name: string;
