@@ -15,6 +15,7 @@ import { matchesWords, searchWords } from "@/lib/leadSearch";
 import type { Lead } from "@/types";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { adSpendProgress } from "@/lib/adSpendProgress";
+import { LEAD_TYPE_OPTIONS } from "@/lib/leadTypes";
 
 interface Account {
   userId: string;
@@ -44,6 +45,8 @@ interface Account {
   } | null;
   isAdvertiser: boolean;
   ringyConnected: boolean;
+  /** Lead type ids switched on (lib/leadTypes.ts). */
+  leadTypes?: string[];
 }
 
 /** Which kind of account this is — drives the segment filter + badge. */
@@ -79,6 +82,7 @@ export function AdminAccounts() {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMsg, setReconcileMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [leadTypeBusy, setLeadTypeBusy] = useState<string | null>(null);
   const [advEmail, setAdvEmail] = useState("");
   const [addingAdv, setAddingAdv] = useState(false);
   const [advMsg, setAdvMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -147,6 +151,35 @@ export function AdminAccounts() {
       window.alert(e?.message ?? "Couldn't update advertiser status.");
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  // Same switches the advertiser has on their dashboard ("Lead types").
+  async function toggleLeadType(a: Account, typeId: string) {
+    const before = a.leadTypes ?? [];
+    const on = before.includes(typeId);
+    const label = LEAD_TYPE_OPTIONS.find((t) => t.id === typeId)?.label ?? typeId;
+    const who = a.name ?? a.email;
+    if (!window.confirm(`${on ? "Turn off" : "Turn on"} ${label} for ${who}? ${on ? "They stop getting these leads" : "They start getting these leads"} from the next one that comes in.`)) return;
+    const next = on ? before.filter((x) => x !== typeId) : [...before, typeId];
+    setLeadTypeBusy(`${a.userId}:${typeId}`);
+    setAccounts((prev) => prev?.map((x) => (x.userId === a.userId ? { ...x, leadTypes: next } : x)) ?? prev);
+    try {
+      const res = await fetch("/api/admin/accounts/lead-types", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: a.userId, leadTypes: next }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      if (Array.isArray(d.leadTypes)) {
+        setAccounts((prev) => prev?.map((x) => (x.userId === a.userId ? { ...x, leadTypes: d.leadTypes } : x)) ?? prev);
+      }
+    } catch (e: any) {
+      setAccounts((prev) => prev?.map((x) => (x.userId === a.userId ? { ...x, leadTypes: before } : x)) ?? prev);
+      window.alert(e?.message ?? "Couldn't update lead types.");
+    } finally {
+      setLeadTypeBusy(null);
     }
   }
 
@@ -435,6 +468,42 @@ export function AdminAccounts() {
                       <div className="text-[11px] text-muted-foreground">
                         <div className="font-medium">No orders yet</div>
                         <div>Joined {formatDate(a.joinedAt)}</div>
+                      </div>
+                    )}
+                    {a.isAdvertiser && (
+                      <div className="mt-1.5" title="Lead types this advertiser gets from the shared campaigns. Same switches as their dashboard.">
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Lead types</div>
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {LEAD_TYPE_OPTIONS.map((t) => {
+                            const on = (a.leadTypes ?? []).includes(t.id);
+                            const busy = leadTypeBusy === `${a.userId}:${t.id}`;
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                role="switch"
+                                aria-checked={on}
+                                aria-label={`${t.label} for ${a.name ?? a.email}`}
+                                disabled={leadTypeBusy !== null}
+                                onClick={() => toggleLeadType(a, t.id)}
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                                  on
+                                    ? "border-brand-red/30 bg-brand-red/10 text-brand-red hover:bg-brand-red/15"
+                                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                                )}
+                                title={on ? `${t.label} on. Click to turn off.` : `${t.label} off. Click to turn on.`}
+                              >
+                                {busy ? (
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                ) : (
+                                  <span className={cn("h-1.5 w-1.5 rounded-full", on ? "bg-brand-red" : "bg-slate-300")} />
+                                )}
+                                {t.label.replace(/ leads$/i, "")} {on ? "on" : "off"}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </td>

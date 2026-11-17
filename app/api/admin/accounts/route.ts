@@ -6,6 +6,7 @@ import { deliveredCounts } from "@/lib/orderProgress";
 import { weeklyLeadAllotment, endDueSubscriptions } from "@/lib/leadSubscription";
 import { PIPELINE_STAGES } from "@/data/pipeline";
 import { compareAccounts } from "@/lib/adminAccountSort";
+import { enabledLeadTypes } from "@/lib/leadTypes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       select: { id: true, userId: true, quantity: true, status: true },
     }),
-    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true, isAdvertiser: true, createdAt: true } }),
+    prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, agency: true, phone: true, isAdvertiser: true, leadTypes: true, createdAt: true } }),
     // Ringy lead-forwarding, so advertiser rows can show connected/not.
     prisma.integration.findMany({ where: { type: "RINGY", enabled: true }, select: { userId: true } }),
   ]);
@@ -169,6 +170,8 @@ export async function GET() {
         subscription: subByUser[id] ?? null,
         isAdvertiser: u.isAdvertiser ?? false,
         ringyConnected: ringyConnectedIds.has(id),
+        // Lead types switched on (dashboard "Lead types"); admins can flip them here too.
+        leadTypes: enabledLeadTypes(u.leadTypes),
         conversionPct: d.delivered > 0 ? Math.round((sold / d.delivered) * 100) : 0,
         // Progress = combined total across this client's INCOMPLETE orders only
         // (still being fulfilled), from a LIVE lead count. Fully delivered orders
