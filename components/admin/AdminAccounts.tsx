@@ -490,14 +490,14 @@ export function AdminAccounts() {
                                   "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                                   on
                                     ? "border-brand-red/30 bg-brand-red/10 text-brand-red hover:bg-brand-red/15"
-                                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                                    : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
                                 )}
                                 title={on ? `${t.label} on. Click to turn off.` : `${t.label} off. Click to turn on.`}
                               >
                                 {busy ? (
                                   <Loader2 className="h-2.5 w-2.5 animate-spin" />
                                 ) : (
-                                  <span className={cn("h-1.5 w-1.5 rounded-full", on ? "bg-brand-red" : "bg-slate-300")} />
+                                  <span className={cn("h-1.5 w-1.5 rounded-full", on ? "bg-brand-red" : "bg-muted-foreground/50")} />
                                 )}
                                 {t.label.replace(/ leads$/i, "")} {on ? "on" : "off"}
                               </button>
