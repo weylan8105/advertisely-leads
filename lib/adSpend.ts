@@ -18,7 +18,7 @@ import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding 
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
 import { isPaidInFeeAdvertiser } from "./paidInFeeTeams";
-import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram } from "./advertiserProgram";
+import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram, onFeeWaiverTeam, waiverEnded } from "./advertiserProgram";
 
 export const PROCESSING_FEE_RATE = 0.03; // of each payment
 export const SERVICE_FEE_RATE = 0.2;
@@ -146,6 +146,7 @@ export interface ClientSubscription {
   status: string;
   adSpend: boolean;
   program: boolean; // the Advertiser Program (lib/advertiserProgram.ts)
+  feeWaived?: boolean; // a program membership joined with the fee waived (FEE_WAIVER)
   startedAt: string | null;
   currentPeriodEnd: string | null; // next payment
   cancelAtPeriodEnd: boolean;
@@ -394,6 +395,7 @@ async function clientSubscriptions(customerIds: string[]): Promise<ClientSubscri
         status: sub.status,
         adSpend: false,
         program: sub.metadata?.kind === ADVERTISER_PROGRAM_KIND,
+        feeWaived: sub.metadata?.kind === ADVERTISER_PROGRAM_KIND && !!sub.metadata?.feeWaived,
         startedAt: sub.start_date ? new Date(sub.start_date * 1000).toISOString() : null,
         currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
         cancelAtPeriodEnd: !!sub.cancel_at_period_end || !!sub.cancel_at,
@@ -507,6 +509,9 @@ export interface AdSpendSummary {
     mustJoin: boolean; // no leads or top-ups until they join: November cover ended, or their membership has
     legacyUntil: string | null; // that renewal date
     legacyViaTeam: boolean; // covered by their upline's fee, not their own (lib/teamAdvertiser.ts)
+    feeWaiverTeam: boolean; // on the Enhanced Wealth team: the membership is waived for them (FEE_WAIVER)
+    feeWaived: boolean; // a member right now on a waived membership
+    waiverEnded: boolean; // had a waived membership, but left the team, so it no longer counts
   };
   autoPause: boolean;
   pausedForBudget: boolean;
@@ -545,13 +550,16 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
       id: true, name: true, email: true, adCampaignIds: true, adSpendAutoPause: true,
       adSpendPausedCampaignIds: true, adSpendTargetDate: true, adSpendEmails: true,
       // Their uplines: a member of a November fee client's team is covered by that fee.
-      memberships: { select: { organization: { select: { ownerId: true, owner: { select: { email: true } } } } } },
+      memberships: { select: { organizationId: true, organization: { select: { ownerId: true, owner: { select: { email: true } } } } } },
     },
   });
   if (!user) return null;
   const uplineEmails = (user.memberships ?? [])
     .filter((m) => m.organization?.ownerId !== user.id)
     .map((m) => m.organization?.owner?.email);
+
+  // On the Enhanced Wealth team, the program membership is waived (lib/advertiserProgram.ts FEE_WAIVER).
+  const waiver = { onWaiverTeam: onFeeWaiverTeam((user.memberships ?? []).map((m) => m.organizationId)) };
 
   const errors: string[] = [];
   const sharedPoolOnly = isSharedPoolOnly(user.adCampaignIds);
@@ -639,15 +647,21 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     campaigns: meta.campaigns,
     sharedPoolOnly,
     program: {
-      member: isProgramMember(cardPayments.subscriptions),
+      member: isProgramMember(cardPayments.subscriptions, waiver),
       joined: hasJoinedProgram(cardPayments.subscriptions),
       mustJoin: mustJoinProgram(user.email, cardPayments.subscriptions, new Date(), {
+        ...waiver,
         uplineEmails,
         // Never hold someone back on a Stripe read that failed.
         sharedPoolOnly: sharedPoolOnly && !errors.some((e) => e.startsWith("Stripe")),
       }),
       legacyUntil: legacyCoverEnds(user.email, uplineEmails)?.ends.toISOString() ?? null,
       legacyViaTeam: legacyCoverEnds(user.email, uplineEmails)?.viaTeam ?? false,
+      feeWaiverTeam: waiver.onWaiverTeam,
+      feeWaived:
+        waiver.onWaiverTeam &&
+        cardPayments.subscriptions.some((x) => x.program && x.feeWaived && ["active", "trialing", "past_due"].includes(x.status)),
+      waiverEnded: waiverEnded(cardPayments.subscriptions, waiver),
     },
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,

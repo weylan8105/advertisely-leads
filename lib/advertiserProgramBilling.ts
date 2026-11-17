@@ -7,7 +7,7 @@
 import type Stripe from "stripe";
 import { stripe } from "./stripe";
 import { prisma } from "./prisma";
-import { ADVERTISER_PROGRAM, ADVERTISER_PROGRAM_KIND } from "./advertiserProgram";
+import { ADVERTISER_PROGRAM, ADVERTISER_PROGRAM_KIND, FEE_WAIVER } from "./advertiserProgram";
 import { SHARED_POOL_ONLY, enforceAdSpend, forgetAdSpendSummary } from "./adSpend";
 
 /** Find-or-create the program's recurring Price. */
@@ -25,6 +25,78 @@ export async function getProgramPriceId(): Promise<string> {
     product_data: { name },
   });
   return price.id;
+}
+
+/** Find-or-create the forever 100%-off coupon that waives the membership (FEE_WAIVER). */
+export async function getFeeWaiverCouponId(): Promise<string> {
+  if (!stripe) throw new Error("Stripe not configured");
+  const id = FEE_WAIVER.couponId;
+  try {
+    await stripe.coupons.retrieve(id);
+    return id;
+  } catch (e: any) {
+    if (e?.code !== "resource_missing" && e?.statusCode !== 404) throw e;
+  }
+  try {
+    await stripe.coupons.create({ id, percent_off: 100, duration: "forever", name: "Membership waived (Enhanced Wealth)" });
+  } catch (e: any) {
+    // Another request created it first.
+    if (e?.code !== "resource_already_exists") throw e;
+  }
+  return id;
+}
+
+// feeWaivedAt: when the first waived payment was due, for the "saved so far" figure.
+const waiverMetadata = (userId: string) => ({
+  kind: ADVERTISER_PROGRAM_KIND,
+  userId,
+  feeWaived: FEE_WAIVER.key,
+  feeWaivedAt: new Date().toISOString(),
+});
+
+/**
+ * Join with the membership waived: a subscription to the same Price with the
+ * waiver coupon, so every invoice is $0. Active right away, no card needed.
+ * Throws when Stripe doesn't start it (and cancels what it left behind).
+ */
+export async function joinWithFeeWaived(userId: string, customerId: string): Promise<Stripe.Subscription> {
+  if (!stripe) throw new Error("Stripe not configured");
+  const sub = await stripe.subscriptions.create(
+    {
+      customer: customerId,
+      items: [{ price: await getProgramPriceId() }],
+      discounts: [{ coupon: await getFeeWaiverCouponId() }],
+      metadata: waiverMetadata(userId),
+      description: `${ADVERTISER_PROGRAM.name} (membership waived: ${FEE_WAIVER.label})`,
+    },
+    // A double click within the same minute makes one membership, not two.
+    { idempotencyKey: `program-waived:${userId}:${Math.floor(Date.now() / 60_000)}` },
+  );
+  if (sub.status !== "active" && sub.status !== "trialing") {
+    await stripe.subscriptions.cancel(sub.id).catch(() => {});
+    throw new Error(`waived membership came back ${sub.status}`);
+  }
+  return sub;
+}
+
+/** A paying member who is on the waiver team: waive their membership from the next payment on. */
+export async function waiveExistingMembership(sub: Stripe.Subscription): Promise<void> {
+  if (!stripe || sub.metadata?.feeWaived) return;
+  // The current period is already paid; the waiver starts with the next one.
+  const end = (sub as any).items?.data?.[0]?.current_period_end ?? (sub as any).current_period_end;
+  const feeWaivedAt = new Date(end ? end * 1000 : Date.now()).toISOString();
+  await stripe.subscriptions.update(sub.id, {
+    discounts: [{ coupon: await getFeeWaiverCouponId() }],
+    metadata: { ...sub.metadata, feeWaived: FEE_WAIVER.key, feeWaivedAt },
+    description: `${ADVERTISER_PROGRAM.name} (membership waived: ${FEE_WAIVER.label})`,
+  });
+}
+
+/** Is the user on a team whose members join with the membership waived? */
+export async function isOnFeeWaiverTeam(userId: string): Promise<boolean> {
+  if (!prisma) return false;
+  const n = await prisma.membership.count({ where: { userId, organizationId: { in: [...FEE_WAIVER.teamIds] } } });
+  return n > 0;
 }
 
 /** The user's program subscriptions in Stripe, newest first. */

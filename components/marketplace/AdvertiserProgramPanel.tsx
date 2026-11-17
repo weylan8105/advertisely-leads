@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Check, AlertCircle, CalendarClock, Wallet, Users, LogIn, Megaphone } from "lucide-react";
+import { Loader2, Check, AlertCircle, CalendarClock, Wallet, Users, LogIn, Megaphone, BadgeCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AVAILABLE_STATES, stateName } from "@/data/states";
@@ -17,7 +17,17 @@ interface ProgramData {
     cardFeeRate: number;
     leadPriceCents: { low: number; high: number };
   };
-  member: { status: string; startedAt: string | null; nextPaymentAt: string | null; cancelAtPeriodEnd: boolean } | null;
+  member: {
+    status: string;
+    startedAt: string | null;
+    nextPaymentAt: string | null;
+    cancelAtPeriodEnd: boolean;
+    feeWaived?: boolean;
+    savedCents?: number;
+  } | null;
+  // On the Enhanced Wealth team: the membership is waived for them.
+  feeWaiver?: { label: string } | null;
+  waiverEnded?: boolean;
   joined: boolean;
   legacyUntil: string | null;
   legacyViaTeam?: boolean;
@@ -60,6 +70,7 @@ export function AdvertiserProgramPanel() {
     try {
       const p = new URLSearchParams(window.location.search).get("status");
       if (p === "success") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Add ad spend on your dashboard and your leads start with the next one in your states." });
+      if (p === "waived") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Your $500 membership is waived as part of the Enhanced Wealth team. Add ad spend on your dashboard and your leads start with the next one in your states." });
       if (p === "cancel") setBanner({ ok: false, text: "Checkout canceled. You weren't charged." });
       if (p) {
         const u = new URL(window.location.href);
@@ -91,7 +102,10 @@ export function AdvertiserProgramPanel() {
   }
 
   async function setCancel(resume: boolean) {
-    if (!resume && !window.confirm("Cancel the Advertiser Program? There are no more payments after this 2-week period. Your leads stop when it ends, and any ad spend you have left stays on your account for when you rejoin.")) return;
+    const confirmText = data?.member?.feeWaived
+      ? "Cancel the Advertiser Program? Your leads stop when this 2-week period ends, and any ad spend you have left stays on your account. You can rejoin free while you're on the Enhanced Wealth team."
+      : "Cancel the Advertiser Program? There are no more payments after this 2-week period. Your leads stop when it ends, and any ad spend you have left stays on your account for when you rejoin.";
+    if (!resume && !window.confirm(confirmText)) return;
     setBusy(true);
     setError(null);
     try {
@@ -143,6 +157,19 @@ export function AdvertiserProgramPanel() {
       ? usd(offer.leadPriceCents.low)
       : `${usd(offer.leadPriceCents.low)}–${usd(offer.leadPriceCents.high)}`;
   const cardFeePct = Math.round(offer.cardFeeRate * 100);
+  // Enhanced Wealth team: the membership is waived (shown wherever the $500 would be).
+  const waiver = data.feeWaiver ?? null;
+  const waivedBadge = waiver && (
+    <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-900">
+      <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+      <div>
+        <div className="font-semibold">{waiver.label}: membership fee waived</div>
+        <div className="text-emerald-800">
+          Advertisers normally pay {usd0(offer.amountCents)} {every} to be in the program. As part of the {waiver.label}, you pay $0.
+        </div>
+      </div>
+    </div>
+  );
   const mgmtPct = Math.round(offer.managementRate * 100);
 
   const banners = (
@@ -152,6 +179,12 @@ export function AdvertiserProgramPanel() {
           banner.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-300 bg-amber-50 text-amber-900")}>
           {banner.ok ? <Check className="h-4 w-4 shrink-0 text-emerald-600" /> : <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />}
           {banner.text}
+        </div>
+      )}
+      {!data.member && data.waiverEnded && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Your membership fee was waived while you were on the Enhanced Wealth team. You&apos;ve left the team, so your leads are paused until you join at the regular price below.</span>
         </div>
       )}
       {!data.member && data.legacyUntil && (
@@ -174,7 +207,11 @@ export function AdvertiserProgramPanel() {
     <Card className="p-6">
       <div className="text-sm font-semibold mb-2">How it works</div>
       <ul className="space-y-2 text-sm text-muted-foreground">
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {usd0(offer.amountCents)} {every} is your membership. It keeps you in the program and is separate from your ad spend.</li>
+        {waiver ? (
+          <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> The membership is normally {usd0(offer.amountCents)} {every}. It&apos;s waived for you as part of the {waiver.label}.</li>
+        ) : (
+          <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {usd0(offer.amountCents)} {every} is your membership. It keeps you in the program and is separate from your ad spend.</li>
+        )}
         <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> You add ad spend on your dashboard, any amount, whenever you like. All of it goes to leads.</li>
         <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Each lead costs what we paid for it, plus a {mgmtPct}% management fee and the {cardFeePct}% card fee.</li>
         <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Leads come from our Blue Collar campaigns, shared in a round robin between advertisers licensed in the lead&apos;s state, and land in your pipeline the moment they come in.</li>
@@ -202,11 +239,34 @@ export function AdvertiserProgramPanel() {
               </span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Member since {fmtDate(m.startedAt)}.</p>
+            {m.feeWaived && waiver && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                <div>
+                  <div className="font-semibold">{waiver.label}: your {usd0(offer.amountCents)} membership is waived</div>
+                  <div className="text-emerald-800">
+                    You pay $0 {every} instead of {usd0(offer.amountCents)}.
+                    {(m.savedCents ?? 0) > 0 && <> You&apos;ve saved <strong>{usd0(m.savedCents ?? 0)}</strong> so far by being on the {waiver.label}.</>}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="rounded-lg border border-slate-200 p-3">
+              <div className={cn("rounded-lg border p-3", m.feeWaived ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200")}>
                 <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Megaphone className="h-3 w-3" /> {every[0].toUpperCase() + every.slice(1)}</div>
-                <div className="text-xl font-semibold">{usd0(offer.amountCents)}</div>
-                <div className="text-[11px] text-muted-foreground">membership</div>
+                {m.feeWaived ? (
+                  <>
+                    <div className="text-xl font-semibold">
+                      $0 <span className="text-sm font-normal text-muted-foreground line-through">{usd0(offer.amountCents)}</span>
+                    </div>
+                    <div className="text-[11px] font-medium text-emerald-700">membership waived</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xl font-semibold">{usd0(offer.amountCents)}</div>
+                    <div className="text-[11px] text-muted-foreground">membership</div>
+                  </>
+                )}
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
                 <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Wallet className="h-3 w-3" /> Ad spend left</div>
@@ -221,8 +281,9 @@ export function AdvertiserProgramPanel() {
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-[11px] text-muted-foreground flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {ending ? "Last day" : "Next payment"}</div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {ending ? "Last day" : m.feeWaived ? "Renews" : "Next payment"}</div>
                 <div className="text-sm font-semibold mt-1">{fmtDate(m.nextPaymentAt)}</div>
+                {m.feeWaived && !ending && <div className="text-[11px] text-emerald-700">$0, waived</div>}
               </div>
             </div>
             {m.status === "past_due" && (
@@ -270,14 +331,16 @@ export function AdvertiserProgramPanel() {
   );
   const steps = [
     ["Pick your states", "Choose the states you're licensed in below. You only get leads from those states."],
-    ["Join", `Pay your ${fee} membership through a secure Stripe checkout. No sales call needed.`],
+    waiver
+      ? ["Join free", `Your ${fee} membership is waived for the ${waiver.label}. No card or sales call needed.`]
+      : ["Join", `Pay your ${fee} membership through a secure Stripe checkout. No sales call needed.`],
     ["Add ad spend", "On your dashboard, add however much you want to put toward leads. Add more anytime."],
     ["Get leads", "New leads in your states land in your pipeline as they come in. Your dashboard shows your balance, leads and cost per lead."],
   ];
   const faqs: [string, React.ReactNode][] = [
     ["So, am I buying leads?", <>Yes, but not at a vendor&apos;s price. You add ad spend, and each lead is charged at what it cost us to generate, plus a {mgmtPct}% management fee. We run the ads, so you never build a campaign or spend your evenings figuring out why one stopped working.</>],
     ["What does “priced at what they actually cost” mean?", <>Most lead vendors charge one fixed price per lead, whatever it cost them to get it. Here, your price follows our real cost per lead from our Facebook campaigns, so it moves with the market by campaign, state and season. Today that works out to about $20–$40 a lead, fees included. We don&apos;t guarantee appointments, applications or issued policies. Results depend on your speed to lead, follow-up, sales process, licensing, product fit and underwriting.</>],
-    ["Then what's the membership for?", <>It&apos;s your spot in the program: our live campaigns, the round robin, at-cost pricing and your advertiser dashboard. It renews at {fee} {every}. Your ad spend is kept separate and is only used for leads.</>],
+    ["Then what's the membership for?", <>It&apos;s your spot in the program: our live campaigns, the round robin, at-cost pricing and your advertiser dashboard. {waiver ? <>It&apos;s normally {fee} {every}, and it&apos;s waived for you as part of the {waiver.label}.</> : <>It renews at {fee} {every}.</>} Your ad spend is kept separate and is only used for leads.</>],
     ["Do I need to know anything about running ads?", <>No. We handle the campaigns, the creative and the testing.</>],
     ["How are leads shared?", <>Leads come from our Blue Collar IUL campaigns. Each one goes, in a round robin, to an advertiser licensed in the lead&apos;s state, and lands in their pipeline the moment it comes in.</>],
     ["What if I cancel?", <>No more payments after the 2 weeks you&apos;ve paid for. Leads stop when that period ends, and any ad spend you haven&apos;t used stays on your account for when you rejoin.</>],
@@ -300,8 +363,9 @@ export function AdvertiserProgramPanel() {
           We run the Facebook campaigns and send the leads straight to your pipeline in the states you&apos;re licensed in. As a
           member, you pay what each lead cost us to generate, plus a {mgmtPct}% management fee.
         </p>
+        {waivedBadge && <div className="mx-auto mt-6 max-w-xl">{waivedBadge}</div>}
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Button size="lg" onClick={() => scrollTo("advertise-join")}>Join the Advertiser Program</Button>
+          <Button size="lg" onClick={() => scrollTo("advertise-join")}>{waiver ? "Join free" : "Join the Advertiser Program"}</Button>
           <Button size="lg" variant="outline" onClick={() => scrollTo("advertise-faq")}>How it works</Button>
         </div>
         {disclaimer}
@@ -330,9 +394,24 @@ export function AdvertiserProgramPanel() {
           <Card className="p-6">
             <div className="text-sm font-semibold">Program membership</div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold">{fee}</span>
-              <span className="text-sm text-muted-foreground">{every}</span>
+              {waiver ? (
+                <>
+                  <span className="text-3xl font-semibold">$0</span>
+                  <span className="text-lg text-muted-foreground line-through">{fee}</span>
+                  <span className="text-sm text-muted-foreground">{every}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl font-semibold">{fee}</span>
+                  <span className="text-sm text-muted-foreground">{every}</span>
+                </>
+              )}
             </div>
+            {waiver && (
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                <BadgeCheck className="h-3.5 w-3.5" /> Waived for the {waiver.label}
+              </div>
+            )}
             <p className="mt-3 text-sm text-muted-foreground">Your membership includes:</p>
             <ul className="mt-2 space-y-2 text-sm">
               {[
@@ -360,7 +439,7 @@ export function AdvertiserProgramPanel() {
           </Card>
         </div>
         <p className="mx-auto mt-5 max-w-2xl text-center text-sm text-muted-foreground">
-          Your membership renews at {fee} {every}. It never buys leads: your ad spend is kept separate and is only used for leads.
+          {waiver ? <>Your membership is waived while you&apos;re on the {waiver.label}.</> : <>Your membership renews at {fee} {every}.</>} It never buys leads: your ad spend is kept separate and is only used for leads.
         </p>
       </section>
 
@@ -388,8 +467,19 @@ export function AdvertiserProgramPanel() {
       <section id="advertise-join" className="scroll-mt-20 py-14">
         <Card className="mx-auto max-w-2xl p-6 sm:p-8">
           <h3 className="text-xl font-semibold">Join the {offer.name}</h3>
+          {waivedBadge && <div className="mt-4">{waivedBadge}</div>}
           <dl className="mt-4 space-y-1.5 text-sm">
-            <div className="flex justify-between gap-4"><dt>Program membership, {every}</dt><dd className="font-medium">{usd(offer.amountCents)}</dd></div>
+            <div className="flex justify-between gap-4">
+              <dt>Program membership, {every}</dt>
+              {waiver ? (
+                <dd className="font-medium">
+                  <span className="mr-1.5 font-normal text-muted-foreground line-through">{usd(offer.amountCents)}</span>
+                  <span className="text-emerald-700">$0, waived</span>
+                </dd>
+              ) : (
+                <dd className="font-medium">{usd(offer.amountCents)}</dd>
+              )}
+            </div>
             <div className="flex justify-between gap-4 text-muted-foreground"><dt>Ad spend</dt><dd>separate, you choose the amount</dd></div>
             <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Each lead</dt><dd>our cost + {mgmtPct}% (about $20–$40 today)</dd></div>
           </dl>
@@ -412,12 +502,22 @@ export function AdvertiserProgramPanel() {
           {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
           <Button size="lg" className="mt-6 w-full sm:w-auto" onClick={join} disabled={busy || states.length === 0}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
-            Join for {fee} {every}
+            {waiver ? "Join free, membership waived" : <>Join for {fee} {every}</>}
           </Button>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Billed {every} until you cancel. After you join, add ad spend on your dashboard to start receiving leads. Each lead also
-            includes a {cardFeePct}% card processing fee. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad
-            spend stays on your account.
+            {waiver ? (
+              <>
+                No card needed to join: your membership is $0 while you&apos;re on the {waiver.label}. If you leave the team, the
+                regular {fee} {every} applies. After you join, add ad spend on your dashboard to start receiving leads. Each lead
+                includes a {cardFeePct}% card processing fee. Cancel anytime; unused ad spend stays on your account.
+              </>
+            ) : (
+              <>
+                Billed {every} until you cancel. After you join, add ad spend on your dashboard to start receiving leads. Each lead also
+                includes a {cardFeePct}% card processing fee. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad
+                spend stays on your account.
+              </>
+            )}
           </p>
         </Card>
       </section>

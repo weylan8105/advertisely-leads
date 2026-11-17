@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet, TrendingUp, Users, Target, Loader2, AlertTriangle, PauseCircle, Info, CalendarClock } from "lucide-react";
+import { Wallet, TrendingUp, Users, Target, Loader2, AlertTriangle, PauseCircle, Info, CalendarClock, BadgeCheck } from "lucide-react";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
   // Someone who has to join (or rejoin) the Advertiser Program can't add ad spend until they do.
   const viaProgram = summary.program.mustJoin;
   const member = summary.program.member;
+  // Enhanced Wealth team: the $500 program membership is waived for them (older cached summaries lack these).
+  const waiverTeam = !!summary.program.feeWaiverTeam;
+  const feeWaived = !!summary.program.feeWaived;
 
   async function addSpend() {
     const dollars = Number(amount.replace(/[^0-9.]/g, ""));
@@ -72,7 +75,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
           <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             Your leads are paused.{" "}
-            {summary.program.legacyViaTeam
+            {summary.program.waiverEnded
+              ? "Your membership fee was waived while you were on the Enhanced Wealth team, and you've left the team"
+              : summary.program.legacyViaTeam
               ? "Your upline's advertiser month has ended"
               : summary.program.legacyUntil
                 ? "Your November advertiser fee has run its month"
@@ -91,7 +96,17 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
             {summary.program.legacyViaTeam ? "Your upline's advertiser month covers you until" : "Your November advertiser fee covers you until"}{" "}
             <strong>{new Date(summary.program.legacyUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</strong>.
             From then on, leads come through the{" "}
-            <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a> ($500 every 2 weeks).
+            <a href="/marketplace?tab=advertise" className="font-semibold underline">Advertisely Advertiser Program</a>{" "}
+            {waiverTeam ? "(membership waived for the Enhanced Wealth team)" : "($500 every 2 weeks)"}.
+          </span>
+        </div>
+      )}
+      {feeWaived && (
+        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <span>
+            <strong>Enhanced Wealth team: membership fee waived.</strong> Advertisers pay $500 every 2 weeks to be in the
+            Advertiser Program. As part of the Enhanced Wealth team, you pay $0.
           </span>
         </div>
       )}
@@ -189,14 +204,18 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
           <CardHeader>
             <CardTitle>Advertiser Program</CardTitle>
             <CardDescription>
-              {summary.program.joined
-                ? "Your membership has ended, so your leads are paused. Rejoin for $500 every 2 weeks; your unused ad spend is still here."
-                : "Join for $500 every 2 weeks to get leads. Ad spend is separate and is added here once you're a member."}
+              {waiverTeam
+                ? summary.program.joined
+                  ? "Your membership has ended, so your leads are paused. Rejoin free: the $500 membership is waived for the Enhanced Wealth team. Your unused ad spend is still here."
+                  : "Join free to get leads: the $500 membership is waived for the Enhanced Wealth team. Ad spend is separate and is added here once you're a member."
+                : summary.program.joined
+                  ? "Your membership has ended, so your leads are paused. Rejoin for $500 every 2 weeks; your unused ad spend is still here."
+                  : "Join for $500 every 2 weeks to get leads. Ad spend is separate and is added here once you're a member."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <a href="/marketplace?tab=advertise">
-              <Button>{summary.program.joined ? "Rejoin the program" : "Join the program"}</Button>
+              <Button>{summary.program.joined ? (waiverTeam ? "Rejoin free" : "Rejoin the program") : waiverTeam ? "Join free" : "Join the program"}</Button>
             </a>
           </CardContent>
         </Card>
@@ -206,7 +225,9 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
             <CardTitle>Add spend</CardTitle>
             <CardDescription>
               {member
-                ? "Buys your leads. Separate from your $500 program membership."
+                ? feeWaived
+                  ? "Buys your leads. Your program membership is waived (Enhanced Wealth team)."
+                  : "Buys your leads. Separate from your $500 program membership."
                 : summary.sharedPoolOnly ? "Adds to your lead budget." : "Adds to your campaign budget."}{" "}
               Paid securely through Stripe.
               {member && <> <a href="/marketplace?tab=advertise" className="underline">Manage membership</a></>}

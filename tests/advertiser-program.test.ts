@@ -25,11 +25,29 @@ const db = {
     findMany: vi.fn(async () => Object.values(users)),
   },
   leadSubscription: { upsert: vi.fn() },
+  membership: { count: vi.fn(async ({ where }: any) => (where.userId === "EW_AGENT" && where.organizationId.in.includes("cmsdc9be50001l4045uljpthc") ? 1 : 0)) },
 };
 vi.mock("@/lib/prisma", () => ({ isDatabaseConfigured: true, get prisma() { return db; } }));
 
 const subscriptionsRetrieve = vi.fn();
-vi.mock("@/lib/stripe", () => ({ isStripeConfigured: true, stripe: { subscriptions: { retrieve: (...a: unknown[]) => subscriptionsRetrieve(...a) } } }));
+const subscriptionsCreate = vi.fn();
+const subscriptionsUpdate = vi.fn(async () => ({}));
+const subscriptionsCancel = vi.fn(async () => ({}));
+const couponsRetrieve = vi.fn();
+const couponsCreate = vi.fn(async () => ({}));
+vi.mock("@/lib/stripe", () => ({
+  isStripeConfigured: true,
+  stripe: {
+    subscriptions: {
+      retrieve: (...a: unknown[]) => subscriptionsRetrieve(...a),
+      create: (...a: unknown[]) => subscriptionsCreate(...a),
+      update: (...a: unknown[]) => subscriptionsUpdate(...a),
+      cancel: (...a: unknown[]) => subscriptionsCancel(...a),
+    },
+    coupons: { retrieve: (...a: unknown[]) => couponsRetrieve(...a), create: (...a: unknown[]) => couponsCreate(...a) },
+    prices: { list: vi.fn(async () => ({ data: [{ id: "price_program" }] })) },
+  },
+}));
 
 const getAdSpendSummary = vi.fn();
 const enforceAdSpend = vi.fn(async () => ({ action: "none" }));
@@ -44,7 +62,9 @@ vi.mock("@/lib/house", () => ({ deliverLeadToOwner: vi.fn(async () => true) }));
 vi.mock("@/lib/fulfillment", () => ({ fulfillOrder: vi.fn() }));
 
 const program = await import("@/lib/advertiserProgram");
-const { recordProgramInvoice } = await import("@/lib/advertiserProgramBilling");
+const { recordProgramInvoice, joinWithFeeWaived, waiveExistingMembership, isOnFeeWaiverTeam, getFeeWaiverCouponId } = await import(
+  "@/lib/advertiserProgramBilling"
+);
 const { upsertLocalSubscription } = await import("@/lib/leadSubscription");
 const { sharedClientSlots, clientLeadPriceCents } = await import("@/lib/sharedPool");
 
@@ -206,5 +226,106 @@ describe("shared pool for members", () => {
     users.MEMBER = { id: "MEMBER", name: "Member", email: "m@new.test", licensedStates: [], ownedOrganizations: [] };
     getAdSpendSummary.mockResolvedValue(summary({ balanceCents: 90_000, program: { member: false, joined: true, mustJoin: true, legacyUntil: null } }));
     expect(await sharedClientSlots("TX", "abca")).toEqual([]);
+  });
+});
+
+describe("Enhanced Wealth team: membership fee waived", () => {
+  const EW = "cmsdc9be50001l4045uljpthc"; // Ryan's Team
+  const waived = (status: string) => ({ program: true, status, feeWaived: true });
+
+  it("only the Enhanced Wealth team gets the waiver", () => {
+    expect(program.onFeeWaiverTeam([EW])).toBe(true);
+    expect(program.onFeeWaiverTeam(["some-other-team", EW])).toBe(true);
+    expect(program.onFeeWaiverTeam(["some-other-team"])).toBe(false);
+    expect(program.onFeeWaiverTeam([])).toBe(false);
+    expect(program.onFeeWaiverTeam([null, undefined])).toBe(false);
+  });
+
+  it("a waived membership counts like a paid one while they're on the team", () => {
+    expect(program.isProgramMember([waived("active")], { onWaiverTeam: true })).toBe(true);
+    // Not checked: never cut someone's leads on a check that wasn't made.
+    expect(program.isProgramMember([waived("active")])).toBe(true);
+    expect(program.mustJoinProgram("agent@ew.test", [waived("active")], DEC(20), { onWaiverTeam: true, sharedPoolOnly: true })).toBe(false);
+    expect(program.waiverEnded([waived("active")], { onWaiverTeam: true })).toBe(false);
+  });
+
+  it("left the team: the waived membership stops counting and they join at the regular price", () => {
+    expect(program.isProgramMember([waived("active")], { onWaiverTeam: false })).toBe(false);
+    expect(program.mustJoinProgram("agent@ew.test", [waived("active")], DEC(20), { onWaiverTeam: false, sharedPoolOnly: true })).toBe(true);
+    expect(program.waiverEnded([waived("active")], { onWaiverTeam: false })).toBe(true);
+    // A paid membership is never affected by the team check.
+    expect(program.isProgramMember([sub("active")], { onWaiverTeam: false })).toBe(true);
+    expect(program.waiverEnded([waived("active"), sub("active")], { onWaiverTeam: false })).toBe(false);
+  });
+
+  it("savings: one $500 fee for each 2-week period started since the waiver began", () => {
+    const start = new Date("2026-11-16T18:00:00Z");
+    expect(program.waivedSavingsCents(start, new Date("2026-11-16T18:00:01Z"))).toBe(50_000);
+    expect(program.waivedSavingsCents(start, new Date("2026-11-29T18:00:00Z"))).toBe(50_000);
+    expect(program.waivedSavingsCents(start, new Date("2026-11-30T18:00:00Z"))).toBe(100_000);
+    expect(program.waivedSavingsCents(start, new Date("2027-01-11T18:00:00Z"))).toBe(250_000);
+    expect(program.waivedSavingsCents(start, new Date("2026-11-15T18:00:00Z"))).toBe(0); // starts later (an existing member's next period)
+    expect(program.waivedSavingsCents(null)).toBe(0);
+  });
+
+  it("team membership is read from the database", async () => {
+    expect(await isOnFeeWaiverTeam("EW_AGENT")).toBe(true);
+    expect(await isOnFeeWaiverTeam("SOMEONE_ELSE")).toBe(false);
+  });
+
+  it("joining waived: the same membership price with a forever 100%-off coupon, marked waived, no checkout", async () => {
+    couponsRetrieve.mockRejectedValueOnce(Object.assign(new Error("No such coupon"), { code: "resource_missing" }));
+    subscriptionsCreate.mockResolvedValueOnce({ id: "sub_w", status: "active" });
+    const s = await joinWithFeeWaived("EW_AGENT", "cus_1");
+    expect(s.id).toBe("sub_w");
+    expect(couponsCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "advertiser-program-enhanced-wealth", percent_off: 100, duration: "forever" }),
+    );
+    const [params, opts] = subscriptionsCreate.mock.calls[0] as any[];
+    expect(params.customer).toBe("cus_1");
+    expect(params.items).toEqual([{ price: "price_program" }]);
+    expect(params.discounts).toEqual([{ coupon: "advertiser-program-enhanced-wealth" }]);
+    expect(params.metadata).toMatchObject({ kind: "advertiser-program", userId: "EW_AGENT", feeWaived: "enhanced-wealth" });
+    expect(typeof params.metadata.feeWaivedAt).toBe("string");
+    expect(opts.idempotencyKey).toMatch(/^program-waived:EW_AGENT:/);
+  });
+
+  it("an existing coupon is reused", async () => {
+    couponsRetrieve.mockResolvedValueOnce({ id: "advertiser-program-enhanced-wealth" });
+    expect(await getFeeWaiverCouponId()).toBe("advertiser-program-enhanced-wealth");
+    expect(couponsCreate).not.toHaveBeenCalled();
+  });
+
+  it("a waived join Stripe doesn't start is canceled and reported, not left behind", async () => {
+    couponsRetrieve.mockResolvedValueOnce({ id: "advertiser-program-enhanced-wealth" });
+    subscriptionsCreate.mockResolvedValueOnce({ id: "sub_bad", status: "incomplete" });
+    await expect(joinWithFeeWaived("EW_AGENT", "cus_1")).rejects.toThrow(/incomplete/);
+    expect(subscriptionsCancel).toHaveBeenCalledWith("sub_bad");
+  });
+
+  it("a paying member on the team is waived from their next payment on", async () => {
+    couponsRetrieve.mockResolvedValueOnce({ id: "advertiser-program-enhanced-wealth" });
+    const end = Math.floor(new Date("2026-11-30T18:00:00Z").getTime() / 1000);
+    await waiveExistingMembership({ id: "sub_paid", metadata: { kind: "advertiser-program", userId: "EW_AGENT" }, items: { data: [{ current_period_end: end }] } } as any);
+    const [id, params] = subscriptionsUpdate.mock.calls[0] as any[];
+    expect(id).toBe("sub_paid");
+    expect(params.discounts).toEqual([{ coupon: "advertiser-program-enhanced-wealth" }]);
+    expect(params.metadata).toMatchObject({ feeWaived: "enhanced-wealth", feeWaivedAt: "2026-11-30T18:00:00.000Z", userId: "EW_AGENT" });
+    // Already waived: nothing to do.
+    subscriptionsUpdate.mockClear();
+    await waiveExistingMembership({ id: "sub_w", metadata: { feeWaived: "enhanced-wealth" } } as any);
+    expect(subscriptionsUpdate).not.toHaveBeenCalled();
+  });
+
+  it("a $0 waived invoice doesn't touch ad spend", async () => {
+    users.EW_AGENT = { id: "EW_AGENT", isAdvertiser: true, adCampaignIds: ["shared-pool"] };
+    const inv = {
+      id: "in_w",
+      status: "paid",
+      amount_paid: 0,
+      parent: { subscription_details: { subscription: "sub_w", metadata: { kind: "advertiser-program", userId: "EW_AGENT", feeWaived: "enhanced-wealth" } } },
+    } as any;
+    expect(await recordProgramInvoice(inv)).toBe(true); // the program's, so the lead subscription leaves it alone
+    expect(payments).toHaveLength(0);
   });
 });

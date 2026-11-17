@@ -40,6 +40,37 @@ export const LEGACY_RETAINER_UNTIL: Record<string, string> = {
 // renewal date above. After it you need the Program for leads, like the owner.
 export const LEGACY_TEAM_ADVERTISER_OWNERS = new Set<string>(["jljensen38@gmail.com"]);
 
+// ─── Enhanced Wealth team: membership fee waived (owner directive, Nov 16 2026) ───
+// "Waive the $500 fee for anybody who tries to join on the Enhanced Wealth team,
+// visibly show on their account that the fee is waived." The Enhanced Wealth team
+// is Ryan's team in the app. Its members join with a Stripe subscription carrying
+// a 100%-off coupon (metadata.feeWaived = FEE_WAIVER.key), so a waived membership
+// works exactly like a paid one: same Stripe record, same leads, same price per
+// lead (cost + 20% + 3%). Only the $500 membership is waived. The waiver belongs
+// to being on the team: someone who leaves it stops counting as a member on the
+// waived subscription, and joins again at the regular price.
+export const FEE_WAIVER = {
+  key: "enhanced-wealth",
+  label: "Enhanced Wealth team",
+  teamIds: new Set<string>(["cmsdc9be50001l4045uljpthc"]), // Ryan's Team
+  couponId: "advertiser-program-enhanced-wealth",
+};
+
+/** Is any of these teams one whose members join with the membership waived? */
+export const onFeeWaiverTeam = (teamIds: (string | null | undefined)[]) => teamIds.some((id) => !!id && FEE_WAIVER.teamIds.has(id));
+
+/**
+ * The membership fees a waived member hasn't paid so far: one for each 2-week
+ * period started since they joined, the current one included.
+ */
+export function waivedSavingsCents(startedAt: Date | string | null | undefined, now = new Date()): number {
+  if (!startedAt) return 0;
+  const start = new Date(startedAt).getTime();
+  if (!Number.isFinite(start) || start > now.getTime()) return 0;
+  const periodMs = ADVERTISER_PROGRAM.intervalWeeks * 7 * 864e5;
+  return (Math.floor((now.getTime() - start) / periodMs) + 1) * ADVERTISER_PROGRAM.amountCents;
+}
+
 /** A member's price for a lead: the campaign's cost per lead, plus the management fee, plus the card fee. */
 export const programLeadPriceCents = (cplCents: number) =>
   Math.round(cplCents * (1 + ADVERTISER_PROGRAM.managementRate) * (1 + ADVERTISER_PROGRAM.cardFeeRate));
@@ -48,13 +79,30 @@ export const programLeadPriceCents = (cplCents: number) =>
 export interface ProgramSub {
   program: boolean;
   status: string;
+  feeWaived?: boolean; // joined with the membership waived (FEE_WAIVER)
 }
+
+/**
+ * Whether the user is on the fee-waiver team right now. Left out, a waived
+ * membership counts (never cut someone's leads on a check that wasn't made);
+ * false means they have left the team, so a waived membership no longer counts.
+ */
+export interface WaiverOpts {
+  onWaiverTeam?: boolean;
+}
+
+const counts = (s: ProgramSub, o: WaiverOpts) => !(s.feeWaived && o.onWaiverTeam === false);
 
 const LIVE = new Set(["active", "trialing", "past_due"]);
 const NEVER_STARTED = new Set(["incomplete", "incomplete_expired"]);
 
-/** Paying right now (or retrying a failed payment). */
-export const isProgramMember = (subs: ProgramSub[]) => subs.some((s) => s.program && LIVE.has(s.status));
+/** In the program right now: paying, fee waived, or retrying a failed payment. */
+export const isProgramMember = (subs: ProgramSub[], o: WaiverOpts = {}) =>
+  subs.some((s) => s.program && LIVE.has(s.status) && counts(s, o));
+
+/** A live waived membership that no longer counts because they left the team. */
+export const waiverEnded = (subs: ProgramSub[], o: WaiverOpts = {}) =>
+  !isProgramMember(subs, o) && subs.some((s) => s.program && LIVE.has(s.status) && s.feeWaived && o.onWaiverTeam === false);
 
 /** Has ever been in the program, including members whose membership has since ended. */
 export const hasJoinedProgram = (subs: ProgramSub[]) => subs.some((s) => s.program && !NEVER_STARTED.has(s.status));
@@ -96,9 +144,9 @@ export function mustJoinProgram(
   email: string | null | undefined,
   subs: ProgramSub[],
   now = new Date(),
-  opts: { uplineEmails?: (string | null | undefined)[]; sharedPoolOnly?: boolean } = {},
+  opts: { uplineEmails?: (string | null | undefined)[]; sharedPoolOnly?: boolean } & WaiverOpts = {},
 ): boolean {
-  if (isProgramMember(subs)) return false;
+  if (isProgramMember(subs, opts)) return false;
   const cover = legacyCoverEnds(email, opts.uplineEmails);
   if (cover) return now >= cover.ends;
   return !!opts.sharedPoolOnly || hasJoinedProgram(subs);
