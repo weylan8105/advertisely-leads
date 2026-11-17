@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AVAILABLE_STATES, stateName } from "@/data/states";
 import { formatCurrency, cn } from "@/lib/utils";
+import { AddSpendForm } from "@/components/dashboard/AddSpendForm";
 
 interface ProgramData {
   available: boolean;
@@ -68,12 +69,19 @@ export function AdvertiserProgramPanel() {
       .finally(() => setLoading(false));
 
   useEffect(() => {
-    load();
+    let p: string | null = null;
+    try { p = new URLSearchParams(window.location.search).get("status"); } catch {}
+    if (p === "topup-success") {
+      // Back from Stripe after adding ad spend: apply the new balance (turns leads back on), then show it.
+      fetch("/api/advertiser/spend?topup=success", { cache: "no-store" }).catch(() => null).finally(load);
+    } else {
+      load();
+    }
     try {
-      const p = new URLSearchParams(window.location.search).get("status");
-      if (p === "success") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Add ad spend on your dashboard and your leads start with the next one in your states." });
-      if (p === "waived") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Your $500 membership is waived as part of the Enhanced Wealth team. Add ad spend on your dashboard and your leads start with the next one in your states." });
-      if (p === "cancel") setBanner({ ok: false, text: "Checkout canceled. You weren't charged." });
+      if (p === "success") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Add ad spend below and your leads start with the next one in your states." });
+      if (p === "waived") setBanner({ ok: true, text: "Welcome to the Advertiser Program! Your $500 membership is waived as part of the Enhanced Wealth team. Add ad spend below and your leads start with the next one in your states." });
+      if (p === "cancel" || p === "topup-cancel") setBanner({ ok: false, text: "Checkout canceled. You weren't charged." });
+      if (p === "topup-success") setBanner({ ok: true, text: "Payment received. Your ad spend is updated." });
       if (p) {
         const u = new URL(window.location.href);
         u.searchParams.delete("status");
@@ -214,7 +222,7 @@ export function AdvertiserProgramPanel() {
         ) : (
           <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> {usd0(offer.amountCents)} {every} is your membership. It keeps you in the program and is separate from your ad spend.</li>
         )}
-        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> You add ad spend on your dashboard, any amount, whenever you like. All of it goes to leads.</li>
+        <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> You add ad spend here or on your dashboard, any amount, whenever you like. All of it goes to leads.</li>
         <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Each lead costs what we paid for it, plus a {mgmtPct}% management fee and the {cardFeePct}% card fee.</li>
         <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Leads come from our Blue Collar campaigns, shared in a round robin between advertisers licensed in the lead&apos;s state, and land in your pipeline the moment they come in.</li>
         <li className="flex gap-2"><Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" /> Cancel anytime. Leads keep coming until the 2 weeks you paid for run out, and any unused ad spend stays on your account for when you rejoin.</li>
@@ -305,8 +313,17 @@ export function AdvertiserProgramPanel() {
                 Your last payment didn&apos;t go through. Stripe will retry it; update your card from the receipt email if it keeps failing.
               </p>
             )}
+            <div id="advertise-add-spend" className="mt-5 scroll-mt-20 rounded-lg border border-slate-200 p-4">
+              <div className="flex items-center gap-1.5 text-sm font-semibold"><Wallet className="h-4 w-4 text-brand-red" /> Add ad spend</div>
+              <p className="mt-1 mb-3 text-sm text-muted-foreground">
+                Buys your leads. Add any amount, whenever you like, here or on your dashboard. Paid securely through Stripe.
+              </p>
+              <div className="max-w-md">
+                <AddSpendForm member returnTo="marketplace" />
+              </div>
+            </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              Add ad spend and see your leads on your <a href="/dashboard" className="font-medium text-brand-red hover:underline">dashboard</a>.
+              See your leads and where your ad spend has gone on your <a href="/dashboard" className="font-medium text-brand-red hover:underline">dashboard</a>.
               Today a lead costs about <span className="font-medium text-foreground">{priceRange}</span> (our cost + {mgmtPct}% management + {cardFeePct}% card fee).
               {ending && <> Leads stop on your last day; unused ad spend stays on your account.</>}
             </p>
@@ -348,7 +365,7 @@ export function AdvertiserProgramPanel() {
     waiver
       ? ["Join free", `Your ${fee} membership is waived for the ${waiver.label}. No card or sales call needed.`]
       : ["Join", `Pay your ${fee} membership through a secure Stripe checkout. No sales call needed.`],
-    ["Add ad spend", "On your dashboard, add however much you want to put toward leads. Add more anytime."],
+    ["Add ad spend", "Here or on your dashboard, add however much you want to put toward leads. Add more anytime."],
     ["Get leads", "New leads in your states land in your pipeline as they come in. Your dashboard shows your balance, leads and cost per lead."],
   ];
   const faqs: [string, React.ReactNode][] = [
@@ -536,12 +553,12 @@ export function AdvertiserProgramPanel() {
             {waiver ? (
               <>
                 No card needed to join: your membership is $0 while you&apos;re on the {waiver.label}. If you leave the team, the
-                regular {fee} {every} applies. After you join, add ad spend on your dashboard to start receiving leads. Each lead
+                regular {fee} {every} applies. After you join, add ad spend here or on your dashboard to start receiving leads. Each lead
                 includes a {cardFeePct}% card processing fee. Cancel anytime; unused ad spend stays on your account.
               </>
             ) : (
               <>
-                Billed {every} until you cancel. After you join, add ad spend on your dashboard to start receiving leads. Each lead also
+                Billed {every} until you cancel. After you join, add ad spend here or on your dashboard to start receiving leads. Each lead also
                 includes a {cardFeePct}% card processing fee. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad
                 spend stays on your account.
               </>

@@ -1,17 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Wallet, TrendingUp, Users, Target, Loader2, AlertTriangle, PauseCircle, Info, CalendarClock, BadgeCheck } from "lucide-react";
+import { Wallet, TrendingUp, Users, Target, AlertTriangle, PauseCircle, Info, CalendarClock, BadgeCheck } from "lucide-react";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { adSpendProgress } from "@/lib/adSpendProgress";
+import { AddSpendForm } from "@/components/dashboard/AddSpendForm";
 
-const PRESETS = [500, 1000, 2500, 5000];
-const MIN_DOLLARS = 100;
-const PROCESSING_RATE = 0.03; // lib/adSpend.ts PROCESSING_FEE_RATE
 const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team", program: "Advertiser Program", "team-fee": "Management fee (20%)" };
 
 const usd = (cents: number) =>
@@ -31,12 +28,7 @@ function monthLabel(ym: string) {
 
 /** An advertiser's campaign budget: what they've paid, spent, have left, and what leads cost. */
 export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
-  const [amount, setAmount] = useState("1000");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const low = summary.balanceCents <= 0;
-  const typedCents = Math.round((Number(amount.replace(/[^0-9.]/g, "")) || 0) * 100);
   const runningLow = !low && summary.daysLeft !== null && summary.daysLeft <= 3;
   // Someone who has to join (or rejoin) the Advertiser Program can't add ad spend until they do.
   const viaProgram = summary.program.mustJoin;
@@ -44,29 +36,6 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
   // Enhanced Wealth team: the $500 program membership is waived for them (older cached summaries lack these).
   const waiverTeam = !!summary.program.feeWaiverTeam;
   const feeWaived = !!summary.program.feeWaived;
-
-  async function addSpend() {
-    const dollars = Number(amount.replace(/[^0-9.]/g, ""));
-    if (!dollars || dollars < MIN_DOLLARS) {
-      setError(`The minimum is $${MIN_DOLLARS}.`);
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch("/api/advertiser/spend/top-up", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountCents: Math.round(dollars * 100) }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) throw new Error(data.error ?? "Could not start checkout.");
-      window.location.href = data.url;
-    } catch (e) {
-      setError((e as Error).message);
-      setLoading(false);
-    }
-  }
 
   return (
     <div className="mb-6 space-y-4">
@@ -233,50 +202,8 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
               {member && <> <a href="/marketplace?tab=advertise" className="underline">Manage membership</a></>}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setAmount(String(p))}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-sm",
-                    Number(amount) === p ? "border-brand-red bg-brand-red/10 text-brand-red" : "border-slate-200 hover:bg-slate-50",
-                  )}
-                >
-                  {usd0(p * 100)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                <input
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red"
-                  aria-label="Amount to add"
-                />
-              </div>
-              <Button onClick={addSpend} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add spend"}
-              </Button>
-            </div>
-            {typedCents >= MIN_DOLLARS * 100 && (
-              <p className="text-xs text-muted-foreground">
-                {member ? (
-                  <>All {usd(typedCents)} goes to leads. Each lead costs our cost plus the 20% management fee and 3% card fee.</>
-                ) : (
-                  <>
-                    {usd(typedCents)} adds {usd(typedCents - Math.round(typedCents * PROCESSING_RATE))} to your ad budget after the
-                    3% card processing fee.
-                  </>
-                )}
-              </p>
-            )}
-            {error && <p className="text-xs text-rose-600">{error}</p>}
+          <CardContent>
+            <AddSpendForm member={!!member} />
           </CardContent>
         </Card>
         )}

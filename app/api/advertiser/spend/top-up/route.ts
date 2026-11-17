@@ -9,7 +9,10 @@ import { legacyRetainerEnds } from "@/lib/advertiserProgram";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** POST /api/advertiser/spend/top-up { amountCents } — Stripe Checkout to add ad spend. */
+/**
+ * POST /api/advertiser/spend/top-up { amountCents, returnTo? } — Stripe Checkout to add ad spend.
+ * returnTo "marketplace" brings them back to the Advertiser Program tab instead of the dashboard.
+ */
 export async function POST(req: NextRequest) {
   if (!isStripeConfigured || !stripe) return NextResponse.json({ error: "Payments aren't set up yet." }, { status: 503 });
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
   // A member's top-up is credited in full; their card fee is on each lead instead.
   const programMember = !!summary?.program.member;
 
-  const body = (await req.json().catch(() => ({}))) as { amountCents?: number };
+  const body = (await req.json().catch(() => ({}))) as { amountCents?: number; returnTo?: string };
   const amountCents = Math.round(Number(body.amountCents) || 0);
   if (amountCents < MIN_TOP_UP_CENTS || amountCents > MAX_TOP_UP_CENTS) {
     return NextResponse.json(
@@ -47,6 +50,9 @@ export async function POST(req: NextRequest) {
   const customer = existing ?? (await stripe.customers.create({ email: user.email, name: user.name ?? undefined, metadata: { userId } }));
   const base = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
   const metadata = { kind: AD_SPEND_KIND, userId, ...(programMember ? { program: "1" } : {}) };
+  // Back to where they started: the marketplace's program tab, or the dashboard.
+  const back = (status: "success" | "cancel") =>
+    body.returnTo === "marketplace" ? `${base}/marketplace?tab=advertise&status=topup-${status}` : `${base}/dashboard?topup=${status}`;
 
   try {
     const checkout = await stripe.checkout.sessions.create({
@@ -64,8 +70,8 @@ export async function POST(req: NextRequest) {
       ],
       payment_intent_data: { metadata, description: "Advertisely campaign ad spend" },
       metadata,
-      success_url: `${base}/dashboard?topup=success`,
-      cancel_url: `${base}/dashboard?topup=cancel`,
+      success_url: back("success"),
+      cancel_url: back("cancel"),
     });
     return NextResponse.json({ url: checkout.url });
   } catch (e: any) {
