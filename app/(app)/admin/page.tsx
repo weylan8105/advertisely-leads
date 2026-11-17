@@ -36,6 +36,8 @@ import {
   Trash2,
   Clock,
   Copy,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
@@ -86,6 +88,9 @@ const VALID_TABS = new Set([
 // These two live in the box near the top of the page, not the lower tab bar.
 const TOP_TABS = new Set(["accounts", "replacements"]);
 
+/** localStorage flag: "1" when the Client accounts box is collapsed on this device. */
+const CLIENT_BOX_COLLAPSED_KEY = "adv_admin_client_box_collapsed";
+
 // Wrapped in Suspense because useSearchParams requires it during prerender.
 export default function AdminPage() {
   return (
@@ -115,12 +120,33 @@ function AdminPageInner() {
   const [topTab, setTopTab] = useState<"accounts" | "replacements">(() =>
     searchParams.get("tab") === "replacements" ? "replacements" : "accounts",
   );
+  // Collapse the Client accounts box so the tools below are a short scroll
+  // away. Remembered per device; opening the box from a link or the stat
+  // card always expands it again.
+  const [clientBoxCollapsed, setClientBoxCollapsed] = useState(false);
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "accounts" || t === "replacements") return;
+    try {
+      if (localStorage.getItem(CLIENT_BOX_COLLAPSED_KEY) === "1") setClientBoxCollapsed(true);
+    } catch {}
+    // Only on first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const setClientBoxCollapsedSaved = useCallback((collapsed: boolean) => {
+    setClientBoxCollapsed(collapsed);
+    try {
+      if (collapsed) localStorage.setItem(CLIENT_BOX_COLLAPSED_KEY, "1");
+      else localStorage.removeItem(CLIENT_BOX_COLLAPSED_KEY);
+    } catch {}
+  }, []);
   const openTopTab = useCallback((t: "accounts" | "replacements") => {
     setTopTab(t);
+    setClientBoxCollapsedSaved(false);
     requestAnimationFrame(() =>
       document.getElementById("client-box")?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
-  }, []);
+  }, [setClientBoxCollapsedSaved]);
   // React to query changes when already on /admin (Link nav doesn't remount).
   useEffect(() => {
     const t = searchParams.get("tab");
@@ -402,9 +428,23 @@ function AdminPageInner() {
 
       {/* Client accounts + Replacement Queue — the day-to-day client management box. */}
       <Card id="client-box" className="mt-6 scroll-mt-4">
-        <Tabs value={topTab} onValueChange={(v) => setTopTab(v as "accounts" | "replacements")}>
-          <CardHeader className="pb-3">
-            <TabsList className="w-max">
+        <Tabs
+          value={topTab}
+          onValueChange={(v) => {
+            setTopTab(v as "accounts" | "replacements");
+            if (clientBoxCollapsed) setClientBoxCollapsedSaved(false);
+          }}
+        >
+          <CardHeader
+            className={`${clientBoxCollapsed ? "" : "pb-3 "}flex-row flex-wrap items-center justify-between gap-3 space-y-0`}
+          >
+            {/* Clicking either tab (even the one already open) expands a collapsed box. */}
+            <TabsList
+              className="w-max"
+              onClick={() => {
+                if (clientBoxCollapsed) setClientBoxCollapsedSaved(false);
+              }}
+            >
               <TabsTrigger value="accounts">Client accounts</TabsTrigger>
               <TabsTrigger value="replacements">
                 Replacement Queue
@@ -416,8 +456,29 @@ function AdminPageInner() {
                 )}
               </TabsTrigger>
             </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              aria-expanded={!clientBoxCollapsed}
+              aria-controls="client-box-content"
+              onClick={() => setClientBoxCollapsedSaved(!clientBoxCollapsed)}
+            >
+              {clientBoxCollapsed ? (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Expand list
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="h-4 w-4" />
+                  Collapse list
+                </>
+              )}
+            </Button>
           </CardHeader>
-          <CardContent>
+          {/* Hidden, not unmounted, so search and filters survive a collapse. */}
+          <CardContent id="client-box-content" className={clientBoxCollapsed ? "hidden" : undefined}>
             <TabsContent value="accounts" className="mt-0">
               <p className="mb-3 text-sm text-muted-foreground">
                 Every client account, open orders first. Manage their lead orders or open their CRM.
