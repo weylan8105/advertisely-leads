@@ -256,28 +256,145 @@ export function AdvertiserProgramPanel() {
     );
   }
 
-  // Join
+  // Join: a sales page, so agents can sell themselves on it.
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const fee = `${usd0(offer.amountCents)}`;
+  const disclaimer = (
+    <p className="mx-auto mt-4 max-w-xl text-center text-[11px] text-muted-foreground">
+      Results depend on how quickly and how well you follow up, your sales process, licensing and underwriting. We don&apos;t
+      promise a specific cost per lead or any number of sales.
+    </p>
+  );
+  const eyebrow = (t: string) => (
+    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-red">{t}</div>
+  );
+  const steps = [
+    ["Pick your states", "Choose the states you're licensed in below. You only get leads from those states."],
+    ["Join", `Pay your ${fee} membership through a secure Stripe checkout. No sales call needed.`],
+    ["Add ad spend", "On your dashboard, add however much you want to put toward leads. Add more anytime."],
+    ["Get leads", "New leads in your states land in your pipeline as they come in. Your dashboard shows your balance, leads and cost per lead."],
+  ];
+  const faqs: [string, React.ReactNode][] = [
+    ["So, am I buying leads?", <>Yes, but not at a vendor&apos;s price. You add ad spend, and each lead is charged at what it cost us to generate, plus a {mgmtPct}% management fee. We run the ads, so you never build a campaign or spend your evenings figuring out why one stopped working.</>],
+    ["What does “priced at what they actually cost” mean?", <>Most lead vendors charge one fixed price per lead, whatever it cost them to get it. Here, your price follows our real cost per lead from our Facebook campaigns, so it moves with the market by campaign, state and season. Today that works out to about $20–$40 a lead, fees included. We don&apos;t guarantee appointments, applications or issued policies. Results depend on your speed to lead, follow-up, sales process, licensing, product fit and underwriting.</>],
+    ["Then what's the membership for?", <>It&apos;s your spot in the program: our live campaigns, the round robin, at-cost pricing and your advertiser dashboard. It renews at {fee} {every}. Your ad spend is kept separate and is only used for leads.</>],
+    ["Do I need to know anything about running ads?", <>No. We handle the campaigns, the creative and the testing.</>],
+    ["How are leads shared?", <>Leads come from our Blue Collar IUL campaigns. Each one goes, in a round robin, to an advertiser licensed in the lead&apos;s state, and lands in their pipeline the moment it comes in.</>],
+    ["What if I cancel?", <>No more payments after the 2 weeks you&apos;ve paid for. Leads stop when that period ends, and any ad spend you haven&apos;t used stays on your account for when you rejoin.</>],
+  ];
+
   return (
     <div>
       {banners}
-      <div className="grid gap-5 md:grid-cols-3">
-        <Card className="p-6 md:col-span-2">
-          <h3 className="text-lg font-semibold">{offer.name}</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Become an advertiser right here. Your membership puts you in our campaigns&apos; round robin, and the ad spend you add
-            buys leads at our cost plus a {mgmtPct}% management fee.
+
+      {/* Hero */}
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-brand-red/[0.05] to-white px-5 py-12 text-center sm:px-10">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-red/20 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-red">
+          <Megaphone className="h-3 w-3" /> Advertisely Advertiser Program
+        </span>
+        <h2 className="mx-auto mt-5 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+          IUL leads priced at <span className="underline decoration-brand-red decoration-4 underline-offset-[6px]">what they actually cost</span>.
+          <br className="hidden sm:block" /> Without running ads yourself.
+        </h2>
+        <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground">
+          We run the Facebook campaigns and send the leads straight to your pipeline in the states you&apos;re licensed in. As a
+          member, you pay what each lead cost us to generate, plus a {mgmtPct}% management fee.
+        </p>
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <Button size="lg" onClick={() => scrollTo("advertise-join")}>Join the Advertiser Program</Button>
+          <Button size="lg" variant="outline" onClick={() => scrollTo("advertise-faq")}>How it works</Button>
+        </div>
+        {disclaimer}
+      </section>
+
+      {/* Why */}
+      <section className="mx-auto max-w-3xl px-2 py-14 text-center">
+        {eyebrow("At-cost leads")}
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Get leads without taking on a second job.</h2>
+        <p className="mt-4 text-muted-foreground">
+          You could pay a vendor a fixed price per lead. You could spend your nights learning Ads Manager, testing campaigns and
+          trying to make them work.
+        </p>
+        <p className="mt-3 text-muted-foreground">
+          As an Advertisely advertiser, we handle the advertising. You choose your states and how much ad spend to add.
+        </p>
+      </section>
+
+      {/* Cost */}
+      <section className="pb-14">
+        <div className="text-center">
+          {eyebrow("Pricing")}
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">What does it cost?</h2>
+        </div>
+        <div className="mx-auto mt-8 grid max-w-4xl gap-5 md:grid-cols-2">
+          <Card className="p-6">
+            <div className="text-sm font-semibold">Program membership</div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-semibold">{fee}</span>
+              <span className="text-sm text-muted-foreground">{every}</span>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">Your membership includes:</p>
+            <ul className="mt-2 space-y-2 text-sm">
+              {[
+                "A spot in our live Blue Collar IUL campaigns",
+                "Leads shared in a round robin with advertisers licensed in the lead's state",
+                `Leads at our cost + ${mgmtPct}%`,
+                "Leads delivered to your Advertisely pipeline the moment they come in",
+                "Your advertiser dashboard: ad spend, leads and cost per lead",
+              ].map((t) => (
+                <li key={t} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{t}</li>
+              ))}
+            </ul>
+          </Card>
+          <Card className="p-6">
+            <div className="text-sm font-semibold">Ad spend</div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-3xl font-semibold">You choose</span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">Only used as leads come in</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Your ad spend pays for your leads. Each lead costs what it cost us to generate, plus a {mgmtPct}% management fee
+              and a {cardFeePct}% card processing fee. Today that&apos;s about <span className="font-medium text-foreground">$20–$40</span> a lead.
+              Add more whenever you want more leads.
+            </p>
+          </Card>
+        </div>
+        <p className="mx-auto mt-5 max-w-2xl text-center text-sm text-muted-foreground">
+          Your membership renews at {fee} {every}. It never buys leads: your ad spend is kept separate and is only used for leads.
+        </p>
+      </section>
+
+      {/* Steps */}
+      <section className="rounded-2xl bg-slate-50 px-5 py-14 sm:px-10">
+        <div className="text-center">
+          {eyebrow("One simple path")}
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Getting started shouldn&apos;t be a job, either.</h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            Setup takes a few minutes and no sales call. Pick your states, join, add ad spend, and leads start coming in.
           </p>
-          <dl className="mt-4 max-w-md space-y-1.5 text-sm">
+        </div>
+        <ol className="mx-auto mt-8 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map(([t, d], i) => (
+            <li key={t} className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="text-sm font-semibold tabular-nums text-brand-red">{String(i + 1).padStart(2, "0")}</div>
+              <div className="mt-2 font-semibold">{t}</div>
+              <p className="mt-1 text-sm text-muted-foreground">{d}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* Join */}
+      <section id="advertise-join" className="scroll-mt-20 py-14">
+        <Card className="mx-auto max-w-2xl p-6 sm:p-8">
+          <h3 className="text-xl font-semibold">Join the {offer.name}</h3>
+          <dl className="mt-4 space-y-1.5 text-sm">
             <div className="flex justify-between gap-4"><dt>Program membership, {every}</dt><dd className="font-medium">{usd(offer.amountCents)}</dd></div>
             <div className="flex justify-between gap-4 text-muted-foreground"><dt>Ad spend</dt><dd>separate, you choose the amount</dd></div>
-            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Each lead</dt><dd>our cost + {mgmtPct}%</dd></div>
+            <div className="flex justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold"><dt>Each lead</dt><dd>our cost + {mgmtPct}% (about $20–$40 today)</dd></div>
           </dl>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Today a lead costs about <span className="font-medium text-foreground">$20–$40</span>. The membership doesn&apos;t buy
-            leads: after you join, add ad spend on your dashboard to start receiving leads.
-          </p>
 
-          <h3 className="text-lg font-semibold mt-6">States you&apos;re licensed in</h3>
+          <h4 className="mt-6 font-semibold">States you&apos;re licensed in</h4>
           <p className="text-sm text-muted-foreground mt-1">You only get leads from these states. This also updates your profile.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {AVAILABLE_STATES.map((s) => {
@@ -293,16 +410,36 @@ export function AdvertiserProgramPanel() {
           </div>
 
           {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-          <Button className="mt-5" onClick={join} disabled={busy || states.length === 0}>
+          <Button size="lg" className="mt-6 w-full sm:w-auto" onClick={join} disabled={busy || states.length === 0}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
-            Join for {usd0(offer.amountCents)} {every}
+            Join for {fee} {every}
           </Button>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Billed {every} until you cancel. Each lead also includes a {cardFeePct}% card processing fee. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad spend stays on your account.
+            Billed {every} until you cancel. After you join, add ad spend on your dashboard to start receiving leads. Each lead also
+            includes a {cardFeePct}% card processing fee. If you cancel, leads stop when the 2 weeks you paid for run out; unused ad
+            spend stays on your account.
           </p>
         </Card>
-        {howItWorks}
-      </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="advertise-faq" className="scroll-mt-20 pb-6">
+        <h2 className="text-center text-2xl font-semibold tracking-tight sm:text-3xl">FAQs</h2>
+        <div className="mx-auto mt-6 max-w-3xl divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+          {faqs.map(([q, a]) => (
+            <details key={q} className="group px-5 py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
+                {q}
+                <span className="text-muted-foreground transition-transform group-open:rotate-45">+</span>
+              </summary>
+              <p className="mt-2 text-sm text-muted-foreground">{a}</p>
+            </details>
+          ))}
+        </div>
+        <div className="mt-8 text-center">
+          <Button size="lg" onClick={() => scrollTo("advertise-join")}>Join the Advertiser Program</Button>
+        </div>
+      </section>
     </div>
   );
 }
