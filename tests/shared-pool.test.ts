@@ -22,7 +22,7 @@ vi.mock("@/lib/adSpend", () => ({
   forgetAdSpendSummary: vi.fn(),
 }));
 
-const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient, sharedClientSlots, TOGGLE_ONLY_POOLS, recentCplCents, MIN_SHARED_CPL_CENTS } =
+const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient, sharedClientSlots, TOGGLE_ONLY_POOLS, recentCplCents, pricingWindowStart, withoutClientStamp, MIN_SHARED_CPL_CENTS } =
   await import("@/lib/sharedPool");
 const { leadTypeOn, enabledLeadTypes, storedLeadTypes } = await import("@/lib/leadTypes");
 
@@ -147,6 +147,29 @@ describe("price per lead: last 72 hours, $20 minimum", () => {
     expect(MIN_SHARED_CPL_CENTS).toBe(2000);
     expect(recentCplCents([row("174.50", 10)], undefined, 9999)).toBe(2000); // $17.45 → $20
     expect(recentCplCents([], undefined, 1759)).toBe(2000); // fallback below the minimum
+  });
+  it("never divides the spend by more leads than actually arrived", () => {
+    // Meta counted 45 leads for $1,461.19 but only 37 reached the CRM: $39.49, not $32.47.
+    expect(recentCplCents([row("1461.19", 45)], undefined, 9999, 37)).toBe(3949);
+    // More arrived than Meta counted (late attribution): keep Meta's count.
+    expect(recentCplCents([row("300.00", 10)], undefined, 9999, 12)).toBe(3000);
+    // Arrived count unknown or zero: Meta's count.
+    expect(recentCplCents([row("300.00", 10)], undefined, 9999, null)).toBe(3000);
+    expect(recentCplCents([row("300.00", 10)], undefined, 9999, 0)).toBe(3000);
+    // Far fewer than Meta counted means our count is off, not the price: Meta's count.
+    expect(recentCplCents([row("300.00", 10)], undefined, 9999, 4)).toBe(3000);
+  });
+  it("counts a delivered lead in the pool it arrived in, despite the client's name on it", () => {
+    const lead = { source: "Meta - Blue Collar", rawFormData: { advertiser_name: "Jace Jensen", form_id: "1" }, campaignName: "Blue Collar ER - Updated Messaging OTP", packageId: "blue-collar-iul" };
+    expect(sharedPoolOf(lead)).toBe(null);
+    expect(sharedPoolOf({ ...lead, rawFormData: withoutClientStamp(lead.rawFormData) })).toBe("ew");
+  });
+  it("starts the pricing window at midnight Central, three days back", () => {
+    expect(pricingWindowStart(new Date("2026-11-17T17:00:00Z")).toISOString()).toBe("2026-11-14T06:00:00.000Z");
+    // Before midnight Central the UTC date is already a day ahead.
+    expect(pricingWindowStart(new Date("2026-11-18T03:00:00Z")).toISOString()).toBe("2026-11-14T06:00:00.000Z");
+    // Daylight time (UTC-5).
+    expect(pricingWindowStart(new Date("2026-07-10T17:00:00Z")).toISOString()).toBe("2026-07-07T05:00:00.000Z");
   });
   it("falls back to the last 7 days, then the fixed figure, when the 72 hours has no leads", () => {
     expect(recentCplCents([{ spend: "50.00", actions: [] }, undefined], row("640.00", 20), 9999)).toBe(3200);

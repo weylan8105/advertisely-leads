@@ -100,18 +100,35 @@ export function sharedPoolOf(lead: PoolLead): SharedPool | null {
 // hours, not a longer average; and never less than $20 a lead. Meta reports by
 // day, so "the last 72 hours" is its last 3 full days plus today so far. A pool
 // with no leads in that window uses its last 7 days, then the fixed fallback.
+// The spend is divided by the leads that actually reached the CRM in that window
+// when that is fewer than Meta counted (Nov 17 2026: Meta counted 153 Enhanced
+// Wealth leads over five days, 141 arrived, so clients were paying under cost).
 export const MIN_SHARED_CPL_CENTS = 2000;
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
 const READ_TOKEN = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_MANAGE_TOKEN;
 const cplCache = new Map<SharedPool, { at: number; cents: number }>();
 
-/** Spend ÷ leads from a Meta insights row; null when there is nothing to divide. */
-export function cplFromInsights(row: { spend?: string; actions?: { action_type: string; value: string }[] } | undefined): number | null {
+/**
+ * Spend ÷ leads from a Meta insights row; null when there is nothing to divide.
+ * `arrivedLeads` is how many of those leads actually reached the CRM: Meta counts
+ * some that never arrive (repeat submissions, drops), and dividing by its higher
+ * number charges clients less than the campaign cost. So the spend is never
+ * divided by more leads than arrived. 0 / null = unknown, use Meta's count; so
+ * does an arrived count under ARRIVED_TRUST_RATIO of Meta's.
+ */
+export const ARRIVED_TRUST_RATIO = 0.75;
+export function cplFromInsights(
+  row: { spend?: string; actions?: { action_type: string; value: string }[] } | undefined,
+  arrivedLeads?: number | null,
+): number | null {
   if (!row) return null;
   const spend = Math.round(parseFloat(row.spend ?? "0") * 100);
   const acts = row.actions ?? [];
   const pick = (t: string) => Number(acts.find((a) => a.action_type === t)?.value ?? 0);
-  const leads = pick("lead") || pick("offsite_conversion.fb_pixel_lead") || pick("onsite_conversion.lead_grouped");
+  const metaLeads = pick("lead") || pick("offsite_conversion.fb_pixel_lead") || pick("onsite_conversion.lead_grouped");
+  // A count far below Meta's means our own count is off (an intake outage, say), not the price.
+  const trustArrived = !!arrivedLeads && arrivedLeads > 0 && arrivedLeads >= metaLeads * ARRIVED_TRUST_RATIO;
+  const leads = trustArrived ? Math.min(metaLeads, arrivedLeads!) : metaLeads;
   if (!spend || !leads) return null;
   return Math.round(spend / leads);
 }
@@ -135,9 +152,53 @@ export function combineInsights(rows: (InsightsRow | undefined)[]): InsightsRow 
  * A pool's cost per lead: the last 72 hours when it has leads, else the last 7
  * days, else the fallback; never below the minimum.
  */
-export function recentCplCents(recent: (InsightsRow | undefined)[], week: InsightsRow | undefined, fallbackCents: number): number {
-  const cents = cplFromInsights(combineInsights(recent)) ?? cplFromInsights(week) ?? fallbackCents;
+export function recentCplCents(
+  recent: (InsightsRow | undefined)[],
+  week: InsightsRow | undefined,
+  fallbackCents: number,
+  arrivedLeads?: number | null,
+): number {
+  const cents = cplFromInsights(combineInsights(recent), arrivedLeads) ?? cplFromInsights(week) ?? fallbackCents;
   return Math.max(cents, MIN_SHARED_CPL_CENTS);
+}
+
+/** Midnight at the start of the day `daysAgo` days back, in the ad accounts' reporting time zone. */
+export function pricingWindowStart(now = new Date(), daysAgo = 3, tz = "America/Chicago"): Date {
+  const ymd = new Date(now.getTime() - daysAgo * 86_400_000).toLocaleDateString("en-CA", { timeZone: tz });
+  const noon = new Date(`${ymd}T12:00:00Z`);
+  const offsetMs =
+    new Date(noon.toLocaleString("en-US", { timeZone: "UTC" })).getTime() -
+    new Date(noon.toLocaleString("en-US", { timeZone: tz })).getTime();
+  return new Date(new Date(`${ymd}T00:00:00Z`).getTime() + offsetMs);
+}
+
+/**
+ * A delivered lead carries the client's name (deliverLeadToOwner), which makes
+ * sharedPoolOf read it as that client's own campaign lead. Drop the stamp to see
+ * which pool it arrived in.
+ */
+export function withoutClientStamp(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const { [ADVERTISER_NAME_KEY]: _stamp, ...rest } = raw as Record<string, unknown>;
+  return rest;
+}
+
+/**
+ * How many of a pool's leads reached the CRM in the pricing window (Meta's
+ * last 3 full days plus today). Null when it can't be read.
+ */
+export async function arrivedPoolLeads(pool: SharedPool): Promise<number | null> {
+  if (!prisma) return null;
+  try {
+    const rows = await prisma.lead.findMany({
+      where: { receivedAt: { gte: pricingWindowStart() }, trashedAt: null },
+      select: { source: true, rawFormData: true, campaignName: true, packageId: true },
+    });
+    return rows.filter((l) => sharedPoolOf({ ...l, rawFormData: withoutClientStamp(l.rawFormData) }) === pool).length;
+  } catch (e) {
+    console.warn("[shared pool] arrived-lead count failed", e);
+    return null;
+  }
 }
 
 export async function sharedCplCents(pool: SharedPool): Promise<number> {
@@ -161,11 +222,11 @@ export async function sharedCplCents(pool: SharedPool): Promise<number> {
         ),
       );
     try {
-      const [last3, today] = await Promise.all([read("last_3d"), read("today")]);
+      const [last3, today, arrived] = await Promise.all([read("last_3d"), read("today"), arrivedPoolLeads(pool)]);
       const recent = [last3, today];
       // Only ask for the week when the last 72 hours had no leads to price from.
       const week = cplFromInsights(combineInsights(recent)) === null ? await read("last_7d") : undefined;
-      cents = recentCplCents(recent, week, c.fallbackCplCents);
+      cents = recentCplCents(recent, week, c.fallbackCplCents, arrived);
     } catch (e) {
       console.warn("[shared pool] CPL read failed", e);
     }
