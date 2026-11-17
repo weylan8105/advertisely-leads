@@ -16,6 +16,7 @@ describe("text verified leads", () => {
     expect(isTextVerified({ rawFormData: ghl("1519246773375371") })).toBe(true);
     expect(isTextVerified({ rawFormData: ghl("1453178320339815") })).toBe(true); // Blue Collar SMS
     expect(isTextVerified({ rawFormData: ghl("1491493996376938") })).toBe(true); // Enhanced Wealth Blue Collar OTP
+    expect(isTextVerified({ rawFormData: ghl("29049465218082332") })).toBe(true); // Nurse v3 (5-minute availability)
     expect(isTextVerified({ rawFormData: ghl("1444916353834638") })).toBe(false); // Blue Collar v2, no SMS
     // Same ad, older form without the SMS check: no badge.
     expect(isTextVerified({ rawFormData: ghl(OLD_FORM) })).toBe(false);
