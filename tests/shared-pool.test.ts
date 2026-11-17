@@ -22,7 +22,7 @@ vi.mock("@/lib/adSpend", () => ({
   forgetAdSpendSummary: vi.fn(),
 }));
 
-const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient, sharedClientSlots, TOGGLE_ONLY_POOLS } =
+const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient, sharedClientSlots, TOGGLE_ONLY_POOLS, recentCplCents, MIN_SHARED_CPL_CENTS } =
   await import("@/lib/sharedPool");
 const { leadTypeOn, enabledLeadTypes, storedLeadTypes } = await import("@/lib/leadTypes");
 
@@ -132,5 +132,24 @@ describe("shared lead pool", () => {
     expect(await ids("nurse")).toEqual(["both", "nurse-only"]);
     expect(await ids("ewws")).toEqual(["bc-only", "both"]);
     expect(await ids("ew")).toEqual(["bc-only", "both"]);
+  });
+});
+
+describe("price per lead: last 72 hours, $20 minimum", () => {
+  const row = (spend: string, leads: number) => ({ spend, actions: [{ action_type: "lead", value: String(leads) }] });
+  it("uses the last 3 days plus today, added together", () => {
+    // $900 + $300 over 30 + 10 leads = $30.00
+    expect(recentCplCents([row("900.00", 30), row("300.00", 10)], undefined, 9999)).toBe(3000);
+    // The week's figure is ignored when the last 72 hours has leads.
+    expect(recentCplCents([row("900.00", 30), undefined], row("7000.00", 100), 9999)).toBe(3000);
+  });
+  it("never charges less than $20", () => {
+    expect(MIN_SHARED_CPL_CENTS).toBe(2000);
+    expect(recentCplCents([row("174.50", 10)], undefined, 9999)).toBe(2000); // $17.45 → $20
+    expect(recentCplCents([], undefined, 1759)).toBe(2000); // fallback below the minimum
+  });
+  it("falls back to the last 7 days, then the fixed figure, when the 72 hours has no leads", () => {
+    expect(recentCplCents([{ spend: "50.00", actions: [] }, undefined], row("640.00", 20), 9999)).toBe(3200);
+    expect(recentCplCents([undefined, undefined], undefined, 3228)).toBe(3228);
   });
 });

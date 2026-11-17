@@ -45,7 +45,8 @@ export const TOGGLE_ONLY_POOLS: ReadonlySet<SharedPool> = new Set<SharedPool>(["
 /** The lead type an advertiser must have on to take a pool's leads. */
 export const poolLeadType = (pool: SharedPool) => (pool === "nurse" ? NURSE_LEAD_TYPE : BLUE_COLLAR_LEAD_TYPE);
 
-// Source campaign per pool: its last-7-day cost per lead is what a client pays.
+// Source campaign per pool: its cost per lead over the last 72 hours is what a client
+// pays, never less than MIN_SHARED_CPL_CENTS (see sharedCplCents).
 // A pool can draw from more than one campaign; its cost per lead is their combined spend ÷ leads.
 export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { ids: string[]; label: string; fallbackCplCents: number }> = {
   abca: { ids: ["120250442615980207"], label: "ABCA landing page", fallbackCplCents: 2045 },
@@ -94,7 +95,12 @@ export function sharedPoolOf(lead: PoolLead): SharedPool | null {
   return "ew";
 }
 
-// ── Cost per lead, from Meta (last 7 days), cached for an hour ──────────────
+// ── Cost per lead, from Meta, cached for an hour ────────────────────────────
+// Owner directive (Nov 17 2026): charge what we are paying NOW, the last 72
+// hours, not a longer average; and never less than $20 a lead. Meta reports by
+// day, so "the last 72 hours" is its last 3 full days plus today so far. A pool
+// with no leads in that window uses its last 7 days, then the fixed fallback.
+export const MIN_SHARED_CPL_CENTS = 2000;
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
 const READ_TOKEN = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_MANAGE_TOKEN;
 const cplCache = new Map<SharedPool, { at: number; cents: number }>();
@@ -125,24 +131,41 @@ export function combineInsights(rows: (InsightsRow | undefined)[]): InsightsRow 
   return { spend: spend.toFixed(2), actions: [...acts].map(([action_type, v]) => ({ action_type, value: String(v) })) };
 }
 
+/**
+ * A pool's cost per lead: the last 72 hours when it has leads, else the last 7
+ * days, else the fallback; never below the minimum.
+ */
+export function recentCplCents(recent: (InsightsRow | undefined)[], week: InsightsRow | undefined, fallbackCents: number): number {
+  const cents = cplFromInsights(combineInsights(recent)) ?? cplFromInsights(week) ?? fallbackCents;
+  return Math.max(cents, MIN_SHARED_CPL_CENTS);
+}
+
 export async function sharedCplCents(pool: SharedPool): Promise<number> {
   const c = SHARED_POOL_CAMPAIGNS[pool];
   const hit = cplCache.get(pool);
   if (hit && Date.now() - hit.at < 3_600_000) return hit.cents;
-  let cents = c.fallbackCplCents;
+  let cents = Math.max(c.fallbackCplCents, MIN_SHARED_CPL_CENTS);
   if (READ_TOKEN) {
-    try {
-      const rows = await Promise.all(
-        c.ids.map(async (id) => {
-          const res = await fetch(
-            `${GRAPH}/${id}/insights?fields=spend,actions&date_preset=last_7d&access_token=${encodeURIComponent(READ_TOKEN)}`,
-            { cache: "no-store" },
-          );
-          const j = await res.json();
-          return j?.data?.[0];
-        }),
+    // The pool's campaigns added together for one Meta date preset.
+    const read = async (preset: string) =>
+      combineInsights(
+        await Promise.all(
+          c.ids.map(async (id) => {
+            const res = await fetch(
+              `${GRAPH}/${id}/insights?fields=spend,actions&date_preset=${preset}&access_token=${encodeURIComponent(READ_TOKEN)}`,
+              { cache: "no-store" },
+            );
+            const j = await res.json();
+            return j?.data?.[0] as InsightsRow | undefined;
+          }),
+        ),
       );
-      cents = cplFromInsights(combineInsights(rows)) ?? c.fallbackCplCents;
+    try {
+      const [last3, today] = await Promise.all([read("last_3d"), read("today")]);
+      const recent = [last3, today];
+      // Only ask for the week when the last 72 hours had no leads to price from.
+      const week = cplFromInsights(combineInsights(recent)) === null ? await read("last_7d") : undefined;
+      cents = recentCplCents(recent, week, c.fallbackCplCents);
     } catch (e) {
       console.warn("[shared pool] CPL read failed", e);
     }
