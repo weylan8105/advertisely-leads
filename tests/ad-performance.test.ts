@@ -284,3 +284,13 @@ describe("date windows", () => {
     expect(addDays("2026-10-31", 1)).toBe("2026-11-01");
   });
 });
+
+describe("Essential Workers funnel", async () => {
+  const { funnelOf } = await import("@/lib/adPerformance");
+  it("puts EWWS leads in their own funnel, by campaign id or name", () => {
+    expect(funnelOf({ source: "early-retirement-quiz" })).toBe("abca");
+    expect(funnelOf({ source: "facebook", campaignName: "EWWS - Nurses - Instant Form - Closed Deals" })).toBe("ewws");
+    expect(funnelOf({ source: "facebook", campaignName: "", rawCampaign: "120249692494360601" }, new Set(["120249692494360601"]))).toBe("ewws");
+    expect(funnelOf({ source: "facebook", campaignName: "Blue Collar ER - Updated Messaging OTP" })).toBe("ew");
+  });
+});

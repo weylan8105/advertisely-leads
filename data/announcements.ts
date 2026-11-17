@@ -36,9 +36,10 @@ export interface Announcement {
   /**
    * Who sees this. "all" (default) = every agent. "working_leads" = only agents
    * who currently have leads to work (an open order or assigned leads) — resolved
-   * server-side in /api/announcements.
+   * server-side in /api/announcements. "advertisers" = advertiser accounts only
+   * (not the owners).
    */
-  audience?: "all" | "working_leads";
+  audience?: "all" | "working_leads" | "advertisers";
 }
 
 // Jace Jensen's account (owner request, Nov 16 2026): his team passed the
@@ -68,6 +69,21 @@ export const ANNOUNCEMENTS: Announcement[] = [
       footnote: "Amounts are what each person paid, before the 3% card fee.",
     },
     ctaLabel: "Got it",
+  },
+  // Nurse leads launch (owner request, Nov 16 2026): every advertiser, once.
+  {
+    key: "nurse-leads-launch-2026-11",
+    audience: "advertisers",
+    eyebrow: "New lead type",
+    title: "Nurse leads are live",
+    body: "We just launched a new lead type: nurses and healthcare workers from our Essential Workers campaign. They're off until you turn them on.",
+    highlights: [
+      "Turn them on under Lead types on your dashboard.",
+      "They come in the states you're licensed in, alongside your Blue Collar leads.",
+      "Each one is charged from your ad spend, the same way as your other leads.",
+    ],
+    ctaLabel: "Turn on Nurse leads",
+    ctaHref: "/dashboard#lead-types",
   },
   {
     key: "blue-collar-iul-script-2026-10",

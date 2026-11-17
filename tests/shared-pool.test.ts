@@ -19,15 +19,14 @@ vi.mock("@/lib/adSpend", () => ({
   forgetAdSpendSummary: vi.fn(),
 }));
 
-const { sharedPoolOf, cplFromInsights, licensedIn, deliverSharedLeadToClient } = await import("@/lib/sharedPool");
+const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient } = await import("@/lib/sharedPool");
 
 describe("shared lead pool", () => {
   it("takes ABCA quiz leads and Enhanced Wealth Blue Collar page leads only", () => {
     expect(sharedPoolOf({ source: "early-retirement-quiz", rawFormData: {} })).toBe("abca");
     expect(sharedPoolOf({ source: "facebook", rawFormData: {}, campaignName: "Blue Collar ER - Updated Messaging OTP", packageId: "blue-collar-iul" })).toBe("ew");
-    // EWWS page, nurses, and a client's own campaign leads stay out.
+    // EWWS Blue Collar and a client's own campaign leads stay out.
     expect(sharedPoolOf({ source: "facebook", rawFormData: {}, campaignName: "EWWS - Blue Collar - Instant Form - Closed Deals", packageId: "blue-collar-iul" })).toBeNull();
-    expect(sharedPoolOf({ source: "facebook", rawFormData: {}, campaignName: "Blue Collar ER - Updated Messaging OTP", packageId: "healthcare-iul" })).toBeNull();
     expect(sharedPoolOf({ source: "facebook", rawFormData: { advertiser_name: "Jace Jensen" }, campaignName: "Advertisely Advertiser - Jace Jensen", packageId: "blue-collar-iul" })).toBeNull();
   });
 
@@ -62,5 +61,23 @@ describe("shared lead pool", () => {
     payments.length = 0;
     expect(await deliverSharedLeadToClient("TAKEN", { userId: "JACE", name: "Jace", cplCents: 2045 }, "abca")).toBe(false);
     expect(payments).toEqual([]);
+  });
+
+  it("puts nurse leads (EWWS Nurses form, HWA quiz) in their own opt-in pool", () => {
+    expect(sharedPoolOf({ source: "facebook", rawFormData: {}, campaignName: "EWWS - Nurses - Instant Form - Closed Deals", packageId: "healthcare-iul" })).toBe("nurse");
+    expect(sharedPoolOf({ source: "healthcare-wealth-quiz", rawFormData: {}, packageId: "healthcare-iul" })).toBe("nurse");
+    // Already delivered to someone, or a client's own nurse campaign: not ours to share.
+    expect(sharedPoolOf({ source: "facebook", rawFormData: { advertiser_name: "Ryan" }, packageId: "healthcare-iul" })).toBeNull();
+    expect(sharedPoolOf({ source: "facebook", rawFormData: {}, campaignName: "Advertisely Advertiser - Jace Jensen", packageId: "healthcare-iul" })).toBeNull();
+  });
+
+  it("adds up several campaigns' insights for one pool's cost per lead", () => {
+    const row = combineInsights([
+      { spend: "100.00", actions: [{ action_type: "lead", value: "5" }] },
+      undefined,
+      { spend: "50.00", actions: [{ action_type: "lead", value: "5" }] },
+    ]);
+    expect(cplFromInsights(row)).toBe(1500);
+    expect(combineInsights([undefined])).toBeUndefined();
   });
 });

@@ -27,6 +27,8 @@ model User {
   // States the agent is licensed in (2-letter codes), chosen at signup. Used to
   // pre-fill the state selection on every order.
   licensedStates           String[]  @default([])
+  /// Opt-in lead types the advertiser takes from the shared pool (lib/leadTypes.ts), e.g. "healthcare-iul".
+  leadTypes                String[]  @default([])
   // The lead this user is on the phone with right now (pipeline "Talking to"),
   // shown to teammates so two people don't call the same lead. Stale after 30 min.
   talkingLeadId            String?

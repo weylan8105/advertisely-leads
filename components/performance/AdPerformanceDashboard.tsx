@@ -18,13 +18,16 @@ const RANGES: { id: PerfRange; label: string }[] = [
   { id: "30d", label: "30 days" },
   { id: "shared", label: "Since Sep 14" },
 ];
-type FunnelView = "all" | "ew" | "abca";
+type Funnel = "ew" | "abca" | "ewws";
+type FunnelView = "all" | Funnel;
+const FUNNEL_NAME: Record<Funnel, string> = { ew: "Enhanced Wealth", abca: "ABCA", ewws: "Essential Workers" };
+const FUNNEL_IDS: Funnel[] = ["ew", "abca", "ewws"];
 const FUNNELS: { id: FunnelView; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "ew", label: "Enhanced Wealth" },
-  { id: "abca", label: "ABCA" },
+  ...FUNNEL_IDS.map((id) => ({ id, label: FUNNEL_NAME[id] })),
 ];
-const FUNNEL_NAME = { ew: "Enhanced Wealth", abca: "ABCA" } as const;
+/** The funnels a view shows: one, or all of them. */
+const shownFunnels = (view: FunnelView): Funnel[] => (view === "all" ? FUNNEL_IDS : [view]);
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active",
   PAUSED: "Paused",
@@ -90,7 +93,7 @@ function DayTooltip({ active, payload, label, format }: any) {
         <div key={p.dataKey} className="flex items-center justify-between gap-4 text-slate-500">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm" style={{ background: p.fill }} />
-            {FUNNEL_NAME[p.dataKey as "ew" | "abca"]}
+            {FUNNEL_NAME[p.dataKey as Funnel]}
           </span>
           <span className="tabular-nums">{format(p.value ?? 0)}</span>
         </div>
@@ -118,9 +121,8 @@ function DayChart({
   view: FunnelView;
   format: (n: number) => string;
 }) {
-  const data = days.map((d) => ({ date: d.date, ew: d.ew[metric], abca: d.abca[metric] }));
-  const showEw = view !== "abca";
-  const showAbca = view !== "ew";
+  const data = days.map((d) => ({ date: d.date, ew: d.ew[metric], abca: d.abca[metric], ewws: d.ewws?.[metric] ?? 0 }));
+  const shown = shownFunnels(view);
   const axis = { fontSize: 11, fill: "hsl(var(--muted-foreground))" };
   return (
     <div className="min-w-0">
@@ -139,20 +141,18 @@ function DayChart({
               tickFormatter={metric === "spendCents" ? (v) => `$${Math.round(v / 100)}` : undefined}
             />
             <Tooltip cursor={{ fill: "hsl(var(--muted))" }} content={<DayTooltip format={format} />} />
-            {showEw && (
+            {shown.map((f, i) => (
               <Bar
-                dataKey="ew"
+                key={f}
+                dataKey={f}
                 stackId="day"
-                fill="var(--series-ew)"
+                fill={`var(--series-${f})`}
                 stroke="hsl(var(--card))"
                 strokeWidth={1}
-                radius={showAbca ? 0 : [4, 4, 0, 0]}
+                radius={i === shown.length - 1 ? [4, 4, 0, 0] : 0}
                 isAnimationActive={false}
               />
-            )}
-            {showAbca && (
-              <Bar dataKey="abca" stackId="day" fill="var(--series-abca)" stroke="hsl(var(--card))" strokeWidth={1} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            )}
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -221,7 +221,7 @@ export function AdPerformanceDashboard() {
   const dealTotal = (key: Exclude<keyof PerfDealRow, "agent">) => deals.reduce((n, d) => n + d[key], 0);
 
   return (
-    <div className="[--series-abca:#eb6834] [--series-ew:#2a78d6] dark:[--series-abca:#d95926] dark:[--series-ew:#3987e5]">
+    <div className="[--series-abca:#eb6834] [--series-ew:#2a78d6] [--series-ewws:#1a9e77] dark:[--series-abca:#d95926] dark:[--series-ew:#3987e5] dark:[--series-ewws:#25b98c]">
       <PageHeader
         eyebrow="Internal · Advertisely Admin"
         title="Ad Performance"
@@ -300,14 +300,15 @@ export function AdPerformanceDashboard() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
-              <Panel title="Enhanced Wealth vs ABCA">
+              <Panel title="By funnel">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead />
-                        <TableHead className="text-right">Enhanced Wealth</TableHead>
-                        <TableHead className="text-right">ABCA</TableHead>
+                        {FUNNEL_IDS.map((f) => (
+                          <TableHead key={f} className="text-right">{FUNNEL_NAME[f]}</TableHead>
+                        ))}
                         <TableHead className="text-right">Total</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -315,8 +316,11 @@ export function AdPerformanceDashboard() {
                       {COMPARE_ROWS.map((r) => (
                         <TableRow key={r.label}>
                           <TableCell className="py-1.5 text-slate-500">{r.label}</TableCell>
-                          <TableCell className="py-1.5 text-right tabular-nums">{r.value(data!.funnels.ew)}</TableCell>
-                          <TableCell className="py-1.5 text-right tabular-nums">{r.value(data!.funnels.abca)}</TableCell>
+                          {FUNNEL_IDS.map((f) => (
+                            <TableCell key={f} className="py-1.5 text-right tabular-nums">
+                              {data!.funnels[f] ? r.value(data!.funnels[f]) : "—"}
+                            </TableCell>
+                          ))}
                           <TableCell className="py-1.5 text-right font-medium tabular-nums">{r.value(data!.funnels.all)}</TableCell>
                         </TableRow>
                       ))}
@@ -325,7 +329,7 @@ export function AdPerformanceDashboard() {
                 </div>
               </Panel>
             </div>
-            <Panel title="What Meta sees" note={view === "all" ? "Both ad accounts" : FUNNEL_NAME[view]}>
+            <Panel title="What Meta sees" note={view === "all" ? "All ad accounts" : FUNNEL_NAME[view]}>
               <dl className="space-y-2.5 text-sm">
                 {[
                   ["Impressions", count(s.impressions)],
@@ -346,16 +350,11 @@ export function AdPerformanceDashboard() {
 
           <Panel title="Last 14 days">
             <div className="mb-3 flex gap-4 text-xs text-slate-500">
-              {view !== "abca" && (
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-[var(--series-ew)]" /> Enhanced Wealth
+              {shownFunnels(view).map((f) => (
+                <span key={f} className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: `var(--series-${f})` }} /> {FUNNEL_NAME[f]}
                 </span>
-              )}
-              {view !== "ew" && (
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-sm bg-[var(--series-abca)]" /> ABCA
-                </span>
-              )}
+              ))}
             </div>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
               <DayChart title="Ad spend" days={data!.daily} metric="spendCents" view={view} format={money} />
@@ -378,7 +377,7 @@ export function AdPerformanceDashboard() {
                   <TableBody>
                     {[...data!.daily].reverse().map((d) => {
                       const sum = (k: "spendCents" | "leads" | "applications" | "issuedPaid") =>
-                        (view !== "abca" ? d.ew[k] : 0) + (view !== "ew" ? d.abca[k] : 0);
+                        shownFunnels(view).reduce((n, f) => n + (d[f]?.[k] ?? 0), 0);
                       return (
                         <TableRow key={d.date}>
                           <TableCell className="py-1">{shortDate(d.date)}</TableCell>
@@ -541,8 +540,8 @@ export function AdPerformanceDashboard() {
               <li>A dial is logged each time someone copies a lead&apos;s number, taps Call or clicks the lead. Clicking the lead and then copying its number is one dial, and so is clicking it again within 30 minutes. Copying the number or tapping Call again counts as another dial, up to 2 dials per lead in any 2 minutes.</li>
               <li>Dials weren&apos;t logged before Nov 6, so those days show one dial per lead moved out of New Lead, and their contact rate reads high.</li>
               <li>Contacted means a lead reached Contacted or further. Dials per contact is the average number of dials a lead took before that, for leads first worked since Nov 6.</li>
-              <li>Days run on Central time in Advertisely. Meta uses each ad account&apos;s own timezone: Pacific for Enhanced Wealth, Central for ABCA.</li>
-              <li>Client campaigns and their leads aren&apos;t included. Leads moved to the trash aren&apos;t counted either, so Advertisely can read a little below Meta.</li>
+              <li>Days run on Central time in Advertisely. Meta uses each ad account&apos;s own timezone: Pacific for Enhanced Wealth, Central for ABCA, Eastern for Essential Workers.</li>
+              <li>Client campaigns and their leads aren&apos;t included. Leads from our campaigns are, even after they go to a client through the shared rotation. Leads moved to the trash aren&apos;t counted either, so Advertisely can read a little below Meta.</li>
             </ul>
           </details>
         </div>

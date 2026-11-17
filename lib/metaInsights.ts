@@ -435,12 +435,15 @@ export async function getScorecardSpend(sinceYmd: string | null, untilYmd: strin
 
 // --- Ad Performance dashboard ------------------------------------------------
 
-export type PerfFunnel = "ew" | "abca";
+export type PerfFunnel = "ew" | "abca" | "ewws";
+export const PERF_FUNNELS: PerfFunnel[] = ["ew", "abca", "ewws"];
 
 // Each ad account reports days in its own timezone.
-const PERF_ACCOUNTS: { funnel: PerfFunnel; raw: string; tz: string; pixel: string }[] = [
+// Essential Workers (EWWS) has no pixel of its own here: its instant forms don't need one.
+const PERF_ACCOUNTS: { funnel: PerfFunnel; raw: string; tz: string; pixel: string | null }[] = [
   { funnel: "ew", raw: ACCOUNT_RAW || "2254810101392917", tz: "America/Los_Angeles", pixel: "717587103522110" },
   { funnel: "abca", raw: ABCA_ACCOUNT_RAW || "2126340781245705", tz: "America/Chicago", pixel: "1060042860173387" },
+  { funnel: "ewws", raw: process.env.EWWS_AD_ACCOUNT_ID || "1270766111922960", tz: "America/New_York", pixel: null },
 ];
 
 // Campaigns run for clients: their spend and leads are theirs, not ours.
@@ -482,7 +485,7 @@ const toInt = (v: unknown) => parseInt(String(v ?? "0"), 10) || 0;
 const timeRange = (r: { since: string; until: string }) => `time_range=${encodeURIComponent(JSON.stringify(r))}`;
 
 /**
- * Spend and delivery per campaign for both ad accounts, plus 14 days of daily
+ * Spend and delivery per campaign for each ad account, plus 14 days of daily
  * spend and what each pixel shows. `rangeFor` turns a timezone into that
  * account's dates. Client campaigns are left out. One-minute cache.
  */
@@ -493,7 +496,7 @@ export async function getMetaPerformance(
   pixelWindow: { since: Date; until: Date } | null,
 ): Promise<MetaPerformance> {
   if (!PERF_TOKEN) {
-    return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, missing: ["ew", "abca"], errors: [] };
+    return { configured: false, campaigns: [], dailySpendCents: {}, pixelEvents: null, missing: [...PERF_FUNNELS], errors: [] };
   }
   const cached = perfCache.get(key);
   if (cached && Date.now() - cached.at < PERF_TTL_MS) return cached.snap;
@@ -519,7 +522,7 @@ export async function getMetaPerformance(
         fetchAllPages(
           `${GRAPH}/${account}/adsets?fields=campaign_id,daily_budget&effective_status=${encodeURIComponent('["ACTIVE"]')}&limit=500&${tok}`,
         ),
-        pixelWindow
+        pixelWindow && pixel
           ? fetchAllPages(
               `${GRAPH}/${pixel}/stats?aggregation=event&start_time=${Math.floor(pixelWindow.since.getTime() / 1000)}&end_time=${Math.floor(pixelWindow.until.getTime() / 1000)}&limit=500&${tok}`,
             )

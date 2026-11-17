@@ -2,7 +2,8 @@ import { prisma } from "./prisma";
 import { leadOrigin, ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
 import { deliverLeadToOwner } from "./house";
-import { HOUSE_EMAIL } from "./housePause";
+import { HOUSE_EMAIL, isHouseUser } from "./housePause";
+import { NURSE_LEAD_TYPE } from "./leadTypes";
 import { programLeadPriceCents } from "./advertiserProgram";
 
 // ─── Shared lead pool (owner directive, Nov 13 2026) ─────────────────────────
@@ -29,12 +30,18 @@ export const SHARED_POOL = {
   enabled: true,
 };
 
-export type SharedPool = "abca" | "ew";
+// "nurse" (Nov 16 2026): nurse / healthcare leads from our Essential Workers
+// (EWWS) and HWA campaigns, shared only with advertisers who turned on Nurse
+// leads on their dashboard (User.leadTypes, lib/leadTypes.ts).
+export type SharedPool = "abca" | "ew" | "nurse";
 
 // Source campaign per pool: its last-7-day cost per lead is what a client pays.
-export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { id: string; label: string; fallbackCplCents: number }> = {
-  abca: { id: "120250442615980207", label: "ABCA landing page", fallbackCplCents: 2045 },
-  ew: { id: "120245300016060396", label: "Enhanced Wealth Blue Collar", fallbackCplCents: 3228 },
+// A pool can draw from more than one campaign; its cost per lead is their combined spend ÷ leads.
+export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { ids: string[]; label: string; fallbackCplCents: number }> = {
+  abca: { ids: ["120250442615980207"], label: "ABCA landing page", fallbackCplCents: 2045 },
+  ew: { ids: ["120245300016060396"], label: "Enhanced Wealth Blue Collar", fallbackCplCents: 3228 },
+  // EWWS - Nurses: "Closed Deals" (lifetime $17.59/lead) and "Conversion Leads".
+  nurse: { ids: ["120249692494360601", "120249710458100601"], label: "Nurse", fallbackCplCents: 1759 },
 };
 
 type PoolLead = {
@@ -50,6 +57,7 @@ export function sharedPoolOf(lead: PoolLead): SharedPool | null {
   if (src.includes("early-retirement-quiz")) return "abca";
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, unknown>;
   if (String(raw[ADVERTISER_NAME_KEY] ?? "").trim()) return null; // a client's own campaign lead
+  if (lead.packageId === NURSE_LEAD_TYPE && !/^\s*advertisely advertiser/i.test(lead.campaignName ?? "")) return "nurse";
   if (leadOrigin(lead.source, lead.rawFormData) !== "import") return null;
   if ((lead.packageId ?? "blue-collar-iul") !== "blue-collar-iul") return null; // nurses stay out
   if (/ewws|essential workers/i.test(lead.campaignName ?? "")) return null; // EWWS page, not Enhanced Wealth
@@ -72,6 +80,21 @@ export function cplFromInsights(row: { spend?: string; actions?: { action_type: 
   return Math.round(spend / leads);
 }
 
+type InsightsRow = { spend?: string; actions?: { action_type: string; value: string }[] };
+
+/** Several campaigns' insights rows added together (spend and each action). */
+export function combineInsights(rows: (InsightsRow | undefined)[]): InsightsRow | undefined {
+  const present = rows.filter((r): r is InsightsRow => !!r);
+  if (present.length <= 1) return present[0];
+  let spend = 0;
+  const acts = new Map<string, number>();
+  for (const r of present) {
+    spend += parseFloat(r.spend ?? "0") || 0;
+    for (const a of r.actions ?? []) acts.set(a.action_type, (acts.get(a.action_type) ?? 0) + (Number(a.value) || 0));
+  }
+  return { spend: spend.toFixed(2), actions: [...acts].map(([action_type, v]) => ({ action_type, value: String(v) })) };
+}
+
 export async function sharedCplCents(pool: SharedPool): Promise<number> {
   const c = SHARED_POOL_CAMPAIGNS[pool];
   const hit = cplCache.get(pool);
@@ -79,12 +102,17 @@ export async function sharedCplCents(pool: SharedPool): Promise<number> {
   let cents = c.fallbackCplCents;
   if (READ_TOKEN) {
     try {
-      const res = await fetch(
-        `${GRAPH}/${c.id}/insights?fields=spend,actions&date_preset=last_7d&access_token=${encodeURIComponent(READ_TOKEN)}`,
-        { cache: "no-store" },
+      const rows = await Promise.all(
+        c.ids.map(async (id) => {
+          const res = await fetch(
+            `${GRAPH}/${id}/insights?fields=spend,actions&date_preset=last_7d&access_token=${encodeURIComponent(READ_TOKEN)}`,
+            { cache: "no-store" },
+          );
+          const j = await res.json();
+          return j?.data?.[0];
+        }),
       );
-      const j = await res.json();
-      cents = cplFromInsights(j?.data?.[0]) ?? c.fallbackCplCents;
+      cents = cplFromInsights(combineInsights(rows)) ?? c.fallbackCplCents;
     } catch (e) {
       console.warn("[shared pool] CPL read failed", e);
     }
@@ -144,7 +172,7 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
     where: { isAdvertiser: true },
     orderBy: { createdAt: "asc" },
     select: {
-      id: true, name: true, email: true, licensedStates: true,
+      id: true, name: true, email: true, licensedStates: true, leadTypes: true,
       ownedOrganizations: {
         select: { memberships: { where: { inRotation: true }, select: { user: { select: { licensedStates: true } } } } },
       },
@@ -152,6 +180,7 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
   });
   const licensed = clients.filter((c) => {
     if ((c.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) return false; // the house isn't a client
+    if (pool === "nurse" && !(c.leadTypes ?? []).includes(NURSE_LEAD_TYPE)) return false; // Nurse leads are opt-in
     const teamLicensed = c.ownedOrganizations.some((o) => o.memberships.some((m) => licensedIn(m.user.licensedStates ?? [], state)));
     return licensedIn(c.licensedStates ?? [], state) || teamLicensed;
   });
@@ -204,5 +233,12 @@ export async function deliverSharedLeadToClient(leadId: string, slot: ClientSlot
   });
   forgetAdSpendSummary(slot.userId);
   return true;
+}
+/**
+ * A nurse lead from a form the house (Ryan) owns goes to the shared nurse pool
+ * instead of being delivered to him (owner request, Nov 16 2026).
+ */
+export async function isHouseNurseLead(ownerUserId: string | null | undefined, packageId: string | null | undefined): Promise<boolean> {
+  return SHARED_POOL.enabled && packageId === NURSE_LEAD_TYPE && (await isHouseUser(ownerUserId));
 }
 // ─── end shared lead pool ─────────────────────────────────────────────────────

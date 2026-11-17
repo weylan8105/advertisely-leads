@@ -3,6 +3,7 @@ import { mapLeadFields } from "./meta";
 import { tryFulfillForNewLead } from "./fulfillment";
 import { deliverLeadToOwner } from "./house";
 import { isPausedHouseUser } from "./housePause";
+import { isHouseNurseLead } from "./sharedPool";
 import { fireMetaLeadEvent } from "./metaCapi";
 import { isTestLead } from "./testLeads";
 
@@ -161,7 +162,10 @@ export async function ingestLeadFromFields(opts: {
   // HOUSE_PAUSE: a form Ryan owns is not delivered to him while he is away; its
   // lead goes through the normal rotation below instead (no Meta event, same as
   // any other owned form).
-  const ownerPaused = await isPausedHouseUser(opts.ownerUserId);
+  // Nurse leads from Ryan's forms also go to the rotation: they're shared with
+  // the advertisers who turned on Nurse leads (lib/sharedPool.ts).
+  const ownerPaused =
+    (await isPausedHouseUser(opts.ownerUserId)) || (await isHouseNurseLead(opts.ownerUserId, created.packageId));
   if (opts.ownerUserId && !ownerPaused) {
     const delivered = await deliverLeadToOwner(
       created.id,

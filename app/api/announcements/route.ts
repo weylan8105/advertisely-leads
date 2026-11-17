@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ANNOUNCEMENTS, findAnnouncement } from "@/data/announcements";
+import { isOwnerEmail } from "@/lib/owners";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +15,18 @@ export async function GET() {
   const userId = (session?.user as any)?.id as string | undefined;
   if (!userId) return NextResponse.json({ pending: [] });
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { announcementsSeen: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { announcementsSeen: true, isAdvertiser: true, email: true },
+  });
   const seen = new Set(user?.announcementsSeen ?? []);
-  let pending = ANNOUNCEMENTS.filter((a) => !seen.has(a.key) && (!a.userIds || a.userIds.includes(userId)));
+  const advertiser = !!user?.isAdvertiser && !isOwnerEmail(user.email);
+  let pending = ANNOUNCEMENTS.filter(
+    (a) =>
+      !seen.has(a.key) &&
+      (!a.userIds || a.userIds.includes(userId)) &&
+      (a.audience !== "advertisers" || advertiser),
+  );
 
   // Audience targeting: a "working_leads" announcement is shown only to agents who
   // currently have leads to work — an open order (as buyer or recipient) or any

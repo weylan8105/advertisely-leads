@@ -22,7 +22,7 @@ import { prisma } from "./prisma";
 import { ACTIVITY_TZ, moveLevel } from "./activityStats";
 import { CONVERSION_STAGE_IDS, WON_STAGE_ID, stageLabel } from "@/data/pipeline";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
-import { getMetaPerformance, type CampaignPerf, type PerfFunnel } from "./metaInsights";
+import { getMetaPerformance, PERF_FUNNELS, type CampaignPerf, type PerfFunnel } from "./metaInsights";
 
 export const PERF_RANGES = ["today", "yesterday", "7d", "30d", "shared"] as const;
 export type PerfRange = (typeof PERF_RANGES)[number];
@@ -79,6 +79,8 @@ export interface PerfLead {
   campaignName: string | null;
   utmCampaign: string | null;
   rawCampaign: string | null;
+  /** Carries an advertiser name: a client's own lead, or one of ours delivered under a client's or the house's name. */
+  clientTagged?: boolean;
   assignedUserId: string | null;
   receivedAt: Date;
   pipelineStage: string;
@@ -124,7 +126,19 @@ export const emptyCounts = (): PerfCounts => ({
   leads: 0, dials: 0, leadsDialed: 0, contacted: 0, reached: 0, dialsToReach: 0, applications: 0, issuedPaid: 0, premiumCents: 0,
 });
 
-export const funnelOf = (lead: { source?: string | null }): PerfFunnel => (lead.source === ABCA_SOURCE ? "abca" : "ew");
+// Essential Workers Wealth Solutions campaigns are named "EWWS - …".
+const EWWS_NAME = /^\s*ewws\b|essential workers/i;
+
+/** Which funnel a lead belongs to. `ewwsCampaignIds`: the EWWS ad account's campaign ids. */
+export const funnelOf = (
+  lead: { source?: string | null; campaignName?: string | null; utmCampaign?: string | null; rawCampaign?: string | null },
+  ewwsCampaignIds?: Set<string>,
+): PerfFunnel => {
+  if (lead.source === ABCA_SOURCE) return "abca";
+  if (lead.rawCampaign && ewwsCampaignIds?.has(lead.rawCampaign)) return "ewws";
+  if (EWWS_NAME.test(lead.campaignName ?? "") || EWWS_NAME.test(lead.utmCampaign ?? "")) return "ewws";
+  return "ew";
+};
 
 const CONVERSION_LABELS = new Set<string>(CONVERSION_STAGE_IDS.map((id) => stageLabel(id)));
 
@@ -368,10 +382,12 @@ export function dealsByAgent(leads: PerfLead[], events: PerfEvent[], agentName: 
   return [...rows.values()].sort((a, b) => b.applications - a.applications || a.agent.localeCompare(b.agent));
 }
 
+export type PerfDayFunnel = { spendCents: number; leads: number; applications: number; issuedPaid: number };
 export interface PerfDay {
   date: string;
-  ew: { spendCents: number; leads: number; applications: number; issuedPaid: number };
-  abca: { spendCents: number; leads: number; applications: number; issuedPaid: number };
+  ew: PerfDayFunnel;
+  abca: PerfDayFunnel;
+  ewws: PerfDayFunnel;
 }
 
 export interface PerfCampaignRow extends PerfSummary {
@@ -390,7 +406,7 @@ export interface AdPerformance {
   metaConfigured: boolean;
   missing: PerfFunnel[];
   errors: string[];
-  funnels: { all: PerfSummary; ew: PerfSummary; abca: PerfSummary };
+  funnels: { all: PerfSummary; ew: PerfSummary; abca: PerfSummary; ewws: PerfSummary };
   campaigns: PerfCampaignRow[];
   noCampaign: PerfCounts;
   deals: PerfDealRow[];
@@ -409,7 +425,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
   const pixelCutoff = new Date(now.getTime() - PIXEL_STATS_DAYS * 86_400_000);
   const pixelWindow = { since: since < pixelCutoff ? pixelCutoff : since, until: until > now ? now : until };
 
-  const [meta, leads, moves, sends, users, dials] = await Promise.all([
+  const [meta, allLeads, moves, sends, users, dials] = await Promise.all([
     getMetaPerformance(
       `${range}:${today}`,
       (tz) => rangeDays(range, ymdInTz(now, tz)),
@@ -419,10 +435,10 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
     prisma.$queryRaw<PerfLead[]>`
       SELECT id, source, "campaignName", "utmCampaign", "assignedUserId",
              substring("rawFormData"::text from 'campaignId[^0-9]{1,12}([0-9]{10,})') AS "rawCampaign",
-             "receivedAt", "pipelineStage", "soldAt", "soldPremiumCents"
+             "receivedAt", "pipelineStage", "soldAt", "soldPremiumCents",
+             jsonb_exists("rawFormData", ${ADVERTISER_NAME_KEY}) AS "clientTagged"
       FROM "Lead"
       WHERE "trashedAt" IS NULL
-        AND NOT jsonb_exists("rawFormData", ${ADVERTISER_NAME_KEY})
         AND COALESCE("campaignName", '') NOT LIKE 'Advertisely Advertiser%'`,
     prisma.$queryRaw<PerfMove[]>`
       SELECT "leadId", body, metadata, "createdAt" FROM "LeadActivity" WHERE type = 'STATUS_CHANGED'`,
@@ -434,15 +450,21 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
     prisma.leadActivity.findMany({ where: { type: "CALL_MADE" }, select: { leadId: true, createdAt: true } }),
   ]);
 
+  // A lead with an advertiser name is still ours when it came from one of our
+  // campaigns: shared-pool leads delivered to a client, and Essential Workers
+  // leads from Ryan's forms. Client campaigns aren't in meta.campaigns.
+  const ourIdByName = new Map(meta.campaigns.map((c) => [c.name, c.campaignId]));
+  const ourIds = new Set(meta.campaigns.map((c) => c.campaignId));
+  const leads = allLeads.filter((l) => !l.clientTagged || ourIds.has(campaignKeyOf(l, ourIdByName) ?? ""));
   const leadById = new Map(leads.map((l) => [l.id, l]));
   const events = perfEvents(leads, moves, dials);
   const userById = new Map(users.map((u) => [u.id, u]));
   const agentName = (id: string) => userById.get(id)?.name?.trim() || userById.get(id)?.email || "Unknown agent";
-  const funnelKey = (id: string) => funnelOf(leadById.get(id) ?? { source: null });
+  const ewwsIds = new Set(meta.campaigns.filter((c) => c.funnel === "ewws").map((c) => c.campaignId));
+  const funnelKey = (id: string) => funnelOf(leadById.get(id) ?? { source: null }, ewwsIds);
 
   const byFunnel = tally(events, since, until, funnelKey);
-  const ewCounts = byFunnel.get("ew") ?? emptyCounts();
-  const abcaCounts = byFunnel.get("abca") ?? emptyCounts();
+  const countsOf = (f: PerfFunnel) => byFunnel.get(f) ?? emptyCounts();
   const funnelCampaigns = (f: PerfFunnel) => meta.campaigns.filter((c) => c.funnel === f);
 
   const idByName = new Map(meta.campaigns.map((c) => [c.name, c.campaignId]));
@@ -474,7 +496,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
       const c = counts.get(f) ?? emptyCounts();
       return { spendCents: meta.dailySpendCents[`${date}:${f}`] ?? 0, leads: c.leads, applications: c.applications, issuedPaid: c.issuedPaid };
     };
-    daily.push({ date, ew: day("ew"), abca: day("abca") });
+    daily.push({ date, ew: day("ew"), abca: day("abca"), ewws: day("ewws") });
   }
 
   return {
@@ -486,9 +508,10 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
     missing: meta.missing,
     errors: meta.errors,
     funnels: {
-      all: summarize(addCounts(ewCounts, abcaCounts), meta.campaigns, meta.missing.length === 0),
-      ew: summarize(ewCounts, funnelCampaigns("ew"), !meta.missing.includes("ew")),
-      abca: summarize(abcaCounts, funnelCampaigns("abca"), !meta.missing.includes("abca")),
+      all: summarize(PERF_FUNNELS.map(countsOf).reduce(addCounts, emptyCounts()), meta.campaigns, meta.missing.length === 0),
+      ew: summarize(countsOf("ew"), funnelCampaigns("ew"), !meta.missing.includes("ew")),
+      abca: summarize(countsOf("abca"), funnelCampaigns("abca"), !meta.missing.includes("abca")),
+      ewws: summarize(countsOf("ewws"), funnelCampaigns("ewws"), !meta.missing.includes("ewws")),
     },
     campaigns,
     noCampaign,

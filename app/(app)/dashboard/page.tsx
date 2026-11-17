@@ -26,6 +26,7 @@ import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { PnlSummary } from "@/components/dashboard/PnlSummary";
 import { AdvertiserSpendPanel } from "@/components/dashboard/AdvertiserSpendPanel";
+import { LeadTypesCard } from "@/components/dashboard/LeadTypesCard";
 import { LeadCostPanel } from "@/components/dashboard/LeadCostPanel";
 import { LEAD_COST_OWNER_EMAILS } from "@/lib/owners";
 import { TeamAdSpendCard } from "@/components/dashboard/TeamAdSpendCard";
@@ -222,6 +223,7 @@ export default function DashboardPage() {
 
       {isOwner && <LeadCostPanel />}
       {adSpend && !isOwner && <AdvertiserSpendPanel summary={adSpend} />}
+      {adSpend && !isOwner && <LeadTypesCard />}
 
       <TeamAdSpendCard />
 

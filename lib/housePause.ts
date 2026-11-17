@@ -39,3 +39,14 @@ export async function isPausedHouseUser(userId: string | null | undefined): Prom
     return false;
   }
 }
+
+/** Is this user the house account (paused or not)? */
+export async function isHouseUser(userId: string | null | undefined): Promise<boolean> {
+  if (!userId || !prisma) return false;
+  try {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    return (u?.email ?? "").trim().toLowerCase() === HOUSE_EMAIL;
+  } catch {
+    return false;
+  }
+}

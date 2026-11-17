@@ -603,8 +603,9 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // in lib/tempRotationGuest.ts is on.
   // SHARED_POOL (Nov 2026): Enhanced Wealth Blue Collar and ABCA quiz leads go
   // through the round-robin below, advertiser clients included (lib/sharedPool.ts).
+  // Nurse leads (Nov 16 2026) go to the advertisers who turned them on.
   const pool = SHARED_POOL.enabled ? sharedPoolOf(lead) : null;
-  if (pool !== "ew") {
+  if (pool !== "ew" && pool !== "nurse") {
     if (await routeEwTextVerifiedToGuest(lead)) return;
     if (await routePageLeadToHouse(lead)) return;
   }
@@ -690,8 +691,10 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // lib/tempRotationGuest.ts is on.
   // HOUSE_PAUSE: while Ryan is away the guests also take turns on the Blue
   // Collar page leads (Enhanced Wealth, text-verified, EWWS) that now come here.
+  // Not on nurse leads: those only go to advertisers who opted in.
   const guestTakesTurn =
-    isAbcaLandingPageLead(lead.source) || pool !== null || (isHousePaused() && lead.packageId === "blue-collar-iul");
+    pool !== "nurse" &&
+    (isAbcaLandingPageLead(lead.source) || pool !== null || (isHousePaused() && lead.packageId === "blue-collar-iul"));
   const guests = TEMP_ROTATION_GUEST.enabled && guestTakesTurn ? await getRotationGuests() : [];
   const guestById = new Map<string, (typeof guests)[number]>();
   for (const g of guests) {
@@ -761,7 +764,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
 
   // SHARED_POOL: an Enhanced Wealth lead nobody could take goes to the house as
   // before (routePageLeadToHouse does nothing while HOUSE_PAUSE holds it).
-  if (pool === "ew" && (await routePageLeadToHouse(lead))) return;
+  if ((pool === "ew" || pool === "nurse") && (await routePageLeadToHouse(lead))) return;
 
   // Not claimed by any buyer order, and no admin under their weekly target took
   // it → leave it in the BANK (unassigned) as sellable stock for its state.
