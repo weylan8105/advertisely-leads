@@ -4,7 +4,7 @@ import type { NormalizedInboundLead } from "@/lib/inboundLead";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
 import { deliverLeadToOwner, assignLeadToHouse } from "@/lib/house";
 import { isPausedHouseUser } from "@/lib/housePause";
-import { isHouseNurseLead } from "@/lib/sharedPool";
+import { isHouseToggleLead } from "@/lib/sharedPool";
 import { fireMetaLeadEvent } from "@/lib/metaCapi";
 import { findFormLeadCopy } from "@/lib/leadIngest";
 import { isTestLead } from "@/lib/testLeads";
@@ -137,8 +137,8 @@ export async function createInboundLead(
       ownerId = owner?.id ?? null;
     }
     try {
-      // Nurse leads from Ryan's forms go to the advertisers who turned them on (lib/sharedPool.ts).
-      if (ownerId && ((await isPausedHouseUser(ownerId)) || (await isHouseNurseLead(ownerId, record.packageId)))) {
+      // Essential Workers leads from Ryan's forms go to the advertisers who have that lead type on (lib/sharedPool.ts).
+      if (ownerId && ((await isPausedHouseUser(ownerId)) || (await isHouseToggleLead(ownerId, record)))) {
         // HOUSE_PAUSE: a lead from a form Ryan owns is not delivered to him while
         // he is away. It goes through the normal rotation instead (a Blue Collar
         // lead reaches a client; anything else waits unassigned in the bank).

@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { Loader2, Layers } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { OptInLeadType } from "@/lib/leadTypes";
+import type { LeadTypeOption } from "@/lib/leadTypes";
 
 /**
- * Advertiser dashboard: switch extra lead types on or off. Blue Collar leads
- * always come; each type here only comes once it's on (User.leadTypes).
+ * Advertiser dashboard: switch lead types on or off (User.leadTypes). You only
+ * get shared leads of the types you have on.
  */
 export function LeadTypesCard() {
-  const [types, setTypes] = useState<OptInLeadType[] | null>(null);
+  const [types, setTypes] = useState<LeadTypeOption[] | null>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,17 +68,10 @@ export function LeadTypesCard() {
         <h3 className="text-sm font-semibold">Lead types</h3>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Blue Collar leads always come to you. Turn on any other type you want, and those leads start coming in your licensed
-        states, paid from your ad spend.
+        Choose the kinds of leads you want. You only get the types you have on, in your licensed states, paid from your ad
+        spend.
       </p>
       <ul className="mt-4 divide-y divide-slate-100">
-        <li className="flex items-center justify-between gap-4 py-3">
-          <div>
-            <div className="text-sm font-medium">Blue Collar leads</div>
-            <div className="text-xs text-muted-foreground">Always on.</div>
-          </div>
-          <Switch on disabled label="Blue Collar leads" />
-        </li>
         {types.map((t) => {
           const on = enabled.includes(t.id);
           return (
@@ -86,9 +79,11 @@ export function LeadTypesCard() {
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
                   {t.label}
-                  <span className="rounded-full bg-brand-red/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-red">
-                    New
-                  </span>
+                  {t.isNew && (
+                    <span className="rounded-full bg-brand-red/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-red">
+                      New
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">{t.description}</div>
               </div>
@@ -117,7 +112,7 @@ function Switch({ on, disabled, onClick, label }: { on: boolean; disabled?: bool
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed",
         on ? "bg-brand-red" : "bg-slate-300",
-        disabled && !onClick ? "opacity-60" : "",
+        disabled ? "opacity-60" : "",
       )}
     >
       <span className={cn("inline-block h-5 w-5 rounded-full bg-white shadow transition-transform", on ? "translate-x-5" : "translate-x-0.5")} />

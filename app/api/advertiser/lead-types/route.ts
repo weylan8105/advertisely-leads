@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { OPT_IN_LEAD_TYPES, cleanLeadTypes } from "@/lib/leadTypes";
+import { LEAD_TYPE_OPTIONS, enabledLeadTypes, storedLeadTypes } from "@/lib/leadTypes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET  /api/advertiser/lead-types — the opt-in lead types and which ones I have on.
- * PUT  { leadTypes: string[] } — set mine. Advertisers only.
+ * GET  /api/advertiser/lead-types — the lead types and which ones I have on.
+ * PUT  { leadTypes: string[] } — the ids I want on. Advertisers only.
  */
 async function me() {
   const session = await getServerSession(authOptions);
@@ -24,7 +24,7 @@ export async function GET() {
   const user = await me();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!user.isAdvertiser) return NextResponse.json({ error: "Not an advertiser account." }, { status: 403 });
-  return NextResponse.json({ types: OPT_IN_LEAD_TYPES, enabled: cleanLeadTypes(user.leadTypes) });
+  return NextResponse.json({ types: LEAD_TYPE_OPTIONS, enabled: enabledLeadTypes(user.leadTypes) });
 }
 
 export async function PUT(req: NextRequest) {
@@ -33,7 +33,7 @@ export async function PUT(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!user.isAdvertiser) return NextResponse.json({ error: "Not an advertiser account." }, { status: 403 });
   const body = await req.json().catch(() => ({}));
-  const enabled = cleanLeadTypes(body?.leadTypes);
-  await prisma.user.update({ where: { id: user.id }, data: { leadTypes: enabled } });
-  return NextResponse.json({ types: OPT_IN_LEAD_TYPES, enabled });
+  const stored = storedLeadTypes(body?.leadTypes);
+  await prisma.user.update({ where: { id: user.id }, data: { leadTypes: stored } });
+  return NextResponse.json({ types: LEAD_TYPE_OPTIONS, enabled: enabledLeadTypes(stored) });
 }

@@ -3,7 +3,7 @@ import { leadOrigin, ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
 import { deliverLeadToOwner } from "./house";
 import { HOUSE_EMAIL, isHouseUser } from "./housePause";
-import { NURSE_LEAD_TYPE } from "./leadTypes";
+import { NURSE_LEAD_TYPE, BLUE_COLLAR_LEAD_TYPE, leadTypeOn } from "./leadTypes";
 import { programLeadPriceCents } from "./advertiserProgram";
 
 // ─── Shared lead pool (owner directive, Nov 13 2026) ─────────────────────────
@@ -30,19 +30,44 @@ export const SHARED_POOL = {
   enabled: true,
 };
 
-// "nurse" (Nov 16 2026): nurse / healthcare leads from our Essential Workers
-// (EWWS) and HWA campaigns, shared only with advertisers who turned on Nurse
-// leads on their dashboard (User.leadTypes, lib/leadTypes.ts).
-export type SharedPool = "abca" | "ew" | "nurse";
+// Lead types (Nov 16 2026, lib/leadTypes.ts): an advertiser only gets a pool's
+// leads when its type is on for them (dashboard "Lead types"). Blue Collar is
+// on unless switched off; Nurse is off unless switched on.
+//  - "ewws":  Blue Collar leads from the Essential Workers (EWWS) ad account
+//  - "nurse": nurse / healthcare leads (EWWS Nurses, HWA quiz)
+// These two go ONLY to advertisers with the type on: no marketplace orders,
+// admin overflow, rotation guests or replacements (see TOGGLE_ONLY_POOLS).
+export type SharedPool = "abca" | "ew" | "ewws" | "nurse";
+
+/** Pools that go only to advertisers who switched the lead type on. */
+export const TOGGLE_ONLY_POOLS: ReadonlySet<SharedPool> = new Set<SharedPool>(["ewws", "nurse"]);
+
+/** The lead type an advertiser must have on to take a pool's leads. */
+export const poolLeadType = (pool: SharedPool) => (pool === "nurse" ? NURSE_LEAD_TYPE : BLUE_COLLAR_LEAD_TYPE);
 
 // Source campaign per pool: its last-7-day cost per lead is what a client pays.
 // A pool can draw from more than one campaign; its cost per lead is their combined spend ÷ leads.
 export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { ids: string[]; label: string; fallbackCplCents: number }> = {
   abca: { ids: ["120250442615980207"], label: "ABCA landing page", fallbackCplCents: 2045 },
   ew: { ids: ["120245300016060396"], label: "Enhanced Wealth Blue Collar", fallbackCplCents: 3228 },
+  // EWWS - Blue Collar: "Closed Deals" (lifetime $92.70/lead) and "Conversion Leads".
+  ewws: { ids: ["120249692494140601", "120249710458680601"], label: "Essential Workers Blue Collar", fallbackCplCents: 9270 },
   // EWWS - Nurses: "Closed Deals" (lifetime $17.59/lead) and "Conversion Leads".
   nurse: { ids: ["120249692494360601", "120249710458100601"], label: "Nurse", fallbackCplCents: 1759 },
 };
+
+const EWWS_NAME = /^\s*ewws\b|essential workers/i;
+const EWWS_CAMPAIGN_IDS = new Set([...SHARED_POOL_CAMPAIGNS.ewws.ids, ...SHARED_POOL_CAMPAIGNS.nurse.ids]);
+const NURSE_CAMPAIGN_IDS = new Set(SHARED_POOL_CAMPAIGNS.nurse.ids);
+
+/** The Meta campaign id a form lead kept in its raw data, if any. */
+function rawCampaignId(raw: unknown): string | null {
+  try {
+    return JSON.stringify(raw ?? {}).match(/campaignId[^0-9]{1,12}([0-9]{10,})/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 type PoolLead = {
   source: string | null;
@@ -57,10 +82,15 @@ export function sharedPoolOf(lead: PoolLead): SharedPool | null {
   if (src.includes("early-retirement-quiz")) return "abca";
   const raw = (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, unknown>;
   if (String(raw[ADVERTISER_NAME_KEY] ?? "").trim()) return null; // a client's own campaign lead
-  if (lead.packageId === NURSE_LEAD_TYPE && !/^\s*advertisely advertiser/i.test(lead.campaignName ?? "")) return "nurse";
+  if (/^\s*advertisely advertiser/i.test(lead.campaignName ?? "")) return null; // a client's campaign
+  // Essential Workers ad account: by campaign id (some leads keep only that) or "EWWS - …" name.
+  const campaignId = rawCampaignId(lead.rawFormData);
+  const ewws = (!!campaignId && EWWS_CAMPAIGN_IDS.has(campaignId)) || EWWS_NAME.test(lead.campaignName ?? "");
+  const nurseCampaign = (!!campaignId && NURSE_CAMPAIGN_IDS.has(campaignId)) || (ewws && /nurse/i.test(lead.campaignName ?? ""));
+  if (lead.packageId === NURSE_LEAD_TYPE || nurseCampaign) return "nurse";
+  if (ewws) return (lead.packageId ?? BLUE_COLLAR_LEAD_TYPE) === BLUE_COLLAR_LEAD_TYPE ? "ewws" : null;
   if (leadOrigin(lead.source, lead.rawFormData) !== "import") return null;
   if ((lead.packageId ?? "blue-collar-iul") !== "blue-collar-iul") return null; // nurses stay out
-  if (/ewws|essential workers/i.test(lead.campaignName ?? "")) return null; // EWWS page, not Enhanced Wealth
   return "ew";
 }
 
@@ -180,7 +210,7 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
   });
   const licensed = clients.filter((c) => {
     if ((c.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) return false; // the house isn't a client
-    if (pool === "nurse" && !(c.leadTypes ?? []).includes(NURSE_LEAD_TYPE)) return false; // Nurse leads are opt-in
+    if (!leadTypeOn(c.leadTypes, poolLeadType(pool))) return false; // they switched this lead type off (or never on)
     const teamLicensed = c.ownedOrganizations.some((o) => o.memberships.some((m) => licensedIn(m.user.licensedStates ?? [], state)));
     return licensedIn(c.licensedStates ?? [], state) || teamLicensed;
   });
@@ -235,10 +265,13 @@ export async function deliverSharedLeadToClient(leadId: string, slot: ClientSlot
   return true;
 }
 /**
- * A nurse lead from a form the house (Ryan) owns goes to the shared nurse pool
- * instead of being delivered to him (owner request, Nov 16 2026).
+ * An Essential Workers lead (Blue Collar or Nurse) from a form the house (Ryan)
+ * owns goes to its shared pool instead of being delivered to him (owner
+ * request, Nov 16 2026).
  */
-export async function isHouseNurseLead(ownerUserId: string | null | undefined, packageId: string | null | undefined): Promise<boolean> {
-  return SHARED_POOL.enabled && packageId === NURSE_LEAD_TYPE && (await isHouseUser(ownerUserId));
+export async function isHouseToggleLead(ownerUserId: string | null | undefined, lead: PoolLead): Promise<boolean> {
+  if (!SHARED_POOL.enabled) return false;
+  const pool = sharedPoolOf(lead);
+  return !!pool && TOGGLE_ONLY_POOLS.has(pool) && (await isHouseUser(ownerUserId));
 }
 // ─── end shared lead pool ─────────────────────────────────────────────────────

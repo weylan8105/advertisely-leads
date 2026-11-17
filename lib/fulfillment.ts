@@ -12,7 +12,7 @@ import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
-import { SHARED_POOL, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, type ClientSlot } from "@/lib/sharedPool";
+import { SHARED_POOL, TOGGLE_ONLY_POOLS, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, type ClientSlot } from "@/lib/sharedPool";
 import {
   TEMP_ROTATION_GUEST,
   routeEwTextVerifiedToGuest,
@@ -603,9 +603,11 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // in lib/tempRotationGuest.ts is on.
   // SHARED_POOL (Nov 2026): Enhanced Wealth Blue Collar and ABCA quiz leads go
   // through the round-robin below, advertiser clients included (lib/sharedPool.ts).
-  // Nurse leads (Nov 16 2026) go to the advertisers who turned them on.
+  // Essential Workers leads (Nov 16 2026), Blue Collar ("ewws") and Nurse, go
+  // ONLY to advertisers who have that lead type on (lib/leadTypes.ts).
   const pool = SHARED_POOL.enabled ? sharedPoolOf(lead) : null;
-  if (pool !== "ew" && pool !== "nurse") {
+  const toggleOnly = !!pool && TOGGLE_ONLY_POOLS.has(pool);
+  if (pool === null || pool === "abca") {
     if (await routeEwTextVerifiedToGuest(lead)) return;
     if (await routePageLeadToHouse(lead)) return;
   }
@@ -615,7 +617,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   // — we make good on bad leads before fulfilling new volume. Only admin-greenlit
   // requests auto-fill, and fulfillReplacement still enforces the request's order
   // states + age, so this can't deliver an off-state/off-order lead.
-  if (await tryReplacementForFreshLead(leadId)) return;
+  if (!toggleOnly && (await tryReplacementForFreshLead(leadId))) return;
 
   // TEMPORARY event boost (Nov 9–11 2026): 3 of every 4 ABCA original-campaign
   // leads go to the house (Ryan); the 4th flows to the normal rotation below.
@@ -684,16 +686,17 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const adminById = new Map(eligibleAdminSlots.map((s) => [s.userId, s]));
   // An admin who is also a buyer stays a buyer slot (don't double-count).
   const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
-  const rotation = [...buyerIds, ...adminIds];
+  // Toggle-only pools skip buyers' orders and admin overflow: just the advertisers with the type on.
+  const rotation = toggleOnly ? [] : [...buyerIds, ...adminIds];
 
   // TEMP_ROTATION_GUEST (Nov 2026): each guest (Kyle) is one more slot
   // in the ABCA landing-page round-robin while the toggle in
   // lib/tempRotationGuest.ts is on.
   // HOUSE_PAUSE: while Ryan is away the guests also take turns on the Blue
   // Collar page leads (Enhanced Wealth, text-verified, EWWS) that now come here.
-  // Not on nurse leads: those only go to advertisers who opted in.
+  // Not on toggle-only pools: those only go to advertisers with the type on.
   const guestTakesTurn =
-    pool !== "nurse" &&
+    !toggleOnly &&
     (isAbcaLandingPageLead(lead.source) || pool !== null || (isHousePaused() && lead.packageId === "blue-collar-iul"));
   const guests = TEMP_ROTATION_GUEST.enabled && guestTakesTurn ? await getRotationGuests() : [];
   const guestById = new Map<string, (typeof guests)[number]>();
@@ -716,7 +719,8 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   }
 
   if (rotation.length > 0) {
-    const cursorKey = `st:${lead.state}`;
+    // Toggle-only pools keep their own turn order, so the main rotation's turns don't skew theirs.
+    const cursorKey = toggleOnly ? `${pool}:st:${lead.state}` : `st:${lead.state}`;
     const cursor = await prisma.distributionCursor.findUnique({ where: { id: cursorKey } });
     const lastIdx = cursor?.lastRecipientId ? rotation.indexOf(cursor.lastRecipientId) : -1;
     const setCursor = (rid: string) =>
@@ -764,7 +768,7 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
 
   // SHARED_POOL: an Enhanced Wealth lead nobody could take goes to the house as
   // before (routePageLeadToHouse does nothing while HOUSE_PAUSE holds it).
-  if ((pool === "ew" || pool === "nurse") && (await routePageLeadToHouse(lead))) return;
+  if ((pool === "ew" || toggleOnly) && (await routePageLeadToHouse(lead))) return;
 
   // Not claimed by any buyer order, and no admin under their weekly target took
   // it → leave it in the BANK (unassigned) as sellable stock for its state.
