@@ -3,7 +3,7 @@ import { Footer } from "@/components/layout/Footer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MarketplaceTabs } from "@/components/marketplace/MarketplaceTabs";
 import { FilterSidebar } from "@/components/marketplace/FilterSidebar";
-import { Badge } from "@/components/ui/badge";
+import { MarketplaceHeaderBadges, ReplacementDisclaimer } from "@/components/marketplace/MarketplaceTabAware";
 import { LEADS_PURCHASE_PAUSED, PURCHASE_PAUSED_MESSAGE } from "@/lib/flags";
 
 export default function MarketplacePage() {
@@ -18,12 +18,7 @@ export default function MarketplacePage() {
               eyebrow="Lead marketplace"
               title="IUL lead packages built for one job."
               description="Pick a package, set your filters, and your leads are delivered to your dashboard within 24 hours. TCPA-compliant capture and full source attribution on every record."
-              actions={
-                <div className="flex gap-2 flex-wrap">
-                  <Badge variant="success">Live inventory</Badge>
-                  <Badge variant="muted">Replacement-eligible</Badge>
-                </div>
-              }
+              actions={<MarketplaceHeaderBadges />}
             />
           </div>
         </section>
@@ -43,8 +38,7 @@ export default function MarketplacePage() {
               <div className="mt-10 rounded-xl border border-slate-200 bg-white p-5 text-xs text-muted-foreground">
                 <span className="text-foreground font-medium">Disclaimers: </span>
                 Lead availability varies by state and campaign volume. All leads include
-                documented consent. Replacement eligibility subject to quality review.
-                Advertisely does not guarantee sales outcomes.
+                documented consent.<ReplacementDisclaimer /> Advertisely does not guarantee sales outcomes.
               </div>
             </div>
           </div>

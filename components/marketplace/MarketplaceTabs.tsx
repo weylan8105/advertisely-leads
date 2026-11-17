@@ -6,18 +6,18 @@ import { MarketplaceStore } from "@/components/marketplace/MarketplaceStore";
 import { SubscriptionPanel } from "@/components/marketplace/SubscriptionPanel";
 import { AdvertiserProgramPanel } from "@/components/marketplace/AdvertiserProgramPanel";
 import { cn } from "@/lib/utils";
+import { setMarketplaceTab, tabFromUrl, type MarketplaceTab } from "@/components/marketplace/MarketplaceTabAware";
 
-type Tab = "advertise" | "buy" | "subscribe";
+type Tab = MarketplaceTab;
 
 // The Advertiser Program is the main way to get leads (owner, Nov 16 2026);
 // buying leads outright is second. Subscribe & Save was replaced by the
 // program: its tab only shows for someone who still has a subscription, so
 // they can see and manage it.
 export function MarketplaceTabs() {
-  const [tab, setTab] = useState<Tab>(() => {
-    const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-    return t === "buy" || t === "subscribe" ? t : "advertise";
-  });
+  const [tab, setTab] = useState<Tab>(() => tabFromUrl());
+  // The header badges and disclaimer follow the open tab.
+  useEffect(() => setMarketplaceTab(tab), [tab]);
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(null);
 
   useEffect(() => {
