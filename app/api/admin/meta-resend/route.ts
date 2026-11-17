@@ -9,6 +9,7 @@ import {
   PICKUP_STAGES,
   QUALIFIED_LEAD_EVENT,
   STAGE_EVENTS,
+  UNCREDITED_NOTE,
   fireMetaContactedEvent,
   fireMetaLeadEvent,
   fireMetaQualifiedLeadEvent,
@@ -36,7 +37,8 @@ const moveBody = (stage: string) => `Moved to "${stageLabel(stage)}" in the pipe
 /**
  * POST /api/admin/meta-resend — resend Enhanced Wealth events Meta never showed,
  * at their real times: closing-stage moves (one Purchase per lead, at its first
- * such move) and instant form leads still inside Meta's 7-day limit. Skips
+ * such move; again if the first went out without Meta's lead id and the id can
+ * now be found) and instant form leads still inside Meta's 7-day limit. Skips
  * anything already sent under the current name, so it's safe to repeat until
  * `remaining` is 0. Outcomes land in FunnelEvent like any send. Admin only.
  */
@@ -66,10 +68,15 @@ export async function POST() {
     }),
   ]);
 
+  // A Purchase that went out without Meta's lead id doesn't count as sent: it's
+  // tried again, and fireMetaStageEvent only resends it once the id is found.
+  const PURCHASE = STAGE_EVENTS[RESEND_STAGES[0]]?.event;
   const sent = new Set(
     sends.map((s) => {
       const m = s.cta?.match(/^ok (\S+) .*lead:(\S+)/);
-      return m ? `${m[1]}:${m[2]}` : "";
+      if (!m) return "";
+      if (m[1] === PURCHASE && UNCREDITED_NOTE.test(s.cta ?? "")) return "";
+      return `${m[1]}:${m[2]}`;
     }),
   );
 

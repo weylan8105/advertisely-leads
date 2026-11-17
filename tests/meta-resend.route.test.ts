@@ -20,6 +20,7 @@ vi.mock("@/lib/metaCapi", () => ({
   STAGE_EVENTS: { underwriting: { event: "Purchase" }, approved: { event: "Purchase" }, "issued-not-paid": { event: "Purchase" }, "issued-paid": { event: "Purchase" } },
   QUALIFIED_LEAD_EVENT: "Subscribe",
   CONTACTED_EVENT: "StartTrial",
+  UNCREDITED_NOTE: /\bid:(no-access|not-found|no-form|timeout|error)\b/,
   PICKUP_STAGES: ["follow-up", "call-back", "presentation-ran", "underwriting", "approved", "issued-not-paid", "issued-paid"],
   fireMetaContactedEvent: vi.fn(async () => {}),
   fireMetaStageEvent: fired.stage,
@@ -84,6 +85,17 @@ describe("POST /api/admin/meta-resend", () => {
     expect(await res.json()).toEqual({ processed: 4, remaining: 0 });
     expect(fired.stage).toHaveBeenCalledWith("L1", "underwriting", null, movedAt);
     expect(fired.stage).toHaveBeenCalledWith("L3", "issued-paid", null, later);
+  });
+
+  it("retries a Purchase that went out without Meta's lead id", async () => {
+    db.sends = [
+      { cta: "ok Purchase rcvd:1 id:no-access lead:L1" },
+      { cta: "ok StartTrial rcvd:1 id:no-access lead:L1" },
+    ];
+    db.moves = [{ leadId: "L1", body: 'Moved to "Underwriting" in the pipeline.', createdAt: movedAt }];
+    const res = await POST();
+    expect(await res.json()).toEqual({ processed: 1, remaining: 0 });
+    expect(fired.stage).toHaveBeenCalledWith("L1", "underwriting", null, movedAt);
   });
 
   it("still sends a lead whose earlier send used the old name", async () => {

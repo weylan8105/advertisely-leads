@@ -342,6 +342,24 @@ describe("stage events", () => {
     expect(sent).toHaveLength(2);
   });
 
+  it("resends a Purchase that went out without the lead id, once the id can be found", async () => {
+    leads.set("L1", instantLead());
+    graph.pageAccess = false;
+    await fireMetaStageEvent("L1", "underwriting");
+    expect(logged[0].cta).toBe("ok Purchase rcvd:1 id:no-access lead:L1");
+    // Still no access: nothing better to send, so nothing goes out.
+    await fireMetaStageEvent("L1", "underwriting");
+    expect(sent).toHaveLength(1);
+    // Access granted: sent again with the lead id, then never again.
+    graph.pageAccess = true;
+    await fireMetaStageEvent("L1", "approved");
+    expect(sent).toHaveLength(2);
+    expect(sent[1].text).toContain(`"lead_id":${META_ID}`);
+    expect(logged[1].cta).toBe("ok Purchase rcvd:1 id:found lead:L1");
+    await fireMetaStageEvent("L1", "issued-not-paid");
+    expect(sent).toHaveLength(2);
+  });
+
   it("sends the Purchase again after Meta refused the first", async () => {
     leads.set("L1", instantLead());
     graph.capi = () => json({ error: { message: "Invalid parameter", code: 100 } }, 400);

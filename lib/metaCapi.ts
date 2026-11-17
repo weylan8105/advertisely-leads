@@ -447,13 +447,24 @@ export const STAGE_EVENTS: Record<string, { event: string; withValue?: boolean }
 };
 
 /** Whether Meta already accepted a "Purchase" for this lead (any closing stage). */
-async function purchaseAlreadySent(leadId: string): Promise<boolean> {
+// A form lead's event that went out without Meta's lead id: Meta logs it but
+// can't credit it to the ad (e.g. the System User couldn't see the form's Page).
+export const UNCREDITED_NOTE = /\bid:(no-access|not-found|no-form|timeout|error)\b/;
+
+/**
+ * The Purchase this lead already sent, if any: "credited" when Meta could tie it
+ * to the ad, "uncredited" when it went out without the lead id (worth sending
+ * again once the id can be found), null when none was sent.
+ */
+async function purchaseAlreadySent(leadId: string): Promise<"credited" | "uncredited" | null> {
   const rows = await prisma!.funnelEvent.findMany({
     where: { source: "meta-capi", cta: { startsWith: `ok ${PURCHASE_EVENT} `, contains: `lead:${leadId}` } },
     select: { cta: true },
   });
   const mine = new RegExp(`lead:${leadId}(\\s|$)`);
-  return rows.some((r) => mine.test(r.cta ?? ""));
+  const ours = rows.filter((r) => mine.test(r.cta ?? ""));
+  if (ours.length === 0) return null;
+  return ours.some((r) => !UNCREDITED_NOTE.test(r.cta ?? "")) ? "credited" : "uncredited";
 }
 
 // Owner (Nov 16 2026): pickups are a quality signal. The first time a lead
@@ -524,8 +535,11 @@ export async function fireMetaStageEvent(
   if (!cfg) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) return;
-  if (await purchaseAlreadySent(lead.id).catch(() => false)) return;
+  const prior = await purchaseAlreadySent(lead.id).catch(() => "credited" as const);
+  if (prior === "credited") return;
   const crm = await instantFormContext(lead).catch(() => null);
+  // Sent before without the lead id: send again only now that Meta can credit it.
+  if (prior === "uncredited" && !crm?.leadId) return;
   const result = await sendMetaEvent(lead, {
     eventName: cfg.event,
     // The same event id the partner Conversions API uses, so a sale reported
