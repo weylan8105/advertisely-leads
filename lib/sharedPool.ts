@@ -45,9 +45,10 @@ export const TOGGLE_ONLY_POOLS: ReadonlySet<SharedPool> = new Set<SharedPool>(["
 /** The lead type an advertiser must have on to take a pool's leads. */
 export const poolLeadType = (pool: SharedPool) => (pool === "nurse" ? NURSE_LEAD_TYPE : BLUE_COLLAR_LEAD_TYPE);
 
-// Source campaign per pool: its cost per lead over the last 72 hours is what a client
-// pays, never less than MIN_SHARED_CPL_CENTS (see sharedCplCents).
-// A pool can draw from more than one campaign; its cost per lead is their combined spend ÷ leads.
+// Main campaign(s) per pool. The price now comes from every house campaign in the
+// pool's ad account (SHARED_POOL_ACCOUNTS below); these ids are only the fallback
+// when the account can't be read, plus how Essential Workers leads are told apart.
+// A client pays the last 72 hours' cost per lead, never less than MIN_SHARED_CPL_CENTS.
 export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { ids: string[]; label: string; fallbackCplCents: number }> = {
   abca: { ids: ["120250442615980207"], label: "ABCA landing page", fallbackCplCents: 2045 },
   ew: { ids: ["120245300016060396"], label: "Enhanced Wealth Blue Collar", fallbackCplCents: 3228 },
@@ -58,6 +59,25 @@ export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { ids: string[]; label: s
 };
 
 const EWWS_NAME = /^\s*ewws\b|essential workers/i;
+
+// ── Every house campaign counts toward the price (owner, Nov 17 2026) ──────────
+// "All of the testing campaigns (as well as ones that are not generating leads)
+// need to be factored into our clients' cost per lead." So a pool's price is the
+// spend of EVERY campaign in its ad account, not just the main campaign above:
+// tests, paused campaigns that still spent in the window, and campaigns with no
+// leads all count. Clients' own campaigns ("Advertisely Advertiser - …" or a
+// client's User.adCampaignIds) are left out, because those are billed to that
+// client's budget directly. The Essential Workers account holds two pools: nurse
+// campaigns (name has "nurse") price the nurse pool, the rest price Blue Collar.
+export const SHARED_POOL_ACCOUNTS: Record<SharedPool, { account: string; nurse?: boolean }> = {
+  abca: { account: "2126340781245705" }, // American Blue Collar Advantage
+  ew: { account: "2254810101392917" }, // Enhanced Wealth
+  ewws: { account: "1270766111922960", nurse: false }, // Essential Workers Wealth Solutions
+  nurse: { account: "1270766111922960", nurse: true },
+};
+// Campaigns in those accounts that are NOT lead generation for the pools (e.g. a
+// recruiting or brand campaign), matched by name. Empty: everything counts.
+export const NOT_POOL_CAMPAIGNS: RegExp[] = [];
 const EWWS_CAMPAIGN_IDS = new Set([...SHARED_POOL_CAMPAIGNS.ewws.ids, ...SHARED_POOL_CAMPAIGNS.nurse.ids]);
 const NURSE_CAMPAIGN_IDS = new Set(SHARED_POOL_CAMPAIGNS.nurse.ids);
 
@@ -134,6 +154,45 @@ export function cplFromInsights(
 }
 
 type InsightsRow = { spend?: string; actions?: { action_type: string; value: string }[] };
+type CampaignInsightsRow = InsightsRow & { campaign_id?: string; campaign_name?: string };
+
+/**
+ * One pool's share of its ad account's campaign rows, added together: every
+ * campaign except clients' own (by name or their campaign ids) and NOT_POOL_CAMPAIGNS,
+ * split nurse / not nurse on the Essential Workers account.
+ */
+export function poolSpendRow(
+  pool: SharedPool,
+  rows: CampaignInsightsRow[],
+  clientCampaignIds: ReadonlySet<string> = new Set(),
+): InsightsRow | undefined {
+  const { nurse } = SHARED_POOL_ACCOUNTS[pool];
+  const kept = rows.filter((r) => {
+    const name = r.campaign_name ?? "";
+    if (/^\s*advertisely advertiser/i.test(name)) return false;
+    if (r.campaign_id && clientCampaignIds.has(r.campaign_id)) return false;
+    if (NOT_POOL_CAMPAIGNS.some((re) => re.test(name))) return false;
+    if (nurse === undefined) return true;
+    const isNurse = /nurse/i.test(name) || (!!r.campaign_id && NURSE_CAMPAIGN_IDS.has(r.campaign_id));
+    return isNurse === nurse;
+  });
+  const sum = combineInsights(kept.map(({ spend, actions }) => ({ spend, actions })));
+  return sum ?? (rows.length ? { spend: "0", actions: [] } : undefined);
+}
+
+/** Campaign ids that belong to clients (billed to their own budget), from User.adCampaignIds. */
+async function clientCampaignIdSet(): Promise<Set<string>> {
+  if (!prisma) return new Set();
+  try {
+    const users = await prisma.user.findMany({
+      where: { adCampaignIds: { isEmpty: false } },
+      select: { adCampaignIds: true },
+    });
+    return new Set(users.flatMap((u: { adCampaignIds?: string[] }) => u.adCampaignIds ?? []));
+  } catch {
+    return new Set();
+  }
+}
 
 /** Several campaigns' insights rows added together (spend and each action). */
 export function combineInsights(rows: (InsightsRow | undefined)[]): InsightsRow | undefined {
@@ -207,8 +266,23 @@ export async function sharedCplCents(pool: SharedPool): Promise<number> {
   if (hit && Date.now() - hit.at < 3_600_000) return hit.cents;
   let cents = Math.max(c.fallbackCplCents, MIN_SHARED_CPL_CENTS);
   if (READ_TOKEN) {
-    // The pool's campaigns added together for one Meta date preset.
-    const read = async (preset: string) =>
+    const clientIds = await clientCampaignIdSet();
+    // Every house campaign in the pool's ad account for one Meta date preset (see
+    // SHARED_POOL_ACCOUNTS). Null when the account can't be read.
+    const readAccount = async (preset: string): Promise<InsightsRow | undefined | null> => {
+      const res = await fetch(
+        `${GRAPH}/act_${SHARED_POOL_ACCOUNTS[pool].account}/insights?level=campaign&fields=campaign_id,campaign_name,spend,actions&limit=500&date_preset=${preset}&access_token=${encodeURIComponent(READ_TOKEN)}`,
+        { cache: "no-store" },
+      );
+      const j = await res.json();
+      if (!res.ok || j?.error || !Array.isArray(j?.data)) {
+        console.warn("[shared pool] account read failed", pool, j?.error?.message);
+        return null;
+      }
+      return poolSpendRow(pool, j.data as CampaignInsightsRow[], clientIds);
+    };
+    // Fallback when the account can't be read: the pool's main campaigns only.
+    const readCampaigns = async (preset: string) =>
       combineInsights(
         await Promise.all(
           c.ids.map(async (id) => {
@@ -221,6 +295,10 @@ export async function sharedCplCents(pool: SharedPool): Promise<number> {
           }),
         ),
       );
+    const read = async (preset: string) => {
+      const all = await readAccount(preset);
+      return all === null ? readCampaigns(preset) : all;
+    };
     try {
       const [last3, today, arrived] = await Promise.all([read("last_3d"), read("today"), arrivedPoolLeads(pool)]);
       const recent = [last3, today];

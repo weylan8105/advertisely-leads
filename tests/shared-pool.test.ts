@@ -22,7 +22,7 @@ vi.mock("@/lib/adSpend", () => ({
   forgetAdSpendSummary: vi.fn(),
 }));
 
-const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient, sharedClientSlots, TOGGLE_ONLY_POOLS, recentCplCents, pricingWindowStart, withoutClientStamp, MIN_SHARED_CPL_CENTS } =
+const { sharedPoolOf, cplFromInsights, combineInsights, licensedIn, deliverSharedLeadToClient, sharedClientSlots, TOGGLE_ONLY_POOLS, recentCplCents, pricingWindowStart, withoutClientStamp, MIN_SHARED_CPL_CENTS, poolSpendRow } =
   await import("@/lib/sharedPool");
 const { leadTypeOn, enabledLeadTypes, storedLeadTypes } = await import("@/lib/leadTypes");
 
@@ -174,5 +174,37 @@ describe("price per lead: last 72 hours, $20 minimum", () => {
   it("falls back to the last 7 days, then the fixed figure, when the 72 hours has no leads", () => {
     expect(recentCplCents([{ spend: "50.00", actions: [] }, undefined], row("640.00", 20), 9999)).toBe(3200);
     expect(recentCplCents([undefined, undefined], undefined, 3228)).toBe(3228);
+  });
+
+  describe("every house campaign counts toward the price", () => {
+    const camp = (campaign_id: string, campaign_name: string, spend: string, leads = 0) => ({
+      campaign_id, campaign_name, spend, actions: leads ? [{ action_type: "lead", value: String(leads) }] : [],
+    });
+    it("adds test campaigns and campaigns with no leads, leaves clients' own campaigns out", () => {
+      const rows = [
+        camp("1", "Advertisely ABCA / Lead Purchase / Team Use", "3783.42", 161),
+        camp("2", "Advertisely ABCA / Lead Purchase / Text message Test", "225.04"),
+        camp("3", "Advertisely Advertiser - Jace Jensen", "249.59", 4),
+        camp("4", "Custom client campaign", "500.00", 10),
+      ];
+      const row = poolSpendRow("abca", rows, new Set(["4"]));
+      expect(row?.spend).toBe("4008.46");
+      // $4,008.46 over the 159 leads that arrived = $25.21, vs $23.80 from the main campaign alone.
+      expect(recentCplCents([row], undefined, 9999, 159)).toBe(2521);
+    });
+    it("splits the Essential Workers account into nurse and Blue Collar", () => {
+      const rows = [
+        camp("120249692494360601", "EWWS - Nurses - Instant Form - Closed Deals", "319.45", 20),
+        camp("9", "EWWS - Blue Collar - Instant Form - Closed Deals", "151.04", 2),
+        camp("8", "EWWS - Retargeting test", "40.00"),
+      ];
+      expect(poolSpendRow("nurse", rows)?.spend).toBe("319.45");
+      expect(poolSpendRow("ewws", rows)?.spend).toBe("191.04");
+    });
+    it("an account with no house spend prices from nothing (falls back), not from clients' campaigns", () => {
+      const row = poolSpendRow("abca", [camp("3", "Advertisely Advertiser - David Layton", "67.69", 1)]);
+      expect(cplFromInsights(row)).toBeNull();
+      expect(poolSpendRow("abca", [])).toBeUndefined();
+    });
   });
 });
