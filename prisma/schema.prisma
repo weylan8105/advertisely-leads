@@ -537,7 +537,7 @@ model FunnelEvent {
   source    String   @default("abca-quiz")
   fbclid    String? // Facebook click id from the landing URL — present = ad visitor
   cta       String? // which entry point started the quiz (hero_zip_auto, hero_zip_submit, final_zip_*, header, sticky, hero_tap)
-  variant   String? // landing-page A/B test arm: "A" (ZIP-first hero) | "B" (tap-first hero)
+  variant   String? // landing-page test arm: "A" (ZIP-first hero) | "B" (tap-first hero), Oct 2026; "LP" (live page) | "IF" (/qualify, instant-form questions), Nov 16 2026
   createdAt DateTime @default(now())
 
   @@index([createdAt])

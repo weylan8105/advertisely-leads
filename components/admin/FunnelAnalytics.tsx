@@ -31,6 +31,7 @@ interface FunnelData {
   entryPoints?: { cta: string; count: number }[];
   zipErrors?: { empty: number; partial: number };
   variant?: "A" | "B" | null;
+  abTestId?: ABTestId;
   stepMode?: "questions" | "milestones";
   abTest?: ABTest | null;
 }
@@ -39,7 +40,28 @@ interface ArmStats {
   visitors: number; started: number; zipEntered: number; reachedContact: number; leads: number;
   startRate: number; zipRate: number; contactRate: number; leadRate: number;
 }
+type ABTestId = "page" | "hero";
+// How each landing-page test names its two versions (the API reports them as A and B).
+const AB_COPY: Record<ABTestId, { title: string; A: string; B: string; startNote: string; contactNote: string; stop: string }> = {
+  page: {
+    title: "Page test: instant-form questions at /qualify (B) vs the live page (A)",
+    A: "A — live page",
+    B: "B — instant-form questions",
+    startNote: "info only — both start with one tap",
+    contactNote: "early read — B asks more questions before it",
+    stop: "Set IF_SPLIT = 0 in abca-quiz.html.",
+  },
+  hero: {
+    title: "A/B test: tap-first hero (B) vs ZIP-first (A)",
+    A: "A — ZIP first",
+    B: "B — tap first",
+    startNote: "info only — a tap is easier than typing a ZIP",
+    contactNote: "fair early read",
+    stop: "Set AB_SPLIT_B = 0 in abca-quiz.html.",
+  },
+};
 interface ABTest {
+  id?: ABTestId;
   A: ArmStats; B: ArmStats;
   startP: number | null; contactP: number | null; leadP: number | null;
   startLiftPct: number | null; contactLiftPct: number | null; leadLiftPct: number | null;
@@ -68,6 +90,7 @@ function abVerdict(p: number | null, lift: number | null, nA: number, nB: number
 }
 
 function ABTestCard({ ab }: { ab: ABTest }) {
+  const copy = AB_COPY[ab.id ?? "hero"];
   const n = Math.min(ab.A.visitors, ab.B.visitors);
   // Guardrail agreed up front: stop B if it's clearly producing fewer leads after ~1,000 each.
   const stopB = n >= 1000 && ab.leadP !== null && ab.leadP < 0.05 && (ab.leadLiftPct ?? 0) < 0;
@@ -93,7 +116,7 @@ function ABTestCard({ ab }: { ab: ABTest }) {
   return (
     <div className="mb-5 rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
-        <div className="text-sm font-semibold">A/B test: tap-first hero (B) vs ZIP-first (A)</div>
+        <div className="text-sm font-semibold">{copy.title}</div>
         <div className="text-[11px] text-muted-foreground">
           Whole test since {new Date(ab.window.start).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ad visitors only · winner = leads per visitor
         </div>
@@ -112,8 +135,8 @@ function ABTestCard({ ab }: { ab: ABTest }) {
             </tr>
           </thead>
           <tbody>
-            {row("A — ZIP first", ab.A)}
-            {row("B — tap first", ab.B)}
+            {row(copy.A, ab.A)}
+            {row(copy.B, ab.B)}
           </tbody>
         </table>
       </div>
@@ -128,9 +151,9 @@ function ABTestCard({ ab }: { ab: ABTest }) {
             </span>
           )}
         </div>
-        <div><span className="text-muted-foreground">Reached the contact form (fair early read): </span><span className={cn("font-medium", tone(contact.tone))}>{contact.text}</span>{ab.contactP !== null && <span className="text-muted-foreground"> · p = {ab.contactP}</span>}</div>
-        <div><span className="text-muted-foreground">Started the quiz (info only — a tap is easier than typing a ZIP): </span><span className={cn("font-medium", tone(start.tone))}>{start.text}</span></div>
-        {stopB && <div className="font-semibold text-rose-600">Stop version B: after 1,000+ visitors each it&apos;s producing clearly fewer leads per visitor. Set AB_SPLIT_B = 0 in abca-quiz.html.</div>}
+        <div><span className="text-muted-foreground">Reached the contact form ({copy.contactNote}): </span><span className={cn("font-medium", tone(contact.tone))}>{contact.text}</span>{ab.contactP !== null && <span className="text-muted-foreground"> · p = {ab.contactP}</span>}</div>
+        <div><span className="text-muted-foreground">Started the quiz ({copy.startNote}): </span><span className={cn("font-medium", tone(start.tone))}>{start.text}</span></div>
+        {stopB && <div className="font-semibold text-rose-600">Stop version B: after 1,000+ visitors each it&apos;s producing clearly fewer leads per visitor. {copy.stop}</div>}
       </div>
       <div className="mt-2">
         <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
@@ -322,7 +345,7 @@ export function FunnelAnalytics() {
                 variant === v ? "border-brand-red bg-brand-red/10 text-brand-red font-medium" : "border-slate-200 text-muted-foreground hover:bg-slate-50",
               )}
             >
-              {v === "all" ? "Both versions" : v === "A" ? "A — ZIP first" : "B — tap first"}
+              {v === "all" ? "Both versions" : AB_COPY[data?.abTestId ?? "hero"][v]}
             </button>
           ))}
         </div>

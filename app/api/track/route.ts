@@ -51,8 +51,9 @@ export async function POST(req: NextRequest) {
   const fbclid = body?.fbclid ? String(body.fbclid).slice(0, 255) : null;
   // Entry point that started the quiz (e.g. "hero_zip_auto", "header"); slug only.
   const cta = body?.cta ? String(body.cta).replace(/[^a-z0-9_]/gi, "").slice(0, 32) || null : null;
-  // Landing-page A/B test arm; anything other than A/B is ignored.
-  const variant = body?.variant === "A" || body?.variant === "B" ? body.variant : null;
+  // Landing-page test arm: "A"/"B" (Oct hero test) or "LP"/"IF" (Nov 16 page test:
+  // the live page vs /qualify). Anything else (e.g. "QA") is ignored.
+  const variant = ["A", "B", "LP", "IF"].includes(body?.variant) ? (body.variant as string) : null;
 
   try {
     await prisma.funnelEvent.create({ data: { sessionId, type, step, source, fbclid, cta, variant } });

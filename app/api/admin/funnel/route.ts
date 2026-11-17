@@ -12,6 +12,23 @@ export const dynamic = "force-dynamic";
 const STEP_LABELS = ["What matters most", "Coverage wanted", "Beneficiary", "Age", "Contact"];
 // Version B (tap-first hero A/B arm): the hero tap answers step 1, then ZIP, then the rest.
 const STEP_LABELS_B = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Age", "Contact"];
+// Page B of the Nov 16 page test (/qualify): the updated Blue Collar instant form's questions.
+const STEP_LABELS_IF = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthly income", "Monthly budget", "Retire by", "Age", "Beneficiary name", "Contact"];
+
+// Landing-page tests, newest first. Each tags its two arms differently in the beacons;
+// the API always reports them as A (control) and B (challenger) of the newest test with data.
+//  - page (Nov 16 2026): LP = the live page, IF = /qualify (instant form's questions)
+//  - hero (Oct 2026):    A = ZIP-first hero, B = tap-first hero
+type Layout = "zip" | "tap" | "if"; // which question order a visitor saw
+const AB_TESTS = [
+  { id: "page", tags: { A: "LP", B: "IF" }, layouts: { A: "tap", B: "if" } },
+  { id: "hero", tags: { A: "A", B: "B" }, layouts: { A: "zip", B: "tap" } },
+] as const;
+type AbTestDef = (typeof AB_TESTS)[number];
+// The hero test ended Oct 23 with B (tap-first) for everyone, so untagged visits after it saw tap-first.
+const HERO_TEST_END_DAY = "2026-10-23";
+const LABELS_BY_LAYOUT: Record<Layout, string[]> = { zip: STEP_LABELS, tap: STEP_LABELS_B, if: STEP_LABELS_IF };
+const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, if: 9 };
 
 // A/B test planned sample per arm (two-sided alpha 0.05, 80% power):
 //  - first answer 20% -> 26%:           ~775 visitors per version
@@ -170,7 +187,7 @@ export async function GET(req: NextRequest) {
   type Person = {
     completed: boolean; steps: Set<number>; ad: boolean; an: boolean; day: string;
     startT: number | null; startCta: string | null;
-    variant: "A" | "B" | null; // A/B arm; null = before the test (saw the ZIP-first page)
+    variant: string | null; // beacon tag ("A"/"B" hero test, "LP"/"IF" page test); null = untagged
   };
   function rollup(rows: SessionRow[]) {
   const people = new Map<string, Person>();
@@ -188,7 +205,7 @@ export async function GET(req: NextRequest) {
     } else if (day < p.day) {
       p.day = day;
     }
-    if (!p.variant && (s.variant === "A" || s.variant === "B")) p.variant = s.variant;
+    if (!p.variant && s.variant) p.variant = s.variant;
     if (s.v) {
       viewSessions++;
       viewKeys.add(key);
@@ -211,27 +228,36 @@ export async function GET(req: NextRequest) {
   const humans = everyone.filter((p) => !p.an);
   const anPeople = everyone.filter((p) => p.an);
 
-  // A/B test scoping: ?variant=A | B narrows everything below to that version. While B
-  // traffic is in range, "A" means tagged A only (same period as B); otherwise untagged
-  // (pre-test) visitors saw the ZIP-first page, so they count as A.
+  // Which test is current: the newest one with any tagged visits (ever).
+  const test: AbTestDef =
+    AB_TESTS.find((t) => testRows.some((r) => r.variant === t.tags.A || r.variant === t.tags.B)) ?? AB_TESTS[AB_TESTS.length - 1];
+  const tagArm = (tag: string | null): "A" | "B" | null =>
+    tag === test.tags.A ? "A" : tag === test.tags.B ? "B" : null;
+  const arm = (p: Person) => tagArm(p.variant);
+  const layout = (p: Person): Layout =>
+    p.variant === "IF" ? "if" : p.variant === "A" ? "zip" : p.variant === "B" || p.variant === "LP" ? "tap" : p.day < HERO_TEST_END_DAY ? "zip" : "tap";
+
+  // A/B test scoping: ?variant=A | B narrows everything below to that arm of the current
+  // test. While B traffic is in range, "A" means tagged A only (same period as B);
+  // otherwise every non-B visitor counts as A (untagged visitors saw the control page).
   const variantParam = params.get("variant");
   const variantFilter = variantParam === "A" || variantParam === "B" ? variantParam : null;
-  const isB = (p: Person) => p.variant === "B";
+  const isB = (p: Person) => arm(p) === "B";
   const abActive = humans.some(isB);
   const scoped = variantFilter === "B"
     ? humans.filter(isB)
     : variantFilter === "A"
-      ? humans.filter((p) => (abActive ? p.variant === "A" : !isB(p)))
+      ? humans.filter((p) => (abActive ? arm(p) === "A" : !isB(p)))
       : humans;
   const scopedSet = new Set(scoped);
-  // Shared milestones (B asks ZIP on its own step 2, A on the hero):
-  //  - Entered ZIP: B = got past its ZIP screen (step 3). A = started from a ZIP form
-  //    (header/sticky starts give no ZIP until the contact form), or completed (contact
-  //    requires a ZIP). Starts from before entry points were tracked default to ZIP.
-  //  - Reached contact form: B step 6, A step 5 (or completed).
+  // Shared milestones (tap-first pages ask ZIP on their own step 2, the ZIP-first hero up front):
+  //  - Entered ZIP: tap-first / IF = got past the ZIP screen (step 3). ZIP-first = started
+  //    from a ZIP form (header/sticky starts give no ZIP until the contact form), or
+  //    completed (contact requires a ZIP). Starts from before entry points were tracked default to ZIP.
+  //  - Reached contact form: ZIP-first step 5, tap-first step 6, IF step 9 (or completed).
   const zipDone = (p: Person) =>
-    isB(p) ? p.steps.has(3) || p.completed : p.completed || (p.steps.has(1) && /zip/.test(p.startCta ?? "zip"));
-  const contactDone = (p: Person) => p.completed || p.steps.has(isB(p) ? 6 : 5);
+    layout(p) !== "zip" ? p.steps.has(3) || p.completed : p.completed || (p.steps.has(1) && /zip/.test(p.startCta ?? "zip"));
+  const contactDone = (p: Person) => p.completed || p.steps.has(CONTACT_STEP[layout(p)]);
 
   const views = scoped.length;
   const completes = scoped.filter((p) => p.completed).length;
@@ -261,9 +287,10 @@ export async function GET(req: NextRequest) {
     );
   } else {
     // Every step that actually has data, not just labelled ones ("Step N" fallback).
-    const labels = variantFilter === "B" ? STEP_LABELS_B : STEP_LABELS;
+    const shown: Layout = variantFilter ? test.layouts[variantFilter] : "zip";
+    const labels = LABELS_BY_LAYOUT[shown];
     const maxStep = Math.max(labels.length, Math.max(0, ...byStep.keys()));
-    rawSteps.push({ label: variantFilter === "B" ? "Visited page" : "Visited page (ZIP)", count: views });
+    rawSteps.push({ label: shown === "zip" ? "Visited page (ZIP)" : "Visited page", count: views });
     for (let n = 1; n <= maxStep; n++) {
       rawSteps.push({ label: labels[n - 1] ?? `Step ${n}`, count: byStep.get(n) ?? 0 });
     }
@@ -275,9 +302,10 @@ export async function GET(req: NextRequest) {
     visitors: number; started: number; zipEntered: number; reachedContact: number; leads: number;
     startRate: number; zipRate: number; contactRate: number; leadRate: number;
   };
-  const testPeople = rollup(testRows).people.filter((p) => !p.an && p.ad && (p.variant === "A" || p.variant === "B"));
+  const testRowsNow = testRows.filter((r) => tagArm(r.variant) !== null);
+  const testPeople = rollup(testRowsNow).people.filter((p) => !p.an && p.ad && arm(p) !== null);
   const armStats = (v: "A" | "B"): Arm => {
-    const ps = testPeople.filter((p) => p.variant === v);
+    const ps = testPeople.filter((p) => arm(p) === v);
     const n = ps.length;
     const started = ps.filter((p) => p.steps.has(1)).length;
     const zipEntered = ps.filter(zipDone).length;
@@ -300,6 +328,7 @@ export async function GET(req: NextRequest) {
   };
   const lift = (a: number, b: number) => (a > 0 ? Math.round(((b - a) / a) * 100) : null);
   let abTest: null | {
+    id: AbTestDef["id"];
     A: Arm; B: Arm;
     startP: number | null; contactP: number | null; leadP: number | null;
     startLiftPct: number | null; contactLiftPct: number | null; leadLiftPct: number | null;
@@ -311,8 +340,9 @@ export async function GET(req: NextRequest) {
     const A = armStats("A");
     const B = armStats("B");
     let tMin = Infinity, tMax = -Infinity;
-    for (const r of testRows) { const t = new Date(r.t).getTime(); if (t < tMin) tMin = t; if (t > tMax) tMax = t; }
+    for (const r of testRowsNow) { const t = new Date(r.t).getTime(); if (t < tMin) tMin = t; if (t > tMax) tMax = t; }
     abTest = {
+      id: test.id,
       A, B,
       startP: twoPropP(A.started, A.visitors, B.started, B.visitors),
       contactP: twoPropP(A.reachedContact, A.visitors, B.reachedContact, B.visitors),
@@ -372,7 +402,8 @@ export async function GET(req: NextRequest) {
   const zipErrors = { empty: 0, partial: 0 };
   for (const r of zipErrRows) {
     // Same version scoping as the funnel (B's in-quiz ZIP errors never land in A's view).
-    const keep = !variantFilter || (variantFilter === "B" ? r.variant === "B" : abActive ? r.variant === "A" : r.variant !== "B");
+    const a = tagArm(r.variant);
+    const keep = !variantFilter || (variantFilter === "B" ? a === "B" : abActive ? a === "A" : a !== "B");
     if (!keep) continue;
     if ((r.digits ?? 0) === 0) zipErrors.empty += Number(r.c);
     else zipErrors.partial += Number(r.c);
@@ -418,6 +449,7 @@ export async function GET(req: NextRequest) {
     series,
     // A/B test: which version is in view, how the step bars are built, and the comparison.
     variant: variantFilter,
+    abTestId: test.id,
     stepMode,
     abTest,
     // Excluded from the headline funnel, reported separately.
