@@ -4,6 +4,7 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { findPackage, leadPoolIdsFor } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
 import { isPausedHouseUser } from "@/lib/housePause";
+import { isOverAgeRequest, MAX_AGE_FOR_AGE_REPLACEMENT } from "@/lib/replacementReasons";
 
 // Replacements are fresh-only: a candidate must have entered the CRM within the
 // last 48 hours (owner directive Sep 30 2026). Module-scoped so both the
@@ -115,6 +116,11 @@ export async function fulfillReplacement(
     id: opts.onlyLeadId && opts.onlyLeadId !== bad.id ? opts.onlyLeadId : { not: bad.id },
     ...freshFilter,
     ...NOT_TEST_LEAD,
+    // Asked for because the prospect was too old: never hand back another older
+    // one. Leads with no exact age on file (instant forms) are still allowed.
+    ...(isOverAgeRequest(request.reason)
+      ? { OR: [{ age: null }, { age: { lte: MAX_AGE_FOR_AGE_REPLACEMENT } }] }
+      : {}),
   };
 
   // State preference: like-for-like same state first, then ANY state the client

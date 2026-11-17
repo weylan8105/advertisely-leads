@@ -70,3 +70,20 @@ export function replacementWindowClosed(deliveredAtIso?: string | Date | null): 
   if (!Number.isFinite(t)) return false;
   return Date.now() - t > REPLACEMENT_WINDOW_HOURS * 3_600_000;
 }
+
+// A replacement asked for because the prospect was too old must not hand back
+// another older prospect (owner, Nov 17 2026: "try to give him younger leads").
+// Such a request only takes a lead aged 62 or under, or one with no exact age
+// on file (instant-form leads only carry an age range).
+export const MAX_AGE_FOR_AGE_REPLACEMENT = 62;
+
+/** True when the stored request reason is the "Over the age limit" category. */
+export function isOverAgeRequest(reason: string | null | undefined): boolean {
+  return (reason ?? "").startsWith(reasonLabel("over_age"));
+}
+
+/** Whether a candidate lead's age is acceptable for the given request reason. */
+export function replacementAgeOk(reason: string | null | undefined, age: number | null | undefined): boolean {
+  if (!isOverAgeRequest(reason)) return true;
+  return age == null || age <= MAX_AGE_FOR_AGE_REPLACEMENT;
+}
