@@ -77,6 +77,8 @@ const HIDDEN_KEYS = new Set(
     "referrer", "keyword", "tags", "date_added", "dateadded", "date_updated", "dateupdated",
     "country", "city", "postal_code", "postalcode", "full_address", "fulladdress", "address",
     "timezone", "assigned_to", "assignedto", "dnd", "company", "company_name", "companyname",
+    // GHL's raw contact record and its created date (owner request, Nov 18)
+    "contact", "date_created", "datecreated", "created_at", "createdat",
   ].map((k) => k.toLowerCase()),
 );
 
@@ -146,6 +148,8 @@ export function LeadDetailModal({
     ([k, v]) =>
       !k.toLowerCase().startsWith("quiz_") &&
       !HIDDEN_KEYS.has(k.toLowerCase()) &&
+      // "Date Created" / "date-created" -> "date_created"
+      !HIDDEN_KEYS.has(k.trim().toLowerCase().replace(/[\s-]+/g, "_")) &&
       // Drop any nested-object/array value — these are always webhook plumbing
       // (location, workflow, customData, attribution, trigger data), never a
       // genuine form answer, which is always a scalar.
@@ -650,6 +654,23 @@ export function LeadDetailModal({
         )}
 
         <div className="p-6 overflow-y-auto scrollbar-thin space-y-6">
+          {/* Any other genuine form answers (e.g. Meta lead-form questions). */}
+          {otherEntries.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+                Other form answers
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {otherEntries.map(([k, v]) => (
+                  <div key={k} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs text-muted-foreground">{prettyKey(k)}</div>
+                    <div className="text-sm font-medium mt-0.5 break-words">{prettyVal(v)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-x-10 gap-y-5">
           {/* Pipeline stage — move the opportunity without dragging (GHL-style). */}
           {stageList.length > 0 && (
@@ -867,23 +888,6 @@ export function LeadDetailModal({
             <div>
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Why IUL / intent</div>
               <p className="text-sm">{lead.intentReason}</p>
-            </div>
-          )}
-
-          {/* Any other genuine form answers (e.g. Meta lead-form questions). */}
-          {otherEntries.length > 0 && (
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
-                Other form answers
-              </div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {otherEntries.map(([k, v]) => (
-                  <div key={k} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs text-muted-foreground">{prettyKey(k)}</div>
-                    <div className="text-sm font-medium mt-0.5 break-words">{prettyVal(v)}</div>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
