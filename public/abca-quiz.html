@@ -989,7 +989,7 @@ async function finish(){
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
     quiz_coverage:answers.coverage, quiz_lead_tier:tier,
     consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
-    event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp, fbclid:tracking.fbclid,
+    event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp || ((document.cookie.match(/(?:^|;\s*)_fbp=([^;]+)/)||[])[1] || ""), fbclid:tracking.fbclid,
     utm_source:tracking.utm_source, utm_campaign:tracking.utm_campaign, utm_content:tracking.utm_content,
     landing_url:tracking.landing_url, lead_source:"early-retirement-quiz", submitted_at:nowIso
   };
