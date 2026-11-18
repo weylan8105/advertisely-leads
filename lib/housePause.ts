@@ -1,24 +1,25 @@
 import { prisma } from "./prisma";
 
-// ─── TEMPORARY: no new leads to the house (owner request, Nov 13 2026) ────────
-// Ryan is travelling, so while this is on NOTHING new is routed to his CRM:
-//  - Enhanced Wealth + Essential Workers (EWWS) page leads stop being house-only
-//    and go through the normal per-state rotation instead: clients with an open
-//    order, plus the temporary rotation guests (lib/tempRotationGuest.ts). That
-//    includes the text-verified Enhanced Wealth Blue Collar form, which stops
-//    alternating Ryan / guest and joins the same rotation.
-//  - Leads from forms Ryan owns as an advertiser (the EWWS forms) take the same
-//    route instead of being delivered to him.
+// ─── House pause: OFF since Nov 18 2026 (owner: "turn Ryan back on") ──────────
+// It was on Nov 13 to Nov 18 2026 while Ryan was travelling. While it is on,
+// NOTHING new is routed to his CRM:
+//  - Enhanced Wealth + Essential Workers (EWWS) page leads that would fall back
+//    to the house stay unassigned in the bank instead.
+//  - Leads from forms Ryan owns as an advertiser go through the rotation instead
+//    of being delivered to him.
 //  - Ryan's overflow slot in the rotation is skipped.
 //  - Replacements owed to Ryan wait: they do not claim fresh leads on intake.
-// A lead no client can take (no open order or guest covers its state, or it is
-// not a Blue Collar lead) stays unassigned in the bank; it is not sent to Ryan.
+//  - The rotation guests (lib/tempRotationGuest.ts) take turns on every Blue
+//    Collar page lead, not only the ABCA and shared-pool ones.
 //
-// TO TURN IT BACK ON: set `enabled: false` below and deploy. Routing returns to
-// exactly what it was; leads delivered to clients in the meantime stay with them,
-// and leads left in the bank stay there (they are not swept to Ryan afterwards).
+// With it off, Ryan gets: his overflow slot in the per-state rotation (states on
+// his licence, up to his weekly target), any Enhanced Wealth / Essential Workers
+// lead no client can take, and the replacements owed to him. Leads delivered to
+// clients during the pause stay with them, and leads left in the bank stay there.
+//
+// TO PAUSE AGAIN: set `enabled: true` below and deploy.
 export const HOUSE_PAUSE = {
-  enabled: true,
+  enabled: false,
   reason: "Ryan is travelling",
 };
 

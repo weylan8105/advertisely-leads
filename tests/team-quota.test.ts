@@ -120,6 +120,20 @@ describe("fulfillOrder under weekly amounts", () => {
     await fulfillOrder("ord_1");
     expect(Object.keys(assignedTo())).toEqual([OWNER]);
   });
+
+  it("fills an order with shared Enhanced Wealth page leads, never Essential Workers or nurse page leads", async () => {
+    setupOrder();
+    db.organization.findUnique.mockResolvedValue({ ownerId: OWNER, distributionMode: "MANUAL", rrCursor: 0, memberships: [] });
+    const lead = (id: string, over: Record<string, unknown>) => ({ id, state: "TX", name: "Test Lead", phone: "", email: "", ...over });
+    db.lead.findMany.mockResolvedValue([
+      lead("ew", { source: "facebook", packageId: "blue-collar-iul" }),
+      lead("ewws", { source: "facebook", packageId: "blue-collar-iul", campaignName: "EWWS - Blue Collar" }),
+      lead("nurse", { source: "facebook", packageId: "healthcare-iul", campaignName: "EWWS - Nurses" }),
+      lead("quiz", { source: "early-retirement-quiz", packageId: "blue-collar-iul" }),
+    ]);
+    expect(await fulfillOrder("ord_1")).toBe(2);
+    expect(assignedTo()[OWNER].ids.sort()).toEqual(["ew", "quiz"]);
+  });
 });
 
 describe("admin overflow under weekly amounts", () => {

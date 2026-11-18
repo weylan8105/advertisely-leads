@@ -102,11 +102,16 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
   // the bank (e.g. older unassigned leads or CSV imports). These are exactly the
   // non-quiz "import"-origin leads (lib/leadOrigin); the ABCA / HWA quiz funnels
   // stay sellable.
-  // HOUSE_PAUSE (lib/housePause.ts): while Ryan is away these page leads are
-  // routed to clients instead, so the filter is lifted until it is switched off.
+  // SHARED_POOL (lib/sharedPool.ts): Enhanced Wealth Blue Collar page leads are
+  // shared with clients, open orders included, so those stay in. Essential
+  // Workers and nurse page leads still never reach an order.
+  // HOUSE_PAUSE (lib/housePause.ts): while it is on, every page lead is routed
+  // to clients instead, so the filter is lifted.
   const candidates = isHousePaused()
     ? rawCandidates
-    : rawCandidates.filter((l) => leadOrigin(l.source, l.rawFormData) !== "import");
+    : rawCandidates.filter(
+        (l) => leadOrigin(l.source, l.rawFormData) !== "import" || (SHARED_POOL.enabled && sharedPoolOf(l) === "ew"),
+      );
 
   if (candidates.length === 0) return 0;
 
