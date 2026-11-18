@@ -1,7 +1,8 @@
 // Activity Dashboard + Leaderboards: per-agent production numbers for a period.
 //
 //   Leads          leads assigned to the agent in the period
-//   Dials          every dial logged in the period (lib/dials.ts), so a lead can count
+//   Dials          every dial logged in the period (lib/dials.ts; a number copy is 2
+//                  since Nov 18, 2026), so a lead can count
 //                  many times. A lead moved out of New Lead (any stage) with no logged
 //                  dial counts as one, which is all the days before Nov 6, 2026 have.
 //   Contacts       leads moved to Contacted / Follow up / Call Back or further
@@ -120,6 +121,8 @@ export interface StageMoveRow {
 export interface DialRow {
   leadId: string;
   actorId: string | null;
+  /** Dials this row is worth (a number copy = 2). Missing = 1. */
+  dials?: number | null;
 }
 
 /** Adds dials, contacts, appointments and presentations to each user's stats. */
@@ -132,7 +135,7 @@ export function addFunnelStats(
   const logged = new Set<string>(); // `${uid}\u0000${leadId}`
   for (const d of dials) {
     if (!d.actorId || (allowed && !allowed.has(d.actorId))) continue;
-    get(d.actorId).dials++;
+    get(d.actorId).dials += Math.max(1, Number(d.dials ?? 1) || 1);
     logged.add(`${d.actorId}\u0000${d.leadId}`);
   }
 
@@ -199,7 +202,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
       JOIN "Lead" l ON l.id = a."leadId"
       WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
     prisma.$queryRaw<DialRow[]>`
-      SELECT a."leadId", a.metadata->>'actorId' AS "actorId"
+      SELECT a."leadId", a.metadata->>'actorId' AS "actorId", COALESCE((a.metadata->>'dials')::int, 1) AS dials
       FROM "LeadActivity" a
       JOIN "Lead" l ON l.id = a."leadId"
       WHERE a.type = 'CALL_MADE' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
@@ -257,4 +260,24 @@ export async function submittedDeals(since: Date): Promise<SubmittedDeal[]> {
 
 export function hasActivity(s: ActivityStats): boolean {
   return s.leads + s.dials + s.policies > 0;
+}
+
+/**
+ * Logged dials per agent between `since` and `until` (lib/dials.ts weights),
+ * plus how many different leads each one dialed. Only these agents.
+ */
+export async function dialsByUser(since: Date, until: Date, userIds: string[]): Promise<Map<string, { dials: number; leads: number }>> {
+  const out = new Map<string, { dials: number; leads: number }>();
+  if (!prisma || !userIds.length) return out;
+  const rows = await prisma.$queryRaw<{ actorId: string; dials: number; leads: number }[]>`
+    SELECT a.metadata->>'actorId' AS "actorId",
+           SUM(COALESCE((a.metadata->>'dials')::int, 1))::int AS dials,
+           COUNT(DISTINCT a."leadId")::int AS leads
+    FROM "LeadActivity" a
+    JOIN "Lead" l ON l.id = a."leadId"
+    WHERE a.type = 'CALL_MADE' AND a."createdAt" >= ${since} AND a."createdAt" < ${until}
+      AND l."trashedAt" IS NULL AND a.metadata->>'actorId' = ANY(${userIds})
+    GROUP BY 1`;
+  for (const r of rows) out.set(r.actorId, { dials: Number(r.dials), leads: Number(r.leads) });
+  return out;
 }

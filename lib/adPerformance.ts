@@ -20,6 +20,7 @@
 
 import { prisma } from "./prisma";
 import { ACTIVITY_TZ, moveLevel } from "./activityStats";
+import { dialsOf } from "./dials";
 import { CONVERSION_STAGE_IDS, WON_STAGE_ID, stageLabel } from "@/data/pipeline";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { getMetaPerformance, PERF_FUNNELS, type CampaignPerf, type PerfFunnel } from "./metaInsights";
@@ -98,6 +99,8 @@ export interface PerfMove {
 export interface PerfDial {
   leadId: string;
   createdAt: Date;
+  /** CALL_MADE metadata; its `dials` is how many dials the row counts for. */
+  metadata?: unknown;
 }
 
 export interface PerfCounts {
@@ -186,8 +189,11 @@ export function perfEvents(leads: PerfLead[], moves: PerfMove[], dials: PerfDial
   const dialTimes = new Map<string, Date[]>();
   for (const d of dials) {
     if (!known.has(d.leadId)) continue;
-    events.push({ leadId: d.leadId, kind: "dial", at: d.createdAt });
-    dialTimes.set(d.leadId, [...(dialTimes.get(d.leadId) ?? []), d.createdAt]);
+    // A number copy is worth 2 dials (lib/dials.ts).
+    for (let i = 0; i < dialsOf(d.metadata); i++) {
+      events.push({ leadId: d.leadId, kind: "dial", at: d.createdAt });
+      dialTimes.set(d.leadId, [...(dialTimes.get(d.leadId) ?? []), d.createdAt]);
+    }
   }
   for (const [leadId, at] of firstContact) {
     if ((firstWorked.get(leadId) ?? at) < DIALS_TRACKED_FROM) continue;
@@ -447,7 +453,7 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
       select: { cta: true },
     }),
     prisma.user.findMany({ select: { id: true, name: true, email: true } }),
-    prisma.leadActivity.findMany({ where: { type: "CALL_MADE" }, select: { leadId: true, createdAt: true } }),
+    prisma.leadActivity.findMany({ where: { type: "CALL_MADE" }, select: { leadId: true, createdAt: true, metadata: true } }),
   ]);
 
   // A lead with an advertiser name is still ours when it came from one of our

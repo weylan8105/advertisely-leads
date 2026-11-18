@@ -2,7 +2,7 @@
 // these stands in for a call, logged as a CALL_MADE lead activity with metadata
 // {via, actorId}:
 //
-//   copy      copied the lead's number
+//   copy      copied the lead's number (counts as 2 dials)
 //   call      tapped Call
 //   talking   clicked the lead, which puts "Talking to" on it
 //
@@ -12,30 +12,38 @@
 export const DIAL_VIAS = ["copy", "call", "talking"] as const;
 export type DialVia = (typeof DIAL_VIAS)[number];
 
-// Copying the number (or tapping Call) again is a redial and counts, up to
-// DIAL_CAP dials per lead in any DIAL_CAP_MS. Copying it a third time inside
-// that window doesn't add one.
-export const DIAL_CAP = 2;
-export const DIAL_CAP_MS = 2 * 60_000;
+// Copying a lead's number counts as 2 dials (agents double-dial). After a copy or
+// a Call tap counts, nothing more counts on that lead for DIAL_COOLDOWN_MS, so
+// copying the same number over and over doesn't stack up dials. (Nov 18, 2026.)
+export const DIAL_COOLDOWN_MS = 60_000;
 // Matches how long "Talking to" lasts (STALE_MS in /api/presence): clicking the
 // lead again inside this window is the same call.
 export const SAME_CALL_MS = 30 * 60_000;
 
+/** Dials one logged dial is worth. Stored on the activity as metadata.dials. */
+export function dialWeight(via: DialVia): number {
+  return via === "copy" ? 2 : 1;
+}
+
+/** Dials a CALL_MADE activity counts for. Older rows have no `dials` and count 1. */
+export function dialsOf(metadata: unknown): number {
+  const n = Number((metadata as any)?.dials);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+}
+
 export type DialAction = "log" | "skip" | "merge";
 
 /**
- * What to do with a dial, given this agent's latest dials on this lead within
- * SAME_CALL_MS, newest first (DIAL_CAP of them is enough). Clicking a lead and
- * then copying its number is one call, so the copy takes over the click
- * ("merge") and only the next copy counts as a redial.
+ * What to do with a dial, given this agent's latest dial on this lead within
+ * SAME_CALL_MS (newest first). Clicking a lead and then copying its number is
+ * one call, so the copy takes over the click ("merge") and counts as 2.
  */
 export function dialAction(via: DialVia, recent: { via: unknown; at: Date }[], now: Date): DialAction {
   const latest = recent[0];
   if (!latest) return "log";
   if (via === "talking") return "skip";
   if (latest.via === "talking") return "merge";
-  const inWindow = recent.filter((d) => now.getTime() - d.at.getTime() < DIAL_CAP_MS).length;
-  return inWindow < DIAL_CAP ? "log" : "skip";
+  return now.getTime() - latest.at.getTime() < DIAL_COOLDOWN_MS ? "skip" : "log";
 }
 
 // One request at a time per lead, so the server has seen each dial before it

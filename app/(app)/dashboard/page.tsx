@@ -30,6 +30,7 @@ import { LeadTypesCard } from "@/components/dashboard/LeadTypesCard";
 import { LeadCostPanel } from "@/components/dashboard/LeadCostPanel";
 import { LEAD_COST_OWNER_EMAILS } from "@/lib/owners";
 import { TeamAdSpendCard } from "@/components/dashboard/TeamAdSpendCard";
+import { TeamDialsCard } from "@/components/dashboard/TeamDialsCard";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { ActivityDashboard } from "@/components/dashboard/ActivityDashboard";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
@@ -226,6 +227,8 @@ export default function DashboardPage() {
       {adSpend && !isOwner && <LeadTypesCard />}
 
       <TeamAdSpendCard />
+
+      <TeamDialsCard className="mb-6" />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard

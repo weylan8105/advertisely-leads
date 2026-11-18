@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { canActOnLead } from "@/lib/leadAccess";
-import { DIAL_CAP, DIAL_VIAS, SAME_CALL_MS, dialAction } from "@/lib/dials";
+import { DIAL_VIAS, SAME_CALL_MS, dialAction, dialWeight } from "@/lib/dials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       metadata: { path: ["actorId"], equals: userId },
     },
     orderBy: { createdAt: "desc" },
-    take: DIAL_CAP,
+    take: 1,
     select: { id: true, createdAt: true, metadata: true },
   });
   const action = dialAction(
@@ -57,10 +57,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   if (action === "merge") {
     // The dial happened when they copied, so it moves to now. That also starts
-    // the 2-minute redial window from the copy, not the click.
+    // the 1-minute cooldown from the copy, not the click.
     await prisma.leadActivity.update({
       where: { id: recent[0].id },
-      data: { createdAt: now, metadata: { via, actorId: userId } },
+      data: { createdAt: now, metadata: { via, actorId: userId, dials: dialWeight(via) } },
     });
   } else if (action === "log") {
     const name = session?.user?.name ?? null;
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         type: "CALL_MADE",
         author: name,
         body: `Dialed by ${name ?? "an agent"}.`,
-        metadata: { via, actorId: userId },
+        metadata: { via, actorId: userId, dials: dialWeight(via) },
       },
     });
   }

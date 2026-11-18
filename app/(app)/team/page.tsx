@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { TeamDialsCard } from "@/components/dashboard/TeamDialsCard";
 import {
   UsersRound,
   UserPlus,
@@ -398,6 +399,9 @@ export default function TeamPage() {
         )}
         </div>
       </div>
+
+      {/* Uplines: each member's dials today and the 9 pm report. */}
+      <TeamDialsCard />
 
       {data.goldmineOff && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

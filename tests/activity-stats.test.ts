@@ -52,6 +52,11 @@ describe("addFunnelStats", () => {
     expect((await run([], dials)).get("sam")?.dials).toBe(3);
   });
 
+  it("counts a number copy as the dials it's worth", async () => {
+    const dials = [{ leadId: "L1", actorId: "sam", dials: 2 }, { leadId: "L2", actorId: "sam", dials: 1 }, { leadId: "L3", actorId: "sam" }];
+    expect((await run([], dials)).get("sam")?.dials).toBe(4);
+  });
+
   it("counts a lead moved with no logged dial as one dial", async () => {
     const s = (await run([moved("Dialed"), moved("Contacted")], [])).get("sam");
     expect(s).toMatchObject({ dials: 1, contacts: 1 });

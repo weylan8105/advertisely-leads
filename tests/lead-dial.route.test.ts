@@ -72,53 +72,48 @@ describe("reportDial", () => {
 });
 
 describe("POST /api/leads/:id/dial", () => {
-  it("logs a dial with who made it and how", async () => {
+  it("logs a copy as 2 dials, with who made it and how", async () => {
     const { body } = await send("copy");
     expect(body).toEqual({ ok: true, counted: true });
     expect(prismaMock.leadActivity.create.mock.calls[0][0].data).toMatchObject({
-      leadId: "L1", type: "CALL_MADE", author: "Sam Agent", metadata: { via: "copy", actorId: "agent" },
+      leadId: "L1", type: "CALL_MADE", author: "Sam Agent", metadata: { via: "copy", actorId: "agent", dials: 2 },
     });
+    expect(prismaMock.leadActivity.findMany.mock.calls[0][0]).toMatchObject({ take: 1, orderBy: { createdAt: "desc" } });
   });
 
-  it("counts copying the number twice as two dials", async () => {
-    earlier(["copy", 5_000]);
-    expect((await send("copy")).body.counted).toBe(true);
-    expect(prismaMock.leadActivity.create).toHaveBeenCalledTimes(1);
-    expect(prismaMock.leadActivity.findMany.mock.calls[0][0]).toMatchObject({ take: 2, orderBy: { createdAt: "desc" } });
+  it("logs a Call tap as 1 dial", async () => {
+    await send("call");
+    expect(prismaMock.leadActivity.create.mock.calls[0][0].data.metadata).toEqual({ via: "call", actorId: "agent", dials: 1 });
   });
 
-  it("stops at two dials when the number is copied a third time within 2 minutes", async () => {
-    earlier(["copy", 20_000], ["copy", 100_000]);
+  it("doesn't count another copy within 1 minute", async () => {
+    earlier(["copy", 20_000]);
+    expect((await send("copy")).body.counted).toBe(false);
+    earlier(["copy", 59_000]);
     expect((await send("copy")).body.counted).toBe(false);
     expect(prismaMock.leadActivity.create).not.toHaveBeenCalled();
   });
 
-  it("counts Call toward the same two", async () => {
-    earlier(["copy", 20_000], ["call", 60_000]);
+  it("doesn't count a Call tap right after a copy", async () => {
+    earlier(["copy", 20_000]);
     expect((await send("call")).body.counted).toBe(false);
-    earlier(["call", 20_000]);
-    expect((await send("copy")).body.counted).toBe(true);
   });
 
-  it("counts again once the 2 minutes have passed", async () => {
-    earlier(["copy", 30_000], ["copy", 130_000]);
+  it("counts again once the minute has passed", async () => {
+    earlier(["copy", 61_000]);
     expect((await send("copy")).body.counted).toBe(true);
+    expect(prismaMock.leadActivity.create.mock.calls[0][0].data.metadata.dials).toBe(2);
   });
 
-  it("treats clicking the lead then copying its number as one dial", async () => {
+  it("turns clicking the lead then copying its number into one 2-dial copy", async () => {
     earlier(["talking", 120_000]);
     expect((await send("copy")).body.counted).toBe(false);
     expect(prismaMock.leadActivity.create).not.toHaveBeenCalled();
     const { where, data } = prismaMock.leadActivity.update.mock.calls[0][0];
     expect(where).toEqual({ id: "A1" });
-    expect(data.metadata).toEqual({ via: "copy", actorId: "agent" });
-    // Dated at the copy, so the 2-minute window starts there.
+    expect(data.metadata).toEqual({ via: "copy", actorId: "agent", dials: 2 });
+    // Dated at the copy, so the 1-minute cooldown starts there.
     expect(Date.now() - data.createdAt.getTime()).toBeLessThan(1_000);
-  });
-
-  it("counts click, copy, copy as two dials", async () => {
-    earlier(["copy", 15_000]); // the click, taken over by the first copy
-    expect((await send("copy")).body.counted).toBe(true);
   });
 
   it("doesn't count clicking the lead again during the same call", async () => {
