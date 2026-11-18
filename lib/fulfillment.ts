@@ -13,7 +13,8 @@ import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
 import { isClientPaused } from "@/lib/clientPause";
-import { SHARED_POOL, TOGGLE_ONLY_POOLS, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, type ClientSlot } from "@/lib/sharedPool";
+import { SHARED_POOL, TOGGLE_ONLY_POOLS, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, poolLeadType, type ClientSlot } from "@/lib/sharedPool";
+import { leadTypeOn } from "@/lib/leadTypes";
 import {
   TEMP_ROTATION_GUEST,
   routeEwTextVerifiedToGuest,
@@ -701,8 +702,12 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const adminById = new Map(eligibleAdminSlots.map((s) => [s.userId, s]));
   // An admin who is also a buyer stays a buyer slot (don't double-count).
   const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
-  // Toggle-only pools skip buyers' orders and admin overflow: just the advertisers with the type on.
-  const rotation = toggleOnly ? [] : [...buyerIds, ...adminIds];
+  // Toggle-only pools skip buyers' orders: just the advertisers with the type
+  // on, and an admin who has it on takes a turn like they do (owner, Nov 18
+  // 2026: "Ryan should be in a normal round robin like everybody else").
+  const rotation = toggleOnly
+    ? adminIds.filter((id) => leadTypeOn(adminById.get(id)?.leadTypes, poolLeadType(pool!)))
+    : [...buyerIds, ...adminIds];
 
   // TEMP_ROTATION_GUEST (Nov 2026): each guest (Kyle) is one more slot
   // in the ABCA landing-page round-robin while the toggle in

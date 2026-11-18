@@ -44,10 +44,27 @@ export async function getHouseAccount(): Promise<{ userId: string; organizationI
  * overflow count. Each becomes a round-robin slot; once an admin hits their
  * target they drop out (and overflow stays in the bank). Ordered by createdAt
  * so the rotation is stable.
+ *
+ * States (owner, Nov 18 2026: "Ryan should be in a normal round robin like
+ * everybody else"): an admin's slot covers the same states a client's does
+ * (lib/sharedPool.ts sharedClientSlots): their own licence plus the licences of
+ * the agents in rotation on their team. `leadTypes` is their dashboard lead-type
+ * switches, which decide their turn on the Essential Workers and nurse pools.
  */
-export async function getEligibleAdminSlots(): Promise<
-  { userId: string; organizationId: string | null; licensedStates: string[] }[]
-> {
+export type AdminSlot = { userId: string; organizationId: string | null; licensedStates: string[]; leadTypes: string[] };
+
+/**
+ * The states a slot covers: the admin's own plus each in-rotation teammate's.
+ * Anyone with no states on file counts as licensed everywhere, which is an empty
+ * list here too (the same fallback buyers and clients get).
+ */
+export function slotLicensedStates(own: string[], team: string[][]): string[] {
+  const all = [own, ...team];
+  if (all.some((s) => s.length === 0)) return [];
+  return [...new Set(all.flat())];
+}
+
+export async function getEligibleAdminSlots(): Promise<AdminSlot[]> {
   if (!prisma) return [];
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", weeklyLeadTarget: { gt: 0 } },
@@ -57,12 +74,20 @@ export async function getEligibleAdminSlots(): Promise<
       email: true,
       weeklyLeadTarget: true,
       licensedStates: true,
-      ownedOrganizations: { select: { id: true }, orderBy: { createdAt: "asc" }, take: 1 },
+      leadTypes: true,
+      ownedOrganizations: {
+        select: {
+          id: true,
+          memberships: { where: { inRotation: true }, select: { user: { select: { licensedStates: true } } } },
+        },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
     },
   });
   if (admins.length === 0) return [];
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-  const slots: { userId: string; organizationId: string | null; licensedStates: string[] }[] = [];
+  const slots: AdminSlot[] = [];
   for (const a of admins) {
     // HOUSE_PAUSE: Ryan takes no overflow turns while he is away.
     if (isHousePaused() && (a.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) continue;
@@ -81,10 +106,14 @@ export async function getEligibleAdminSlots(): Promise<
       },
     });
     if (got < (a.weeklyLeadTarget ?? 0)) {
+      const team = (a.ownedOrganizations[0]?.memberships ?? []).map(
+        (m: { user: { licensedStates?: string[] | null } }) => m.user.licensedStates ?? [],
+      );
       slots.push({
         userId: a.id,
         organizationId: a.ownedOrganizations[0]?.id ?? null,
-        licensedStates: a.licensedStates ?? [],
+        licensedStates: slotLicensedStates(a.licensedStates ?? [], team),
+        leadTypes: a.leadTypes ?? [],
       });
     }
   }

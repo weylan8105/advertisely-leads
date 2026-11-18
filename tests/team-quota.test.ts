@@ -25,7 +25,7 @@ vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 
 import { takeQuotaSlot, type QuotaSlot } from "@/lib/teamQuota";
 import { fulfillOrder } from "@/lib/fulfillment";
-import { assignOverflowLeadTo, getEligibleAdminSlots } from "@/lib/house";
+import { assignOverflowLeadTo, getEligibleAdminSlots, slotLicensedStates } from "@/lib/house";
 import { PATCH as patchMember } from "@/app/api/team/members/[id]/route";
 import { PATCH as patchSettings } from "@/app/api/team/settings/route";
 
@@ -168,6 +168,25 @@ describe("admin overflow under weekly amounts", () => {
       { assignedUserId: "admin_1" },
       { organizationId: "org_admin", quotaRoutedAt: { not: null } },
     ]);
+  });
+
+  it("an admin's slot covers their own states plus their in-rotation team's, like a client's", async () => {
+    expect(slotLicensedStates(["AR"], [["TX", "FL"], ["FL", "CA"]]).sort()).toEqual(["AR", "CA", "FL", "TX"]);
+    // nobody on file for a teammate (or the admin) = licensed everywhere
+    expect(slotLicensedStates(["AR"], [["TX"], []])).toEqual([]);
+    expect(slotLicensedStates([], [["TX"]])).toEqual([]);
+    expect(slotLicensedStates(["AR"], [])).toEqual(["AR"]);
+
+    db.user.findMany.mockResolvedValue([
+      {
+        id: "admin_1", weeklyLeadTarget: 10, licensedStates: ["AR"], leadTypes: ["healthcare-iul"],
+        ownedOrganizations: [{ id: "org_admin", memberships: [{ user: { licensedStates: ["TX"] } }, { user: { licensedStates: ["AR", "GA"] } }] }],
+      },
+    ]);
+    db.lead.count.mockResolvedValue(0);
+    const [s] = await getEligibleAdminSlots();
+    expect(s.licensedStates.sort()).toEqual(["AR", "GA", "TX"]);
+    expect(s.leadTypes).toEqual(["healthcare-iul"]);
   });
 });
 
