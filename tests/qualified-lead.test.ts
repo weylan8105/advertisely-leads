@@ -57,3 +57,26 @@ describe("Qualified Lead = income $3,000+ AND age 55 or younger", () => {
     for (const s of ["new-lead", "aged-lead", "dnc", "chargeback"]) expect(isPickupStage(s)).toBe(false);
   });
 });
+
+describe("ABCA main page (asks age, not income): qualified on age 20 to 55", () => {
+  const page = (age: string, extra: Record<string, string> = {}) => ({ lead_source: "early-retirement-quiz", quiz_age: age, age, ...extra });
+  it("counts 20 through 55, and nothing outside it", () => {
+    expect(isQualifiedLead(page("20"))).toBe(true);
+    expect(isQualifiedLead(page("38"))).toBe(true);
+    expect(isQualifiedLead(page("55"))).toBe(true);
+    expect(isQualifiedLead(page("19"))).toBe(false);
+    expect(isQualifiedLead(page("56"))).toBe(false);
+  });
+  it("never guesses a missing age", () => {
+    expect(isQualifiedLead({ lead_source: "early-retirement-quiz" })).toBeNull();
+  });
+  it("page B (/qualify) keeps the full income + age rule", () => {
+    const b = page("40", { quiz_variant: "instant-form-questions" });
+    expect(isQualifiedLead(b)).toBeNull(); // no income answer: never guessed
+    expect(isQualifiedLead({ ...b, [q]: "Under $3,000" })).toBe(false);
+    expect(isQualifiedLead({ ...b, [q]: "$3,000 to $5,000" })).toBe(true);
+  });
+  it("other sources keep needing income", () => {
+    expect(isQualifiedLead({ quiz_age: "40" })).toBeNull();
+  });
+});

@@ -66,6 +66,17 @@ export const INSTANT_FORM_LEAD_EVENT = "Contact";
 export const QUALIFIED_LEAD_EVENT = "Subscribe";
 export const QUALIFIED_MIN_MONTHLY_INCOME = 3000;
 export const QUALIFIED_MAX_AGE = 55;
+// Owner (Nov 18 2026): the ABCA main landing page (/) asks age but not income, so
+// its leads qualify on age alone: 20 to 55 (ideal is 30-50; 20 and 55 are the
+// outer edges). Page B (/qualify) asks both and keeps the full income + age rule.
+export const QUALIFIED_MIN_AGE_AGE_ONLY = 20;
+const ABCA_QUIZ_SOURCE = "early-retirement-quiz";
+
+/** An ABCA main-page quiz lead: the funnel that doesn't ask income. */
+function isAgeOnlyFunnel(raw: Record<string, unknown>): boolean {
+  const source = String(raw["lead_source"] ?? raw["source"] ?? "").trim();
+  return source === ABCA_QUIZ_SOURCE && !String(raw["quiz_variant"] ?? "").trim();
+}
 
 /** The lead's answer to the gross monthly income question, or null if it wasn't asked. */
 export function monthlyIncomeAnswer(rawFormData: unknown): string | null {
@@ -86,13 +97,19 @@ export function ageAnswer(rawFormData: unknown): number | null {
 }
 
 /**
- * The full "Qualified Lead" test: income $3,000+/month AND age 55 or younger.
+ * The full "Qualified Lead" test: income $3,000+/month AND age 55 or younger
+ * (ABCA main-page quiz leads, which aren't asked income: age 20 to 55).
  * true / false when both were answered (false as soon as either fails), null
  * when one is missing and nothing failed (we never guess).
  */
 export function isQualifiedLead(rawFormData: unknown): boolean | null {
   const income = isIncomeQualified(rawFormData);
   const age = ageAnswer(rawFormData);
+  const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
+  if (income === null && isAgeOnlyFunnel(raw)) {
+    if (age == null) return null;
+    return age >= QUALIFIED_MIN_AGE_AGE_ONLY && age <= QUALIFIED_MAX_AGE;
+  }
   if (income === false || (age != null && age > QUALIFIED_MAX_AGE)) return false;
   if (income === null || age == null) return null;
   return true;
