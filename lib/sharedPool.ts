@@ -50,7 +50,8 @@ export const poolLeadType = (pool: SharedPool) => (pool === "nurse" ? NURSE_LEAD
 // when the account can't be read, plus how Essential Workers leads are told apart.
 // A client pays the last 72 hours' cost per lead, never less than MIN_SHARED_CPL_CENTS.
 export const SHARED_POOL_CAMPAIGNS: Record<SharedPool, { ids: string[]; label: string; fallbackCplCents: number }> = {
-  abca: { ids: ["120250442615980207"], label: "ABCA landing page", fallbackCplCents: 2045 },
+  // ABCA Team Use: the CBO copy (live since Nov 17 2026) and the original ABO campaign (paused).
+  abca: { ids: ["120251017137530207", "120250442615980207"], label: "ABCA landing page", fallbackCplCents: 2045 },
   ew: { ids: ["120245300016060396"], label: "Enhanced Wealth Blue Collar", fallbackCplCents: 3228 },
   // EWWS - Blue Collar: "Closed Deals" (lifetime $92.70/lead) and "Conversion Leads".
   ewws: { ids: ["120249692494140601", "120249710458680601"], label: "Essential Workers Blue Collar", fallbackCplCents: 9270 },
