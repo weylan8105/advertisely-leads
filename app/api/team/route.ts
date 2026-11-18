@@ -7,7 +7,6 @@ import { ensureOrgContext, canManageTeam } from "@/lib/org";
 import { hasRingy } from "@/lib/ringyAccess";
 import { ensureReferralCode } from "@/lib/referral";
 import { uplineTeamFor } from "@/lib/upline";
-import { quotaCountsThisWeek } from "@/lib/teamQuota";
 import { teamBalances } from "@/lib/teamAdSpend";
 
 export const runtime = "nodejs";
@@ -33,7 +32,7 @@ export async function GET() {
 
   const memberships = await prisma.membership.findMany({
     where: { organizationId: ctx.organizationId },
-    include: { user: { select: { id: true, name: true, email: true, image: true } } },
+    include: { user: { select: { id: true, name: true, email: true, image: true, isAdvertiser: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -46,12 +45,6 @@ export async function GET() {
   });
   const countByUser: Record<string, number> = {};
   for (const r of leadCounts) if (r.assignedUserId) countByUser[r.assignedUserId] = r._count._all;
-
-  // Weekly amounts: leads each member got from the owner's flow in the last 7 days.
-  const quotaThisWeek = await quotaCountsThisWeek(
-    ctx.organizationId,
-    memberships.map((m) => m.userId),
-  );
 
   // Advertiser team: members the owner lets add spend to the owner's campaign.
   const org = await prisma.organization.findUnique({
@@ -81,12 +74,11 @@ export async function GET() {
     email: m.user.email,
     image: m.user.image,
     role: m.role,
-    inRotation: m.inRotation,
     goldmineAccess: !m.goldmineBlocked,
+    // Runs their own campaign: managers see their weekly ad spend (/api/team/ad-spend).
+    isAdvertiser: m.user.isAdvertiser,
     adSpendAccess: m.adSpendAccess,
     adSpendCreditCents: Math.max(0, credits.get(m.userId) ?? 0),
-    weeklyLeadQuota: m.weeklyLeadQuota ?? 0,
-    quotaThisWeek: quotaThisWeek.get(m.userId) ?? 0,
     leadCount: countByUser[m.userId] ?? 0,
     ringyConnected: ringyOn.has(m.userId),
     isSelf: m.userId === userId,
@@ -115,7 +107,7 @@ export async function GET() {
     organization: {
       id: ctx.organizationId,
       name: ctx.organizationName,
-      distributionMode: ctx.distributionMode,
+      leadDestination: ctx.leadDestination,
     },
     role: ctx.role,
     canManage: manage,

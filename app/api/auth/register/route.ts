@@ -131,7 +131,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // Otherwise an upline code puts them on their upline's team (out of round-robin rotation until their upline adds them).
+  // Otherwise an upline code puts them on their upline's team, with its Goldmine.
   let uplineTeam: string | null = null;
   if (!joinedTeam && uplineCode) {
     const joined = await joinUplineTeam(user.id, uplineCode).catch((e) => {

@@ -349,21 +349,20 @@ describe("Goldmine access", () => {
     sessionUserId = ryan.id;
     const off = await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { goldmineAccess: false }, "PATCH"), { params: { id: m.id } });
     expect(off.status).toBe(200);
-    expect(await off.json()).toMatchObject({ membership: { goldmineAccess: false, inRotation: false } });
+    expect(await off.json()).toMatchObject({ membership: { goldmineAccess: false } });
     expect(await canActOnLead(newbie.id, false, goldLead)).toBe(false);
 
     await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { goldmineAccess: true }, "PATCH"), { params: { id: m.id } });
     expect(await canActOnLead(newbie.id, false, goldLead)).toBe(true);
   });
 
-  it("round robin stays a manual step for the upline", async () => {
+  it("there's no member round robin to switch any more", async () => {
     const newbie = addUser("New Agent", null);
     await joinUplineTeam(newbie.id, "RYAN7K");
     const m = mems.find((x) => x.userId === newbie.id)!;
-    expect(m.inRotation).toBe(false);
     sessionUserId = ryan.id;
-    await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { inRotation: true }, "PATCH"), { params: { id: m.id } });
-    expect(m.inRotation).toBe(true);
+    const res = await patchMember(jsonReq(`https://advertisely.io/api/team/members/${m.id}`, { inRotation: true }, "PATCH"), { params: { id: m.id } });
+    expect(res.status).toBe(400);
   });
 
   it("making an agent an admin turns their Goldmine back on", async () => {

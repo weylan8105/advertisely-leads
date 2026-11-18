@@ -9,7 +9,7 @@ import { getHouseAccount, getEligibleAdminSlots, assignOverflowLeadTo } from "@/
 import { tryReplacementForFreshLead } from "@/lib/replacement";
 import { HOLDBACK_TAGS_TO_HOUSE } from "@/lib/flags";
 import { isRecognizedUsLocation } from "@/lib/leadImport";
-import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
+import { goldmineLeadData, planLeadPipelines, type LeadPipeline } from "@/lib/leadDestination";
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
 import { isClientPaused } from "@/lib/clientPause";
@@ -116,15 +116,13 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
 
   if (candidates.length === 0) return 0;
 
-  // ── Distribution (Phase 1) ─────────────────────────────────────────
-  // Decide who each lead goes to. MANUAL (default) → the buyer/owner, exactly
-  // as before. ROUND_ROBIN → spread evenly across the org's in-rotation members
-  // using a persisted cursor so the rotation stays fair across separate runs.
-  // WEEKLY_QUOTA → each agent gets up to their weekly amount (lib/teamQuota.ts);
-  // whatever nobody has room for stays with the owner.
+  // ── Destination ────────────────────────────────────────────────────
+  // Every lead goes to the buyer (or the downline the order was bought for).
+  // On the team owner's own order, their lead destination may put some or all
+  // of them in the team's Goldmine instead (lib/leadDestination.ts).
   let orgId = order.organizationId as string | null;
   // Orders created before Phase 1 (or before stamping) may have no org — resolve
-  // and persist the buyer's org so distribution + scoping work.
+  // and persist the buyer's org so scoping works.
   if (!orgId) {
     const ctx = await ensureOrgContext(order.userId);
     orgId = ctx?.organizationId ?? null;
@@ -132,87 +130,31 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
       await prisma.order.update({ where: { id: order.id }, data: { organizationId: orgId } });
     }
   }
-  let mode: "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA" = "MANUAL";
-  let rotation: string[] = [];
-  let rrCursor = 0;
-  let orgOwnerId: string | null = null;
-  if (orgId) {
-    const org = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: {
-        ownerId: true,
-        distributionMode: true,
-        rrCursor: true,
-        memberships: {
-          where: { inRotation: true },
-          select: { userId: true },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-    if (org) {
-      orgOwnerId = org.ownerId;
-      mode = org.distributionMode;
-      rrCursor = org.rrCursor;
-      rotation = org.memberships.map((m) => m.userId);
-    }
-  }
-  // Round-robin distributes the ORG OWNER's purchases across the team. A member
-  // who buys their own leads (they belong to a team but aren't the owner) must
-  // receive their entire order — never have it split to the agency. Without this
-  // guard, an agent's personal order was round-robined to the team owner (Luke's
-  // paid leads were leaking to Wylie).
-  // An order routed to a specific downline agent (deliverToUserId) always goes
-  // entirely to that agent — never round-robined or split.
+  // A member who buys their own leads, or an order routed to a specific downline
+  // agent (deliverToUserId), always delivers to that person's own pipeline.
   const routedTo = order.deliverToUserId ?? null;
-  const ownersOwnOrder = !routedTo && order.userId === orgOwnerId;
-  const useRR = ownersOwnOrder && mode === "ROUND_ROBIN" && rotation.length > 0;
-  const quotaSlots =
-    ownersOwnOrder && mode === "WEEKLY_QUOTA" && orgId ? await loadQuotaSlots(orgId, order.userId) : [];
-
-  // leadId → assigned userId. Default recipient is the routed agent, else the buyer.
   const defaultRecipient = routedTo ?? order.userId;
-  const assigneeOf = new Map<string, string>();
-  const quotaRouted = new Set<string>(); // leadIds handed out by weekly amounts
-  candidates.forEach((l, i) => {
-    if (useRR) {
-      assigneeOf.set(l.id, rotation[(rrCursor + i) % rotation.length]);
-      return;
-    }
-    const agent = quotaSlots.length > 0 ? takeQuotaSlot(quotaSlots, l.state) : null;
-    if (agent) quotaRouted.add(l.id);
-    assigneeOf.set(l.id, agent ?? defaultRecipient);
-  });
-  // Group ids by assignee for batched updates.
-  const idsByAssignee = new Map<string, string[]>();
-  for (const [leadId, assignee] of assigneeOf) {
-    const arr = idsByAssignee.get(assignee) ?? [];
-    arr.push(leadId);
-    idsByAssignee.set(assignee, arr);
-  }
+  const plan: LeadPipeline[] = routedTo
+    ? candidates.map(() => "main")
+    : await planLeadPipelines(orgId, order.userId, candidates.length);
+  const pipelineOf = new Map<string, LeadPipeline>(candidates.map((l, i) => [l.id, plan[i] ?? "main"]));
+  const assigneeOf = new Map<string, string>(candidates.map((l) => [l.id, defaultRecipient]));
 
   const now = new Date();
   // Assign in a single transaction so concurrent fulfillment doesn't double-assign
   await prisma.$transaction(async (tx) => {
-    for (const [assignee, ids] of idsByAssignee) {
+    for (const pipeline of ["main", "goldmine"] as const) {
+      const ids = candidates.filter((l) => pipelineOf.get(l.id) === pipeline).map((l) => l.id);
+      if (ids.length === 0) continue;
       await tx.lead.updateMany({
         where: { id: { in: ids }, assignedUserId: null },
         data: {
-          assignedUserId: assignee,
+          assignedUserId: defaultRecipient,
           assignedAt: now,
           orderId: order.id,
           ...(orgId ? { organizationId: orgId } : {}),
-          // The owner never has a weekly amount, so an agent's batch is all quota-routed.
-          ...(quotaRouted.has(ids[0]) ? { quotaRoutedAt: now } : {}),
+          ...(pipeline === "goldmine" && orgId ? goldmineLeadData(orgId, now) : {}),
         },
-      });
-    }
-
-    // Advance the round-robin cursor so the next batch continues the rotation.
-    if (useRR && orgId) {
-      await tx.organization.update({
-        where: { id: orgId },
-        data: { rrCursor: (rrCursor + candidates.length) % rotation.length },
       });
     }
 
@@ -237,10 +179,9 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
       data: candidates.map((l) => ({
         leadId: l.id,
         type: "LEAD_ASSIGNED" as const,
-        body: useRR
-          ? `Lead routed to a team member via round-robin (order ${order.id}).`
-          : quotaRouted.has(l.id)
-            ? `Lead routed to a team member by weekly amounts (order ${order.id}).`
+        body:
+          pipelineOf.get(l.id) === "goldmine"
+            ? `Lead put in the team Goldmine via order ${order.id} (the owner's lead destination).`
             : `Lead assigned to customer via order ${order.id}.`,
       })),
     });
@@ -253,6 +194,8 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
     try {
       const byRecipient = new Map<string, typeof candidates>();
       for (const l of candidates) {
+        // Goldmine leads are the team's, not in anyone's own pipeline: no email.
+        if (pipelineOf.get(l.id) === "goldmine") continue;
         const who = assigneeOf.get(l.id) ?? defaultRecipient;
         const arr = byRecipient.get(who) ?? [];
         arr.push(l);

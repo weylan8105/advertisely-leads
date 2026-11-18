@@ -13,8 +13,7 @@ import { applyTeamJoinDefaults } from "@/lib/teamAdvertiser";
  * (OWNER/ADMIN), else the team they own (created on first use). Because these
  * codes are shared publicly as discount codes, there's no approval step: the
  * agent is on the team right away with the team's Goldmine (a manager can switch
- * that off per member), but out of round-robin rotation until a manager puts
- * them in it on the Team page. Someone on the wrong team just enters the right
+ * that off per member). Someone on the wrong team just enters the right
  * upline's code.
  *
  * An agent has one upline at a time: joining a new upline's team is a transfer

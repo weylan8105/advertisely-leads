@@ -6,7 +6,7 @@ export interface OrgContext {
   organizationId: string;
   organizationName: string;
   role: OrgRole;
-  distributionMode: "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA";
+  leadDestination: "PERSONAL" | "SPLIT" | "GOLDMINE";
   // A team manager switched off this member's Goldmine (shared pool) access.
   goldmineOff: boolean;
 }
@@ -38,14 +38,14 @@ export async function getOrgContext(userId: string): Promise<OrgContext | null> 
               userId,
             },
           },
-          include: { organization: { select: { id: true, name: true, distributionMode: true } } },
+          include: { organization: { select: { id: true, name: true, leadDestination: true } } },
         })
       : null;
 
   if (!membership) {
     membership = await prisma.membership.findFirst({
       where: { userId },
-      include: { organization: { select: { id: true, name: true, distributionMode: true } } },
+      include: { organization: { select: { id: true, name: true, leadDestination: true } } },
       orderBy: { createdAt: "asc" },
     });
   }
@@ -55,7 +55,7 @@ export async function getOrgContext(userId: string): Promise<OrgContext | null> 
     organizationId: membership.organization.id,
     organizationName: membership.organization.name,
     role: membership.role as OrgRole,
-    distributionMode: membership.organization.distributionMode as OrgContext["distributionMode"],
+    leadDestination: membership.organization.leadDestination,
     goldmineOff: membership.goldmineBlocked,
   };
 }
@@ -82,7 +82,7 @@ async function provisionOwnedTeam(userId: string): Promise<{ id: string; name: s
     });
     if (!user) return null;
     const org = await tx.organization.create({
-      data: { name: personalOrgName(user), ownerId: user.id, distributionMode: "MANUAL" },
+      data: { name: personalOrgName(user), ownerId: user.id, leadDestination: "PERSONAL" },
       select: { id: true, name: true },
     });
     await tx.membership.create({

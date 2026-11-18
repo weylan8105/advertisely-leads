@@ -69,9 +69,8 @@ model User {
   // to them (see deliverLeadToOwner); surfaces them as a distinct segment on the
   // admin Client-accounts tab. Does not block them from also placing orders.
   isAdvertiser             Boolean   @default(false)
-  // How many of their own campaign leads an advertiser keeps per rolling 7 days;
-  // the rest go to their team (see lib/advertiserVolume.ts). null = keep every
-  // lead (default), 0 = the team gets all of them.
+  // Unused since Nov 2026 (replaced by Organization.leadDestination). Kept so
+  // the column stays.
   advertiserWeeklyKeep     Int?
   // Advertiser ad-spend budget (lib/adSpend.ts). Their Meta campaigns: these ids,
   // or when empty the "Advertisely Advertiser - <name>" campaigns.
@@ -607,10 +606,12 @@ model Organization {
   id                String           @id @default(cuid())
   name              String
   ownerId           String
-  // How purchased leads are handed out to the team.
-  distributionMode  DistributionMode @default(MANUAL)
-  // Round-robin pointer — advanced each time a lead is auto-assigned so the
-  // rotation is fair and survives across separate fulfillment runs.
+  // Where the owner's incoming leads land (lib/leadDestination.ts): their own
+  // pipeline, alternating between it and the team's Goldmine, or Goldmine only.
+  // Stored in the old distributionMode column (round robin / weekly amounts were
+  // removed Nov 2026), so no migration was needed.
+  leadDestination   LeadDestination  @default(PERSONAL) @map("distributionMode")
+  // Alternation pointer for SPLIT: advanced once per lead.
   rrCursor          Int              @default(0)
   // Goldmine: the team-shared aged-lead pipeline. When enabled, the owner's
   // main-pipeline leads auto-move here after `goldmineAfterDays` (time since
@@ -637,15 +638,15 @@ model Membership {
   organizationId  String
   userId          String
   role            MembershipRole @default(AGENT)
-  // Whether this member receives leads under ROUND_ROBIN distribution.
+  // Old round-robin flag. Distribution no longer uses it; lib/house.ts still
+  // counts in-rotation members' states for the owner's overflow slot.
   inRotation      Boolean        @default(true)
   // The team's manager switched off this member's Goldmine access (shared aged
   // pool). Members get Goldmine automatically; this is the opt-out. Stored in the
   // old "pendingApproval" column (join approval was removed Nov 2026), so rows
   // that were still pending then start with Goldmine off.
   goldmineBlocked Boolean        @default(false) @map("pendingApproval")
-  // Weekly amounts: how many of the owner's incoming leads this member gets per
-  // rolling 7 days when the team distributes by WEEKLY_QUOTA. Null/0 = none.
+  // Unused since Nov 2026 (weekly amounts were removed). Kept so the column stays.
   weeklyLeadQuota Int?
   // An advertiser team: the owner let this member add spend to the owner's
   // campaign and get campaign leads for it (lib/teamAdSpend.ts). Off by default.
@@ -693,10 +694,13 @@ enum InvitationStatus {
   EXPIRED
 }
 
-enum DistributionMode {
-  MANUAL // all purchased leads go to the buyer/owner; reassign by hand
-  ROUND_ROBIN // purchased leads are spread across in-rotation members
-  WEEKLY_QUOTA // owner's incoming leads go to members up to their weekly amount; the rest stay with the owner
+// Database values keep their old names (the DistributionMode enum).
+enum LeadDestination {
+  PERSONAL @map("MANUAL") // every lead goes to the owner's own pipeline
+  SPLIT    @map("ROUND_ROBIN") // alternate: owner's pipeline, then the team's Goldmine
+  GOLDMINE @map("WEEKLY_QUOTA") // every lead goes to the team's Goldmine
+
+  @@map("DistributionMode")
 }
 
 // Advertisely Bucks Marketing Campaign (DRAFT): every change to a user's Advertisely Bucks balance.

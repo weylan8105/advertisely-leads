@@ -6,8 +6,6 @@ import {
   UsersRound,
   UserPlus,
   Loader2,
-  Shuffle,
-  Hand,
   Trash2,
   Mail,
   Copy,
@@ -17,7 +15,6 @@ import {
   PackageCheck,
   Link2,
   Gem,
-  CalendarRange,
   Megaphone,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -53,14 +50,12 @@ interface Member {
   name: string | null;
   email: string;
   role: "OWNER" | "ADMIN" | "AGENT";
-  inRotation: boolean;
   goldmineAccess: boolean;
+  /** Runs their own campaign; managers see their weekly ad spend. */
+  isAdvertiser: boolean;
   /** Advertiser team: may add spend to the owner's campaign; their credit left. */
   adSpendAccess: boolean;
   adSpendCreditCents: number;
-  /** Leads/week under "Weekly amounts" (0 = none) and how many they got in the last 7 days. */
-  weeklyLeadQuota: number;
-  quotaThisWeek: number;
   leadCount: number;
   /** Their Ringy CRM is connected (shown to managers who can link Ringy). */
   ringyConnected: boolean;
@@ -74,7 +69,7 @@ interface Invitation {
   expiresAt: string;
 }
 interface TeamData {
-  organization: { id: string; name: string; distributionMode: DistributionMode };
+  organization: { id: string; name: string; leadDestination: LeadDestination };
   role: "OWNER" | "ADMIN" | "AGENT";
   canManage: boolean;
   /** The team's manager switched off the caller's Goldmine access. */
@@ -89,7 +84,21 @@ interface TeamData {
   upline: { code: string | null; team: { id: string; name: string } | null };
 }
 
-type DistributionMode = "MANUAL" | "ROUND_ROBIN" | "WEEKLY_QUOTA";
+type LeadDestination = "PERSONAL" | "SPLIT" | "GOLDMINE";
+const DESTINATION_LABEL: Record<LeadDestination, string> = {
+  PERSONAL: "your pipeline only",
+  SPLIT: "round robin between your pipeline and the Goldmine",
+  GOLDMINE: "the Goldmine only",
+};
+
+/** A member advertiser's ad spend paid in (/api/team/member-ad-spend). */
+interface MemberAdSpend {
+  userId: string;
+  last7Cents: number;
+  avgWeekCents: number;
+}
+const usd0 = (c: number) =>
+  (c / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 const roleBadge: Record<string, "success" | "muted"> = {
   OWNER: "success",
@@ -111,9 +120,7 @@ export default function TeamPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [joinMsg, setJoinMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // Weekly amount being typed per member (membershipId → text), saved on blur/Enter.
-  const [quotaDraft, setQuotaDraft] = useState<Record<string, string>>({});
-  const [quotaError, setQuotaError] = useState<string | null>(null);
+  const [memberAdSpend, setMemberAdSpend] = useState<Record<string, MemberAdSpend>>({});
 
   const load = useCallback(async () => {
     try {
@@ -121,6 +128,13 @@ export default function TeamPage() {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
       setData(await res.json());
       setError(null);
+      // Ad spend of members who run their own campaign (managers only; slower, so not awaited).
+      fetch("/api/team/member-ad-spend")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.members) setMemberAdSpend(Object.fromEntries(d.members.map((m: MemberAdSpend) => [m.userId, m])));
+        })
+        .catch(() => {});
       // Orders placed for the downline (owner/admin view; [] for agents).
       try {
         const ordersRes = await fetch("/api/team/orders");
@@ -138,18 +152,6 @@ export default function TeamPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function setMode(mode: DistributionMode) {
-    if (!data || data.organization.distributionMode === mode) return;
-    setBusy("mode");
-    await fetch("/api/team/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ distributionMode: mode }),
-    });
-    setBusy(null);
-    load();
-  }
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
@@ -176,17 +178,6 @@ export default function TeamPage() {
     }
   }
 
-  async function toggleRotation(m: Member) {
-    setBusy(m.membershipId);
-    await fetch(`/api/team/members/${m.membershipId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ inRotation: !m.inRotation }),
-    });
-    setBusy(null);
-    load();
-  }
-
   async function changeRole(m: Member, role: "ADMIN" | "AGENT") {
     setBusy(m.membershipId);
     await fetch(`/api/team/members/${m.membershipId}`, {
@@ -203,31 +194,6 @@ export default function TeamPage() {
     setBusy(m.membershipId);
     await fetch(`/api/team/members/${m.membershipId}`, { method: "DELETE" });
     setBusy(null);
-    load();
-  }
-
-  async function saveQuota(m: Member) {
-    const raw = quotaDraft[m.membershipId];
-    if (raw === undefined) return;
-    const next = raw.trim() === "" ? 0 : Number(raw);
-    if (next === m.weeklyLeadQuota) {
-      setQuotaDraft(({ [m.membershipId]: _, ...rest }) => rest);
-      return;
-    }
-    setBusy(m.membershipId);
-    setQuotaError(null);
-    const res = await fetch(`/api/team/members/${m.membershipId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ weeklyLeadQuota: next }),
-    });
-    const body = await res.json().catch(() => ({}));
-    setBusy(null);
-    if (!res.ok) {
-      setQuotaError(body.error ?? "Could not save that amount");
-      return;
-    }
-    setQuotaDraft(({ [m.membershipId]: _, ...rest }) => rest);
     load();
   }
 
@@ -295,7 +261,7 @@ export default function TeamPage() {
       text:
         body.status === "already-member"
           ? `You're on ${body.teamName}.${moved}`
-          : `You joined ${body.teamName}.${moved} You can work the team's Goldmine now. Your upline adds you to their round robin.`,
+          : `You joined ${body.teamName}.${moved} You can work the team's Goldmine now.`,
     });
     load();
   }
@@ -350,11 +316,6 @@ export default function TeamPage() {
   }
 
   const { organization: org, canManage, members, invitations } = data;
-  const rr = org.distributionMode === "ROUND_ROBIN";
-  const weekly = org.distributionMode === "WEEKLY_QUOTA";
-  const weeklyTotal = members.reduce((n, m) => n + (m.role === "OWNER" ? 0 : m.weeklyLeadQuota), 0);
-  const weeklySent = members.reduce((n, m) => n + (m.role === "OWNER" ? 0 : m.quotaThisWeek), 0);
-  const inRotationCount = members.filter((m) => m.inRotation).length;
 
   return (
     <div className="max-w-4xl space-y-8">
@@ -413,89 +374,22 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Distribution */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="font-semibold tracking-tight">Lead distribution</h2>
-            <p className="mt-1 text-sm text-muted-foreground max-w-lg">
-              How purchased leads are handed out to your team.
-            </p>
-          </div>
-          {canManage ? (
-            <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50">
-              <button
-                onClick={() => setMode("MANUAL")}
-                disabled={busy === "mode"}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  !rr ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Hand className="h-3.5 w-3.5" /> Manual
-              </button>
-              <button
-                onClick={() => setMode("ROUND_ROBIN")}
-                disabled={busy === "mode"}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  rr ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Shuffle className="h-3.5 w-3.5" /> Round-robin
-              </button>
-              <button
-                onClick={() => setMode("WEEKLY_QUOTA")}
-                disabled={busy === "mode"}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  weekly ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <CalendarRange className="h-3.5 w-3.5" /> Weekly amounts
-              </button>
-            </div>
-          ) : (
-            <Badge variant="muted">{weekly ? "Weekly amounts" : rr ? "Round-robin" : "Manual"}</Badge>
-          )}
-        </div>
-        <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm text-muted-foreground">
-          {weekly ? (
-            <>
-              <span className="font-medium text-foreground">Weekly amounts is on.</span> Leads coming into the
-              owner&apos;s pipeline go to each agent up to their weekly number below, only in states they&apos;re
-              licensed in. Once everyone&apos;s full for the week, the rest stay with the owner.
-              {weeklyTotal > 0 && (
-                <span className="block mt-1.5 text-foreground">
-                  {weeklySent} of {weeklyTotal} sent to agents in the last 7 days.
-                </span>
-              )}
-            </>
-          ) : rr ? (
-            <>
-              <span className="font-medium text-foreground">Round-robin is on.</span> New purchased leads and
-              advertiser campaign leads are spread evenly across the {inRotationCount} member
-              {inRotationCount === 1 ? "" : "s"} in rotation below. Campaign leads only go to members licensed in
-              the lead&apos;s state.
-            </>
-          ) : (
-            <>
-              <span className="font-medium text-foreground">Manual is on.</span> All purchased leads go to the
-              team owner, who can reassign them by hand.
-            </>
-          )}
-        </div>
-      </Card>
-
       {/* Members */}
       <Card className="p-6">
-        <h2 className="font-semibold tracking-tight mb-4">Members</h2>
-        {weekly && canManage && (
-          <p className="-mt-2 mb-4 text-sm text-muted-foreground">
-            Type how many leads each agent gets per week (0 for none), then press Enter.
-            {quotaError && <span className="block mt-1 text-rose-600">{quotaError}</span>}
-          </p>
-        )}
+        <h2 className="font-semibold tracking-tight mb-1">Members</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {data.role === "OWNER" ? (
+            <>
+              Your new leads go to {DESTINATION_LABEL[org.leadDestination]}.{" "}
+              <a href="/dashboard#lead-destination" className="font-medium text-brand-red hover:underline">
+                Change on your dashboard
+              </a>
+              . Members with Goldmine on can work the team&apos;s Goldmine.
+            </>
+          ) : (
+            <>Members with Goldmine on can work the team&apos;s Goldmine.</>
+          )}
+        </p>
         <div className="space-y-2">
           {members.map((m) => (
             <div
@@ -513,6 +407,44 @@ export default function TeamPage() {
                 <div className="text-xs text-muted-foreground truncate">{m.email}</div>
               </div>
 
+              {/* Goldmine access: on by default; managers switch any member's on or off. */}
+              {m.role !== "OWNER" && (
+                <button
+                  onClick={() => canManage && toggleGoldmine(m)}
+                  disabled={!canManage || busy === m.membershipId}
+                  title={m.goldmineAccess ? "Can work the team's Goldmine. Click to switch off." : "Goldmine access is off. Click to switch on."}
+                  aria-pressed={m.goldmineAccess}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
+                    m.goldmineAccess
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-slate-200 bg-slate-50 text-muted-foreground",
+                    !canManage && "opacity-70 cursor-default",
+                  )}
+                >
+                  {busy === m.membershipId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gem className="h-3 w-3" />}
+                  {m.goldmineAccess ? "Goldmine on" : "Goldmine off"}
+                </button>
+              )}
+
+              {/* A member running their own campaign: what they put into ad spend (managers only). */}
+              {canManage && m.isAdvertiser && !m.isSelf && (
+                <div
+                  className="flex items-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs text-sky-800"
+                  title="Ad spend they paid in for their own campaign, before the 3% card fee"
+                >
+                  <Megaphone className="h-3 w-3" />
+                  {memberAdSpend[m.userId] ? (
+                    <span className="tabular-nums">
+                      {usd0(memberAdSpend[m.userId].last7Cents)} ad spend last 7 days ·{" "}
+                      {usd0(memberAdSpend[m.userId].avgWeekCents)}/wk avg
+                    </span>
+                  ) : (
+                    <span>Advertiser</span>
+                  )}
+                </div>
+              )}
+
               <Badge variant={roleBadge[m.role]} className="text-[10px]">
                 {m.role === "OWNER" && <ShieldCheck className="h-3 w-3 mr-1" />}
                 {m.role}
@@ -522,97 +454,12 @@ export default function TeamPage() {
                 {m.leadCount} lead{m.leadCount === 1 ? "" : "s"}
               </div>
 
-              {/* Weekly amount (under "Weekly amounts"): leads/week + progress */}
-              {weekly && m.role !== "OWNER" && (
-                <div className="flex items-center gap-2">
-                  {canManage ? (
-                    <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={1000}
-                        aria-label={`Weekly leads for ${m.name ?? m.email}`}
-                        value={quotaDraft[m.membershipId] ?? String(m.weeklyLeadQuota || "")}
-                        placeholder="0"
-                        onChange={(e) => setQuotaDraft((d) => ({ ...d, [m.membershipId]: e.target.value }))}
-                        onBlur={() => saveQuota(m)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                        }}
-                        disabled={busy === m.membershipId}
-                        className="h-8 w-16 px-2 text-sm tabular-nums"
-                      />
-                      /wk
-                    </label>
-                  ) : null}
-                  <div className="w-24">
-                    <div className="text-[11px] tabular-nums text-muted-foreground mb-1">
-                      {m.weeklyLeadQuota > 0
-                        ? `${m.quotaThisWeek} of ${m.weeklyLeadQuota} this week`
-                        : "No weekly leads"}
-                    </div>
-                    {m.weeklyLeadQuota > 0 && (
-                      <Progress
-                        value={Math.min(100, Math.round((m.quotaThisWeek / m.weeklyLeadQuota) * 100))}
-                        className="h-1.5"
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
-              {weekly && m.role === "OWNER" && (
-                <div className="text-xs text-muted-foreground whitespace-nowrap">Keeps the rest</div>
-              )}
-
-              {/* Rotation toggle (only meaningful under round-robin) */}
-              {!weekly && (
-                <button
-                  onClick={() => canManage && toggleRotation(m)}
-                  disabled={!canManage || busy === m.membershipId}
-                  title={m.inRotation ? "In rotation" : "Excluded from rotation"}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
-                    m.inRotation
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-slate-50 text-muted-foreground",
-                    !canManage && "opacity-70 cursor-default",
-                  )}
-                >
-                  {busy === m.membershipId ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : m.inRotation ? (
-                    <Check className="h-3 w-3" />
-                  ) : null}
-                  {m.inRotation ? "In rotation" : "Paused"}
-                </button>
-              )}
-
               {canManage && !m.isSelf && (
                 <a href={`/checkout?for=${m.userId}`} title={`Order leads for ${m.name ?? m.email}`}>
                   <Button size="sm" variant="outline">
                     <ShoppingCart className="h-3.5 w-3.5" /> Order leads
                   </Button>
                 </a>
-              )}
-
-              {/* Goldmine access: on by default; managers can switch an agent's off */}
-              {m.role === "AGENT" && (
-                <button
-                  onClick={() => canManage && toggleGoldmine(m)}
-                  disabled={!canManage || busy === m.membershipId}
-                  title={m.goldmineAccess ? "Can work the team's Goldmine" : "Goldmine access switched off"}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs border transition-colors",
-                    m.goldmineAccess
-                      ? "border-amber-200 bg-amber-50 text-amber-800"
-                      : "border-slate-200 bg-slate-50 text-muted-foreground",
-                    !canManage && "opacity-70 cursor-default",
-                  )}
-                >
-                  <Gem className="h-3 w-3" />
-                  {m.goldmineAccess ? "Goldmine on" : "Goldmine off"}
-                </button>
               )}
 
               {/* Advertiser team: may this member add spend to the owner's campaign for its leads? Off by default. */}
@@ -817,8 +664,8 @@ export default function TeamPage() {
           <p className="mt-1 text-sm text-muted-foreground max-w-xl">
             Agents who enter your code when they create their Advertisely account join{" "}
             <span className="font-medium text-foreground">{data.upline.team?.name ?? "your team"}</span> right
-            away and can work your Goldmine (switch anyone&apos;s off below). They&apos;re not in your round robin
-            until you put them in rotation here. It&apos;s the same code that gives 10% off at checkout.
+            away and can work your Goldmine (switch anyone&apos;s off below). It&apos;s the same code that gives 10%
+            off at checkout.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm font-semibold tracking-wider">

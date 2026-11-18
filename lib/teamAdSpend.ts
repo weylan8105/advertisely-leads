@@ -6,9 +6,8 @@ import type { ClientPayment } from "./adSpend";
  * campaign and get campaign leads for it.
  *
  *  - The upline switches it on per member (Membership.adSpendAccess, off by
- *    default). It only covers paid campaign leads; the free round robin /
- *    weekly amounts of the advertiser's own leads (lib/advertiserVolume.ts)
- *    don't change.
+ *    default). It only covers paid campaign leads; the advertiser's own leads
+ *    follow their lead destination (lib/leadDestination.ts).
  *  - What a downline pays (after the 3% card fee) funds the campaign: it counts
  *    in the advertiser's budget and pacing (lib/adSpend.ts) and becomes the
  *    downline's credit (TeamAdSpend ledger).

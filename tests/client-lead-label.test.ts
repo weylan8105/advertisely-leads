@@ -25,15 +25,15 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 vi.mock("@/lib/email", () => ({ isEmailConfigured: false, sendLeadDeliveryEmail: vi.fn() }));
-const advertiserTeamRecipient = vi.fn(async (): Promise<any> => null);
-vi.mock("@/lib/advertiserVolume", () => ({ advertiserTeamRecipient }));
+const nextLeadPipeline = vi.fn(async (): Promise<"main" | "goldmine"> => "main");
+vi.mock("@/lib/leadDestination", async (orig) => ({ ...(await orig<any>()), nextLeadPipeline }));
 
 beforeEach(() => {
   updates.length = 0;
   storedRaw = { full_name: "Pat Lineman", lead_source: "abca-quiz" };
   owner = { email: "client@gmail.com", name: "Jace Jensen", defaultOrganizationId: null, ownedOrganizations: [] };
-  advertiserTeamRecipient.mockClear();
-  advertiserTeamRecipient.mockResolvedValue(null);
+  nextLeadPipeline.mockClear();
+  nextLeadPipeline.mockResolvedValue("main");
 });
 
 describe("client lead title", () => {
@@ -54,11 +54,13 @@ describe("client lead title", () => {
     expect(leadOriginLabel("abca-quiz", raw)).toBe("Jace Jensen Lead");
   });
 
-  it("keeps the client's name when a teammate receives the lead", async () => {
-    advertiserTeamRecipient.mockResolvedValue({ userId: "TEAMMATE", byQuota: true });
+  it("keeps the client's name when the lead goes to their team's Goldmine", async () => {
+    owner = { ...owner, ownedOrganizations: [{ id: "TEAM" }] };
+    nextLeadPipeline.mockResolvedValue("goldmine");
     const { deliverLeadToOwner } = await import("@/lib/house");
     await deliverLeadToOwner("L1", "JACE", "t");
-    expect(updates[0].data.assignedUserId).toBe("TEAMMATE");
+    expect(nextLeadPipeline).toHaveBeenCalledWith("TEAM", "JACE");
+    expect(updates[0].data).toMatchObject({ assignedUserId: "JACE", pipeline: "goldmine", organizationId: "TEAM", pipelineStage: "new-lead" });
     expect(updates[0].data.rawFormData.advertiser_name).toBe("Jace Jensen");
   });
 

@@ -13,7 +13,6 @@ import { PIPELINE_STAGES, DEFAULT_PIPELINE_SORT, parsePipelineSort, type Pipelin
 import { PipelineIncentiveBanner } from "@/components/leads/PipelineIncentiveBanner";
 import { DeliveredLeadsTracker } from "@/components/dashboard/DeliveredLeadsTracker";
 import { AdminLeadVolumeCard } from "@/components/leads/AdminLeadVolumeCard";
-import { AdvertiserLeadVolumeCard } from "@/components/leads/AdvertiserLeadVolumeCard";
 import { LeadCostReminderModal } from "@/components/leads/LeadCostReminderModal";
 import { LEAD_COST_OWNER_EMAILS } from "@/lib/owners";
 import { Button } from "@/components/ui/button";
@@ -153,9 +152,6 @@ function LeadsPageInner() {
       <PipelineIncentiveBanner />
 
       {isAdmin && <DeliveredLeadsTracker />}
-
-      {/* Advertisers only — renders nothing for anyone else. */}
-      {viewing === "me" && <AdvertiserLeadVolumeCard />}
 
       {viewing === "me" && isAdmin ? (
         <AdminLeadVolumeCard />

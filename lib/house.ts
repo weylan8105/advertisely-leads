@@ -1,9 +1,8 @@
 import { prisma } from "./prisma";
 import { IUL_POOL_IDS, findPackage } from "@/data/packages";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
-import { quotaRecipientFor } from "./teamQuota";
 import { forwardLeadToRingy, isRingyConfigured, type RingyConfig } from "./ringy";
-import { advertiserTeamRecipient } from "./advertiserVolume";
+import { goldmineLeadData, nextLeadPipeline, planLeadPipelines } from "./leadDestination";
 import { assignFundedLead, fundedTeamRecipient, teamHasFundedMembers } from "./teamAdSpend";
 import { campaignCplCents } from "./adSpend";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
@@ -97,8 +96,8 @@ export async function getEligibleAdminSlots(): Promise<AdminSlot[]> {
         orderId: null,
         trashedAt: null,
         assignedAt: { gte: weekAgo },
-        // Overflow their team's weekly amounts handed to downline agents still
-        // counts toward the admin's own target.
+        // Overflow from the old weekly amounts that went to downline agents
+        // still counts toward the admin's own target for its week.
         OR: [
           { assignedUserId: a.id },
           ...(orgId ? [{ organizationId: orgId, quotaRoutedAt: { not: null } }] : []),
@@ -132,9 +131,9 @@ export async function assignOverflowLeadTo(
   if (!lead) return false;
   // Overflow is fresh-only (never aged) — an aged lead stays in the bank as stock.
   if ((Date.now() - lead.receivedAt.getTime()) / 86_400_000 > HOUSE_FRESH_DAYS) return false;
-  // If the admin's team hands out leads by weekly amounts, an agent with room gets it.
-  const agentId = await quotaRecipientFor(organizationId, userId, lead.state);
-  const recipientId = agentId ?? userId;
+  // The admin's lead destination may send it to their team's Goldmine (lib/leadDestination.ts).
+  const toGoldmine = organizationId ? (await nextLeadPipeline(organizationId, userId)) === "goldmine" : false;
+  const recipientId = userId;
   const now = new Date();
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
@@ -142,7 +141,7 @@ export async function assignOverflowLeadTo(
       assignedUserId: recipientId,
       assignedAt: now,
       ...(organizationId ? { organizationId } : {}),
-      ...(agentId ? { quotaRoutedAt: now } : {}),
+      ...(toGoldmine && organizationId ? goldmineLeadData(organizationId, now) : {}),
     },
   });
   if (res.count === 0) return false;
@@ -150,14 +149,13 @@ export async function assignOverflowLeadTo(
     data: {
       leadId,
       type: "LEAD_ASSIGNED",
-      body: agentId
-        ? `Routed to a team member by weekly amounts — ${reason}.`
-        : `Routed to admin CRM — ${reason}.`,
+      body: toGoldmine ? `Routed to the admin's team Goldmine — ${reason}.` : `Routed to admin CRM — ${reason}.`,
     },
   });
-  // Email whoever got it (the admin, or their agent) the same lead-delivery
-  // email clients get, so round-robin leads don't land silently. Never block routing on an email failure.
-  if (isEmailConfigured) {
+  // Email the admin the same lead-delivery email clients get, so round-robin
+  // leads don't land silently (not for a Goldmine lead, which is the team's).
+  // Never block routing on an email failure.
+  if (isEmailConfigured && !toGoldmine) {
     try {
       const [full, recipient] = await Promise.all([
         prisma.lead.findUnique({
@@ -228,17 +226,19 @@ export async function assignLeadToHouse(leadId: string, reason: string): Promise
   if (!lead) return false;
   if ((Date.now() - lead.receivedAt.getTime()) / 86_400_000 > HOUSE_FRESH_DAYS) return false;
   const now = new Date();
+  const toGoldmine = house.organizationId ? (await nextLeadPipeline(house.organizationId, house.userId)) === "goldmine" : false;
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
     data: {
       assignedUserId: house.userId,
       assignedAt: now,
       ...(house.organizationId ? { organizationId: house.organizationId } : {}),
+      ...(toGoldmine && house.organizationId ? goldmineLeadData(house.organizationId, now) : {}),
     },
   });
   if (res.count > 0) {
     await prisma.leadActivity.create({
-      data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to house CRM — ${reason}.` },
+      data: { leadId, type: "LEAD_ASSIGNED", body: `Routed to house ${toGoldmine ? "team Goldmine" : "CRM"} — ${reason}.` },
     });
     return true;
   }
@@ -307,11 +307,11 @@ export async function deliverLeadToOwner(
     console.warn("[house] team ad spend routing failed", e);
   }
 
-  // The advertiser's turn: past their weekly keep amount, or by turn on a
-  // round-robin team (lib/advertiserVolume.ts), the lead goes to someone on the
-  // advertiser's team instead; otherwise they keep it.
-  const teamPick = funded ? null : await advertiserTeamRecipient(ownerUserId, organizationId, lead?.state ?? "");
-  const recipientId = funded?.userId ?? teamPick?.userId ?? ownerUserId;
+  // The advertiser's own lead: their lead destination (dashboard) keeps it in
+  // their pipeline or puts it in their team's Goldmine (lib/leadDestination.ts).
+  const toGoldmine =
+    !funded && organizationId ? (await nextLeadPipeline(organizationId, ownerUserId)) === "goldmine" : false;
+  const recipientId = funded?.userId ?? ownerUserId;
 
   if (!funded) {
     const res = await prisma.lead.updateMany({
@@ -319,13 +319,13 @@ export async function deliverLeadToOwner(
       data: {
         ...leadData,
         assignedUserId: recipientId,
-        ...(teamPick?.byQuota ? { quotaRoutedAt: now } : {}),
+        ...(toGoldmine && organizationId ? goldmineLeadData(organizationId, now) : {}),
       },
     });
     if (res.count === 0) return false;
   }
 
-  const routedToTeam = !!(funded || teamPick);
+  const routedToTeam = !!funded;
   const recipient = routedToTeam
     ? await prisma.user.findUnique({ where: { id: recipientId }, select: { email: true, name: true } })
     : null;
@@ -336,8 +336,8 @@ export async function deliverLeadToOwner(
       type: "LEAD_ASSIGNED",
       body: funded
         ? `${reason} Routed to ${who}, who added spend to the advertiser's campaign (${(funded.cplCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} cost per lead taken from their credit).`
-        : teamPick
-          ? `${reason} Routed to ${who} on the advertiser's team (${teamPick.byRotation ? "round-robin" : "past the advertiser's weekly keep amount"}).`
+        : toGoldmine
+          ? `${reason} Put in the advertiser's team Goldmine (their lead destination).`
           : reason,
     },
   });
@@ -360,7 +360,8 @@ export async function deliverLeadToOwner(
       select: { enabled: true, config: true, id: true },
     });
     const cfg = ringy?.config as Partial<RingyConfig> | undefined;
-    if (ringy?.enabled && isRingyConfigured(cfg)) {
+    // A Goldmine lead is the team's to work, so it doesn't go to the advertiser's dialer.
+    if (!toGoldmine && ringy?.enabled && isRingyConfigured(cfg)) {
       const full = await prisma.lead.findUnique({
         where: { id: leadId },
         select: { name: true, phone: true, email: true, state: true, age: true, occupation: true, income: true, rawFormData: true },
@@ -385,7 +386,8 @@ export async function deliverLeadToOwner(
 
   // Notify the advertiser with the same delivery email buyers get, so their own
   // leads don't land silently. Never block delivery on an email failure.
-  const notify = routedToTeam ? recipient : owner;
+  // No email for a Goldmine lead: it isn't in their own pipeline.
+  const notify = toGoldmine ? null : routedToTeam ? recipient : owner;
   if (isEmailConfigured && notify?.email) {
     try {
       const full = await prisma.lead.findUnique({
@@ -452,24 +454,29 @@ export async function sweepOrphansToHouse(): Promise<{
   const byState: Record<string, number> = {};
 
   // Move in one updateMany per state batch for efficiency, then log activity.
-  const ids = orphans.map((l) => l.id);
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200);
-    await prisma.lead.updateMany({
-      where: { id: { in: chunk }, assignedUserId: null },
-      data: {
-        assignedUserId: house.userId,
-        assignedAt: now,
-        ...(house.organizationId ? { organizationId: house.organizationId } : {}),
-      },
-    });
-    await prisma.leadActivity.createMany({
-      data: chunk.map((leadId) => ({
-        leadId,
-        type: "LEAD_ASSIGNED" as const,
-        body: "Routed to house CRM — no active order covers this state.",
-      })),
-    });
+  // The house's lead destination splits them between its pipeline and its team's Goldmine.
+  const plan = await planLeadPipelines(house.organizationId, house.userId, orphans.length);
+  for (const pipeline of ["main", "goldmine"] as const) {
+    const ids = orphans.filter((_, i) => plan[i] === pipeline).map((l) => l.id);
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      await prisma.lead.updateMany({
+        where: { id: { in: chunk }, assignedUserId: null },
+        data: {
+          assignedUserId: house.userId,
+          assignedAt: now,
+          ...(house.organizationId ? { organizationId: house.organizationId } : {}),
+          ...(pipeline === "goldmine" && house.organizationId ? goldmineLeadData(house.organizationId, now) : {}),
+        },
+      });
+      await prisma.leadActivity.createMany({
+        data: chunk.map((leadId) => ({
+          leadId,
+          type: "LEAD_ASSIGNED" as const,
+          body: `Routed to house ${pipeline === "goldmine" ? "team Goldmine" : "CRM"} — no active order covers this state.`,
+        })),
+      });
+    }
   }
   for (const l of orphans) byState[l.state] = (byState[l.state] ?? 0) + 1;
 

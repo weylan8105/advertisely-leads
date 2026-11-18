@@ -503,7 +503,7 @@ export async function sendUplineJoinEmail({
 <tr><td style="padding:32px;">
 <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">${escapeHtml(joinerName)} joined your team</p>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6;"><strong>${escapeHtml(joinerName)}</strong> (${escapeHtml(joinerEmail)}) used your upline code and is now on <strong>${escapeHtml(teamName)}</strong>.</p>
-<p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">They can see your team's Goldmine now; you can switch that off on your Team page. They're not in your round robin yet: add them there when you want them getting leads. If you don't know them, remove them there.</p>
+<p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">They can work your team's Goldmine now; you can switch that off next to their name on your Team page. To share your new leads with your team, pick Round robin with Goldmine or Goldmine only on your dashboard. If you don't know them, remove them on your Team page.</p>
 <div style="text-align:center;margin:8px 0 24px;"><a href="${teamUrl}" style="display:inline-block;background:#dc2626;color:#fff;font-size:15px;font-weight:600;padding:14px 34px;border-radius:8px;text-decoration:none;">Open your Team page →</a></div>
 <p style="margin:0;font-size:13px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:16px;">If the button doesn't work, paste this link into your browser:<br/><span style="color:#64748b;word-break:break-all;">${escapeHtml(teamUrl)}</span></p>
 </td></tr></table></td></tr></table></body></html>`;
