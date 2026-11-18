@@ -4,6 +4,7 @@ import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
 import { findPackage, leadPoolIdsFor } from "@/data/packages";
 import { NOT_TEST_LEAD } from "@/lib/testLeads";
 import { isPausedHouseUser } from "@/lib/housePause";
+import { isClientPaused } from "@/lib/clientPause";
 import { isOverAgeRequest, MAX_AGE_FOR_AGE_REPLACEMENT } from "@/lib/replacementReasons";
 
 // Replacements are fresh-only: a candidate must have entered the CRM within the
@@ -85,6 +86,11 @@ export async function fulfillReplacement(
   const assignee = bad.assignedUserId ?? request.requestedById;
   const orderId = bad.orderId ?? null;
   const poolIds = leadPoolIdsFor(bad.packageId);
+
+  // CLIENT_PAUSES (lib/clientPause.ts): a client on a dated pause gets nothing
+  // new, replacements included. The request stays pending, exactly as when no
+  // fresh lead is in stock, and is filled after the pause.
+  if (isClientPaused(assignee)) return { ok: false, status: "NO_STOCK", state: bad.state, poolIds };
 
   // Capture the states the client ordered: a replacement may come from ANY of
   // them, not only the bad lead's state (owner directive, Sep 2026).

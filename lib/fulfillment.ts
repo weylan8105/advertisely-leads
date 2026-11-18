@@ -12,6 +12,7 @@ import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { loadQuotaSlots, takeQuotaSlot } from "@/lib/teamQuota";
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
+import { isClientPaused } from "@/lib/clientPause";
 import { SHARED_POOL, TOGGLE_ONLY_POOLS, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, type ClientSlot } from "@/lib/sharedPool";
 import {
   TEMP_ROTATION_GUEST,
@@ -39,6 +40,9 @@ export async function fulfillOrder(orderId: string, opts: { onlyLeadId?: string 
   });
   if (!order) return 0;
   if (order.status === "DELIVERED" || order.status === "REFUNDED") return 0;
+  // CLIENT_PAUSES (lib/clientPause.ts): a client on a dated pause gets nothing
+  // new. The order stays open and fills again once the pause is over.
+  if (isClientPaused(order.deliverToUserId ?? order.userId)) return 0;
 
   // Remaining is based on the LIVE count of non-trashed leads actually on the
   // order — not the stored fulfilledCount — so delivery self-heals from any
@@ -642,8 +646,14 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
   const adminSlots = await getEligibleAdminSlots();
 
   // Orders that can take THIS lead: cover its state, in the age window, not full.
+  // CLIENT_PAUSES (lib/clientPause.ts): a client on a dated pause has no turn,
+  // so the lead goes to the next client instead of waiting on their order.
   const eligibleOrders = pendingOrders.filter(
-    (o) => o.filterStates.length > 0 && o.leads.length < o.quantity && leadAgeEligibleForOrder(o, lead.receivedAt),
+    (o) =>
+      o.filterStates.length > 0 &&
+      o.leads.length < o.quantity &&
+      leadAgeEligibleForOrder(o, lead.receivedAt) &&
+      !isClientPaused(o.deliverToUserId ?? o.userId),
   );
 
   // LICENSING GUARD: never deliver a lead in a state the recipient isn't licensed
@@ -717,6 +727,9 @@ export async function tryFulfillForNewLead(leadId: string): Promise<void> {
       rotation.push(c.userId);
     }
   }
+
+  // CLIENT_PAUSES: nobody on a dated pause takes a turn, whichever kind of slot they hold.
+  for (let i = rotation.length - 1; i >= 0; i--) if (isClientPaused(rotation[i])) rotation.splice(i, 1);
 
   if (rotation.length > 0) {
     // Toggle-only pools keep their own turn order, so the main rotation's turns don't skew theirs.
