@@ -87,6 +87,8 @@ export async function GET() {
           // Joined with a promo code: no membership payment until this date.
           freeUntil: live.status === "trialing" && live.trial_end ? new Date(live.trial_end * 1000).toISOString() : null,
           feeWaived: waived(live),
+          // Their promo code waives the management fee on this much more shared-lead spend.
+          noManagementFeeLeftCents: summary?.program.noManagementFeeLeftCents ?? null,
           // Membership fees they haven't paid since joining on a waived membership.
           savedCents: waived(live)
             ? waivedSavingsCents(live.metadata?.feeWaivedAt ?? (live.start_date ? new Date(live.start_date * 1000) : null))

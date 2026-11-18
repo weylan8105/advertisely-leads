@@ -18,7 +18,7 @@ import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding 
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
 import { isPaidInFeeAdvertiser } from "./paidInFeeTeams";
-import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram, onFeeWaiverTeam, waiverEnded } from "./advertiserProgram";
+import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram, onFeeWaiverTeam, promoNoManagementFeeCents, waiverEnded } from "./advertiserProgram";
 
 export const PROCESSING_FEE_RATE = 0.03; // of each payment
 export const SERVICE_FEE_RATE = 0.2;
@@ -147,6 +147,7 @@ export interface ClientSubscription {
   adSpend: boolean;
   program: boolean; // the Advertiser Program (lib/advertiserProgram.ts)
   feeWaived?: boolean; // a program membership joined with the fee waived (FEE_WAIVER)
+  promoCode?: string; // the promo code it was joined with (PROGRAM_PROMO_CODES)
   startedAt: string | null;
   currentPeriodEnd: string | null; // next payment
   cancelAtPeriodEnd: boolean;
@@ -316,11 +317,11 @@ async function manualPayments(userId: string): Promise<ClientPayment[]> {
   }));
 }
 
-/** What shared-pool leads have cost this client, in cents (a positive number). */
-async function sharedLeadCharges(userId: string): Promise<number> {
+/** What shared-pool leads have cost this client, in cents (a positive number), since a date if given. */
+async function sharedLeadCharges(userId: string, since?: Date): Promise<number> {
   if (!prisma) return 0;
   const agg = await prisma.adSpendPayment.aggregate({
-    where: { userId, method: SHARED_LEAD_METHOD },
+    where: { userId, method: SHARED_LEAD_METHOD, ...(since ? { createdAt: { gte: since } } : {}) },
     _sum: { amountCents: true },
   });
   return -(agg._sum.amountCents ?? 0);
@@ -396,6 +397,7 @@ async function clientSubscriptions(customerIds: string[]): Promise<ClientSubscri
         adSpend: false,
         program: sub.metadata?.kind === ADVERTISER_PROGRAM_KIND,
         feeWaived: sub.metadata?.kind === ADVERTISER_PROGRAM_KIND && !!sub.metadata?.feeWaived,
+        ...(sub.metadata?.kind === ADVERTISER_PROGRAM_KIND && sub.metadata?.promoCode ? { promoCode: String(sub.metadata.promoCode) } : {}),
         startedAt: sub.start_date ? new Date(sub.start_date * 1000).toISOString() : null,
         currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
         cancelAtPeriodEnd: !!sub.cancel_at_period_end || !!sub.cancel_at,
@@ -512,6 +514,8 @@ export interface AdSpendSummary {
     feeWaiverTeam: boolean; // on the Enhanced Wealth team: the membership is waived for them (FEE_WAIVER)
     feeWaived: boolean; // a member right now on a waived membership
     waiverEnded: boolean; // had a waived membership, but left the team, so it no longer counts
+    noManagementFee: boolean; // their promo code waives the management fee on their leads right now
+    noManagementFeeLeftCents: number | null; // shared-lead spend left before the management fee starts (promo members)
   };
   autoPause: boolean;
   pausedForBudget: boolean;
@@ -588,6 +592,20 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   ]);
   // Leads from the shared pool, charged at that campaign's cost per lead.
   const sharedCents = await sharedLeadCharges(user.id).catch(() => 0);
+  // A promo code that waives the management fee on the first stretch of spend (PROGRAM_PROMO_CODES).
+  const isMember = isProgramMember(cardPayments.subscriptions, waiver);
+  const promoSub = isMember
+    ? cardPayments.subscriptions.find(
+        (x) => x.program && ["active", "trialing", "past_due"].includes(x.status) && promoNoManagementFeeCents(x.promoCode, user.id) > 0,
+      )
+    : undefined;
+  let noManagementFeeLeftCents: number | null = null;
+  if (promoSub) {
+    const since = promoSub.startedAt ? new Date(promoSub.startedAt) : undefined;
+    const used = await sharedLeadCharges(user.id, since).catch(() => null);
+    // A failed read keeps the fee on (never undercharge on a guess).
+    noManagementFeeLeftCents = used === null ? 0 : Math.max(0, promoNoManagementFeeCents(promoSub.promoCode, user.id) - used);
+  }
   if (!stripe) errors.push("Stripe isn't connected.");
   // A failed read must never look like a $0 balance (and pause a campaign).
   if (!sharedPoolOnly && READ_TOKEN && !meta.campaigns.length && !errors.length) errors.push("No campaign found for this client.");
@@ -647,7 +665,7 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     campaigns: meta.campaigns,
     sharedPoolOnly,
     program: {
-      member: isProgramMember(cardPayments.subscriptions, waiver),
+      member: isMember,
       joined: hasJoinedProgram(cardPayments.subscriptions),
       mustJoin: mustJoinProgram(user.email, cardPayments.subscriptions, new Date(), {
         ...waiver,
@@ -662,6 +680,8 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
         waiver.onWaiverTeam &&
         cardPayments.subscriptions.some((x) => x.program && x.feeWaived && ["active", "trialing", "past_due"].includes(x.status)),
       waiverEnded: waiverEnded(cardPayments.subscriptions, waiver),
+      noManagementFee: (noManagementFeeLeftCents ?? 0) > 0,
+      noManagementFeeLeftCents,
     },
     autoPause: user.adSpendAutoPause,
     pausedForBudget: user.adSpendPausedCampaignIds.length > 0,

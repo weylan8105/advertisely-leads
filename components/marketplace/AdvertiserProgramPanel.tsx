@@ -26,6 +26,7 @@ interface ProgramData {
     freeUntil?: string | null;
     feeWaived?: boolean;
     savedCents?: number;
+    noManagementFeeLeftCents?: number | null;
   } | null;
   // On the Enhanced Wealth team: the membership is waived for them.
   feeWaiver?: { label: string } | null;
@@ -257,6 +258,17 @@ export function AdvertiserProgramPanel() {
                   <div className="text-emerald-800">
                     Your promo code covers your membership until <strong>{fmtDate(m.freeUntil)}</strong>.
                     {ending ? " Your membership ends that day." : <> Your first {usd0(offer.amountCents)} payment is that day, then {every}.</>}
+                  </div>
+                </div>
+              </div>
+            )}
+            {m.noManagementFeeLeftCents != null && m.noManagementFeeLeftCents > 0 && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                <div>
+                  <div className="font-semibold">No management fee on your leads</div>
+                  <div className="text-emerald-800">
+                    Your promo code waives the {mgmtPct}% management fee on your next <strong>{usd0(m.noManagementFeeLeftCents)}</strong> of leads. You pay the cost per lead plus the {Math.round(offer.cardFeeRate * 100)}% card fee.
                   </div>
                 </div>
               </div>

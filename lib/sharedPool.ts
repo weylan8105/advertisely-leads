@@ -338,15 +338,16 @@ export function isFreeUntilCplClient(email: string | null | undefined): boolean 
   return FREE_UNTIL_CPL.emails.includes((email ?? "").trim().toLowerCase());
 }
 
-export type ClientSlot = { userId: string; name: string; cplCents: number; free?: boolean; program?: boolean };
+export type ClientSlot = { userId: string; name: string; cplCents: number; free?: boolean; program?: boolean; noManagementFee?: boolean };
 
 /**
  * What a client pays for one shared lead: the pool's cost per lead, plus the
  * 20% management fee and the card fee for Advertiser Program members
- * (lib/advertiserProgram.ts).
+ * (lib/advertiserProgram.ts). A promo code can waive the management fee for a
+ * while (PROGRAM_PROMO_CODES noManagementFeeCents): then it's cost + card fee.
  */
-export function clientLeadPriceCents(poolCplCents: number, s: { program: { member: boolean } }): number {
-  return s.program.member ? programLeadPriceCents(poolCplCents) : poolCplCents;
+export function clientLeadPriceCents(poolCplCents: number, s: { program: { member: boolean; noManagementFee?: boolean } }): number {
+  return s.program.member ? programLeadPriceCents(poolCplCents, { noManagementFee: !!s.program.noManagementFee }) : poolCplCents;
 }
 
 export function licensedIn(states: string[], state: string | null): boolean {
@@ -393,7 +394,13 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
     }
     const price = clientLeadPriceCents(cplCents, s);
     if (s.balanceCents < price) continue;
-    out.push({ userId: c.id, name: c.name?.trim() || c.email, cplCents: price, ...(s.program.member ? { program: true } : {}) });
+    out.push({
+      userId: c.id,
+      name: c.name?.trim() || c.email,
+      cplCents: price,
+      ...(s.program.member ? { program: true } : {}),
+      ...(s.program.member && s.program.noManagementFee ? { noManagementFee: true } : {}),
+    });
   }
   return out;
 }
@@ -408,7 +415,13 @@ export async function deliverSharedLeadToClient(leadId: string, slot: ClientSlot
     slot.userId,
     slot.free
       ? `Shared ${label} round-robin — free lead (no charge) while the cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
-      : `Shared ${label} round-robin — ${cost}${slot.program ? " (cost per lead + 20% management + 3% card fee)" : " cost per lead"} taken from the ad-spend balance.`,
+      : `Shared ${label} round-robin — ${cost}${
+          slot.program
+            ? slot.noManagementFee
+              ? " (cost per lead + 3% card fee; promo code: no management fee)"
+              : " (cost per lead + 20% management + 3% card fee)"
+            : " cost per lead"
+        } taken from the ad-spend balance.`,
     { skipTeamFunding: true },
   );
   if (!ok) return false;

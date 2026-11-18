@@ -76,9 +76,20 @@ export function waivedSavingsCents(startedAt: Date | string | null | undefined, 
 // free trial: card on file, $0 today, then the regular $500 every 2 weeks. A
 // code works only on the account it names, and only for someone who has never
 // been in the program, so it can't be used twice or handed to someone else.
-export const PROGRAM_PROMO_CODES: Record<string, { userId: string; freeDays: number; why: string }> = {
+// noManagementFeeCents: the member's shared leads skip the 20% management fee
+// (they still pay the cost per lead + the 3% card fee) until their shared-lead
+// charges since joining reach this amount.
+export const PROGRAM_PROMO_CODES: Record<string, { userId: string; freeDays: number; noManagementFeeCents?: number; why: string }> = {
   // Luke Scheffers paid the owner $1,000 directly: one full month (two memberships) free.
   LUKE1000: { userId: "cmu1muk4m0000jp043c27hqht", freeDays: 28, why: "paid $1,000 directly (Nov 2026)" },
+  // David Layton paid the $3,000 November fee up front (owner, Nov 18 2026): his first
+  // 4 weeks (two memberships) free, and his first $15,000 of ad spend without the management fee.
+  DAVID3000: {
+    userId: "cmw2i7yr40000jp071hed4rll",
+    freeDays: 28,
+    noManagementFeeCents: 1_500_000,
+    why: "paid the $3,000 November fee up front (Nov 2026)",
+  },
 };
 
 export const normalizePromoCode = (code: unknown) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -96,9 +107,18 @@ export function programPromo(
   return { ok: true, code: key, freeDays: promo.freeDays };
 }
 
-/** A member's price for a lead: the campaign's cost per lead, plus the management fee, plus the card fee. */
-export const programLeadPriceCents = (cplCents: number) =>
-  Math.round(cplCents * (1 + ADVERTISER_PROGRAM.managementRate) * (1 + ADVERTISER_PROGRAM.cardFeeRate));
+/** The shared-lead spend a member's promo code gives without the management fee (cents), or 0. */
+export function promoNoManagementFeeCents(code: unknown, userId: string): number {
+  const promo = PROGRAM_PROMO_CODES[normalizePromoCode(code)];
+  return promo && promo.userId === userId ? promo.noManagementFeeCents ?? 0 : 0;
+}
+
+/**
+ * A member's price for a lead: the campaign's cost per lead, plus the management
+ * fee (unless their promo code waives it for now), plus the card fee.
+ */
+export const programLeadPriceCents = (cplCents: number, o: { noManagementFee?: boolean } = {}) =>
+  Math.round(cplCents * (1 + (o.noManagementFee ? 0 : ADVERTISER_PROGRAM.managementRate)) * (1 + ADVERTISER_PROGRAM.cardFeeRate));
 
 /** A Stripe subscription as the program checks it (ClientSubscription in lib/adSpend.ts fits). */
 export interface ProgramSub {

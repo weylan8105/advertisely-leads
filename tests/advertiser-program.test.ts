@@ -149,6 +149,25 @@ describe("one-time promo code", () => {
   });
 });
 
+describe("David's promo code (paid $3,000 up front)", () => {
+  const DAVID = "cmw2i7yr40000jp071hed4rll";
+  it("gives his account 4 weeks free and $15,000 of spend without the management fee", () => {
+    expect(program.programPromo("david3000", DAVID, [])).toEqual({ ok: true, code: "DAVID3000", freeDays: 28 });
+    expect(program.promoNoManagementFeeCents("DAVID3000", DAVID)).toBe(1_500_000);
+    expect(program.programPromo("DAVID3000", "someone-else", [])).toMatchObject({ ok: false });
+    expect(program.promoNoManagementFeeCents("DAVID3000", "someone-else")).toBe(0);
+    expect(program.promoNoManagementFeeCents("LUKE1000", "cmu1muk4m0000jp043c27hqht")).toBe(0);
+    expect(program.promoNoManagementFeeCents(undefined, DAVID)).toBe(0);
+  });
+  it("without the management fee a member pays cost per lead + the 3% card fee", () => {
+    expect(program.programLeadPriceCents(2_500, { noManagementFee: true })).toBe(2_575);
+    expect(clientLeadPriceCents(2_045, { program: { member: true, noManagementFee: true } })).toBe(2_106);
+    expect(clientLeadPriceCents(2_045, { program: { member: true, noManagementFee: false } })).toBe(2_528);
+    // Not a member (his November cover): cost per lead, as before.
+    expect(clientLeadPriceCents(2_045, { program: { member: false, noManagementFee: true } })).toBe(2_045);
+  });
+});
+
 describe("recordProgramInvoice", () => {
   const invoice = (o: Record<string, unknown> = {}) =>
     ({
