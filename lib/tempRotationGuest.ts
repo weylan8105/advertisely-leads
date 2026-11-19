@@ -10,47 +10,34 @@ import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { goldmineLeadData } from "./leadDestination";
 
 // ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
-// Kyle Vietzke (David Layton's team, since Nov 11) gets leads while their own campaigns ramp up. Until the owner says to
-// stop, each of them takes turns on (since Nov 19 Kyle's turns land in David's
-// team Goldmine, see `toPayerGoldmine` below):
-//  - Text-verified Enhanced Wealth Blue Collar leads (the OTP form below):
-//    these normally go 100% to the house (Ryan); now Ryan and the guests take
-//    even turns (Kyle, Ryan, Kyle, …).
-//  - ABCA landing-page leads (the early-retirement-quiz funnel): each guest is
-//    one more slot in the per-state round-robin, next to the open buyer orders
-//    and admin overflow slots.
-// While HOUSE_PAUSE (lib/housePause.ts) is on there are no Ryan turns: every
-// Blue Collar lead goes to the per-state round-robin and the guests are slots.
+// A guest is an agent who gets leads while their own campaign ramps up. The
+// list is empty since Nov 19 2026 (see below). While someone is on it, they
+// take turns on:
+//  - Text-verified Enhanced Wealth Blue Collar leads (the OTP form below), when
+//    the shared pool is off: Ryan and the guests take even turns.
+//  - ABCA landing-page and Blue Collar leads: each guest is one more slot in
+//    the per-state round-robin, next to the open buyer orders, admin overflow
+//    slots and advertiser clients.
 //
-// TO TURN IT OFF: set `enabled: false` below and deploy (or remove one guest
-// from the list to stop just theirs). Nothing else changes — leads already
-// delivered stay where they are, and routing goes straight back to normal. To
-// remove it entirely, delete this file and its two call sites in
+// To remove it entirely, delete this file and its two call sites in
 // lib/fulfillment.ts (search "TEMP_ROTATION_GUEST"). The turn counter in
 // DistributionCursor id "temp-guest:ew-otp" is harmless to leave behind.
+type GuestConfig = { email: string; name: string; reason: string; billTo?: GuestBillTo; toPayerGoldmine?: boolean };
+
 export const TEMP_ROTATION_GUEST = {
   enabled: true,
-  guests: [
-    {
-      email: "kylevitz@gmail.com",
-      name: "Kyle",
-      reason: "temporary rotation for Kyle while his new creatives ramp up",
-      // Owner request (Nov 13 2026): every lead Kyle takes here counts as
-      // David's (David's name on the card, on David's dashboard). It's free
-      // while David's cost per lead is above FREE_UNTIL_CPL (lib/sharedPool.ts);
-      // at or below it, it's charged to David's ad-spend balance at the source
-      // campaign's cost per lead, and skipped if David can't cover it.
-      billTo: { email: "dclayton1235@gmail.com" },
-      // Owner request (Nov 19 2026): Kyle's turns land in David's team Goldmine
-      // (owned by David, New Lead stage) instead of Kyle's own pipeline, where
-      // the whole team works them. No lead email and no Ringy forward, like
-      // every Goldmine lead. Kyle's existing leads were moved there Nov 18.
-      toPayerGoldmine: true,
-    },
-    // Angelo was a free guest Nov 13; removed the same day (owner: his leads come
-    // out of his ad spend). He still gets leads as an advertiser client in the
-    // shared pool (lib/sharedPool.ts), charged per lead.
-  ],
+  // Nobody is a guest now.
+  // Kyle Vietzke (David Layton's team) was one from Nov 11 to Nov 19 2026,
+  // billed to David and, at the end, landing in David's team Goldmine. Owner
+  // (Nov 19 2026): "Treat David as the advertiser and Kyle as just the agent on
+  // his team, just like everybody else." So David takes one turn as an
+  // advertiser client in the shared pool (lib/sharedPool.ts), Kyle's licensed
+  // states count toward that turn as a teammate in rotation, and the lead lands
+  // where David's dashboard setting says (his team Goldmine).
+  // Angelo was a free guest Nov 13 and removed the same day; he is an
+  // advertiser client in the shared pool too.
+  // To add a guest again: { email, name, reason, billTo?: { email }, toPayerGoldmine?: true }.
+  guests: [] as GuestConfig[],
 };
 
 // Enhanced Wealth page forms with the one-time-passcode (text) check. EWWS's
@@ -135,8 +122,8 @@ export async function getRotationGuests(): Promise<RotationGuest[]> {
       licensedStates: u.licensedStates ?? [],
       name: g.name,
       reason: g.reason,
-      ...("billTo" in g && g.billTo ? { billTo: g.billTo } : {}),
-      ...("toPayerGoldmine" in g && g.toPayerGoldmine ? { toPayerGoldmine: true } : {}),
+      ...(g.billTo ? { billTo: g.billTo } : {}),
+      ...(g.toPayerGoldmine ? { toPayerGoldmine: true } : {}),
     });
   }
   return out;

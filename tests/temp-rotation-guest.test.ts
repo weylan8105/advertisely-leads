@@ -36,13 +36,11 @@ describe("temporary guest rotation (Kyle)", () => {
     expect(guestTurnIndex(1, 0)).toBe(-1);
   });
 
-  it("Kyle is the only free guest; Angelo pays per lead as a client", () => {
-    expect(TEMP_ROTATION_GUEST.guests.map((g) => g.name)).toEqual(["Kyle"]);
+  it("nobody is a guest: David is one advertiser slot and Kyle an agent on his team", () => {
+    expect(TEMP_ROTATION_GUEST.guests).toEqual([]);
   });
 
-  it("Kyle's turns land in David's team Goldmine, only when David owns the team and Goldmine is on", () => {
-    const kyle = TEMP_ROTATION_GUEST.guests.find((g) => g.name === "Kyle") as any;
-    expect(kyle.toPayerGoldmine).toBe(true);
+  it("a guest's turns can land in the payer's team Goldmine, only when the payer owns the team and Goldmine is on", () => {
     const guest = { toPayerGoldmine: true, organizationId: "team" };
     const org = { id: "team", ownerId: "david", goldmineEnabled: true };
     expect(guestGoldmineOrgId(guest, "david", org)).toBe("team");
@@ -62,8 +60,7 @@ describe("temporary guest rotation (Kyle)", () => {
   });
 });
 
-describe("free until $35 a lead (David via Kyle, Angelo)", async () => {
-  const { TEMP_ROTATION_GUEST } = await import("@/lib/tempRotationGuest");
+describe("free until $35 a lead (David, Angelo)", async () => {
   const { needsFreeLeads, isFreeUntilCplClient } = await import("@/lib/sharedPool");
   it("free while the dashboard cost per lead is above $35, charged at or below", () => {
     expect(needsFreeLeads({ costPerLeadCents: 9699, spendCents: 116382, leads: 12 })).toBe(true);
@@ -72,11 +69,9 @@ describe("free until $35 a lead (David via Kyle, Angelo)", async () => {
     expect(needsFreeLeads({ costPerLeadCents: null, spendCents: 5000, leads: 0 })).toBe(true);
     expect(needsFreeLeads({ costPerLeadCents: null, spendCents: 0, leads: 0 })).toBe(false);
   });
-  it("applies to David and Angelo only; Kyle's guest leads count as David's", () => {
+  it("applies to David and Angelo only", () => {
     expect(isFreeUntilCplClient("dclayton1235@gmail.com")).toBe(true);
     expect(isFreeUntilCplClient("Angeloo.Rodriguez05@gmail.com")).toBe(true);
     expect(isFreeUntilCplClient("jljensen38@gmail.com")).toBe(false);
-    const kyle = TEMP_ROTATION_GUEST.guests.find((g) => g.email === "kylevitz@gmail.com") as any;
-    expect(kyle.billTo).toEqual({ email: "dclayton1235@gmail.com" });
   });
 });
