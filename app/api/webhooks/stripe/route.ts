@@ -8,7 +8,7 @@ import { clawbackReferralBucks } from "@/lib/referral";
 import { AD_SPEND_KIND, enforceAdSpend, forgetAdSpendSummary, processingFeeCents } from "@/lib/adSpend";
 import { TEAM_AD_SPEND_KIND, recordTeamPayment } from "@/lib/teamAdSpend";
 import { ADVERTISER_PROGRAM_KIND } from "@/lib/advertiserProgram";
-import { membersFundThemselves, creditOwnSpendFromTeamCheckout } from "@/lib/teamAdvertiser";
+import { teamFundingClosedReason, creditOwnSpendFromTeamCheckout } from "@/lib/teamAdvertiser";
 import { enrollProgramMember, recordProgramInvoice } from "@/lib/advertiserProgramBilling";
 import Stripe from "stripe";
 
@@ -85,12 +85,17 @@ export async function POST(req: NextRequest) {
           if (s.payment_status !== "paid") break;
           const grossCents = s.amount_total ?? 0;
           const pi = typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id;
-          // On a team where members fund themselves, the money is the member's own:
-          // it never goes onto the upline's campaign or account (lib/teamAdvertiser.ts).
+          // Where the upline's campaign can't deliver leads for a member's money
+          // (members fund themselves, the house, no campaign of their own), the
+          // money is the member's own: it never goes onto the upline's campaign
+          // or account (lib/teamAdvertiser.ts).
           const upline = prisma
-            ? await prisma.user.findUnique({ where: { id: s.metadata.advertiserId }, select: { email: true } })
+            ? await prisma.user.findUnique({
+                where: { id: s.metadata.advertiserId },
+                select: { email: true, isAdvertiser: true, adCampaignIds: true },
+              })
             : null;
-          if (membersFundThemselves(upline?.email)) {
+          if (teamFundingClosedReason(upline)) {
             const own = await creditOwnSpendFromTeamCheckout({
               userId: s.metadata.userId,
               grossCents,

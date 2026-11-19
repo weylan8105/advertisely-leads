@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { membersFundThemselves } from "@/lib/teamAdvertiser";
+import { uplineCampaignFundable } from "@/lib/teamAdvertiser";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
@@ -49,10 +49,11 @@ export async function GET() {
   // Advertiser team: members the owner lets add spend to the owner's campaign.
   const org = await prisma.organization.findUnique({
     where: { id: ctx.organizationId },
-    select: { ownerId: true, owner: { select: { isAdvertiser: true, email: true } } },
+    select: { ownerId: true, owner: { select: { isAdvertiser: true, email: true, adCampaignIds: true } } },
   });
-  // No "Ad spend on/off" switch on a team where members fund themselves (lib/teamAdvertiser.ts).
-  const advertiserTeam = !!org?.owner?.isAdvertiser && !membersFundThemselves(org.owner.email);
+  // No "Ad spend on/off" switch unless the owner runs a campaign of their own
+  // that a member's money can buy leads from (lib/teamAdvertiser.ts).
+  const advertiserTeam = uplineCampaignFundable(org?.owner);
   const credits = advertiserTeam && org ? await teamBalances(org.ownerId) : new Map<string, number>();
 
   // Ringy: a manager who has Ringy can link it for downlines (lib/ringyAccess.ts).

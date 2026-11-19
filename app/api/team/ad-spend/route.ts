@@ -5,7 +5,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { MIN_TOP_UP_CENTS, MAX_TOP_UP_CENTS, campaignCplCents } from "@/lib/adSpend";
 import { TEAM_AD_SPEND_KIND, fundableMembership, teamFunding } from "@/lib/teamAdSpend";
-import { membersFundThemselves } from "@/lib/teamAdvertiser";
+import { teamFundingClosedReason, moveStrandedTeamCredit, FUNDING_CLOSED_MESSAGE } from "@/lib/teamAdvertiser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,16 +31,32 @@ export async function GET() {
       OR: [{ adSpendAccess: true }, { organization: { ownerId: { in: paidInto.map((r) => r.advertiserId) } } }],
     },
     orderBy: { adSpendAccess: "desc" }, // a switched-on team wins over a switched-off one
-    select: { adSpendAccess: true, organization: { select: { ownerId: true, owner: { select: { name: true, email: true } } } } },
+    select: {
+      adSpendAccess: true,
+      organization: { select: { ownerId: true, owner: { select: { name: true, email: true, isAdvertiser: true, adCampaignIds: true } } } },
+    },
   });
   const campaigns = [];
   const seen = new Set<string>();
   for (const m of memberships) {
     if (seen.has(m.organization.ownerId)) continue;
     seen.add(m.organization.ownerId);
-    // On this team a member's ad spend is their own: they add it from their dashboard, not here.
-    if (membersFundThemselves(m.organization.owner.email)) continue;
     const advertiserId = m.organization.ownerId;
+    // This upline's campaign can't deliver leads for a member's money, so their
+    // ad spend is their own: they add it from their dashboard, not here
+    // (lib/teamAdvertiser.ts). Credit left on a campaign that stopped being one
+    // moves to their own balance instead of sitting there.
+    const closed = teamFundingClosedReason(m.organization.owner);
+    if (closed) {
+      if (closed === "house" || closed === "shared-pool-only") {
+        await moveStrandedTeamCredit({
+          userId,
+          advertiserId,
+          advertiserName: m.organization.owner.name?.trim() || m.organization.owner.email,
+        }).catch((e) => console.error("[team ad spend] moving stranded credit failed", e));
+      }
+      continue;
+    }
     const [funding, cplCents] = await Promise.all([teamFunding(advertiserId), campaignCplCents(advertiserId)]);
     const mine = funding.find((f) => f.userId === userId);
     const creditCents = Math.max(0, mine?.creditCents ?? 0);
@@ -87,14 +103,12 @@ export async function POST(req: NextRequest) {
 
   const [user, advertiser] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } }),
-    prisma.user.findUnique({ where: { id: body.advertiserId }, select: { email: true, name: true } }),
+    prisma.user.findUnique({ where: { id: body.advertiserId }, select: { email: true, name: true, isAdvertiser: true, adCampaignIds: true } }),
   ]);
   if (!user || !advertiser) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-  if (membersFundThemselves(advertiser.email)) {
-    return NextResponse.json(
-      { error: "On this team your ad spend goes to your own account. Add it with the Add spend card on your dashboard." },
-      { status: 403 },
-    );
+  // Never take money for a campaign that can't deliver leads for it (lib/teamAdvertiser.ts).
+  if (teamFundingClosedReason(advertiser)) {
+    return NextResponse.json({ error: FUNDING_CLOSED_MESSAGE }, { status: 403 });
   }
   const advertiserName = advertiser.name?.trim() || advertiser.email;
 

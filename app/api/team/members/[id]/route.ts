@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { ensureOrgContext, canManageTeam } from "@/lib/org";
+import { uplineCampaignFundable } from "@/lib/teamAdvertiser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.role === "ADMIN" || body.role === "AGENT") data.role = body.role;
   if (typeof body.goldmineAccess === "boolean") data.goldmineBlocked = !body.goldmineAccess;
   if (typeof body.adSpendAccess === "boolean") data.adSpendAccess = body.adSpendAccess;
+  // Can't be switched on where the owner has no campaign of their own: the
+  // member's money could never buy a lead there (lib/teamAdvertiser.ts).
+  if (data.adSpendAccess === true) {
+    const org = await prisma.organization.findUnique({
+      where: { id: g.membership.organizationId },
+      select: { owner: { select: { email: true, isAdvertiser: true, adCampaignIds: true } } },
+    });
+    if (!uplineCampaignFundable(org?.owner)) {
+      return NextResponse.json(
+        { error: "This team has no campaign of its own for members to add spend to. Members add ad spend to their own account from their dashboard." },
+        { status: 409 },
+      );
+    }
+  }
   // Admins help run the team, so becoming one turns Goldmine on (it can be switched off after).
   if (data.role === "ADMIN" && data.goldmineBlocked === undefined) data.goldmineBlocked = false;
   if (Object.keys(data).length === 0) {
