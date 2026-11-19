@@ -18,6 +18,7 @@ import { TEAM_AD_SPEND_KIND, teamFunding, teamFundingPayments, type TeamFunding 
 import { stripe } from "./stripe";
 import { setCampaignStatus, setCampaignSpendCap, setDailyBudget } from "./metaAds";
 import { isPaidInFeeAdvertiser } from "./paidInFeeTeams";
+import { adSpendOrders, type AdSpendOrder } from "./adSpendOrders";
 import { ADVERTISER_PROGRAM_KIND, hasJoinedProgram, isProgramMember, legacyCoverEnds, mustJoinProgram, onFeeWaiverTeam, promoNoManagementFeeCents, waiverEnded } from "./advertiserProgram";
 
 export const PROCESSING_FEE_RATE = 0.03; // of each payment
@@ -327,6 +328,17 @@ async function sharedLeadCharges(userId: string, since?: Date): Promise<number> 
   return -(agg._sum.amountCents ?? 0);
 }
 
+/** What their latest shared-pool lead cost them, or null. */
+async function lastSharedLeadCents(userId: string): Promise<number | null> {
+  if (!prisma) return null;
+  const row = await prisma.adSpendPayment.findFirst({
+    where: { userId, method: SHARED_LEAD_METHOD, amountCents: { lt: 0 } },
+    orderBy: { createdAt: "desc" },
+    select: { amountCents: true },
+  });
+  return row ? -row.amountCents : null;
+}
+
 // The account's charges from the last year, shared across clients for a minute.
 let recentChargesCache: { at: number; charges: Promise<any[]> } | null = null;
 function recentCharges(): Promise<any[]> {
@@ -487,6 +499,10 @@ export interface AdSpendSummary {
   serviceFeeCents: number;
   chargedCents: number; // spend + service fees
   balanceCents: number; // available − charged
+  // Each deposit as its own order, oldest first (lib/adSpendOrders.ts); a
+  // leftover under one lead's cost carries into the next deposit.
+  orders: AdSpendOrder[];
+  orderLeadCostCents: number | null; // the lead cost that decides when an order is complete
   thisMonth: MonthCharge;
   leads: number;
   leadsThisMonth: number;
@@ -591,7 +607,10 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     teamFunding(user.id).catch(() => [] as TeamFunding[]),
   ]);
   // Leads from the shared pool, charged at that campaign's cost per lead.
-  const sharedCents = await sharedLeadCharges(user.id).catch(() => 0);
+  const [sharedCents, lastSharedCents] = await Promise.all([
+    sharedLeadCharges(user.id).catch(() => 0),
+    lastSharedLeadCents(user.id).catch(() => null),
+  ]);
   // A promo code that waives the management fee on the first stretch of spend (PROGRAM_PROMO_CODES).
   const isMember = isProgramMember(cardPayments.subscriptions, waiver);
   const promoSub = isMember
@@ -631,6 +650,12 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
   // A target date set for the client spends what's left evenly through it; otherwise each payment over its week.
   const periods = targetDateSet ? [] : paymentPeriods(payments);
   const remaining = affordableSpendCents(balanceCents, thisMonth.spendCents, feeOnPayments);
+  const costPerLeadCents = leads.total > 0 ? Math.round((sum("spendCents") + sharedCents) / leads.total) : null;
+  // Shared-pool clients pay a set price per lead; campaign clients their campaign's cost per lead.
+  const orderLeadCostCents = sharedPoolOnly ? lastSharedCents ?? costPerLeadCents : costPerLeadCents ?? lastSharedCents;
+  // Everything that has come out of the budget, so the orders' leftovers add up to the balance.
+  const depositsNet = payments.filter((p) => p.amountCents > 0).reduce((t, p) => t + p.amountCents - p.processingFeeCents, 0);
+  const orders = adSpendOrders(payments, depositsNet - balanceCents, orderLeadCostCents);
 
   const summary: AdSpendSummary = {
     userId: user.id,
@@ -647,10 +672,12 @@ export async function getAdSpendSummary(userId: string, opts: { fresh?: boolean 
     serviceFeeCents: sum("serviceFeeCents"),
     chargedCents,
     balanceCents,
+    orders,
+    orderLeadCostCents,
     thisMonth,
     leads: leads.total,
     leadsThisMonth: leads.thisMonth,
-    costPerLeadCents: leads.total > 0 ? Math.round((sum("spendCents") + sharedCents) / leads.total) : null,
+    costPerLeadCents,
     dailyBudgetCents: activeBudget || null,
     daysLeft: activeBudget > 0 ? Math.max(0, Math.floor(balanceCents / activeBudget)) : null,
     targetDate,

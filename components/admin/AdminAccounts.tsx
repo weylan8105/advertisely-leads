@@ -661,37 +661,41 @@ function AdSpendProgress({ userId, summary }: { userId: string; summary: AdSpend
     );
   }
   const s = summary!;
-  const { pct, out, low } = adSpendProgress(s);
+  const { pct, out, low, complete, order, spentCents, budgetCents } = adSpendProgress(s);
   return (
     <a
       href={`/dashboard?advertiser=${encodeURIComponent(userId)}`}
       className="block w-44 hover:opacity-80"
-      title={`Ad spend: ${usd0(s.chargedCents)} spent of ${usd0(s.availableCents)} paid in. ${
-        s.dailyBudgetCents ? `${usd0(s.dailyBudgetCents)}/day budget. ` : ""
-      }${s.costPerLeadCents !== null ? `${usd0(s.costPerLeadCents)} per lead. ` : ""}Click for their full budget.`}
+      title={`${order ? `Order #${order.n}: ` : ""}${usd0(spentCents)} spent of ${usd0(budgetCents)}${
+        order?.carriedInCents ? ` (incl. ${usd0(order.carriedInCents)} carried over)` : ""
+      }. ${s.dailyBudgetCents ? `${usd0(s.dailyBudgetCents)}/day budget. ` : ""}${
+        s.costPerLeadCents !== null ? `${usd0(s.costPerLeadCents)} per lead. ` : ""
+      }Click for their full budget.`}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-sky-600">
-          <Megaphone className="h-3 w-3" /> {usd0(s.chargedCents)}/{usd0(s.availableCents)}
+          <Megaphone className="h-3 w-3" /> {order ? `#${order.n} ` : ""}{usd0(spentCents)}/{usd0(budgetCents)}
         </span>
         <span
           className={cn(
             "tabular-nums whitespace-nowrap",
-            out ? "font-medium text-rose-600" : low ? "font-medium text-amber-600" : "text-muted-foreground",
+            out ? "font-medium text-rose-600" : complete ? "font-medium text-emerald-600" : low ? "font-medium text-amber-600" : "text-muted-foreground",
           )}
         >
-          {out ? "Out" : `${usd0(s.balanceCents)} left`}
+          {out ? "Out" : complete ? "Complete" : `${usd0(order ? order.leftCents : s.balanceCents)} left`}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-sky-100">
         <div
-          className={cn("h-full rounded-full transition-all", out ? "bg-rose-500" : low ? "bg-amber-500" : "bg-sky-500")}
+          className={cn("h-full rounded-full transition-all", out ? "bg-rose-500" : complete ? "bg-emerald-500" : low ? "bg-amber-500" : "bg-sky-500")}
           style={{ width: `${pct}%` }}
         />
       </div>
       <div className="mt-0.5 tabular-nums text-muted-foreground">
         {s.costPerLeadCents !== null ? `${usd0(s.costPerLeadCents)}/lead` : "No leads yet"}
-        {s.daysLeft !== null && !out ? (s.daysLeft < 1 ? " · under 1 day" : ` · ~${s.daysLeft}d left`) : ""}
+        {complete && order && order.carriedOutCents > 0
+          ? ` · ${usd0(order.carriedOutCents)} carries over`
+          : s.daysLeft !== null && !out ? (s.daysLeft < 1 ? " · under 1 day" : ` · ~${s.daysLeft}d left`) : ""}
         {s.pausedForBudget ? " · paused" : ""}
       </div>
     </a>

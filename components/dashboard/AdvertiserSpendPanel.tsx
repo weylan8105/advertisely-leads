@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { adSpendProgress } from "@/lib/adSpendProgress";
+import type { AdSpendOrder, AdSpendOrderStatus } from "@/lib/adSpendOrders";
 import { AddSpendForm } from "@/components/dashboard/AddSpendForm";
 
 const METHOD_LABEL: Record<string, string> = { card: "Card", zelle: "Zelle", check: "Check", wire: "Wire", cash: "Cash", other: "Other", team: "Team", program: "Advertiser Program", "team-fee": "Management fee (20%)" };
@@ -104,6 +105,7 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
       )}
 
       <AdSpendBar summary={summary} />
+      <AdSpendOrders orders={summary.orders ?? []} />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <DashboardStatCard
@@ -346,48 +348,133 @@ export function AdvertiserSpendPanel({ summary }: { summary: AdSpendSummary }) {
   );
 }
 
-/** At-a-glance progress through the budget: the same bar admins see for this account. */
+/**
+ * At-a-glance progress through the current order (each deposit is one,
+ * lib/adSpendOrders.ts): the same bar admins see for this account.
+ */
 function AdSpendBar({ summary }: { summary: AdSpendSummary }) {
-  const { pct, out, low } = adSpendProgress(summary);
+  const { pct, out, low, complete, order, spentCents, budgetCents } = adSpendProgress(summary);
   const days = summary.daysLeft;
+  const queued = (summary.orders ?? []).filter((o) => o.status === "queued");
   return (
     <Card>
       <CardContent className="py-4">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <span className="text-sm">
-            <span className="font-semibold">{usd0(summary.chargedCents)}</span>
-            <span className="text-muted-foreground"> spent of {usd0(summary.availableCents)} added</span>
+            {order && <span className="mr-1.5 font-medium text-sky-700">Order #{order.n}</span>}
+            <span className="font-semibold">{usd0(spentCents)}</span>
+            <span className="text-muted-foreground"> spent of {usd0(budgetCents)}</span>
+            {order && order.carriedInCents > 0 && (
+              <span className="text-muted-foreground"> (incl. {usd(order.carriedInCents)} carried over from order #{order.n - 1})</span>
+            )}
           </span>
           <span
             className={cn(
               "text-sm tabular-nums",
-              out ? "font-semibold text-rose-600" : low ? "font-semibold text-amber-600" : "text-muted-foreground",
+              out ? "font-semibold text-rose-600" : complete ? "font-semibold text-emerald-600" : low ? "font-semibold text-amber-600" : "text-muted-foreground",
             )}
           >
             {out
               ? "Budget used up"
-              : `${usd0(summary.balanceCents)} left${
-                  days !== null ? (days < 1 ? " · under 1 day" : ` · about ${days} day${days === 1 ? "" : "s"}`) : ""
-                }`}
+              : complete
+                ? "Order complete"
+                : `${usd0(order ? order.leftCents : summary.balanceCents)} left${
+                    days !== null ? (days < 1 ? " · under 1 day" : ` · about ${days} day${days === 1 ? "" : "s"}`) : ""
+                  }`}
           </span>
         </div>
         <div
           className="h-2.5 w-full overflow-hidden rounded-full bg-sky-100"
           role="progressbar"
-          aria-label="Ad budget spent"
+          aria-label="Current order spent"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={pct}
         >
           <div
-            className={cn("h-full rounded-full transition-all", out ? "bg-rose-500" : low ? "bg-amber-500" : "bg-sky-500")}
+            className={cn("h-full rounded-full transition-all", out ? "bg-rose-500" : complete ? "bg-emerald-500" : low ? "bg-amber-500" : "bg-sky-500")}
             style={{ width: `${pct}%` }}
           />
         </div>
         <div className="mt-1.5 text-xs text-muted-foreground">
-          {pct}% of your budget used
+          {complete && order && order.carriedOutCents > 0 ? (
+            <>
+              The {usd(order.carriedOutCents)} left is less than one lead, so it carries over into your next deposit. It
+              isn&apos;t lost.
+            </>
+          ) : (
+            <>{pct}% of this order used</>
+          )}
+          {queued.length > 0 && ` · ${queued.length} more deposit${queued.length === 1 ? "" : "s"} queued (${usd0(queued.reduce((t, o) => t + o.budgetCents, 0))})`}
           {summary.costPerLeadCents !== null ? ` · ${usd(summary.costPerLeadCents)} per lead` : ""}
           {summary.pausedForBudget ? " · campaign paused" : ""}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const ORDER_STATUS: Record<AdSpendOrderStatus, { label: string; cls: string }> = {
+  complete: { label: "Complete", cls: "bg-emerald-50 text-emerald-700" },
+  active: { label: "In progress", cls: "bg-sky-50 text-sky-700" },
+  queued: { label: "Queued", cls: "bg-slate-100 text-slate-600" },
+};
+
+/** Every deposit as its own order, newest first, with what carried between them. */
+function AdSpendOrders({ orders }: { orders: AdSpendOrder[] }) {
+  if (!orders.length) return null;
+  return (
+    <Card>
+      <CardContent className="py-4">
+        <h3 className="text-sm font-semibold">Your ad spend orders</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Each deposit is its own order. When an order has less left than one lead costs, it&apos;s complete and the
+          leftover carries into your next deposit.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="py-1.5 font-medium">Order</th>
+                <th className="py-1.5 font-medium">Deposited</th>
+                <th className="py-1.5 text-right font-medium">Budget</th>
+                <th className="py-1.5 text-right font-medium">Spent</th>
+                <th className="py-1.5 text-right font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...orders].reverse().map((o) => (
+                <tr key={o.paymentId} className="border-t border-slate-100 align-top">
+                  <td className="py-1.5 font-medium">#{o.n}</td>
+                  <td className="py-1.5">
+                    {new Date(o.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    <span className="block text-xs text-muted-foreground">
+                      {usd(o.paidCents)}
+                      {o.paidCents !== o.netCents && ` (${usd(o.netCents)} after card processing)`}
+                    </span>
+                  </td>
+                  <td className="py-1.5 text-right">
+                    {usd(o.budgetCents)}
+                    {o.carriedInCents > 0 && (
+                      <span className="block text-xs text-emerald-700">+{usd(o.carriedInCents)} from #{o.n - 1}</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-right">{usd(o.spentCents)}</td>
+                  <td className="py-1.5 text-right">
+                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", ORDER_STATUS[o.status].cls)}>
+                      {ORDER_STATUS[o.status].label}
+                    </span>
+                    {o.status === "complete" && o.carriedOutCents > 0 && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {usd(o.carriedOutCents)} {o.n === orders.length ? "carries to your next deposit" : `carried to #${o.n + 1}`}
+                      </span>
+                    )}
+                    {o.status === "active" && <span className="mt-0.5 block text-xs text-muted-foreground">{usd(o.leftCents)} left</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </CardContent>
     </Card>
