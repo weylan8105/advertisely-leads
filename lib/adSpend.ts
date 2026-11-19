@@ -444,7 +444,11 @@ async function stripePayments(paymentEmails: string[]): Promise<StripeAdSpend> {
     if (e && wanted.has(e) && !byId.has(ch.id)) byId.set(ch.id, ch);
   }
   const charges = [...byId.values()];
-  if (!charges.length) return { adSpend: [], other: [], subscriptions: [] };
+  // No charges yet still needs the subscription lookup: a waived (or free-trial)
+  // Program member has a live membership with nothing paid, and skipping it read
+  // them as "must join" while the marketplace showed them as a member, so they
+  // couldn't add ad spend (Nov 19 2026).
+  if (!charges.length && !customerIds.length) return { adSpend: [], other: [], subscriptions: [] };
 
   const adSpend: ClientPayment[] = [];
   const other: ClientPayment[] = [];
