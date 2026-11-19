@@ -5,6 +5,7 @@ import {
   guestLicensedFor,
   guestTurnIndex,
   TEMP_ROTATION_GUEST,
+  guestGoldmineOrgId,
 } from "@/lib/tempRotationGuest";
 
 const ghl = (formId: string) => ({ lastAttributionSource: { formId } });
@@ -37,6 +38,21 @@ describe("temporary guest rotation (Kyle)", () => {
 
   it("Kyle is the only free guest; Angelo pays per lead as a client", () => {
     expect(TEMP_ROTATION_GUEST.guests.map((g) => g.name)).toEqual(["Kyle"]);
+  });
+
+  it("Kyle's turns land in David's team Goldmine, only when David owns the team and Goldmine is on", () => {
+    const kyle = TEMP_ROTATION_GUEST.guests.find((g) => g.name === "Kyle") as any;
+    expect(kyle.toPayerGoldmine).toBe(true);
+    const guest = { toPayerGoldmine: true, organizationId: "team" };
+    const org = { id: "team", ownerId: "david", goldmineEnabled: true };
+    expect(guestGoldmineOrgId(guest, "david", org)).toBe("team");
+    // Goldmine off, someone else's team, no payer, or the option off: Kyle's own pipeline.
+    expect(guestGoldmineOrgId(guest, "david", { ...org, goldmineEnabled: false })).toBeNull();
+    expect(guestGoldmineOrgId(guest, "david", { ...org, ownerId: "someone-else" })).toBeNull();
+    expect(guestGoldmineOrgId(guest, "david", { ...org, id: "other-team" })).toBeNull();
+    expect(guestGoldmineOrgId(guest, null, org)).toBeNull();
+    expect(guestGoldmineOrgId(guest, "david", null)).toBeNull();
+    expect(guestGoldmineOrgId({ organizationId: "team" }, "david", org)).toBeNull();
   });
 
   it("respects licensed states, with none on file meaning everywhere", () => {

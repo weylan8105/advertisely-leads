@@ -7,10 +7,12 @@ import { isHousePaused } from "./housePause";
 import { getAdSpendSummary, forgetAdSpendSummary, SHARED_LEAD_METHOD } from "./adSpend";
 import { sharedPoolOf, sharedCplCents, needsFreeLeads, clientLeadPriceCents, FREE_UNTIL_CPL } from "./sharedPool";
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
+import { goldmineLeadData } from "./leadDestination";
 
 // ─── TEMPORARY: guest agents in the lead rotation (owner request, Nov 2026) ───
 // Kyle Vietzke (David Layton's team, since Nov 11) gets leads while their own campaigns ramp up. Until the owner says to
-// stop, each of them takes turns on:
+// stop, each of them takes turns on (since Nov 19 Kyle's turns land in David's
+// team Goldmine, see `toPayerGoldmine` below):
 //  - Text-verified Enhanced Wealth Blue Collar leads (the OTP form below):
 //    these normally go 100% to the house (Ryan); now Ryan and the guests take
 //    even turns (Kyle, Ryan, Kyle, …).
@@ -39,6 +41,11 @@ export const TEMP_ROTATION_GUEST = {
       // at or below it, it's charged to David's ad-spend balance at the source
       // campaign's cost per lead, and skipped if David can't cover it.
       billTo: { email: "dclayton1235@gmail.com" },
+      // Owner request (Nov 19 2026): Kyle's turns land in David's team Goldmine
+      // (owned by David, New Lead stage) instead of Kyle's own pipeline, where
+      // the whole team works them. No lead email and no Ringy forward, like
+      // every Goldmine lead. Kyle's existing leads were moved there Nov 18.
+      toPayerGoldmine: true,
     },
     // Angelo was a free guest Nov 13; removed the same day (owner: his leads come
     // out of his ad spend). He still gets leads as an advertiser client in the
@@ -81,6 +88,21 @@ export function guestTurnIndex(n: number, guests: number): number {
 
 export type GuestBillTo = { email: string };
 
+/**
+ * Where a guest's lead lands. With `toPayerGoldmine`, in the Goldmine of the
+ * team the guest is on, when the payer owns that team and its Goldmine is on;
+ * otherwise in the guest's own pipeline. Pure.
+ */
+export function guestGoldmineOrgId(
+  guest: { toPayerGoldmine?: boolean; organizationId: string | null },
+  payerId: string | null,
+  org: { id: string; ownerId: string; goldmineEnabled: boolean } | null,
+): string | null {
+  if (!guest.toPayerGoldmine || !payerId || !org) return null;
+  if (org.id !== guest.organizationId || org.ownerId !== payerId || !org.goldmineEnabled) return null;
+  return org.id;
+}
+
 export type RotationGuest = {
   userId: string;
   organizationId: string | null;
@@ -88,6 +110,7 @@ export type RotationGuest = {
   name: string;
   reason: string;
   billTo?: GuestBillTo;
+  toPayerGoldmine?: boolean;
 };
 
 
@@ -113,6 +136,7 @@ export async function getRotationGuests(): Promise<RotationGuest[]> {
       name: g.name,
       reason: g.reason,
       ...("billTo" in g && g.billTo ? { billTo: g.billTo } : {}),
+      ...("toPayerGoldmine" in g && g.toPayerGoldmine ? { toPayerGoldmine: true } : {}),
     });
   }
   return out;
@@ -183,6 +207,18 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
     }
   }
 
+  // A guest whose leads go to the payer's team Goldmine: the payer owns the
+  // lead and it sits in the shared Goldmine for the team to work.
+  const goldmineOrg =
+    bill && guest.toPayerGoldmine && guest.organizationId
+      ? await prisma.organization.findUnique({
+          where: { id: guest.organizationId },
+          select: { id: true, ownerId: true, goldmineEnabled: true },
+        })
+      : null;
+  const goldmineOrgId = guestGoldmineOrgId(guest, bill?.payerId ?? null, goldmineOrg);
+  const now = new Date();
+
   const current = bill
     ? await prisma.lead.findUnique({ where: { id: leadId }, select: { rawFormData: true } })
     : null;
@@ -192,23 +228,25 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
   const res = await prisma.lead.updateMany({
     where: { id: leadId, assignedUserId: null, trashedAt: null },
     data: {
-      assignedUserId: guest.userId,
-      assignedAt: new Date(),
+      assignedUserId: goldmineOrgId && bill ? bill.payerId : guest.userId,
+      assignedAt: now,
       ...(guest.organizationId ? { organizationId: guest.organizationId } : {}),
+      ...(goldmineOrgId ? goldmineLeadData(goldmineOrgId, now) : {}),
       // A billed lead carries the payer's name, like their own campaign's leads.
       ...(bill ? { rawFormData: { ...raw, [ADVERTISER_NAME_KEY]: bill.payerName } as any } : {}),
     },
   });
   if (res.count === 0) return false;
   const cost = bill ? (bill.cplCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" }) : "";
+  const to = goldmineOrgId && bill ? `${bill.payerName}'s team Goldmine (${guest.name}'s turn)` : guest.name;
   await prisma.leadActivity.create({
     data: {
       leadId,
       type: "LEAD_ASSIGNED",
       body: bill
         ? bill.free
-          ? `Routed to ${guest.name} — ${what}; free lead for ${bill.payerName} (no charge) while their cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
-          : `Routed to ${guest.name} — ${what}; ${cost} cost per lead taken from ${bill.payerName}'s ad-spend balance.`
+          ? `Routed to ${to} — ${what}; free lead for ${bill.payerName} (no charge) while their cost per lead is above $${FREE_UNTIL_CPL.targetCents / 100}.`
+          : `Routed to ${to} — ${what}; ${cost} cost per lead taken from ${bill.payerName}'s ad-spend balance.`
         : `Routed to ${guest.name} — ${what} (${guest.reason}).`,
     },
   });
@@ -219,6 +257,9 @@ export async function assignLeadToGuest(leadId: string, guest: RotationGuest, wh
     });
     forgetAdSpendSummary(bill.payerId);
   }
+
+  // Goldmine leads get no lead email and no Ringy forward (lib/leadDestination.ts).
+  if (goldmineOrgId) return true;
 
   const full = await prisma.lead.findUnique({
     where: { id: leadId },
