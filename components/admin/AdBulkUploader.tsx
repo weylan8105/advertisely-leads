@@ -292,8 +292,9 @@ export function AdBulkUploader() {
         update(sk, { status: "running" });
         let adsetId: string;
         try {
-          adsetId = (await post<{ id: string }>("/api/admin/ad-uploader/launch", { ...base, step: "adset", c: ci, s: si, campaignId })).id;
-          update(sk, { status: "done", id: adsetId });
+          const r = await post<{ id: string; warning?: string }>("/api/admin/ad-uploader/launch", { ...base, step: "adset", c: ci, s: si, campaignId });
+          adsetId = r.id;
+          update(sk, { status: "done", id: adsetId, detail: r.warning });
         } catch (e) {
           update(sk, { status: "error", detail: (e as Error).message });
           skipUnder(`${sk}a`, "Ad set wasn't created");

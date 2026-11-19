@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     if (body.step === "adset") {
       if (!body.campaignId) return NextResponse.json({ error: "campaignId is required" }, { status: 400 });
-      return NextResponse.json({ id: await createAdSet(ctx, String(body.campaignId), campaign.objective, adset) });
+      return NextResponse.json(await createAdSet(ctx, String(body.campaignId), campaign.objective, adset));
     }
 
     if (body.step === "ad") {

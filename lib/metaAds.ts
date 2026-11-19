@@ -413,12 +413,16 @@ export async function createAdSet(
   campaignId: string,
   objective: SheetCampaign["objective"],
   s: SheetAdSet,
-): Promise<string> {
+): Promise<{ id: string; warning?: string }> {
   const targeting: Record<string, unknown> = {
     geo_locations: s.states.length ? { regions: await regionKeys(s.states) } : { countries: ["US"] },
     age_min: ctx.financialCategory ? 18 : s.ageMin,
     age_max: ctx.financialCategory ? 65 : s.ageMax,
     targeting_automation: { advantage_audience: 0 },
+    // No Audience Network: it's the main source of bot / junk form fills. Listing
+    // the platforms (all positions on each) is how an ad set leaves it out; the
+    // account-level placement controls don't apply to special-category campaigns.
+    publisher_platforms: AD_SET_PLATFORMS,
   };
 
   let optimization_goal: string;
@@ -438,7 +442,7 @@ export async function createAdSet(
     promoted_object = { pixel_id: ctx.pixelId, custom_event_type: "LEAD" };
   }
 
-  const data = await graphPost<{ id: string }>(`${actId(ctx.accountId)}/adsets`, {
+  const params = {
     name: s.name,
     campaign_id: campaignId,
     daily_budget: String(s.dailyBudgetCents),
@@ -450,9 +454,26 @@ export async function createAdSet(
     targeting,
     start_time: s.startDate ? `${s.startDate}T00:00:00-0600` : undefined,
     status: "PAUSED",
-  });
-  return data.id;
+  };
+  try {
+    const data = await graphPost<{ id: string }>(`${actId(ctx.accountId)}/adsets`, params);
+    return { id: data.id };
+  } catch (e) {
+    // Meta is phasing out manual placements for Leads/Sales on some accounts. If it
+    // refuses them, create the ad set on Advantage+ placements rather than fail the
+    // launch, and say so: Audience Network then has to be turned off by hand.
+    if (!(e instanceof MetaApiError) || !/placement|publisher/i.test(e.message)) throw e;
+    const { publisher_platforms: _dropped, ...auto } = targeting;
+    const data = await graphPost<{ id: string }>(`${actId(ctx.accountId)}/adsets`, { ...params, targeting: auto });
+    return {
+      id: data.id,
+      warning: `Meta didn't allow manual placements here (${e.message}), so this ad set uses Advantage+ placements and includes Audience Network. Remove it in Ads Manager before publishing.`,
+    };
+  }
 }
+
+/** Placements for every new ad set: everything except Audience Network. */
+export const AD_SET_PLATFORMS = ["facebook", "instagram", "messenger"];
 
 export interface AdMedia {
   imageHash?: string;
