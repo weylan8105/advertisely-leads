@@ -28,16 +28,19 @@ const num = (n: number) => n.toLocaleString("en-US");
 const money = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-export function liveTiles(t: LiveTotals): { label: string; value: string; accent?: boolean }[] {
+/** Which lead list a tile opens on Client Performance (none for Dials). */
+export type TileMetric = "leads" | "contacts" | "appointments" | "apps" | "policies";
+
+export function liveTiles(t: LiveTotals): { label: string; value: string; accent?: boolean; metric?: TileMetric }[] {
   return [
-    { label: "Submitted AP", value: money(t.submittedApCents), accent: true },
-    { label: "Apps submitted", value: num(t.apps) },
-    { label: "Issued AP", value: money(t.apCents), accent: true },
-    { label: "Policies issued", value: num(t.policies) },
-    { label: "Leads delivered", value: num(t.leads) },
+    { label: "Submitted AP", value: money(t.submittedApCents), accent: true, metric: "apps" },
+    { label: "Apps submitted", value: num(t.apps), metric: "apps" },
+    { label: "Issued AP", value: money(t.apCents), accent: true, metric: "policies" },
+    { label: "Policies issued", value: num(t.policies), metric: "policies" },
+    { label: "Leads delivered", value: num(t.leads), metric: "leads" },
     { label: "Dials", value: num(t.dials) },
-    { label: "Contacts", value: num(t.contacts) },
-    { label: "Appointments", value: num(t.appointments) },
+    { label: "Contacts", value: num(t.contacts), metric: "contacts" },
+    { label: "Appointments", value: num(t.appointments), metric: "appointments" },
   ];
 }
 
@@ -76,12 +79,29 @@ export function LiveDot() {
   );
 }
 
-export function LiveStatsGrid({ totals }: { totals: LiveTotals | null }) {
+export function LiveStatsGrid({
+  totals,
+  onSelect,
+}: {
+  totals: LiveTotals | null;
+  /** Admin only: makes tiles clickable to open the leads behind them. */
+  onSelect?: (metric: TileMetric, label: string) => void;
+}) {
   const tiles = liveTiles(totals ?? { leads: 0, dials: 0, contacts: 0, appointments: 0, presentations: 0, apps: 0, submittedApCents: 0, policies: 0, apCents: 0 });
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {tiles.map((s) => (
-        <div key={s.label} className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      {tiles.map((s) => {
+        const clickable = !!(onSelect && s.metric && totals);
+        const Tag = clickable ? "button" : "div";
+        return (
+        <Tag
+          key={s.label}
+          {...(clickable ? { type: "button" as const, onClick: () => onSelect!(s.metric!, s.label), title: `See the leads behind ${s.label}` } : {})}
+          className={cn(
+            "rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm",
+            clickable && "transition hover:border-slate-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400",
+          )}
+        >
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.label}</div>
           <div
             className={cn(
@@ -92,8 +112,10 @@ export function LiveStatsGrid({ totals }: { totals: LiveTotals | null }) {
           >
             {totals ? s.value : "—"}
           </div>
-        </div>
-      ))}
+          {clickable && <div className="mt-0.5 text-[11px] text-slate-400">View leads →</div>}
+        </Tag>
+        );
+      })}
     </div>
   );
 }

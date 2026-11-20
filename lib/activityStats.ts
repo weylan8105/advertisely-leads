@@ -125,6 +125,35 @@ export interface DialRow {
   dials?: number | null;
 }
 
+/**
+ * Highest funnel level each (user, lead) reached in the period, keyed
+ * `${userId}\u0000${leadId}`. A move credits whoever made it (older moves: the
+ * lead's owner).
+ */
+export function bestLevels(moves: StageMoveRow[], allowed: Set<string> | null): Map<string, number> {
+  const best = new Map<string, number>();
+  for (const e of moves) {
+    const md = e.metadata && typeof e.metadata === "object" ? e.metadata : {};
+    const level = moveLevel(e.body, e.metadata);
+    if (level <= 0) continue;
+    const uid = (typeof md.actorId === "string" && md.actorId) || e.ownerId;
+    if (!uid || (allowed && !allowed.has(uid))) continue;
+    const key = `${uid}\u0000${e.leadId}`;
+    if ((best.get(key) ?? 0) < level) best.set(key, level);
+  }
+  return best;
+}
+
+/** Stage moves (STATUS_CHANGED) in [since, until) on leads that aren't trashed. */
+export async function stageMovesBetween(since: Date, until: Date): Promise<StageMoveRow[]> {
+  if (!prisma) return [];
+  return prisma.$queryRaw<StageMoveRow[]>`
+    SELECT a."leadId", a.body, a.metadata, l."assignedUserId" AS "ownerId"
+    FROM "LeadActivity" a
+    JOIN "Lead" l ON l.id = a."leadId"
+    WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${since} AND a."createdAt" < ${until} AND l."trashedAt" IS NULL`;
+}
+
 /** Adds dials, contacts, appointments and presentations to each user's stats. */
 export function addFunnelStats(
   moves: StageMoveRow[],
@@ -139,18 +168,7 @@ export function addFunnelStats(
     logged.add(`${d.actorId}\u0000${d.leadId}`);
   }
 
-  // Highest level each (user, lead) reached in the period.
-  const best = new Map<string, number>(); // `${uid}\u0000${leadId}` → level
-  for (const e of moves) {
-    const md = e.metadata && typeof e.metadata === "object" ? e.metadata : {};
-    const level = moveLevel(e.body, e.metadata);
-    if (level <= 0) continue;
-    const uid = (typeof md.actorId === "string" && md.actorId) || e.ownerId;
-    if (!uid || (allowed && !allowed.has(uid))) continue;
-    const key = `${uid}\u0000${e.leadId}`;
-    if ((best.get(key) ?? 0) < level) best.set(key, level);
-  }
-  for (const [key, level] of best) {
+  for (const [key, level] of bestLevels(moves, allowed)) {
     const s = get(key.slice(0, key.indexOf("\u0000")));
     // A stage move only stands in for a dial when none was logged.
     if (!logged.has(key)) s.dials++;
@@ -202,11 +220,7 @@ export async function activityByUser(
       _count: { _all: true },
       _sum: { soldPremiumCents: true },
     }),
-    prisma.$queryRaw<StageMoveRow[]>`
-      SELECT a."leadId", a.body, a.metadata, l."assignedUserId" AS "ownerId"
-      FROM "LeadActivity" a
-      JOIN "Lead" l ON l.id = a."leadId"
-      WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${sinceTs} AND a."createdAt" < ${untilTs} AND l."trashedAt" IS NULL`,
+    stageMovesBetween(sinceTs, untilTs),
     prisma.$queryRaw<DialRow[]>`
       SELECT a."leadId", a.metadata->>'actorId' AS "actorId", COALESCE((a.metadata->>'dials')::int, 1) AS dials
       FROM "LeadActivity" a
