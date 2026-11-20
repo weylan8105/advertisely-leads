@@ -50,12 +50,12 @@ export function AdminLiveStats() {
     if (!data) return;
     const t = data.totals;
     const row = (name: string, a: LiveTotals) => [
-      name, a.leads, a.dials, a.contacts, a.appointments, a.presentations, a.apps,
+      name, a.leads, a.dials, a.contacts, a.presentations, a.apps,
       (a.submittedApCents / 100).toFixed(2), a.policies, (a.apCents / 100).toFixed(2),
     ];
     downloadCsv(
       `client-performance-${range === "custom" ? `${custom.from}_${custom.to}` : range}.csv`,
-      ["Agent", "Leads", "Dials", "Contacts", "Appointments", "Presentations", "Apps", "Submitted AP", "Policies", "Issued AP"],
+      ["Agent", "Leads", "Dials", "Contacts", "Presentations", "Apps", "Submitted AP", "Policies", "Issued AP"],
       [...data.agents.map((a) => row(a.name, a)), row("All agents", t)],
     );
   }
@@ -100,7 +100,7 @@ export function AdminLiveStats() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-muted-foreground">
               <tr>
-                {["Agent", "Leads", "Dials", "Contacts", "Appts", "Apps", "Submitted AP", "Policies", "Issued AP"].map((h, i) => (
+                {["Agent", "Leads", "Dials", "Contacts", "Presentations", "Apps", "Submitted AP", "Policies", "Issued AP"].map((h, i) => (
                   <th key={h} className={`px-3 py-2 font-medium ${i ? "text-right" : "text-left"}`}>{h}</th>
                 ))}
               </tr>
@@ -114,7 +114,7 @@ export function AdminLiveStats() {
                       ["leads", "Leads", a.leads, a.leads.toLocaleString("en-US")],
                       [null, "Dials", a.dials, a.dials.toLocaleString("en-US")],
                       ["contacts", "Contacts", a.contacts, a.contacts.toLocaleString("en-US")],
-                      ["appointments", "Appointments", a.appointments, a.appointments.toLocaleString("en-US")],
+                      ["presentations", "Presentations", a.presentations, a.presentations.toLocaleString("en-US")],
                       ["apps", "Apps", a.apps, a.apps.toLocaleString("en-US")],
                       ["apps", "Submitted AP", a.apps, money(a.submittedApCents)],
                       ["policies", "Policies", a.policies, a.policies.toLocaleString("en-US")],

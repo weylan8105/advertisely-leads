@@ -89,7 +89,7 @@ function HeroDashboardMock() {
         </div>
         <div className="grid md:grid-cols-3 gap-4 p-5">
           <MockStat label="Leads this week" value="118" delta="+24%" tone="teal" />
-          <MockStat label="Appointments set" value="22" delta="+18%" tone="violet" />
+          <MockStat label="Presentations" value="22" delta="+18%" tone="violet" />
           <MockStat label="Closed AP (30d)" value="$48,200" delta="+12%" tone="emerald" />
         </div>
         <div className="px-5 pb-5">

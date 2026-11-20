@@ -194,7 +194,14 @@ export function perfEvents(leads: PerfLead[], moves: PerfMove[], dials: PerfDial
     }
   }
   for (const m of moves) {
+    if (known.has(m.leadId) && isApplicationMove(m.body, m.metadata)) earliest(firstApplication, m.leadId, m.createdAt);
+  }
+  for (const m of moves) {
     if (!known.has(m.leadId)) continue;
+    // Once an application is in, moving the deal along (Underwriting → Approved…)
+    // isn't a new dial or contact.
+    const applied = firstApplication.get(m.leadId);
+    if (applied && m.createdAt > applied) continue;
     const level = moveLevel(m.body, m.metadata);
     if (level >= 1) {
       events.push({ leadId: m.leadId, kind: "moved", at: m.createdAt });
@@ -204,7 +211,6 @@ export function perfEvents(leads: PerfLead[], moves: PerfMove[], dials: PerfDial
       events.push({ leadId: m.leadId, kind: "contacted", at: m.createdAt });
       earliest(firstContact, m.leadId, m.createdAt);
     }
-    if (isApplicationMove(m.body, m.metadata)) earliest(firstApplication, m.leadId, m.createdAt);
   }
   for (const [leadId, at] of firstApplication) events.push({ leadId, kind: "application", at });
 
@@ -442,7 +448,8 @@ export interface AdPerformance {
   events: PerfEventRow[];
 }
 
-export async function getAdPerformance(range: PerfRange, from?: string | null, to?: string | null): Promise<AdPerformance> {
+/** Everything both the dashboard and its lead drilldown need, for one window. */
+async function loadPerfBase(range: PerfRange, from?: string | null, to?: string | null) {
   if (!prisma) throw new Error("Database not configured");
   const now = new Date();
   const today = ymdInTz(now, ACTIVITY_TZ);
@@ -492,16 +499,23 @@ export async function getAdPerformance(range: PerfRange, from?: string | null, t
   const agentName = (id: string) => userById.get(id)?.name?.trim() || userById.get(id)?.email || "Unknown agent";
   const ewwsIds = new Set(meta.campaigns.filter((c) => c.funnel === "ewws").map((c) => c.campaignId));
   const funnelKey = (id: string) => funnelOf(leadById.get(id) ?? { source: null }, ewwsIds);
+  const idByName = new Map(meta.campaigns.map((c) => [c.name, c.campaignId]));
+  const campaignKey = (id: string) => {
+    const lead = leadById.get(id);
+    return (lead && campaignKeyOf(lead, idByName)) ?? "";
+  };
+  return { now, today, days, since, until, meta, sends, leads, leadById, events, agentName, funnelKey, campaignKey, idByName };
+}
+
+export async function getAdPerformance(range: PerfRange, from?: string | null, to?: string | null): Promise<AdPerformance> {
+  const { now, today, days, since, until, meta, sends, leads, events, agentName, funnelKey, campaignKey } =
+    await loadPerfBase(range, from, to);
 
   const byFunnel = tally(events, since, until, funnelKey);
   const countsOf = (f: PerfFunnel) => byFunnel.get(f) ?? emptyCounts();
   const funnelCampaigns = (f: PerfFunnel) => meta.campaigns.filter((c) => c.funnel === f);
 
-  const idByName = new Map(meta.campaigns.map((c) => [c.name, c.campaignId]));
-  const byCampaign = tally(events, since, until, (id) => {
-    const lead = leadById.get(id);
-    return (lead && campaignKeyOf(lead, idByName)) ?? "";
-  });
+  const byCampaign = tally(events, since, until, campaignKey);
   const campaigns: PerfCampaignRow[] = meta.campaigns
     .map((c) => ({
       ...summarize(byCampaign.get(c.campaignId) ?? emptyCounts(), [c]),

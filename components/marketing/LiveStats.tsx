@@ -29,7 +29,7 @@ const money = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 /** Which lead list a tile opens on Client Performance (none for Dials). */
-export type TileMetric = "leads" | "contacts" | "appointments" | "apps" | "policies";
+export type TileMetric = "leads" | "contacts" | "presentations" | "apps" | "policies";
 
 export function liveTiles(t: LiveTotals): { label: string; value: string; accent?: boolean; metric?: TileMetric }[] {
   return [
@@ -40,7 +40,7 @@ export function liveTiles(t: LiveTotals): { label: string; value: string; accent
     { label: "Leads delivered", value: num(t.leads), metric: "leads" },
     { label: "Dials", value: num(t.dials) },
     { label: "Contacts", value: num(t.contacts), metric: "contacts" },
-    { label: "Appointments", value: num(t.appointments), metric: "appointments" },
+    { label: "Presentations", value: num(t.presentations), metric: "presentations" },
   ];
 }
 

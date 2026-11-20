@@ -258,7 +258,7 @@ export default function DashboardPage() {
         <DashboardStatCard
           label="Presentations"
           value={dash?.stats.presentations ?? 0}
-          hint="appointments set"
+          hint="pitched on the call"
           accent="amber"
           icon={<CalendarCheck className="h-4 w-4" />}
         />

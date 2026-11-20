@@ -100,7 +100,7 @@ export function ClientLeadsWindow({ req, onClose }: { req: DrillRequest; onClose
   }
 
   const multiAgentNote =
-    data && !req.userId && data.total < req.count && ["contacts", "appointments", "presentations"].includes(req.metric)
+    data && !req.userId && data.total < req.count && ["contacts", "presentations"].includes(req.metric)
       ? `${req.count.toLocaleString()} counted across agents is ${data.total.toLocaleString()} different people: some leads were worked by more than one agent, and each agent gets credit.`
       : null;
 

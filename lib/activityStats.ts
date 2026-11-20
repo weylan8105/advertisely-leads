@@ -116,6 +116,12 @@ export interface StageMoveRow {
   body: string;
   metadata: any;
   ownerId: string | null;
+  /**
+   * The lead already had an application in (an earlier move into Underwriting or
+   * a later deal stage). Moving a deal along (Underwriting → Approved…) isn't a
+   * new dial, contact or presentation, so these moves don't count.
+   */
+  afterDeal?: boolean | null;
 }
 
 export interface DialRow {
@@ -133,6 +139,7 @@ export interface DialRow {
 export function bestLevels(moves: StageMoveRow[], allowed: Set<string> | null): Map<string, number> {
   const best = new Map<string, number>();
   for (const e of moves) {
+    if (e.afterDeal) continue;
     const md = e.metadata && typeof e.metadata === "object" ? e.metadata : {};
     const level = moveLevel(e.body, e.metadata);
     if (level <= 0) continue;
@@ -147,8 +154,14 @@ export function bestLevels(moves: StageMoveRow[], allowed: Set<string> | null): 
 /** Stage moves (STATUS_CHANGED) in [since, until) on leads that aren't trashed. */
 export async function stageMovesBetween(since: Date, until: Date): Promise<StageMoveRow[]> {
   if (!prisma) return [];
+  const stages = [...CONVERSION_STAGE_IDS];
   return prisma.$queryRaw<StageMoveRow[]>`
-    SELECT a."leadId", a.body, a.metadata, l."assignedUserId" AS "ownerId"
+    SELECT a."leadId", a.body, a.metadata, l."assignedUserId" AS "ownerId",
+           EXISTS (
+             SELECT 1 FROM "LeadActivity" p
+             WHERE p."leadId" = a."leadId" AND p.type = 'STATUS_CHANGED'
+               AND p.metadata->>'stage' = ANY(${stages}) AND p."createdAt" < a."createdAt"
+           ) AS "afterDeal"
     FROM "LeadActivity" a
     JOIN "Lead" l ON l.id = a."leadId"
     WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${since} AND a."createdAt" < ${until} AND l."trashedAt" IS NULL`;
