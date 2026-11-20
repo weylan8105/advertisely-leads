@@ -14,6 +14,7 @@ import {
   Settings,
   Shield,
   Gauge,
+  Activity,
   Landmark,
   LifeBuoy,
   Gem,
@@ -51,6 +52,7 @@ const ALL: Item[] = [
   { href: "/settings", label: "Settings & Integrations", icon: Settings },
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
   { href: "/performance", label: "Ad Performance", icon: Gauge, adminOnly: true },
+  { href: "/client-performance", label: "Client Performance", icon: Activity, adminOnly: true },
   { href: "/business-pnl", label: "Business P&L", icon: Landmark, adminOnly: true },
   { href: "/ad-uploader", label: "Ad Bulk Uploader", icon: UploadCloud, adminOnly: true },
 ];

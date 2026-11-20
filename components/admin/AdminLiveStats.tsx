@@ -21,7 +21,7 @@ export function AdminLiveStats() {
       </div>
       <LiveStatsGrid totals={data?.totals ?? null} />
       <p className="text-xs text-muted-foreground">
-        These tiles are exactly what visitors see on the advertisely.io homepage before they sign in (totals only, no names).
+        These tiles are what visitors see on the advertisely.io homepage before they sign in (totals only, no names).
       </p>
       {data && data.agents.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-slate-200">

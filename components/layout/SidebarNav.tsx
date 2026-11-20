@@ -12,6 +12,7 @@ import {
   Settings,
   Shield,
   Gauge,
+  Activity,
   Sparkles,
   LifeBuoy,
   Gem,
@@ -60,6 +61,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
     items: [
       { href: "/admin", label: "Admin Console", icon: Shield, badge: "Admin" },
       { href: "/performance", label: "Ad Performance", icon: Gauge },
+      { href: "/client-performance", label: "Client Performance", icon: Activity },
       { href: "/business-pnl", label: "Business P&L", icon: Landmark },
       { href: "/ad-uploader", label: "Ad Bulk Uploader", icon: UploadCloud },
     ],
