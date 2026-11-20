@@ -6,6 +6,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Pills } from "@/components/activity/shared";
 import { CustomRangeInputs, customRangeQuery, defaultDayRange, type DayRange } from "@/components/activity/CustomRange";
+import { ClientLeadsWindow, type DrillRequest } from "@/components/admin/ClientLeadsWindow";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { AdPerformance, PerfDay, PerfDealRow, PerfRange, PerfSummary } from "@/lib/adPerformance";
@@ -56,12 +57,15 @@ const share = (part: number, whole: number, of: string) =>
 const shortDate = (ymd: string) =>
   new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-function Tile({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
+function Tile({ label, value, hint, strong, onClick }: { label: string; value: string; hint?: string; strong?: boolean; onClick?: () => void }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
+    <Tag
+      {...(onClick ? { type: "button" as const, onClick, title: `See the leads behind ${label}` } : {})}
       className={cn(
-        "flex min-h-[124px] flex-col rounded-xl p-5",
+        "flex min-h-[124px] flex-col rounded-xl p-5 text-left",
         strong ? "bg-slate-900 text-white" : "border border-slate-200 bg-white",
+        onClick && "transition hover:border-slate-400 hover:shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400",
       )}
     >
       <div className={cn("text-[11px] font-semibold uppercase tracking-[0.16em]", strong ? "text-white/60" : "text-slate-500")}>
@@ -69,7 +73,24 @@ function Tile({ label, value, hint, strong }: { label: string; value: string; hi
       </div>
       <div className="mt-2 text-3xl font-semibold tabular-nums">{value}</div>
       {hint && <div className={cn("mt-auto pt-3 text-xs", strong ? "text-white/60" : "text-slate-500")}>{hint}</div>}
-    </div>
+      {onClick && <div className="pt-1 text-[11px] text-slate-400">View leads →</div>}
+    </Tag>
+  );
+}
+
+type DrillMetric = "leads" | "dialed" | "contacted" | "applications" | "issuedPaid";
+
+/** A count that opens its lead cards when clicked (plain text when zero). */
+function DrillNumber({ n, text, onOpen }: { n: number; text?: string; onOpen: () => void }) {
+  if (!n) return <>{text ?? count(n)}</>;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="tabular-nums underline decoration-slate-300 underline-offset-2 hover:text-brand-red hover:decoration-current"
+    >
+      {text ?? count(n)}
+    </button>
   );
 }
 
@@ -162,14 +183,14 @@ function DayChart({
   );
 }
 
-const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string }[] = [
+const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string; drill?: [DrillMetric, (s: PerfSummary) => number] }[] = [
   { label: "Ad spend", value: (s) => (s.spendKnown ? money(s.spendCents) : "—") },
-  { label: "New leads", value: (s) => count(s.leads) },
+  { label: "New leads", value: (s) => count(s.leads), drill: ["leads", (s) => s.leads] },
   { label: "Dials", value: (s) => count(s.dials) },
-  { label: "Contacted", value: (s) => count(s.contacted) },
+  { label: "Contacted", value: (s) => count(s.contacted), drill: ["contacted", (s) => s.contacted] },
   { label: "Dials per contact", value: (s) => s.dialsPerContact?.toFixed(1) ?? "—" },
-  { label: "Applications", value: (s) => count(s.applications) },
-  { label: "Issued PAID", value: (s) => count(s.issuedPaid) },
+  { label: "Applications", value: (s) => count(s.applications), drill: ["applications", (s) => s.applications] },
+  { label: "Issued PAID", value: (s) => count(s.issuedPaid), drill: ["issuedPaid", (s) => s.issuedPaid] },
   { label: "Premium", value: (s) => money(s.premiumCents) },
   { label: "Cost per lead", value: (s) => money(s.cplCents) },
   { label: "CPA", value: (s) => money(s.cpaCents) },
@@ -180,6 +201,7 @@ const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string }[] = [
 export function AdPerformanceDashboard() {
   const [range, setRange] = useState<PerfRange>("30d");
   const [custom, setCustom] = useState<DayRange>(defaultDayRange);
+  const [drill, setDrill] = useState<DrillRequest | null>(null);
   const [view, setView] = useState<FunnelView>("all");
   const [data, setData] = useState<AdPerformance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -218,6 +240,21 @@ export function AdPerformanceDashboard() {
   }, []);
 
   const s = data?.funnels[view];
+  const rangeLabel = range === "custom" ? `${custom.from} to ${custom.to}` : RANGES.find((r) => r.id === range)!.label;
+  const drillLabel: Record<DrillMetric, string> = {
+    leads: "New leads", dialed: "Leads dialed", contacted: "Contacted", applications: "Applications", issuedPaid: "Issued PAID",
+  };
+  /** scope: all | ew | abca | ewws | campaign:<id> | none; `where` names it in the title. */
+  const openDrill = (metric: DrillMetric, n: number, scope: string, where: string) =>
+    setDrill({
+      metric,
+      title: `${drillLabel[metric]} · ${where} · ${rangeLabel}`,
+      count: n,
+      allAgents: false,
+      atLabel: { leads: "Received", dialed: "Dialed", contacted: "Contacted", applications: "Submitted", issuedPaid: "Issued" }[metric],
+      endpoint: `/api/admin/performance/leads?metric=${metric}&scope=${encodeURIComponent(scope)}&range=${range}${range === "custom" ? customRangeQuery(custom) : ""}`,
+    });
+  const viewName = view === "all" ? "All funnels" : FUNNEL_NAME[view];
   const secondsAgo = data ? Math.max(0, Math.round((now - new Date(data.fetchedAt).getTime()) / 1000)) : null;
   const campaigns = (data?.campaigns ?? []).filter((c) => view === "all" || c.funnel === view);
   const showPixels = !!data?.events.some((e) => e.shown != null);
@@ -293,16 +330,36 @@ export function AdPerformanceDashboard() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Tile label="New leads" value={count(s.leads)} />
-            <Tile label="Dials" value={count(s.dials)} hint={`${count(s.leadsDialed)} leads dialed`} />
-            <Tile label="Contacted" value={count(s.contacted)} hint={share(s.contacted, s.dials, "dials")} />
+            <Tile label="New leads" value={count(s.leads)} onClick={s.leads ? () => openDrill("leads", s.leads, view, viewName) : undefined} />
+            <Tile
+              label="Dials"
+              value={count(s.dials)}
+              hint={`${count(s.leadsDialed)} leads dialed`}
+              onClick={s.leadsDialed ? () => openDrill("dialed", s.leadsDialed, view, viewName) : undefined}
+            />
+            <Tile
+              label="Contacted"
+              value={count(s.contacted)}
+              hint={share(s.contacted, s.dials, "dials")}
+              onClick={s.contacted ? () => openDrill("contacted", s.contacted, view, viewName) : undefined}
+            />
             <Tile
               label="Dials per contact"
               value={s.dialsPerContact?.toFixed(1) ?? "—"}
               hint={s.reached > 0 ? `Across ${count(s.reached)} contacts` : "Measured from Nov 6"}
             />
-            <Tile label="Applications" value={count(s.applications)} hint={share(s.applications, s.contacted, "contacted")} />
-            <Tile label="Issued PAID" value={count(s.issuedPaid)} hint={share(s.issuedPaid, s.applications, "applications")} />
+            <Tile
+              label="Applications"
+              value={count(s.applications)}
+              hint={share(s.applications, s.contacted, "contacted")}
+              onClick={s.applications ? () => openDrill("applications", s.applications, view, viewName) : undefined}
+            />
+            <Tile
+              label="Issued PAID"
+              value={count(s.issuedPaid)}
+              hint={share(s.issuedPaid, s.applications, "applications")}
+              onClick={s.issuedPaid ? () => openDrill("issuedPaid", s.issuedPaid, view, viewName) : undefined}
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -325,10 +382,28 @@ export function AdPerformanceDashboard() {
                           <TableCell className="py-1.5 text-slate-500">{r.label}</TableCell>
                           {FUNNEL_IDS.map((f) => (
                             <TableCell key={f} className="py-1.5 text-right tabular-nums">
-                              {data!.funnels[f] ? r.value(data!.funnels[f]) : "—"}
+                              {!data!.funnels[f] ? "—" : r.drill ? (
+                                <DrillNumber
+                                  n={r.drill[1](data!.funnels[f])}
+                                  text={r.value(data!.funnels[f])}
+                                  onOpen={() => openDrill(r.drill![0], r.drill![1](data!.funnels[f]), f, FUNNEL_NAME[f])}
+                                />
+                              ) : (
+                                r.value(data!.funnels[f])
+                              )}
                             </TableCell>
                           ))}
-                          <TableCell className="py-1.5 text-right font-medium tabular-nums">{r.value(data!.funnels.all)}</TableCell>
+                          <TableCell className="py-1.5 text-right font-medium tabular-nums">
+                            {r.drill ? (
+                              <DrillNumber
+                                n={r.drill[1](data!.funnels.all)}
+                                text={r.value(data!.funnels.all)}
+                                onOpen={() => openDrill(r.drill![0], r.drill![1](data!.funnels.all), "all", "All funnels")}
+                              />
+                            ) : (
+                              r.value(data!.funnels.all)
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -480,9 +555,15 @@ export function AdPerformanceDashboard() {
                         <TableCell>{STATUS_LABEL[c.status ?? ""] ?? c.status ?? "—"}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(c.dailyBudgetCents)}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(c.spendCents)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{count(c.leads)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{count(c.applications)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{count(c.issuedPaid)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <DrillNumber n={c.leads} onOpen={() => openDrill("leads", c.leads, `campaign:${c.campaignId}`, c.name)} />
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <DrillNumber n={c.applications} onOpen={() => openDrill("applications", c.applications, `campaign:${c.campaignId}`, c.name)} />
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <DrillNumber n={c.issuedPaid} onOpen={() => openDrill("issuedPaid", c.issuedPaid, `campaign:${c.campaignId}`, c.name)} />
+                        </TableCell>
                         <TableCell className="text-right tabular-nums">{money(c.cpaCents)}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(c.cacCents)}</TableCell>
                       </TableRow>
@@ -493,7 +574,9 @@ export function AdPerformanceDashboard() {
             )}
             {view === "all" && data!.noCampaign.leads + data!.noCampaign.applications > 0 && (
               <p className="mt-2 text-xs text-slate-500">
-                {count(data!.noCampaign.leads)} leads and {count(data!.noCampaign.applications)} applications aren&apos;t in this table because{" "}
+                <DrillNumber n={data!.noCampaign.leads} text={`${count(data!.noCampaign.leads)} leads`} onOpen={() => openDrill("leads", data!.noCampaign.leads, "none", "No campaign")} /> and{" "}
+                <DrillNumber n={data!.noCampaign.applications} text={`${count(data!.noCampaign.applications)} applications`} onOpen={() => openDrill("applications", data!.noCampaign.applications, "none", "No campaign")} />{" "}
+                aren&apos;t in this table because{" "}
                 {data!.missing.length
                   ? `Meta isn't sharing ${data!.missing.map((f) => FUNNEL_NAME[f]).join(" and ")} campaigns, or no campaign was recorded.`
                   : "no campaign was recorded."}
@@ -553,6 +636,7 @@ export function AdPerformanceDashboard() {
           </details>
         </div>
       )}
+      {drill && <ClientLeadsWindow req={drill} onClose={() => setDrill(null)} />}
     </div>
   );
 }

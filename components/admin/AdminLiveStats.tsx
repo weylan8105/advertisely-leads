@@ -44,7 +44,13 @@ export function AdminLiveStats() {
   const rangeQuery = `range=${range}${range === "custom" ? customRangeQuery(custom) : ""}`;
   const rangeName = range === "custom" ? `${custom.from} to ${custom.to}` : RANGES.find((r) => r.id === range)!.label;
   const openDrill = (metric: string, label: string, count: number, agent: { id: string; name: string } | null) =>
-    setDrill({ metric, title: `${label} · ${agent ? agent.name : "All agents"} · ${rangeName}`, count, userId: agent?.id ?? null, query: rangeQuery });
+    setDrill({
+      metric,
+      title: `${label} · ${agent ? agent.name : "All agents"} · ${rangeName}`,
+      count,
+      allAgents: !agent,
+      endpoint: `/api/admin/live-stats/leads?metric=${metric}&${rangeQuery}${agent ? `&userId=${encodeURIComponent(agent.id)}` : ""}`,
+    });
 
   function exportCsv() {
     if (!data) return;

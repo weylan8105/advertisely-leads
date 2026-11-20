@@ -449,7 +449,7 @@ export interface AdPerformance {
 }
 
 /** Everything both the dashboard and its lead drilldown need, for one window. */
-async function loadPerfBase(range: PerfRange, from?: string | null, to?: string | null) {
+export async function loadPerfBase(range: PerfRange, from?: string | null, to?: string | null) {
   if (!prisma) throw new Error("Database not configured");
   const now = new Date();
   const today = ymdInTz(now, ACTIVITY_TZ);

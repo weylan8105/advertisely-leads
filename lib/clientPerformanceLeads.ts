@@ -49,7 +49,7 @@ export async function metricLeads(
   const untilTs = until ?? new Date(Date.now() + 86_400_000);
 
   // leadId → { credited user, when, AP }
-  const hits = new Map<string, { uid: string; at: Date | null; apCents: number | null }>();
+  const hits: DrillHits = new Map();
   const add = (leadId: string, uid: string, at: Date | null, apCents: number | null) => {
     if (!hits.has(leadId)) hits.set(leadId, { uid, at, apCents });
   };
@@ -84,9 +84,22 @@ export async function metricLeads(
     }
   }
 
-  const total = hits.size;
+  const leads = await drillCards(hits);
+  // Funnel-level metrics have no single "when": newest-touched first.
+  if (MIN_LEVEL[metric]) leads.sort((a, b) => b.touchedAt - a.touchedAt);
+  return { leads: leads.map(({ touchedAt, ...l }) => l), total: hits.size };
+}
+
+export type DrillHits = Map<string, { uid: string | null; at: Date | null; apCents: number | null }>;
+
+/**
+ * Lead cards for up to DRILL_LIMIT of `hits` (in their order). `uid` is who the
+ * lead counted for; null credits its current owner.
+ */
+export async function drillCards(hits: DrillHits): Promise<(DrillLead & { touchedAt: number })[]> {
+  if (!prisma) return [];
   const ids = [...hits.keys()].slice(0, DRILL_LIMIT);
-  if (!ids.length) return { leads: [], total };
+  if (!ids.length) return [];
 
   const rows = await prisma.lead.findMany({
     where: { id: { in: ids } },
@@ -108,7 +121,7 @@ export async function metricLeads(
   };
   const rowById = new Map(rows.map((r) => [r.id, r]));
 
-  const leads: DrillLead[] = [];
+  const leads: (DrillLead & { touchedAt: number })[] = [];
   for (const id of ids) {
     const r = rowById.get(id);
     if (!r) continue;
@@ -124,18 +137,14 @@ export async function metricLeads(
       occupation: r.occupation,
       income: r.income,
       stage: labelForStage(stagesForUser(owner?.pipelineStages ?? null), r.pipelineStage),
-      creditedTo: nameOf(h.uid) ?? "Unknown",
+      creditedTo: nameOf(h.uid ?? r.assignedUserId) ?? "Unassigned",
       owner: nameOf(r.assignedUserId),
       apCents: h.apCents ?? r.valueCents ?? null,
       at: (h.at ?? null)?.toISOString() ?? null,
       receivedAt: r.receivedAt.toISOString(),
       source: r.source,
+      touchedAt: r.updatedAt.getTime(),
     });
   }
-  // Funnel-level metrics have no single "when": newest-touched first.
-  if (MIN_LEVEL[metric]) {
-    const touched = new Map(rows.map((r) => [r.id, r.updatedAt.getTime()]));
-    leads.sort((a, b) => (touched.get(b.id) ?? 0) - (touched.get(a.id) ?? 0));
-  }
-  return { leads, total };
+  return leads;
 }

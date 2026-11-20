@@ -30,16 +30,21 @@ export interface DrillRequest {
   title: string; // e.g. "Contacts · Jace Smith"
   /** How many the clicked number said, so a difference can be explained. */
   count: number;
-  userId: string | null;
-  /** range=…&from=…&to=… */
-  query: string;
+  /** True when the list covers every agent (explains summed per-agent counts). */
+  allAgents: boolean;
+  /** The API URL that returns { total, limit, leads }. */
+  endpoint: string;
+  /** What each card's date means, when it isn't the metric's usual one. */
+  atLabel?: string;
 }
 
 const money = (cents: number | null) =>
   cents == null ? "" : (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
-const AT_LABEL: Record<string, string> = { leads: "Assigned", apps: "Submitted", policies: "Issued" };
+const AT_LABEL: Record<string, string> = {
+  leads: "Assigned", apps: "Submitted", policies: "Issued", applications: "Submitted", issuedPaid: "Issued",
+};
 
 /** The leads behind a Client Performance number, as cards; click one for its full lead card. */
 export function ClientLeadsWindow({ req, onClose }: { req: DrillRequest; onClose: () => void }) {
@@ -52,8 +57,7 @@ export function ClientLeadsWindow({ req, onClose }: { req: DrillRequest; onClose
   useEffect(() => {
     let live = true;
     setData(null); setFailed(false);
-    const u = `/api/admin/live-stats/leads?metric=${req.metric}&${req.query}${req.userId ? `&userId=${encodeURIComponent(req.userId)}` : ""}`;
-    fetch(u, { cache: "no-store" })
+    fetch(req.endpoint, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => { if (live) setData(d); })
       .catch(() => { if (live) setFailed(true); });
@@ -91,7 +95,7 @@ export function ClientLeadsWindow({ req, onClose }: { req: DrillRequest; onClose
     if (!data) return;
     downloadCsv(
       `${req.title.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}.csv`,
-      ["Name", "Age", "State", "Phone", "Email", "Occupation", "Income", "Stage", "Credited to", "Owner", "AP", AT_LABEL[req.metric] ?? "Date", "Received", "Source"],
+      ["Name", "Age", "State", "Phone", "Email", "Occupation", "Income", "Stage", "Credited to", "Owner", "AP", atLabel || "Date", "Received", "Source"],
       data.leads.map((l) => [
         l.name, l.age ?? "", l.state, l.phone, l.email, l.occupation ?? "", l.income ?? "", l.stage, l.creditedTo, l.owner ?? "",
         l.apCents != null ? (l.apCents / 100).toFixed(2) : "", day(l.at), day(l.receivedAt), l.source,
@@ -99,8 +103,9 @@ export function ClientLeadsWindow({ req, onClose }: { req: DrillRequest; onClose
     );
   }
 
+  const atLabel = req.atLabel ?? AT_LABEL[req.metric] ?? "";
   const multiAgentNote =
-    data && !req.userId && data.total < req.count && ["contacts", "presentations"].includes(req.metric)
+    data && req.allAgents && data.total < req.count && ["contacts", "presentations"].includes(req.metric)
       ? `${req.count.toLocaleString()} counted across agents is ${data.total.toLocaleString()} different people: some leads were worked by more than one agent, and each agent gets credit.`
       : null;
 
@@ -185,7 +190,7 @@ export function ClientLeadsWindow({ req, onClose }: { req: DrillRequest; onClose
                   </span>
                   <span className="tabular-nums">
                     {l.apCents ? <strong className="text-slate-800">{money(l.apCents)}</strong> : null}
-                    {l.at ? `${l.apCents ? " · " : ""}${AT_LABEL[req.metric] ?? ""} ${day(l.at)}` : ""}
+                    {l.at ? `${l.apCents ? " · " : ""}${atLabel} ${day(l.at)}`.trim() : ""}
                   </span>
                 </div>
               </button>
