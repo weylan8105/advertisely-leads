@@ -13,7 +13,7 @@ import {
 } from "@/components/activity/shared";
 
 type Scope = "agents" | "teams" | "my-team";
-type Metric = "submittedApCents" | "apps" | "apCents" | "policies" | "dials" | "contacts" | "presentations";
+type Metric = "submittedApCents" | "apps" | "dials" | "contacts" | "presentations";
 
 interface Row extends ActivityStats {
   id: string;
@@ -26,15 +26,12 @@ interface Row extends ActivityStats {
 const METRICS: { id: Metric; label: string }[] = [
   { id: "submittedApCents", label: "Submitted AP" },
   { id: "apps", label: "Apps" },
-  { id: "apCents", label: "Issued AP" },
-  { id: "policies", label: "Policies Sold" },
   { id: "dials", label: "Dials" },
   { id: "contacts", label: "Contacts" },
   { id: "presentations", label: "Presentations" },
 ];
 
-const fmt = (m: Metric, r: ActivityStats) =>
-  m === "apCents" || m === "submittedApCents" ? formatAp(r[m]) : r[m].toLocaleString();
+const fmt = (m: Metric, r: ActivityStats) => (m === "submittedApCents" ? formatAp(r[m]) : r[m].toLocaleString());
 
 export default function LeaderboardPage() {
   const [scope, setScope] = useState<Scope>("agents");
@@ -77,7 +74,7 @@ export default function LeaderboardPage() {
   const ranked = useMemo(
     () =>
       [...(rows ?? [])].sort(
-        (a, b) => b[metric] - a[metric] || b.submittedApCents - a.submittedApCents || b.apCents - a.apCents || b.policies - a.policies || a.name.localeCompare(b.name),
+        (a, b) => b[metric] - a[metric] || b.submittedApCents - a.submittedApCents || b.apps - a.apps || a.name.localeCompare(b.name),
       ),
     [rows, metric],
   );
@@ -148,15 +145,13 @@ export default function LeaderboardPage() {
           </div>
 
           <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[680px] text-sm">
               <thead>
                 <tr className="border-b border-slate-900 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   <th className="w-16 px-5 py-4">Rank</th>
                   <th className="px-5 py-4">{who}</th>
                   <th className="px-5 py-4 text-right">Submitted AP</th>
                   <th className="px-5 py-4 text-right">Apps</th>
-                  <th className="px-5 py-4 text-right">Issued AP</th>
-                  <th className="px-5 py-4 text-right">Policies</th>
                   <th className="px-5 py-4 text-right">Dials</th>
                   <th className="px-5 py-4 text-right">Contacts</th>
                   <th className="px-5 py-4 text-right">Pres</th>
@@ -180,8 +175,6 @@ export default function LeaderboardPage() {
                     </td>
                     <td className="px-5 py-4 text-right font-semibold tabular-nums">{formatAp(r.submittedApCents)}</td>
                     <td className="px-5 py-4 text-right tabular-nums">{r.apps}</td>
-                    <td className="px-5 py-4 text-right tabular-nums">{formatAp(r.apCents)}</td>
-                    <td className="px-5 py-4 text-right tabular-nums">{r.policies}</td>
                     <td className="px-5 py-4 text-right tabular-nums">{r.dials}</td>
                     <td className="px-5 py-4 text-right tabular-nums">{r.contacts}</td>
                     <td className="px-5 py-4 text-right tabular-nums">{r.presentations}</td>
@@ -191,7 +184,7 @@ export default function LeaderboardPage() {
             </table>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Submitted AP and apps count deals the moment they reach Underwriting (or any later stage), at the AP the agent entered. Issued AP and policies count Issued PAID deals. Dials count every call started from Advertisely since Nov 6, and one per lead moved before that. Contacts and presentations count leads moved to those
+            Ranked on submitted business: Submitted AP and apps count each deal once, the day it first reached Underwriting (or any later stage), at the AP the agent entered, going back to the first deal on Advertisely. Dials count every call started from Advertisely since Nov 6, and one per lead moved before that. Contacts and presentations count leads moved to those
             pipeline stages in the period. Central time.
           </p>
         </div>

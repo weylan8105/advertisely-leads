@@ -25,6 +25,9 @@ import { prisma } from "./prisma";
 import { WON_STAGE_ID, CONVERSION_STAGE_IDS } from "@/data/pipeline";
 
 export const ACTIVITY_TZ = "America/Chicago";
+
+// Locked conversion-stage labels, lower-cased: older moves only carry the label.
+const CONVERSION_LABELS = ["underwriting", "approved", "issued not paid", "issued paid 💰", "issued paid"];
 export const PERIODS = ["today", "wtd", "mtd", "ytd", "all"] as const;
 export type Period = (typeof PERIODS)[number];
 
@@ -160,7 +163,9 @@ export async function stageMovesBetween(since: Date, until: Date): Promise<Stage
            EXISTS (
              SELECT 1 FROM "LeadActivity" p
              WHERE p."leadId" = a."leadId" AND p.type = 'STATUS_CHANGED'
-               AND p.metadata->>'stage' = ANY(${stages}) AND p."createdAt" < a."createdAt"
+               AND (p.metadata->>'stage' = ANY(${stages})
+                    OR lower(substring(p.body from '^Moved to "(.*)" in the pipeline\\.$')) = ANY(${CONVERSION_LABELS}))
+               AND p."createdAt" < a."createdAt"
            ) AS "afterDeal"
     FROM "LeadActivity" a
     JOIN "Lead" l ON l.id = a."leadId"
@@ -271,7 +276,9 @@ export interface SubmittedDeal {
 /**
  * Deals submitted since `since`: each lead's first move into Underwriting or a
  * later deal stage (ever), when that first move falls in the period. AP is the
- * lead's current value, so a corrected AP shows everywhere.
+ * lead's current value, so a corrected AP shows everywhere. Moves before Nov 2,
+ * 2026 carry no stage id, only the text `Moved to "<label>"`; conversion-stage
+ * labels are locked, so those are matched by label (backdates older deals).
  */
 export async function submittedDeals(since: Date, until: Date | null = null): Promise<SubmittedDeal[]> {
   if (!prisma) return [];
@@ -284,7 +291,9 @@ export async function submittedDeals(since: Date, until: Date | null = null): Pr
       SELECT DISTINCT ON (a."leadId") a."leadId", a."createdAt" AS at,
              a.metadata->>'actorId' AS actor, (a.metadata->>'apCents')::int AS ap
       FROM "LeadActivity" a
-      WHERE a.type = 'STATUS_CHANGED' AND a.metadata->>'stage' = ANY(${stages})
+      WHERE a.type = 'STATUS_CHANGED'
+        AND (a.metadata->>'stage' = ANY(${stages})
+             OR lower(substring(a.body from '^Moved to "(.*)" in the pipeline\\.$')) = ANY(${CONVERSION_LABELS}))
       ORDER BY a."leadId", a."createdAt" ASC
     ) f
     JOIN "Lead" l ON l.id = f."leadId"
@@ -293,7 +302,7 @@ export async function submittedDeals(since: Date, until: Date | null = null): Pr
 }
 
 export function hasActivity(s: ActivityStats): boolean {
-  return s.leads + s.dials + s.policies > 0;
+  return s.leads + s.dials + s.apps + s.policies > 0;
 }
 
 /**
