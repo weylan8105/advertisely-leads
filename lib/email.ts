@@ -695,3 +695,33 @@ ${tableHtml}
 
   return sendEmail({ to: toEmail, subject, html });
 }
+
+/** A new lead just landed in the team's Goldmine: whoever calls first gets it (lib/leadTexts.ts). */
+export async function sendGoldmineLeadAlertEmail({
+  toEmail,
+  agentName,
+  teamName,
+  leadFirstName,
+  leadState,
+}: {
+  toEmail: string;
+  agentName: string;
+  teamName: string;
+  leadFirstName: string;
+  leadState: string;
+}) {
+  const who = [leadFirstName, leadState].filter(Boolean).join(", ");
+  const subject = `New Goldmine lead${who ? `: ${who}` : ""}. Call in the next 5 minutes`;
+  const url = "https://advertisely.io/goldmine";
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:#dc2626;padding:24px 32px;"><div style="color:#fff;font-size:20px;font-weight:700;">Advertisely</div><div style="color:#fca5a5;font-size:13px;margin-top:2px;">${escapeHtml(teamName)} Goldmine</div></td></tr>
+<tr><td style="padding:32px;">
+<p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">A new lead is waiting${who ? `: ${escapeHtml(who)}` : ""}</p>
+<p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">Hi ${escapeHtml(agentName)}, a fresh lead just landed in your team's Goldmine. Leads called within 5 minutes are far more likely to pick up and qualify. The first agent to call gets it.</p>
+<div style="text-align:center;margin:8px 0 8px;"><a href="${url}" style="display:inline-block;background:#dc2626;color:#fff;font-size:15px;font-weight:600;padding:14px 34px;border-radius:8px;text-decoration:none;">Open Goldmine →</a></div>
+</td></tr></table></td></tr></table></body></html>`;
+  return sendEmail({ to: toEmail, subject, html });
+}

@@ -6,6 +6,7 @@ import { WON_STAGE_ID, CONVERSION_STAGE_IDS, isConversionStage } from "@/data/pi
 import { stagesForUser, labelForStage } from "@/lib/pipelineStages";
 import { canActOnLead } from "@/lib/leadAccess";
 import { fireMetaStageEvent, fireMetaContactedEvent, isPickupStage } from "@/lib/metaCapi";
+import { notifyMissedCall } from "@/lib/leadTexts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,6 +125,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // The first time a lead is picked up (Contacted, Call Back, Presentation Ran or
   // a closing stage), Meta also gets the lead's one "Contacted" quality signal.
   if (isPickupStage(stage)) await fireMetaContactedEvent(params.id).catch(() => {});
+  // First dial with no answer (New Lead → Dialed): text the lead who just called
+  // and from which number, so they call back / pick up next time (lib/leadTexts.ts).
+  if (lead.pipelineStage === "new-lead" && stage === "aged-lead") await notifyMissedCall(params.id, userId);
   await fireMetaStageEvent(params.id, stage, isSold ? premiumCents : null);
 
   return NextResponse.json({ ok: true, stage, valueCents: isDeal ? apCents : undefined });
