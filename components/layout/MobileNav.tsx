@@ -24,6 +24,7 @@ import {
   Coins,
   UploadCloud,
   Trophy,
+  Target,
 } from "lucide-react";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ const ALL: Item[] = [
   { href: "/admin", label: "Admin Console", icon: Shield, adminOnly: true },
   { href: "/performance", label: "Ad Performance", icon: Gauge, adminOnly: true },
   { href: "/client-performance", label: "Client Performance", icon: Activity, adminOnly: true },
+  { href: "/lead-pace", label: "Lead Pace", icon: Target, adminOnly: true },
   { href: "/business-pnl", label: "Business P&L", icon: Landmark, adminOnly: true },
   { href: "/ad-uploader", label: "Ad Bulk Uploader", icon: UploadCloud, adminOnly: true },
 ];

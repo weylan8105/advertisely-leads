@@ -20,6 +20,7 @@ import {
   Landmark,
   UploadCloud,
   Trophy,
+  Target,
 } from "lucide-react";
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
 import { Logo } from "./Logo";
@@ -62,6 +63,7 @@ const sections: { title: string; items: NavItem[]; adminOnly?: boolean }[] = [
       { href: "/admin", label: "Admin Console", icon: Shield, badge: "Admin" },
       { href: "/performance", label: "Ad Performance", icon: Gauge },
       { href: "/client-performance", label: "Client Performance", icon: Activity },
+      { href: "/lead-pace", label: "Lead Pace", icon: Target },
       { href: "/business-pnl", label: "Business P&L", icon: Landmark },
       { href: "/ad-uploader", label: "Ad Bulk Uploader", icon: UploadCloud },
     ],
