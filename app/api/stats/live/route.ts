@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   try {
-    const { totals, activeAgents, since, generatedAt } = await liveStats();
+    const { totals, activeAgents, since, generatedAt } = await liveStats("30d");
     return NextResponse.json(
       { totals, activeAgents, since, generatedAt },
       { headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" } },

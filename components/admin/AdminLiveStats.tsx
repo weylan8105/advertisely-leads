@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Pills } from "@/components/activity/shared";
 import { LiveDot, LiveStatsGrid, updatedLabel, useLiveStats, type LiveStatsPayload, type LiveTotals } from "@/components/marketing/LiveStats";
 
 interface AgentRow extends LiveTotals { id: string; name: string }
@@ -8,21 +10,46 @@ interface AdminPayload extends LiveStatsPayload { agents: AgentRow[] }
 const money = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-/** Admin console tab: the homepage's live 30-day numbers, plus who produced them. */
+type Range = "today" | "yesterday" | "7d" | "30d" | "all";
+const RANGES: { id: Range; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
+  { id: "all", label: "All time" },
+];
+const RANGE_NOTE: Record<Range, string> = {
+  today: "Today so far (Central time)",
+  yesterday: "Yesterday (Central time)",
+  "7d": "Last 7 days, including today (Central time)",
+  "30d": "Rolling last 30 days, the same window as the homepage",
+  all: "All time",
+};
+
+/** Client Performance page: every agent's production for a range, live. */
 export function AdminLiveStats() {
-  const { data, failed } = useLiveStats<AdminPayload>("/api/admin/live-stats");
+  const [range, setRange] = useState<Range>("30d");
+  const { data: raw, failed } = useLiveStats<AdminPayload & { range?: Range }>(`/api/admin/live-stats?range=${range}`);
+  // Don't show the previous range's numbers under the new range's button.
+  const data = raw && raw.range === range ? raw : null;
   return (
     <div className="space-y-6">
+      <Pills value={range} onChange={setRange} options={RANGES} />
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-2"><LiveDot /> Rolling last 30 days · refreshes every 30 seconds</span>
+        <span className="flex items-center gap-2"><LiveDot /> {RANGE_NOTE[range]} · refreshes every 30 seconds</span>
         <span>
           {failed && !data ? "Couldn't load stats" : data ? `${data.activeAgents} active agents · updated ${updatedLabel(data.generatedAt)}` : "Loading…"}
         </span>
       </div>
       <LiveStatsGrid totals={data?.totals ?? null} />
-      <p className="text-xs text-muted-foreground">
-        These tiles are what visitors see on the advertisely.io homepage before they sign in (totals only, no names).
-      </p>
+      {range === "30d" && (
+        <p className="text-xs text-muted-foreground">
+          These tiles are what visitors see on the advertisely.io homepage before they sign in (totals only, no names).
+        </p>
+      )}
+      {data && data.agents.length === 0 && (
+        <p className="text-sm text-muted-foreground">No agent activity in this range yet.</p>
+      )}
       {data && data.agents.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-sm">

@@ -164,7 +164,11 @@ export function addFunnelStats(
  * Stats per user for the period. `userIds` limits the result (null = everyone
  * with any activity). Trashed leads never count.
  */
-export async function activityByUser(since: Date | null, userIds: string[] | null = null): Promise<Map<string, ActivityStats>> {
+export async function activityByUser(
+  since: Date | null,
+  userIds: string[] | null = null,
+  until: Date | null = null,
+): Promise<Map<string, ActivityStats>> {
   const out = new Map<string, ActivityStats>();
   if (!prisma) return out;
   if (userIds && userIds.length === 0) return out;
@@ -174,13 +178,15 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
     return s;
   };
   const sinceTs = since ?? new Date(0);
+  // Open-ended windows run to "now" and a bit past, so nothing just logged is cut off.
+  const untilTs = until ?? new Date(Date.now() + 86_400_000);
 
   const [leadRows, soldRows, events, dials, submitted] = await Promise.all([
     prisma.lead.groupBy({
       by: ["assignedUserId"],
       where: {
         trashedAt: null,
-        assignedAt: { gte: sinceTs },
+        assignedAt: { gte: sinceTs, lt: untilTs },
         assignedUserId: userIds ? { in: userIds } : { not: null },
       },
       _count: { _all: true },
@@ -190,7 +196,7 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
       where: {
         trashedAt: null,
         pipelineStage: WON_STAGE_ID,
-        soldAt: { gte: sinceTs },
+        soldAt: { gte: sinceTs, lt: untilTs },
         assignedUserId: userIds ? { in: userIds } : { not: null },
       },
       _count: { _all: true },
@@ -200,13 +206,13 @@ export async function activityByUser(since: Date | null, userIds: string[] | nul
       SELECT a."leadId", a.body, a.metadata, l."assignedUserId" AS "ownerId"
       FROM "LeadActivity" a
       JOIN "Lead" l ON l.id = a."leadId"
-      WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
+      WHERE a.type = 'STATUS_CHANGED' AND a."createdAt" >= ${sinceTs} AND a."createdAt" < ${untilTs} AND l."trashedAt" IS NULL`,
     prisma.$queryRaw<DialRow[]>`
       SELECT a."leadId", a.metadata->>'actorId' AS "actorId", COALESCE((a.metadata->>'dials')::int, 1) AS dials
       FROM "LeadActivity" a
       JOIN "Lead" l ON l.id = a."leadId"
-      WHERE a.type = 'CALL_MADE' AND a."createdAt" >= ${sinceTs} AND l."trashedAt" IS NULL`,
-    submittedDeals(sinceTs),
+      WHERE a.type = 'CALL_MADE' AND a."createdAt" >= ${sinceTs} AND a."createdAt" < ${untilTs} AND l."trashedAt" IS NULL`,
+    submittedDeals(sinceTs, untilTs),
   ]);
 
   for (const r of leadRows) if (r.assignedUserId) get(r.assignedUserId).leads = r._count._all;
@@ -240,9 +246,10 @@ export interface SubmittedDeal {
  * later deal stage (ever), when that first move falls in the period. AP is the
  * lead's current value, so a corrected AP shows everywhere.
  */
-export async function submittedDeals(since: Date): Promise<SubmittedDeal[]> {
+export async function submittedDeals(since: Date, until: Date | null = null): Promise<SubmittedDeal[]> {
   if (!prisma) return [];
   const stages = [...CONVERSION_STAGE_IDS];
+  const untilTs = until ?? new Date(Date.now() + 86_400_000);
   const rows = await prisma.$queryRaw<{ leadId: string; userId: string | null; apCents: number | null; at: Date }[]>`
     SELECT f."leadId", COALESCE(f.actor, l."assignedUserId") AS "userId",
            COALESCE(l."valueCents", l."soldPremiumCents", f.ap, 0)::int AS "apCents", f.at
@@ -254,7 +261,7 @@ export async function submittedDeals(since: Date): Promise<SubmittedDeal[]> {
       ORDER BY a."leadId", a."createdAt" ASC
     ) f
     JOIN "Lead" l ON l.id = f."leadId"
-    WHERE f.at >= ${since} AND l."trashedAt" IS NULL`;
+    WHERE f.at >= ${since} AND f.at < ${untilTs} AND l."trashedAt" IS NULL`;
   return rows.map((r) => ({ leadId: r.leadId, userId: r.userId, apCents: Number(r.apCents ?? 0), at: new Date(r.at) }));
 }
 

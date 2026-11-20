@@ -10,7 +10,7 @@ export default function ClientPerformancePage() {
       <PageHeader
         eyebrow="Internal · Advertisely Admin"
         title="Client Performance"
-        description="Real production across every agent over the rolling last 30 days: the same totals shown live on the public homepage, with the agents behind them."
+        description="Real production across every agent for any range, live. The 30-day view is the same total shown on the public homepage."
         className="mb-5"
       />
       <AdminLiveStats />
