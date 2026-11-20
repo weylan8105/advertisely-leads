@@ -1,3 +1,4 @@
+import { alertGoldmineTeamOfNewLead } from "./goldmineAlert";
 import { prisma } from "./prisma";
 import { ensureOrgContext } from "./org";
 import { sendLeadDeliveryEmail, isEmailConfigured } from "./email";
@@ -539,7 +540,19 @@ async function routeAbcaEventBoost(lead: { id: string; source: string | null }):
 }
 // ─── end TEMPORARY ABCA event boost ──────────────────────────────────────────
 
+/**
+ * Route a brand-new lead, then, if it landed in a team's Goldmine, email that
+ * team's agents so someone calls fast (lib/goldmineAlert.ts).
+ */
 export async function tryFulfillForNewLead(leadId: string): Promise<void> {
+  if (!prisma) return;
+  const before = await prisma.lead.findUnique({ where: { id: leadId }, select: { assignedUserId: true } });
+  if (!before || before.assignedUserId) return; // already routed
+  await routeNewLead(leadId);
+  await alertGoldmineTeamOfNewLead(leadId);
+}
+
+async function routeNewLead(leadId: string): Promise<void> {
   if (!prisma) return;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead || lead.assignedUserId) return;
