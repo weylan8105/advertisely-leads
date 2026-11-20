@@ -6,12 +6,9 @@ export const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
 
-// States we sell leads in (order availability on the marketplace). 31 states.
-export const AVAILABLE_STATES = [
-  "AL", "AR", "AZ", "CA", "CO", "CT", "FL", "GA", "ID", "IL",
-  "IN", "LA", "MA", "MD", "ME", "MI", "MS", "MT", "NC", "NM",
-  "NV", "OH", "OK", "OR", "PA", "SC", "TN", "TX", "VA", "WA", "WI",
-];
+// States we sell leads in (order availability on the marketplace, and the
+// states agents can pick on their account): every state except New York.
+export const AVAILABLE_STATES = US_STATES.filter((s) => s !== "NY");
 
 export function isStateAvailable(state: string) {
   return AVAILABLE_STATES.includes(state);

@@ -124,6 +124,8 @@ describe("shared lead pool", () => {
       { id: "nurse-only", name: "Nurse only", email: "c@x.test", licensedStates: ["TX"], leadTypes: ["-blue-collar-iul", "healthcare-iul"], ownedOrganizations: [] },
       { id: "nothing", name: "Nothing", email: "d@x.test", licensedStates: ["TX"], leadTypes: ["-blue-collar-iul"], ownedOrganizations: [] },
       { id: "wrong-state", name: "Florida", email: "e@x.test", licensedStates: ["FL"], leadTypes: ["healthcare-iul"], ownedOrganizations: [] },
+      // The upline's states decide: a teammate licensed in TX doesn't bring TX leads to a FL-only upline.
+      { id: "fl-upline", name: "FL upline", email: "g@x.test", licensedStates: ["FL"], leadTypes: ["healthcare-iul"], ownedOrganizations: [{ memberships: [{ user: { licensedStates: ["TX"] } }] }] },
       { id: "broke", name: "No budget", email: "f@x.test", licensedStates: ["TX"], leadTypes: ["healthcare-iul"], ownedOrganizations: [] },
     );
     for (const a of advertisers) summaries.set(a.id, { ...summary, ...(a.id === "broke" ? { balanceCents: 0 } : {}) });

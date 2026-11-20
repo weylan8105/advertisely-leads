@@ -154,11 +154,9 @@ describe("admin overflow", () => {
     expect(updates()[0].data.pipeline).toBeUndefined();
   });
 
-  it("an admin's slot covers their own states plus their in-rotation team's, like a client's", async () => {
-    expect(slotLicensedStates(["AR"], [["TX", "FL"], ["FL", "CA"]]).sort()).toEqual(["AR", "CA", "FL", "TX"]);
-    expect(slotLicensedStates(["AR"], [["TX"], []])).toEqual([]);
-    expect(slotLicensedStates([], [["TX"]])).toEqual([]);
-    expect(slotLicensedStates(["AR"], [])).toEqual(["AR"]);
+  it("an admin's slot covers only the states the admin picked; the team gets the upline's states", async () => {
+    expect(slotLicensedStates(["AR", "TX", "AR"]).sort()).toEqual(["AR", "TX"]);
+    expect(slotLicensedStates([])).toEqual([]); // none on file = everywhere
     db.user.findMany.mockResolvedValue([
       {
         id: "admin_1", weeklyLeadTarget: 10, licensedStates: ["AR"], leadTypes: ["healthcare-iul"],
@@ -167,7 +165,7 @@ describe("admin overflow", () => {
     ]);
     db.lead.count.mockResolvedValue(0);
     const [s] = await getEligibleAdminSlots();
-    expect(s.licensedStates.sort()).toEqual(["AR", "GA", "TX"]);
+    expect(s.licensedStates).toEqual(["AR"]);
   });
 });
 

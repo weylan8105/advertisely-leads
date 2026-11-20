@@ -53,14 +53,13 @@ export async function getHouseAccount(): Promise<{ userId: string; organizationI
 export type AdminSlot = { userId: string; organizationId: string | null; licensedStates: string[]; leadTypes: string[] };
 
 /**
- * The states a slot covers: the admin's own plus each in-rotation teammate's.
- * Anyone with no states on file counts as licensed everywhere, which is an empty
- * list here too (the same fallback buyers and clients get).
+ * The states a slot covers: the admin's own. The upline decides which states
+ * their team receives, so teammates' states don't widen it. No states on file
+ * counts as licensed everywhere (an empty list, the same fallback buyers and
+ * clients get).
  */
-export function slotLicensedStates(own: string[], team: string[][]): string[] {
-  const all = [own, ...team];
-  if (all.some((s) => s.length === 0)) return [];
-  return [...new Set(all.flat())];
+export function slotLicensedStates(own: string[]): string[] {
+  return [...new Set(own)];
 }
 
 export async function getEligibleAdminSlots(): Promise<AdminSlot[]> {
@@ -75,10 +74,7 @@ export async function getEligibleAdminSlots(): Promise<AdminSlot[]> {
       licensedStates: true,
       leadTypes: true,
       ownedOrganizations: {
-        select: {
-          id: true,
-          memberships: { where: { inRotation: true }, select: { user: { select: { licensedStates: true } } } },
-        },
+        select: { id: true },
         orderBy: { createdAt: "asc" },
         take: 1,
       },
@@ -105,13 +101,10 @@ export async function getEligibleAdminSlots(): Promise<AdminSlot[]> {
       },
     });
     if (got < (a.weeklyLeadTarget ?? 0)) {
-      const team = (a.ownedOrganizations[0]?.memberships ?? []).map(
-        (m: { user: { licensedStates?: string[] | null } }) => m.user.licensedStates ?? [],
-      );
       slots.push({
         userId: a.id,
         organizationId: a.ownedOrganizations[0]?.id ?? null,
-        licensedStates: slotLicensedStates(a.licensedStates ?? [], team),
+        licensedStates: slotLicensedStates(a.licensedStates ?? []),
         leadTypes: a.leadTypes ?? [],
       });
     }

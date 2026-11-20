@@ -356,8 +356,9 @@ export function licensedIn(states: string[], state: string | null): boolean {
 
 /**
  * Advertiser clients who can take this lead: ad budget left for one lead at the
- * pool's cost (on a balance read without errors), and someone licensed in the
- * state — the client, or a teammate in their rotation who'd receive it.
+ * pool's cost (on a balance read without errors), and the state is one of the
+ * client's own selected states. The upline decides which states their team
+ * receives, so teammates' states don't add to it.
  */
 export async function sharedClientSlots(state: string | null, pool: SharedPool): Promise<ClientSlot[]> {
   if (!prisma) return [];
@@ -367,16 +368,12 @@ export async function sharedClientSlots(state: string | null, pool: SharedPool):
     orderBy: { createdAt: "asc" },
     select: {
       id: true, name: true, email: true, licensedStates: true, leadTypes: true,
-      ownedOrganizations: {
-        select: { memberships: { where: { inRotation: true }, select: { user: { select: { licensedStates: true } } } } },
-      },
     },
   });
   const licensed = clients.filter((c) => {
     if ((c.email ?? "").trim().toLowerCase() === HOUSE_EMAIL) return false; // the house isn't a client
     if (!leadTypeOn(c.leadTypes, poolLeadType(pool))) return false; // they switched this lead type off (or never on)
-    const teamLicensed = c.ownedOrganizations.some((o) => o.memberships.some((m) => licensedIn(m.user.licensedStates ?? [], state)));
-    return licensedIn(c.licensedStates ?? [], state) || teamLicensed;
+    return licensedIn(c.licensedStates ?? [], state);
   });
   // Read every balance at once: with more clients in the pool, one at a time
   // would hold up the lead that's waiting to be routed.
