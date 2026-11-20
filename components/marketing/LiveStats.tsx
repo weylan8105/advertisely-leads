@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface LiveTotals {
@@ -44,12 +44,18 @@ export function liveTiles(t: LiveTotals): { label: string; value: string; accent
 /** Polls `url` every 30s while the tab is visible. */
 export function useLiveStats<T extends LiveStatsPayload>(url: string) {
   const [data, setData] = useState<T | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const latest = useRef(url);
+  latest.current = url;
   const load = useCallback(() => {
     fetch(url, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: T) => { setData(d); setFailed(false); })
-      .catch(() => setFailed(true));
+      .then((d: T) => {
+        if (latest.current !== url) return; // a newer range was picked meanwhile
+        setData(d); setLoadedUrl(url); setFailed(false);
+      })
+      .catch(() => { if (latest.current === url) setFailed(true); });
   }, [url]);
   useEffect(() => {
     load();
@@ -58,7 +64,7 @@ export function useLiveStats<T extends LiveStatsPayload>(url: string) {
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [load]);
-  return { data, failed };
+  return { data, failed, url: loadedUrl };
 }
 
 export function LiveDot() {

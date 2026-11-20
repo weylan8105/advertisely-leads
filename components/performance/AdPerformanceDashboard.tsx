@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronRight, Loader2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Pills } from "@/components/activity/shared";
+import { CustomRangeInputs, customRangeQuery, defaultDayRange, type DayRange } from "@/components/activity/CustomRange";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { AdPerformance, PerfDay, PerfDealRow, PerfRange, PerfSummary } from "@/lib/adPerformance";
@@ -17,6 +18,7 @@ const RANGES: { id: PerfRange; label: string }[] = [
   { id: "7d", label: "7 days" },
   { id: "30d", label: "30 days" },
   { id: "shared", label: "Since Sep 14" },
+  { id: "custom", label: "Custom" },
 ];
 type Funnel = "ew" | "abca" | "ewws";
 type FunnelView = "all" | Funnel;
@@ -177,6 +179,7 @@ const COMPARE_ROWS: { label: string; value: (s: PerfSummary) => string }[] = [
 /** Admin: how the ads are running, with Meta's numbers next to what the leads became. */
 export function AdPerformanceDashboard() {
   const [range, setRange] = useState<PerfRange>("30d");
+  const [custom, setCustom] = useState<DayRange>(defaultDayRange);
   const [view, setView] = useState<FunnelView>("all");
   const [data, setData] = useState<AdPerformance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,7 +190,8 @@ export function AdPerformanceDashboard() {
   const load = useCallback(async () => {
     const request = ++latest.current;
     try {
-      const res = await fetch(`/api/admin/performance?range=${range}`, { cache: "no-store" });
+      const q = range === "custom" ? customRangeQuery(custom) : "";
+      const res = await fetch(`/api/admin/performance?range=${range}${q}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const next: AdPerformance = await res.json();
       if (request !== latest.current) return;
@@ -198,7 +202,7 @@ export function AdPerformanceDashboard() {
     } finally {
       if (request === latest.current) setLoading(false);
     }
-  }, [range]);
+  }, [range, custom]);
 
   useEffect(() => {
     setLoading(true);
@@ -243,8 +247,11 @@ export function AdPerformanceDashboard() {
         }
       />
 
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <Pills value={range} onChange={setRange} options={RANGES} />
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-3">
+          <Pills value={range} onChange={setRange} options={RANGES} />
+          {range === "custom" && <CustomRangeInputs value={custom} onApply={setCustom} />}
+        </div>
         <Pills value={view} onChange={setView} options={FUNNELS} />
       </div>
 

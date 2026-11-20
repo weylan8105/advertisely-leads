@@ -7,12 +7,16 @@ import { getAdPerformance, parsePerfRange } from "@/lib/adPerformance";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET /api/admin/performance?range=today|yesterday|7d|30d|shared — the Ad Performance dashboard's numbers. Admin only. */
+/**
+ * GET /api/admin/performance?range=today|yesterday|7d|30d|shared|custom[&from=YYYY-MM-DD&to=YYYY-MM-DD]
+ * The Ad Performance dashboard's numbers. Admin only.
+ */
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if ((session?.user as any)?.role !== "ADMIN") return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   if (!isDatabaseConfigured) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
-  const range = parsePerfRange(new URL(req.url).searchParams.get("range"));
-  return NextResponse.json(await getAdPerformance(range));
+  const q = new URL(req.url).searchParams;
+  const range = parsePerfRange(q.get("range"));
+  return NextResponse.json(await getAdPerformance(range, q.get("from"), q.get("to")));
 }

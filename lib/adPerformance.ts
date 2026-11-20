@@ -25,7 +25,7 @@ import { CONVERSION_STAGE_IDS, WON_STAGE_ID, stageLabel } from "@/data/pipeline"
 import { ADVERTISER_NAME_KEY } from "./leadOrigin";
 import { getMetaPerformance, PERF_FUNNELS, type CampaignPerf, type PerfFunnel } from "./metaInsights";
 
-export const PERF_RANGES = ["today", "yesterday", "7d", "30d", "shared"] as const;
+export const PERF_RANGES = ["today", "yesterday", "7d", "30d", "shared", "custom"] as const;
 export type PerfRange = (typeof PERF_RANGES)[number];
 
 // The first day both funnels were live and tracked. Blue Collar spent nothing
@@ -65,8 +65,30 @@ export function dayStart(ymd: string, tz: string): Date {
   return new Date(guess - (shown - guess));
 }
 
+export interface CustomDays {
+  since: string;
+  until: string;
+}
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const isRealDay = (ymd: string) => YMD.test(ymd) && addDays(ymd, 0) === ymd;
+
+/**
+ * A custom from/to (YYYY-MM-DD, both days included) from the query string, or
+ * null when either is missing or not a real date. Swapped if backwards; the end
+ * can't pass today and the start can't pass the end.
+ */
+export function parseCustomDays(from: string | null | undefined, to: string | null | undefined, today: string): CustomDays | null {
+  if (!from || !to || !isRealDay(from) || !isRealDay(to)) return null;
+  let [since, until] = from <= to ? [from, to] : [to, from];
+  if (until > today) until = today;
+  if (since > until) since = until;
+  return { since, until };
+}
+
 /** A window's first and last calendar day, given today's date. */
-export function rangeDays(range: PerfRange, today: string): { since: string; until: string } {
+export function rangeDays(range: PerfRange, today: string, custom: CustomDays | null = null): { since: string; until: string } {
+  if (range === "custom") return custom ?? { since: addDays(today, -29), until: today };
   if (range === "today") return { since: today, until: today };
   if (range === "yesterday") return { since: addDays(today, -1), until: addDays(today, -1) };
   if (range === "7d") return { since: addDays(today, -6), until: today };
@@ -420,11 +442,12 @@ export interface AdPerformance {
   events: PerfEventRow[];
 }
 
-export async function getAdPerformance(range: PerfRange): Promise<AdPerformance> {
+export async function getAdPerformance(range: PerfRange, from?: string | null, to?: string | null): Promise<AdPerformance> {
   if (!prisma) throw new Error("Database not configured");
   const now = new Date();
   const today = ymdInTz(now, ACTIVITY_TZ);
-  const days = rangeDays(range, today);
+  const custom = range === "custom" ? parseCustomDays(from, to, today) : null;
+  const days = rangeDays(range, today, custom);
   const since = dayStart(days.since, ACTIVITY_TZ);
   const until = dayStart(addDays(days.until, 1), ACTIVITY_TZ);
 
@@ -433,8 +456,9 @@ export async function getAdPerformance(range: PerfRange): Promise<AdPerformance>
 
   const [meta, allLeads, moves, sends, users, dials] = await Promise.all([
     getMetaPerformance(
-      `${range}:${today}`,
-      (tz) => rangeDays(range, ymdInTz(now, tz)),
+      `${range}:${custom ? `${custom.since}:${custom.until}:` : ""}${today}`,
+      // A custom range is the same calendar days in every ad account's timezone.
+      (tz) => rangeDays(range, ymdInTz(now, tz), custom),
       (tz) => ({ since: addDays(ymdInTz(now, tz), 1 - TREND_DAYS), until: ymdInTz(now, tz) }),
       pixelWindow,
     ),

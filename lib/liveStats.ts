@@ -4,21 +4,30 @@
 // Same numbers as the leaderboard (lib/activityStats.ts), summed over a window.
 
 import { ACTIVITY_TZ, activityByUser, addStats, emptyStats, type ActivityStats } from "./activityStats";
-import { addDays, dayStart, ymdInTz } from "./adPerformance";
+import { addDays, dayStart, parseCustomDays, ymdInTz, type CustomDays } from "./adPerformance";
 
 export const LIVE_STATS_DAYS = 30;
 
 // "30d" is the homepage's rolling window (now − 30 days), so the two always match.
 // Today / Yesterday / 7 days are calendar days in Central time, like Ad Performance.
-export const CLIENT_RANGES = ["today", "yesterday", "7d", "30d", "all"] as const;
+export const CLIENT_RANGES = ["today", "yesterday", "7d", "30d", "all", "custom"] as const;
 export type ClientRange = (typeof CLIENT_RANGES)[number];
 
 export function parseClientRange(raw: string | null | undefined): ClientRange {
   return (CLIENT_RANGES as readonly string[]).includes(raw ?? "") ? (raw as ClientRange) : "30d";
 }
 
-export function rangeWindow(range: ClientRange, now = new Date()): { since: Date | null; until: Date | null } {
+/** A custom from/to (both days included, Central time), or null when invalid. */
+export function parseClientCustom(from: string | null | undefined, to: string | null | undefined, now = new Date()): CustomDays | null {
+  return parseCustomDays(from, to, ymdInTz(now, ACTIVITY_TZ));
+}
+
+export function rangeWindow(range: ClientRange, now = new Date(), custom: CustomDays | null = null): { since: Date | null; until: Date | null } {
   const today = ymdInTz(now, ACTIVITY_TZ);
+  if (range === "custom" && custom) {
+    const until = dayStart(addDays(custom.until, 1), ACTIVITY_TZ);
+    return { since: dayStart(custom.since, ACTIVITY_TZ), until: until > now ? null : until };
+  }
   if (range === "today") return { since: dayStart(today, ACTIVITY_TZ), until: null };
   if (range === "yesterday") return { since: dayStart(addDays(today, -1), ACTIVITY_TZ), until: dayStart(today, ACTIVITY_TZ) };
   if (range === "7d") return { since: dayStart(addDays(today, -6), ACTIVITY_TZ), until: null };
@@ -45,11 +54,11 @@ export const isActive = (s: ActivityStats) => s.leads + s.dials + s.apps + s.pol
 // One shared computation per instance and range for a few seconds, so a busy
 // homepage doesn't re-scan lead activity for every visitor.
 const CACHE_MS = 15_000;
-const cache = new Map<ClientRange, { at: number; value: Promise<LiveStatsDetail> }>();
+const cache = new Map<string, { at: number; value: Promise<LiveStatsDetail> }>();
 
-async function compute(range: ClientRange): Promise<LiveStatsDetail> {
+async function compute(range: ClientRange, custom: CustomDays | null): Promise<LiveStatsDetail> {
   const now = new Date();
-  const { since, until } = rangeWindow(range, now);
+  const { since, until } = rangeWindow(range, now, custom);
   const byUser = await activityByUser(since, null, until);
   let totals = emptyStats();
   let activeAgents = 0;
@@ -65,11 +74,15 @@ async function compute(range: ClientRange): Promise<LiveStatsDetail> {
   };
 }
 
-export function liveStats(range: ClientRange = "30d"): Promise<LiveStatsDetail> {
-  const hit = cache.get(range);
+export function liveStats(range: ClientRange = "30d", custom: CustomDays | null = null): Promise<LiveStatsDetail> {
+  // Custom without valid dates falls back to the 30 days.
+  if (range === "custom" && !custom) range = "30d";
+  const key = range === "custom" && custom ? `custom:${custom.since}:${custom.until}` : range;
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
-  const value = compute(range);
-  cache.set(range, { at: Date.now(), value });
-  value.catch(() => { if (cache.get(range)?.value === value) cache.delete(range); });
+  if (cache.size > 50) cache.clear();
+  const value = compute(range, range === "custom" ? custom : null);
+  cache.set(key, { at: Date.now(), value });
+  value.catch(() => { if (cache.get(key)?.value === value) cache.delete(key); });
   return value;
 }
