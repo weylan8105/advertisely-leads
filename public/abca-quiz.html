@@ -362,7 +362,7 @@ if (window.ABCA_AB === "B") document.documentElement.classList.add("ab-b");
    and B visitors are sent to /qualify before anything loads or tracks here.
    IF_SPLIT = share sent to B: 0 = test off (everyone stays here), 0.5 = 50/50.
    Beacons tag this page "LP" and page B "IF". QA: ?abv=LP or ?abv=IF. */
-var IF_SPLIT = 0.5;
+var IF_SPLIT = 0; // Test ENDED Nov 20 2026 (owner): B got ~45% fewer leads per visitor (7.1% vs 13.0%). Everyone stays on this page; /qualify stays up.
 var IF_KEY = "abca_ab_ifq";
 window.ABCA_REDIRECTING = false;
 (function(){
