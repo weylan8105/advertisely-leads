@@ -51,6 +51,7 @@ import { CreativeScorecard } from "@/components/admin/CreativeScorecard";
 import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
+import { AdminLiveStats } from "@/components/admin/AdminLiveStats";
 import { UserModeToggle } from "@/components/admin/UserModeToggle";
 
 import { formatCurrency } from "@/lib/utils";
@@ -82,7 +83,7 @@ let toastCounter = 0;
 // Tabs that a notification (or any deep link) may open via ?tab=<value>.
 const VALID_TABS = new Set([
   "all-leads", "queue", "meta", "auto", "sources", "funnel",
-  "replacements", "accounts", "downline-orders", "trash", "stripe-sync",
+  "replacements", "accounts", "downline-orders", "trash", "stripe-sync", "live-stats",
 ]);
 
 // These two live in the box near the top of the page, not the lower tab bar.
@@ -693,6 +694,7 @@ function AdminPageInner() {
             <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
             <TabsTrigger value="trash">Trash</TabsTrigger>
             <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
+            <TabsTrigger value="live-stats">Live 30-day stats</TabsTrigger>
           </TabsList>
           </div>
 
@@ -931,6 +933,21 @@ function AdminPageInner() {
               </CardHeader>
               <CardContent>
                 <TrashQueue />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="live-stats">
+            <Card>
+              <CardHeader>
+                <CardTitle>Live 30-day stats</CardTitle>
+                <CardDescription>
+                  Real production across every agent over the rolling last 30 days: the same numbers shown live on the
+                  public homepage, with the agents behind them.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {tab === "live-stats" && <AdminLiveStats />}
               </CardContent>
             </Card>
           </TabsContent>

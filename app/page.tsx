@@ -2,6 +2,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Hero } from "@/components/marketing/Hero";
 import { TrustStats } from "@/components/marketing/TrustStats";
+import { LiveStats } from "@/components/marketing/LiveStats";
 import { HowItWorks } from "@/components/marketing/HowItWorks";
 import { LeadQuality } from "@/components/marketing/LeadQuality";
 import { FeatureGrid } from "@/components/marketing/FeatureGrid";
@@ -18,6 +19,7 @@ export default function LandingPage() {
       <main>
         <Hero />
         <TrustStats />
+        <LiveStats />
         <HowItWorks />
         <LeadQuality />
         <FeatureGrid />
