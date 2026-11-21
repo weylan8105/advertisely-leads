@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { getHouseAccount } from "@/lib/house";
-import { buildLeadCostLedger, forgetLeadCostLedger, LEAD_COST_PAYMENT_METHOD } from "@/lib/leadCostLedger";
+import { buildLeadCostLedger, forgetLeadCostLedger, setLeadBillingMode, LEAD_COST_PAYMENT_METHOD } from "@/lib/leadCostLedger";
 import { isOwnerEmail } from "@/lib/owners";
 
 export const runtime = "nodejs";
@@ -58,6 +58,23 @@ export async function POST(req: NextRequest) {
 
   forgetLeadCostLedger();
   const ledger = await buildLeadCostLedger(new Date(), { fresh: true }).catch(() => null);
+  return NextResponse.json({ ok: true, ledger });
+}
+
+/**
+ * PATCH /api/admin/lead-cost — choose how the admins pay for their leads.
+ * Body: { mode: "advance" | "prepay" }. "advance" = leads first, pay after;
+ * "prepay" = pay first, and leads only arrive while the balance covers them.
+ */
+export async function PATCH(req: NextRequest) {
+  if (!(await requireOwner())) return NextResponse.json({ error: "Owner access required" }, { status: 403 });
+  if (!isDatabaseConfigured || !prisma) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  const body = (await req.json().catch(() => ({}))) as { mode?: string };
+  if (body.mode !== "advance" && body.mode !== "prepay") {
+    return NextResponse.json({ error: "Choose leads first or pay first." }, { status: 400 });
+  }
+  await setLeadBillingMode(body.mode);
+  const ledger = await buildLeadCostLedger().catch(() => null);
   return NextResponse.json({ ok: true, ledger });
 }
 

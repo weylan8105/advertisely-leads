@@ -22,12 +22,24 @@ import {
  * arrive is still set the same way, by the admin's weekly lead target.
  *
  * Price: each lead is locked at its campaign's cost per lead on the day it was
- * delivered, averaged over the 14 days up to that day (owner: "the average of
- * the last 2 weeks"). Cost per lead = the pool's ad spend ÷ its leads, the same
+ * delivered, over the rolling 3 days clients' shared leads are priced on (owner,
+ * Nov 21 2026: "based off of the rolling 3 days, just like it is now"; this
+ * replaced a 14-day average set earlier the same day): the 3 full days before
+ * the delivery day plus that day. A pool with no leads in that window uses the
+ * last 7 days instead. Cost per lead = the pool's ad spend ÷ its leads, the same
  * spend rules shared leads use (lib/sharedPool.ts: every house campaign in the
  * pool's ad account, clients' own campaigns left out). At cost: no +20%, no 3%
  * card fee (admins pay by bank transfer) and no $20 minimum. A lead outside the
  * pools is priced at all pools together for that window.
+ *
+ * Two ways to pay, chosen on the owners' dashboard (owner, Nov 21 2026):
+ *  - "advance": leads arrive with nothing paid up front and are added to the
+ *    balance owed. This is how it worked before the choice existed.
+ *  - "prepay": pay first, leads after. A lead only goes to an admin while the
+ *    balance covers that lead's cost today; with less than that, the admins'
+ *    turn in the rotation is skipped until a payment is recorded.
+ * It is one balance either way; the mode only decides whether it may go below
+ * zero.
  *
  * Paid = bank transfers recorded on the dashboard since BALANCE_START. The Nov
  * 9–12 lock-in quote ($5,385.60) was paid (owner, Nov 21) and is no longer shown.
@@ -39,7 +51,10 @@ import {
 // paused Nov 13–18, so the first leads counted are the bank leads moved to the
 // admin's Goldmine during that pause and the round-robin leads from Nov 18.
 export const BALANCE_START = new Date("2026-11-13T06:00:00Z");
-export const CPL_WINDOW_DAYS = 14;
+// Full days before the delivery day that set a lead's price (plus the delivery
+// day itself), and the longer window used when those days had no leads.
+export const CPL_WINDOW_DAYS = 3;
+export const CPL_BACKUP_WINDOW_DAYS = 7;
 export const LEAD_COST_PAYMENT_METHOD = "bank";
 const TZ = "America/Chicago";
 
@@ -69,8 +84,20 @@ export interface LeadCostLine {
   owedCents: number;
 }
 
+export type LeadBillingMode = "advance" | "prepay";
+
 export interface LeadCostLedger {
   userId: string;
+  /** "advance" = leads first, pay after; "prepay" = pay first, leads only while the balance covers them. */
+  mode: LeadBillingMode;
+  /** What one more lead from each source would cost today. */
+  nextPrices: { key: LeadCostLine["key"]; label: string; cents: number }[];
+  /** A typical lead's cost: the last 7 days' average, else today's prices. */
+  typicalCplCents: number;
+  /** About how many more leads the balance covers at that cost. 0 when nothing is left. */
+  leadsCovered: number;
+  /** Prepay with too little left for even the cheapest lead: no leads go to admins. */
+  onHold: boolean;
   startIso: string;
   nowIso: string;
   windowDays: number;
@@ -137,7 +164,7 @@ export interface DailyCosts {
  * null when that window has no spend or no leads. Pass several pools to price
  * them together.
  */
-export function windowCplCents(costs: DailyCosts, pools: SharedPool[], ymd: string, windowDays = CPL_WINDOW_DAYS): number | null {
+export function windowCplCents(costs: DailyCosts, pools: SharedPool[], ymd: string, windowDays: number): number | null {
   const rows: Insights[] = [];
   let arrived = 0;
   for (const pool of pools) {
@@ -149,6 +176,60 @@ export function windowCplCents(costs: DailyCosts, pools: SharedPool[], ymd: stri
     }
   }
   return cplFromInsights(combineInsights(rows) ?? (rows.length ? rows[0] : undefined), arrived || null);
+}
+
+/**
+ * The price of a lead delivered on `ymd`: the pool's cost per lead over the 3
+ * full days before it plus that day, or over the last 7 days when those had no
+ * leads. Null when neither window can price it (caller uses the fallback).
+ */
+export function leadCplCents(costs: DailyCosts, pools: SharedPool[], ymd: string): number | null {
+  return (
+    windowCplCents(costs, pools, ymd, CPL_WINDOW_DAYS + 1) ?? windowCplCents(costs, pools, ymd, CPL_BACKUP_WINDOW_DAYS + 1)
+  );
+}
+
+// ─── Advance or prepay ───────────────────────────────────────────────────────
+
+// Kept in a DistributionCursor key/value row, so no new column is needed.
+const BILLING_MODE_KEY = "leadcost:billing-mode";
+
+export async function getLeadBillingMode(): Promise<LeadBillingMode> {
+  if (!prisma) return "advance";
+  const row = await prisma.distributionCursor.findUnique({ where: { id: BILLING_MODE_KEY } });
+  return row?.lastRecipientId === "prepay" ? "prepay" : "advance";
+}
+
+export async function setLeadBillingMode(mode: LeadBillingMode): Promise<void> {
+  if (!prisma) return;
+  await prisma.distributionCursor.upsert({
+    where: { id: BILLING_MODE_KEY },
+    update: { lastRecipientId: mode },
+    create: { id: BILLING_MODE_KEY, lastRecipientId: mode },
+  });
+}
+
+/** Prepay only: does the balance cover one more lead at this price? Advance always does. */
+export function coversLead(mode: LeadBillingMode, balanceCents: number, priceCents: number): boolean {
+  return mode !== "prepay" || balanceCents >= priceCents;
+}
+
+/**
+ * May the routing hand an admin one more lead from this pool right now? Always
+ * yes on "advance". On "prepay" only while the balance covers that lead's cost
+ * today; if the balance can't be read the lead is held, never advanced.
+ */
+export async function adminLeadFunded(pool: SharedPool | null, now = new Date()): Promise<boolean> {
+  try {
+    if ((await getLeadBillingMode()) !== "prepay") return true;
+    const ledger = await buildLeadCostLedger(now);
+    if (!ledger) return false;
+    const price = ledger.nextPrices.find((p) => p.key === (pool ?? "other"))?.cents;
+    return price != null && coversLead("prepay", ledger.balanceCents, price);
+  } catch (e) {
+    console.warn("[lead-cost] prepay check failed; holding the admin turn", e);
+    return false;
+  }
 }
 
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
@@ -234,17 +315,26 @@ const LINE_LABEL: Record<LeadCostLine["key"], string> = {
   other: "Other sources",
 };
 
-let cache: { at: number; value: LeadCostLedger } | null = null;
+// Only the Meta prices are cached. Leads, payments and the mode are read every
+// time, so the prepay check always sees the lead that was just delivered.
+let costCache: { at: number; key: string; value: DailyCosts } | null = null;
 const CACHE_MS = 5 * 60_000;
 
-/** Forget the cached ledger (after a payment is recorded or removed). */
+/** Forget the cached prices. */
 export function forgetLeadCostLedger() {
-  cache = null;
+  costCache = null;
+}
+
+async function dailyCosts(since: string, until: string, now: Date, fresh: boolean): Promise<DailyCosts> {
+  const key = `${since}|${until}`;
+  if (!fresh && costCache && costCache.key === key && Date.now() - costCache.at < CACHE_MS) return costCache.value;
+  const value = await loadDailyCosts(since, until, now);
+  costCache = { at: Date.now(), key, value };
+  return value;
 }
 
 export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: boolean } = {}): Promise<LeadCostLedger | null> {
   if (!prisma) return null;
-  if (!opts.fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const house = await getHouseAccount();
   if (!house) return null;
 
@@ -266,7 +356,8 @@ export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: bool
     const d = ymdChicago(r.at);
     return d < min ? d : min;
   }, ymdChicago(now));
-  const costs = await loadDailyCosts(addDaysYmd(firstDay, -(CPL_WINDOW_DAYS - 1)), ymdChicago(now), now);
+  const today = ymdChicago(now);
+  const costs = await dailyCosts(addDaysYmd(firstDay, -CPL_BACKUP_WINDOW_DAYS), today, now, !!opts.fresh);
 
   let usedFallback = false;
   const priceCache = new Map<string, number>();
@@ -274,7 +365,7 @@ export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: bool
     const key = `${pool ?? "other"}|${day}`;
     const hit = priceCache.get(key);
     if (hit != null) return hit;
-    let cents = windowCplCents(costs, pool ? [pool] : POOLS, day);
+    let cents = leadCplCents(costs, pool ? [pool] : POOLS, day);
     if (cents == null) {
       usedFallback = true;
       cents = SHARED_POOL_CAMPAIGNS[pool ?? "ew"].fallbackCplCents;
@@ -311,7 +402,8 @@ export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: bool
     if (r.at >= lwStart && r.at < lwEnd) lastWeekLeads++;
   }
 
-  const [payRows, admin] = await Promise.all([
+  const [mode, payRows, admin] = await Promise.all([
+    getLeadBillingMode(),
     prisma.adSpendPayment.findMany({
       where: { userId: house.userId, method: LEAD_COST_PAYMENT_METHOD },
       orderBy: { receivedAt: "desc" },
@@ -331,18 +423,37 @@ export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: bool
   const earlier = payRows.filter((p) => !applies(p));
   const paidCents = counted.reduce((s, p) => s + p.amountCents, 0);
   const stillOwedCents = Math.max(0, owedCents - paidCents);
+  const balanceCents = paidCents - owedCents;
+
+  // What one more lead would cost today, per source; and how far the balance goes.
+  // (A source with no recent leads prices at its standard rate here; that isn't a
+  // failed Meta read, so it doesn't count toward `cplSource`.)
+  const fallbackOnLeads = usedFallback;
+  const nextPrices = ([...POOLS, null] as (SharedPool | null)[]).map((pool) => {
+    const key: LeadCostLine["key"] = pool ?? "other";
+    return { key, label: LINE_LABEL[key], cents: price(pool, today) };
+  });
+  const cheapest = Math.min(...nextPrices.map((p) => p.cents));
+  // Typical cost of a lead: the last 7 days' leads if there were any, else today's prices.
+  const typical = last7.leads > 0 ? Math.round(last7.owedCents / last7.leads) : Math.round(nextPrices.reduce((s, p) => s + p.cents, 0) / nextPrices.length);
+  const leadsCovered = balanceCents > 0 && typical > 0 ? Math.floor(balanceCents / typical) : 0;
 
   const value: LeadCostLedger = {
     userId: house.userId,
+    mode,
+    nextPrices,
+    typicalCplCents: typical,
+    leadsCovered,
+    onHold: mode === "prepay" && balanceCents < cheapest,
     startIso: BALANCE_START.toISOString(),
     nowIso: now.toISOString(),
     windowDays: CPL_WINDOW_DAYS,
-    cplSource: usedFallback ? "fallback" : "meta",
+    cplSource: fallbackOnLeads ? "fallback" : "meta",
     totalLeads: routed.length,
     owedCents,
     avgCplCents: routed.length ? Math.round(owedCents / routed.length) : null,
     paidCents,
-    balanceCents: paidCents - owedCents,
+    balanceCents,
     stillOwedCents,
     lines: Array.from(lines.values()).sort((a, b) => b.leads - a.leads),
     days: Array.from(days, ([date, d]) => ({ date, ...d })).sort((a, b) => a.date.localeCompare(b.date)),
@@ -358,6 +469,5 @@ export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: bool
     payments: counted.map(toPayment),
     earlierPayments: earlier.map(toPayment),
   };
-  cache = { at: Date.now(), value };
   return value;
 }

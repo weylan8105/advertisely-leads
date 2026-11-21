@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Wallet, Users, Target, Loader2, Info, Banknote, CheckCircle2, Trash2, Gauge } from "lucide-react";
+import { Wallet, Users, Target, Loader2, Info, Banknote, CheckCircle2, Trash2, Gauge, PauseCircle } from "lucide-react";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { LeadCostLedger } from "@/lib/leadCostLedger";
+import type { LeadBillingMode, LeadCostLedger } from "@/lib/leadCostLedger";
 
 const usd = (cents: number) =>
   (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -21,8 +21,10 @@ function dayLabel(ymd: string) {
 
 /**
  * What the admins owe Advertisely for the leads routed to them: the reverse of a
- * client's ad-spend balance. Every lead is locked at its campaign's 14-day cost
- * per lead on the day it arrived; bank transfers recorded here pay it down.
+ * client's ad-spend balance. Every lead is locked at its campaign's rolling
+ * 3-day cost per lead on the day it arrived; bank transfers recorded here pay it
+ * down. The owners choose here whether leads are advanced (pay after) or paid
+ * for first (leads only while the balance covers them).
  * Owner-only (lib/leadCostLedger.ts).
  */
 export function LeadCostPanel() {
@@ -33,6 +35,7 @@ export function LeadCostPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/lead-cost")
@@ -58,6 +61,38 @@ export function LeadCostPanel() {
   const paidPct = ledger.owedCents > 0 ? Math.min(100, Math.round((ledger.paidCents / ledger.owedCents) * 100)) : 100;
   const since = dateLabel(ledger.startIso);
   const target = ledger.weeklyTarget;
+  const prepay = ledger.mode === "prepay";
+  const weekCostCents = target ? target * ledger.typicalCplCents : null;
+
+  async function chooseMode(mode: LeadBillingMode) {
+    if (!ledger || mode === ledger.mode || switching) return;
+    if (
+      mode === "prepay" &&
+      ledger.stillOwedCents > 0 &&
+      !window.confirm(
+        `You owe ${usd(ledger.stillOwedCents)} right now. On pay first, no more leads arrive until that is paid and there is money left for the next lead. Switch anyway?`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setOk(null);
+    setSwitching(true);
+    try {
+      const res = await fetch("/api/admin/lead-cost", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ledger) throw new Error(data.error ?? "Could not change how you pay.");
+      setLedger(data.ledger);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   async function recordPayment() {
     const dollars = Number(amount.replace(/[^0-9.\-]/g, ""));
@@ -97,6 +132,72 @@ export function LeadCostPanel() {
 
   return (
     <div className="mb-6 space-y-4">
+      {/* How the admins pay for their leads */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            How you pay for your leads
+            {switching && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="How you pay for your leads">
+            {(
+              [
+                {
+                  mode: "advance",
+                  title: "Leads first, pay after",
+                  body: "Leads arrive with nothing paid up front. Each one is added to the balance you owe, at cost.",
+                },
+                {
+                  mode: "prepay",
+                  title: "Pay first, then leads",
+                  body: "Record a payment and leads arrive until it is used up, at cost. None arrive while the balance can't cover the next lead.",
+                },
+              ] as { mode: LeadBillingMode; title: string; body: string }[]
+            ).map((o) => {
+              const on = ledger.mode === o.mode;
+              return (
+                <button
+                  key={o.mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={switching}
+                  onClick={() => chooseMode(o.mode)}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    on ? "border-brand-red bg-brand-red/5" : "border-slate-200 hover:border-slate-300",
+                  )}
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <span className={cn("h-3 w-3 shrink-0 rounded-full border", on ? "border-brand-red bg-brand-red" : "border-slate-300")} />
+                    {o.title}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{o.body}</p>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Cost of the next lead today: {ledger.nextPrices.filter((p) => p.key !== "other").map((p) => `${p.label} ${usd(p.cents)}`).join(" · ")}
+            {weekCostCents != null && ` · a full week at your target of ${target} is about ${usd(weekCostCents)}`}
+          </p>
+        </CardContent>
+      </Card>
+
+      {prepay && ledger.onHold && (
+        <Card className="border-l-4 border-l-amber-500">
+          <CardContent className="flex items-start gap-2 py-3 text-sm">
+            <PauseCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <span>
+              <span className="font-semibold">Your leads are on hold.</span>{" "}
+              {owed > 0
+                ? `You owe ${usd(owed)}. Record a payment for more than that and leads start again.`
+                : `${usd(credit)} is left, less than the cost of one lead. Record a payment and leads start again.`}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Headline: what's owed */}
       <Card className={cn("border-l-4", owed > 0 ? "border-l-rose-500" : "border-l-emerald-500")}>
         <CardContent className="py-4">
@@ -111,14 +212,18 @@ export function LeadCostPanel() {
             {owed > 0 ? (
               <span className="text-2xl font-semibold tabular-nums text-rose-600">{usd(owed)} owed</span>
             ) : (
-              <span className="text-2xl font-semibold tabular-nums text-emerald-600">{credit > 0 ? `${usd(credit)} ahead` : "All paid"}</span>
+              <span className="text-2xl font-semibold tabular-nums text-emerald-600">
+                {credit > 0 ? `${usd(credit)} ${prepay ? "left" : "ahead"}` : "All paid"}
+              </span>
             )}
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-rose-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={paidPct} aria-label="Lead balance paid">
             <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${paidPct}%` }} />
           </div>
           <div className="mt-1.5 text-xs text-muted-foreground">
-            {paidPct}% paid · grows with every lead routed to you, at that lead&apos;s cost
+            {prepay && credit > 0
+              ? `Covers about ${ledger.leadsCovered} more ${ledger.leadsCovered === 1 ? "lead" : "leads"} at ${usd(ledger.typicalCplCents)} each · every lead routed to you comes off it, at that lead's cost`
+              : `${paidPct}% paid · grows with every lead routed to you, at that lead's cost`}
           </div>
         </CardContent>
       </Card>
@@ -134,7 +239,7 @@ export function LeadCostPanel() {
         <DashboardStatCard
           label="Avg. cost per lead"
           value={ledger.avgCplCents != null ? usd(ledger.avgCplCents) : "—"}
-          hint={`${ledger.windowDays}-day campaign average`}
+          hint={`rolling ${ledger.windowDays}-day campaign cost`}
           icon={<Target className="h-4 w-4" />}
           accent="amber"
         />
@@ -157,8 +262,12 @@ export function LeadCostPanel() {
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Record a payment</CardTitle>
-            <CardDescription>Sent Advertisely a bank transfer? Enter the amount and the balance updates.</CardDescription>
+            <CardTitle>{prepay ? "Add funds" : "Record a payment"}</CardTitle>
+            <CardDescription>
+              {prepay
+                ? "Sent Advertisely a bank transfer? Enter the amount. Leads arrive until it is used up."
+                : "Sent Advertisely a bank transfer? Enter the amount and the balance updates."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
@@ -168,7 +277,7 @@ export function LeadCostPanel() {
                   inputMode="decimal"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder={(owed / 100).toFixed(2)}
+                  placeholder={((prepay && weekCostCents ? owed + weekCostCents : owed) / 100).toFixed(2)}
                   className="h-9 w-full rounded-md border border-slate-200 pl-6 pr-3 text-sm outline-none focus:border-brand-red"
                   aria-label="Amount paid"
                 />
@@ -198,8 +307,9 @@ export function LeadCostPanel() {
             <CardTitle>Where it comes from</CardTitle>
             <CardDescription>
               Every lead the round robin has sent to you since {since}, into your CRM or your team Goldmine. Each one is
-              priced at its campaign&apos;s ad spend ÷ leads over the {ledger.windowDays} days up to the day it arrived, and
-              that price is locked in. At cost: no markup and no card fee.
+              priced at its campaign&apos;s ad spend ÷ leads over the {ledger.windowDays} days before it arrived plus that day,
+              the same rolling window clients&apos; leads are priced on, and that price is locked in. At cost: no markup and
+              no card fee.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -272,7 +382,9 @@ export function LeadCostPanel() {
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          How many leads you get is still set by your weekly lead target; this only shows what they cost.
+          {prepay
+            ? "Leads stop at your weekly lead target or when the balance runs out, whichever comes first."
+            : "How many leads you get is still set by your weekly lead target; this only shows what they cost."}
           {ledger.cplSource === "fallback" && " Meta couldn't be read for some days, so those leads use the campaign's standard cost per lead."}{" "}
           <Banknote className="inline h-3 w-3" /> The Nov 9–12 lock-in quote is paid, so it and its payment aren&apos;t counted here.
         </span>

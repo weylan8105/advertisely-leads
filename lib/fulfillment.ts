@@ -13,6 +13,7 @@ import { isRecognizedUsLocation } from "@/lib/leadImport";
 import { goldmineLeadData, planLeadPipelines, type LeadPipeline } from "@/lib/leadDestination";
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
+import { adminLeadFunded } from "@/lib/leadCostLedger";
 import { isClientPaused } from "@/lib/clientPause";
 import { SHARED_POOL, TOGGLE_ONLY_POOLS, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, poolLeadType, type ClientSlot } from "@/lib/sharedPool";
 import { leadTypeOn } from "@/lib/leadTypes";
@@ -652,9 +653,13 @@ async function routeNewLead(leadId: string): Promise<void> {
   // state may take it as overflow (empty licensedStates = licensed everywhere,
   // the same fallback buyers get). Without this, an admin's weekly overflow
   // pulled leads in states they aren't licensed in.
-  const eligibleAdminSlots = adminSlots.filter(
+  // PREPAY (lib/leadCostLedger.ts): when the admins have chosen to pay for
+  // their leads first, they only take a turn while their balance covers this
+  // lead's cost. On "advance" (leads first, pay after) this is always true.
+  const licensedAdminSlots = adminSlots.filter(
     (s) => s.licensedStates.length === 0 || s.licensedStates.includes(lead.state),
   );
+  const eligibleAdminSlots = licensedAdminSlots.length > 0 && (await adminLeadFunded(pool)) ? licensedAdminSlots : [];
   const adminById = new Map(eligibleAdminSlots.map((s) => [s.userId, s]));
   // An admin who is also a buyer stays a buyer slot (don't double-count).
   const adminIds = eligibleAdminSlots.map((s) => s.userId).filter((id) => !orderForRecipient.has(id));
