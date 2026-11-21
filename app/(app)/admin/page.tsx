@@ -36,8 +36,6 @@ import {
   Trash2,
   Clock,
   Copy,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
@@ -85,11 +83,6 @@ const VALID_TABS = new Set([
   "replacements", "accounts", "downline-orders", "trash", "stripe-sync",
 ]);
 
-// These two live in the box near the top of the page, not the lower tab bar.
-const TOP_TABS = new Set(["accounts", "replacements"]);
-
-/** localStorage flag: "1" when the Client accounts box is collapsed on this device. */
-const CLIENT_BOX_COLLAPSED_KEY = "adv_admin_client_box_collapsed";
 
 // Wrapped in Suspense because useSearchParams requires it during prerender.
 export default function AdminPage() {
@@ -114,45 +107,20 @@ function AdminPageInner() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(() => {
     const t = searchParams.get("tab");
-    return t && VALID_TABS.has(t) && !TOP_TABS.has(t) ? t : "all-leads";
+    return t && VALID_TABS.has(t) ? t : "accounts";
   });
-  // The Client accounts / Replacement Queue box near the top of the page.
-  const [topTab, setTopTab] = useState<"accounts" | "replacements">(() =>
-    searchParams.get("tab") === "replacements" ? "replacements" : "accounts",
-  );
-  // Collapse the Client accounts box so the tools below are a short scroll
-  // away. Remembered per device; opening the box from a link or the stat
-  // card always expands it again.
-  const [clientBoxCollapsed, setClientBoxCollapsed] = useState(false);
-  useEffect(() => {
-    const t = searchParams.get("tab");
-    if (t === "accounts" || t === "replacements") return;
-    try {
-      if (localStorage.getItem(CLIENT_BOX_COLLAPSED_KEY) === "1") setClientBoxCollapsed(true);
-    } catch {}
-    // Only on first load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const setClientBoxCollapsedSaved = useCallback((collapsed: boolean) => {
-    setClientBoxCollapsed(collapsed);
-    try {
-      if (collapsed) localStorage.setItem(CLIENT_BOX_COLLAPSED_KEY, "1");
-      else localStorage.removeItem(CLIENT_BOX_COLLAPSED_KEY);
-    } catch {}
-  }, []);
-  const openTopTab = useCallback((t: "accounts" | "replacements") => {
-    setTopTab(t);
-    setClientBoxCollapsedSaved(false);
+  // Open a tab and scroll the tab bar into view (stat cards, deep links).
+  const openTab = useCallback((t: string) => {
+    setTab(t);
     requestAnimationFrame(() =>
-      document.getElementById("client-box")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      document.getElementById("admin-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
-  }, [setClientBoxCollapsedSaved]);
+  }, []);
   // React to query changes when already on /admin (Link nav doesn't remount).
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t === "accounts" || t === "replacements") openTopTab(t);
-    else if (t && VALID_TABS.has(t)) setTab(t);
-  }, [searchParams, openTopTab]);
+    if (t && VALID_TABS.has(t)) openTab(t);
+  }, [searchParams, openTab]);
   // Active CRM-status filter for the All-leads tab, driven by the stat cards.
   const [leadFilter, setLeadFilter] = useState("all");
 
@@ -397,7 +365,7 @@ function AdminPageInner() {
           />
         </button>
         <button
-          onClick={() => openTopTab("accounts")}
+          onClick={() => openTab("accounts")}
           className="text-left transition-transform hover:-translate-y-0.5"
           title="See client accounts + conversion"
         >
@@ -408,7 +376,7 @@ function AdminPageInner() {
             hint="paying agents · click to view"
             accent="emerald"
             icon={<Building2 className="h-4 w-4" />}
-            selected={topTab === "accounts"}
+            selected={tab === "accounts"}
           />
         </button>
       </div>
@@ -416,76 +384,57 @@ function AdminPageInner() {
       {/* Always-visible live landing-page traffic — deep-links to the full funnel tab */}
       <TrafficSnapshot
         onOpenFunnel={() => {
-          setTab("funnel");
-          // The funnel tab lives further down the page; scroll to it so the
-          // deep-link visibly opens it instead of silently switching a tab
-          // that's below the fold.
-          requestAnimationFrame(() =>
-            document.getElementById("admin-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-          );
+          openTab("funnel");
         }}
       />
 
-      {/* Client accounts + Replacement Queue — the day-to-day client management box. */}
-      <Card id="client-box" className="mt-6 scroll-mt-4">
-        <Tabs
-          value={topTab}
-          onValueChange={(v) => {
-            setTopTab(v as "accounts" | "replacements");
-            if (clientBoxCollapsed) setClientBoxCollapsedSaved(false);
-          }}
-        >
-          <CardHeader
-            className={`${clientBoxCollapsed ? "" : "pb-3 "}flex-row flex-wrap items-center justify-between gap-3 space-y-0`}
-          >
-            {/* Clicking either tab (even the one already open) expands a collapsed box. */}
-            <TabsList
-              className="w-max"
-              onClick={() => {
-                if (clientBoxCollapsed) setClientBoxCollapsedSaved(false);
-              }}
-            >
-              <TabsTrigger value="accounts">Client accounts</TabsTrigger>
-              <TabsTrigger value="replacements">
-                Replacement Queue
-                {/* Only requests that need YOU to act (pending, not yet reviewed). */}
-                {pendingUnreviewed > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-brand-red text-white text-[10px] h-4 min-w-[16px] px-1">
-                    {pendingUnreviewed}
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              aria-expanded={!clientBoxCollapsed}
-              aria-controls="client-box-content"
-              onClick={() => setClientBoxCollapsedSaved(!clientBoxCollapsed)}
-            >
-              {clientBoxCollapsed ? (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Expand list
-                </>
-              ) : (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  Collapse list
-                </>
+      <div id="admin-tabs" className="mt-6 scroll-mt-4">
+        <Tabs value={tab} onValueChange={setTab}>
+          {/* Scroll the long tab bar horizontally on mobile instead of overflowing. */}
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
+          <TabsList className="w-max">
+            <TabsTrigger value="accounts">Client accounts</TabsTrigger>
+            <TabsTrigger value="replacements">
+              Replacement Queue
+              {/* Only requests that need YOU to act (pending, not yet reviewed). */}
+              {pendingUnreviewed > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-brand-red text-white text-[10px] h-4 min-w-[16px] px-1">
+                  {pendingUnreviewed}
+                </span>
               )}
-            </Button>
-          </CardHeader>
-          {/* Hidden, not unmounted, so search and filters survive a collapse. */}
-          <CardContent id="client-box-content" className={clientBoxCollapsed ? "hidden" : undefined}>
-            <TabsContent value="accounts" className="mt-0">
+            </TabsTrigger>
+            <TabsTrigger value="all-leads">Lead database</TabsTrigger>
+            <TabsTrigger value="queue">Manual assignment</TabsTrigger>
+            <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
+            <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
+            <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
+            <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
+            <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
+            <TabsTrigger value="trash">Trash</TabsTrigger>
+            <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
+          </TabsList>
+          </div>
+
+          <TabsContent value="accounts">
+            <Card>
+              <CardHeader>
+                <CardTitle>Client accounts</CardTitle>
+              </CardHeader>
+              <CardContent>
               <p className="mb-3 text-sm text-muted-foreground">
                 Every client account, open orders first. Manage their lead orders or open their CRM.
               </p>
               <AdminAccounts />
-            </TabsContent>
-            <TabsContent value="replacements" className="mt-0">
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="replacements">
+            <Card>
+              <CardHeader>
+                <CardTitle>Replacement Queue</CardTitle>
+              </CardHeader>
+              <CardContent>
               <p className="mb-3 text-sm text-muted-foreground">
                 Review replacement requests submitted by agents. Approve, deny, or undo a denial.
                 Approved requests auto-fill as fresh leads arrive in their states.
@@ -674,27 +623,9 @@ function AdminPageInner() {
                     })}
                   </TableBody>
                 </Table>
-            </TabsContent>
-          </CardContent>
-        </Tabs>
-      </Card>
-
-      <div id="admin-tabs" className="mt-8 scroll-mt-4">
-        <Tabs value={tab} onValueChange={setTab}>
-          {/* Scroll the long tab bar horizontally on mobile instead of overflowing. */}
-          <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-thin">
-          <TabsList className="w-max">
-            <TabsTrigger value="all-leads">All leads</TabsTrigger>
-            <TabsTrigger value="queue">Manual assignment</TabsTrigger>
-            <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
-            <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
-            <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
-            <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
-            <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
-            <TabsTrigger value="trash">Trash</TabsTrigger>
-            <TabsTrigger value="stripe-sync">Stripe sync</TabsTrigger>
-          </TabsList>
-          </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="all-leads">
             <Card>

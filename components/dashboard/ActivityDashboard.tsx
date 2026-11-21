@@ -8,7 +8,8 @@ import { PeriodPills, formatAp, pct, type ActivityStats, type Period } from "@/c
 
 /**
  * Activity Dashboard — the agent's own funnel for a period: Leads → Dials →
- * Contacts → Presentations → Policies, plus AP.
+ * Contacts → Presentations → Apps, plus Submitted AP (submitted business,
+ * same as the leaderboard; not Issued PAID).
  * Numbers come from /api/activity (lib/activityStats.ts).
  */
 export function ActivityDashboard() {
@@ -33,8 +34,7 @@ export function ActivityDashboard() {
     { label: "Dials", value: String(s.dials) },
     { label: "Contacts", value: String(s.contacts), hint: `${pct(s.contacts, s.dials)} of dials` },
     { label: "Presentations", value: String(s.presentations), hint: `${pct(s.presentations, s.contacts)} of contacts` },
-    { label: "Apps", value: String(s.apps), hint: `${formatAp(s.submittedApCents)} submitted AP` },
-    { label: "Policies", value: String(s.policies), hint: `${pct(s.policies, s.presentations)} close` },
+    { label: "Apps", value: String(s.apps), hint: `${pct(s.apps, s.presentations)} close` },
   ];
 
   return (
@@ -49,7 +49,7 @@ export function ActivityDashboard() {
         </div>
         <PeriodPills value={period} onChange={setPeriod} />
       </div>
-      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 transition-opacity", loading && stats && "opacity-60")}>
+      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6 transition-opacity", loading && stats && "opacity-60")}>
         {tiles.map((t) => (
           <div key={t.label} className="flex min-h-[132px] flex-col rounded-xl border border-slate-200 bg-white p-5">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{t.label}</div>
@@ -58,9 +58,9 @@ export function ActivityDashboard() {
           </div>
         ))}
         <div className="col-span-2 flex min-h-[132px] flex-col rounded-xl bg-slate-900 p-5 text-white sm:col-span-4 lg:col-span-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">AP</div>
-          <div className="mt-2 text-3xl font-semibold tabular-nums">{formatAp(s.apCents)}</div>
-          <div className="mt-auto pt-3 text-xs text-white/60">Annual premium, Issued PAID</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">Submitted AP</div>
+          <div className="mt-2 text-3xl font-semibold tabular-nums">{formatAp(s.submittedApCents)}</div>
+          <div className="mt-auto pt-3 text-xs text-white/60">Annual premium on apps submitted</div>
         </div>
       </div>
     </section>
