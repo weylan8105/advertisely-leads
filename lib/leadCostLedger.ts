@@ -1,163 +1,58 @@
 import { prisma } from "./prisma";
-import { isClientCampaign } from "./metaInsights";
 import { getHouseAccount } from "./house";
+import {
+  SHARED_POOL_ACCOUNTS,
+  SHARED_POOL_CAMPAIGNS,
+  cplFromInsights,
+  combineInsights,
+  poolSpendRow,
+  sharedPoolOf,
+  withoutClientStamp,
+  type SharedPool,
+} from "./sharedPool";
 
 /**
- * Ryan's lead-cost ledger — what Enhanced Wealth owes Advertisely for the leads
- * it's fronting, against what Ryan has paid back.
+ * What the Advertisely admins owe for the leads they take (owner request, Nov
+ * 21 2026): the reverse of a client's ad-spend balance. Clients see how much
+ * they have left; admins see how much they owe, so they don't take on more than
+ * they can pay for.
  *
- * Ryan fronts the ad cost for every fresh lead Advertisely delivers to him (his
- * house CRM) or to one of his team's agents during (and after) the Enhanced
- * Wealth lock-in. Each such lead costs the average cost per lead: ad spend on
- * our own campaigns since the lock-in began ÷ the leads those campaigns
- * produced, the same "ad spend ÷ leads" every advertiser's panel shows. Leads
- * sold to outside buyers, and leads
- * that belong to other advertiser clients' own campaigns, are NOT his cost and
- * are excluded.
+ * Leads: every lead the routing sends to an admin (the admin's round-robin
+ * slot, into their CRM or their team Goldmine) since BALANCE_START. How many
+ * arrive is still set the same way, by the admin's weekly lead target.
  *
- * Since Nov 13 2026 the bill is a FIXED QUOTE (LOCKIN_QUOTE below) instead of a
- * live count, shown on Ryan's dashboard until it is paid:
+ * Price: each lead is locked at its campaign's cost per lead on the day it was
+ * delivered, averaged over the 14 days up to that day (owner: "the average of
+ * the last 2 weeks"). Cost per lead = the pool's ad spend ÷ its leads, the same
+ * spend rules shared leads use (lib/sharedPool.ts: every house campaign in the
+ * pool's ad account, clients' own campaigns left out). At cost: no +20%, no 3%
+ * card fee (admins pay by bank transfer) and no $20 minimum. A lead outside the
+ * pools is priced at all pools together for that window.
  *
- * owed  = quote leads × quote cost per lead
- * paid  = the bank transfers recorded after the lock-in closed (AdSpendPayment)
- * balance = paid − owed  (may go NEGATIVE — Ryan's account is the only one
- *           allowed to; a negative balance means he still owes that much)
+ * Paid = bank transfers recorded on the dashboard since BALANCE_START. The Nov
+ * 9–12 lock-in quote ($5,385.60) was paid (owner, Nov 21) and is no longer shown.
+ *
+ * balance = paid − owed (negative = still owed)
  */
 
-// The lock-in started Nov 9 2026 00:00 America/Chicago (CST) and the surge
-// auto-reverted Nov 12 00:00 CST.
-export const LEDGER_START = new Date("2026-11-09T06:00:00Z");
-export const LOCKIN_END = new Date("2026-11-12T06:00:00Z");
-
-export interface LeadCostQuote {
-  fromIso: string;
-  toIso: string; // exclusive
-  /** Leads billed: `sentLeads` − `clientLeads`. */
-  leads: number;
-  /** Leads that were first sent to Ryan. */
-  sentLeads: number;
-  /** Of those, the ones later handed to clients, who pay for them instead. */
-  clientLeads: number;
-  clients: { name: string; leads: number }[];
-  cplCents: number;
-  totalCents: number;
-  adSpendCents: number;
-  leadsGenerated: number;
-  /** Where the leads came from. Adds up to `sentLeads`. */
-  lines: { label: string; leads: number }[];
-  /** Leads per day (America/Chicago). Adds up to `sentLeads`. */
-  days: { date: string; leads: number }[];
-  /** Only transfers recorded from this moment on count toward the quote. */
-  paymentsFromIso: string;
-  /** Shown beside any transfer recorded before `paymentsFromIso`. */
-  earlierPaymentsNote: string;
-}
-
-/**
- * The lock-in quote (owner request, Nov 13 2026): one fixed bill for every lead
- * that was FIRST sent to Ryan from the start of the lock-in until routing to
- * him was switched off late on Nov 12 (lib/housePause.ts). A lead counts if it
- * reached him first, whether it then stayed in his pipeline, went to the
- * Goldmine or was passed to a teammate.
- *
- * One exception (owner, same day): leads later handed on to clients are the
- * clients' cost, not his. 22 were redistributed out of his pipeline on Nov 13
- * while he was away, to buyers' paid orders and to advertisers' ad-spend
- * balances, so those come off: 214 − 22 = 192 billed. If more of these leads
- * are handed to clients later, lower `QUOTE_CLIENT_LEADS` and `clients` again.
- *
- * Frozen on purpose. The live count this replaces read "who holds the lead
- * now", which stopped being true once leads were moved out of his pipeline and
- * guest agents began taking turns. Counted on Nov 13 from each lead's first
- * LEAD_ASSIGNED activity: 215 leads reached him first; one was a bad lead that
- * was swapped for a replacement, which leaves 214 before the client leads.
- *
- * Cost per lead = ad spend on our own campaigns Nov 9–12 ÷ the leads Meta
- * reports for those campaigns in that time = $7,489.28 ÷ 267 = $28.05.
- *   Enhanced Wealth    $3,261.21, 89 leads  (Blue Collar ER)
- *   ABCA               $1,931.10, 99 leads  (Team Use $1,706.45, 94 + Text message Test $224.65, 5)
- *   Essential Workers  $2,296.97, 79 leads  (Nurses $1,166.59, 66 + Blue Collar $1,130.38, 13)
- * "Advertisely Advertiser - …" campaigns belong to clients and are left out of
- * both the spend and the lead count.
- *
- * The divisor is Meta's own lead count (owner's choice, Nov 13), not the 256
- * leads that are in the CRM: 4 more were bad leads that were replaced and 7
- * never reached the CRM, and the ad spend paid for all of them. The first
- * version of this quote divided by 256, which gave $29.26.
- *
- * Payments: only transfers recorded after the lock-in closed count
- * (`paymentsFromIso`). Nothing has been paid toward it yet; a $2,300.32 entry
- * from Nov 10 was removed on the owner's word that it was never sent.
- */
-const QUOTE_SENT_LEADS = 214;
-const QUOTE_CLIENT_LEADS = 22;
-const QUOTE_LEADS = QUOTE_SENT_LEADS - QUOTE_CLIENT_LEADS;
-const QUOTE_CPL_CENTS = 2805;
-export const LOCKIN_QUOTE: LeadCostQuote = {
-  fromIso: LEDGER_START.toISOString(),
-  toIso: "2026-11-13T06:00:00.000Z",
-  leads: QUOTE_LEADS,
-  sentLeads: QUOTE_SENT_LEADS,
-  clientLeads: QUOTE_CLIENT_LEADS,
-  clients: [
-    { name: "Jace Jensen", leads: 5 },
-    { name: "Angelo Rodriguez", leads: 4 },
-    { name: "Luke Scheffers", leads: 4 },
-    { name: "Mario Alvarado", leads: 4 },
-    { name: "Kyle Vietzke", leads: 3 },
-    { name: "David Layton", leads: 2 },
-  ],
-  cplCents: QUOTE_CPL_CENTS,
-  totalCents: QUOTE_LEADS * QUOTE_CPL_CENTS,
-  adSpendCents: 748_928,
-  leadsGenerated: 267,
-  lines: [
-    { label: "Enhanced Wealth Blue Collar page", leads: 78 },
-    { label: "Essential Workers forms (nurses and blue collar)", leads: 77 },
-    { label: "ABCA, lock-in boost", leads: 37 },
-    { label: "ABCA, your turns in the rotation", leads: 21 },
-    { label: "Replacement for a bad lead (the bad one isn't charged)", leads: 1 },
-  ],
-  days: [
-    { date: "2026-11-09", leads: 58 },
-    { date: "2026-11-10", leads: 56 },
-    { date: "2026-11-11", leads: 67 },
-    { date: "2026-11-12", leads: 33 },
-  ],
-  paymentsFromIso: "2026-11-13T06:00:00.000Z",
-  earlierPaymentsNote: "Paid for the week before the lock-in (Nov 2–8), so it isn't part of this quote.",
-};
-
+// Nov 13 2026 00:00 CST, the end of the lock-in quote. Routing to admins was
+// paused Nov 13–18, so the first leads counted are the bank leads moved to the
+// admin's Goldmine during that pause and the round-robin leads from Nov 18.
+export const BALANCE_START = new Date("2026-11-13T06:00:00Z");
+export const CPL_WINDOW_DAYS = 14;
 export const LEAD_COST_PAYMENT_METHOD = "bank";
+const TZ = "America/Chicago";
 
-// The lead-cost reimbursement rate Ryan is billed per lead, stored on its own
-// (a DistributionCursor KV row) and kept SEPARATE from the global pricing CPL
-// (User.manualCplCents), which drives the marketplace fresh-lead price floor —
-// so setting Ryan's pay-back rate never moves lead sale prices.
-const LEAD_COST_CPL_KEY = "leadcost:cpl-cents";
+// Transfers that paid the Nov 9–12 lock-in quote, not this balance: the
+// $5,385.60 recorded Nov 17 2026 (paid in full, owner, Nov 21).
+const LOCKIN_QUOTE_PAYMENT_IDS = new Set(["cmwlg7hbj0001ju08brq9dj2i"]);
 
-export async function getLeadCostCplCents(): Promise<number | null> {
-  if (!prisma) return null;
-  const row = await prisma.distributionCursor.findUnique({ where: { id: LEAD_COST_CPL_KEY } });
-  const n = parseInt(row?.lastRecipientId ?? "", 10);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-export async function setLeadCostCplCents(cents: number | null): Promise<void> {
-  if (!prisma) return;
-  const val = cents == null ? "" : String(Math.round(cents));
-  await prisma.distributionCursor.upsert({
-    where: { id: LEAD_COST_CPL_KEY },
-    update: { lastRecipientId: val },
-    create: { id: LEAD_COST_CPL_KEY, lastRecipientId: val },
-  });
-}
-
-export interface LeadCostTeamLine {
-  userId: string;
-  name: string;
-  leads: number;
-}
+// LEAD_ASSIGNED bodies written when routing hands a lead to an admin (lib/house.ts).
+const ADMIN_ROUTED = [
+  "Routed to admin CRM%",
+  "Routed to the admin's team Goldmine%",
+  "Moved from the bank to the admin's team Goldmine%",
+];
 
 export interface LeadCostPayment {
   id: string;
@@ -167,188 +62,263 @@ export interface LeadCostPayment {
   at: string; // ISO
 }
 
+export interface LeadCostLine {
+  key: SharedPool | "other";
+  label: string;
+  leads: number;
+  owedCents: number;
+}
+
 export interface LeadCostLedger {
   userId: string;
-  lockInActive: boolean;
-  ledgerStartIso: string;
-  lockInEndIso: string;
+  startIso: string;
   nowIso: string;
+  windowDays: number;
+  /** "meta" when every price came from Meta; "fallback" when some used a fixed rate. */
+  cplSource: "meta" | "fallback";
 
-  cplCents: number | null;
-  cplSource: "meta" | "manual" | "none";
-  // Behind a live average: ad spend on our own campaigns since the lock-in
-  // began, and the leads that spend produced. Null when Meta can't be read.
-  adSpendCents: number | null;
-  leadsGenerated: number | null;
-
-  leadsToHouse: number; // delivered to Ryan's own CRM
-  leadsToTeam: number; // delivered to his agents (not sold to buyers)
   totalLeads: number;
-  team: LeadCostTeamLine[];
-
-  owedCents: number; // totalLeads × CPL (0 when CPL unknown)
+  owedCents: number;
+  /** owed ÷ leads: the average cost per lead admins are paying. */
+  avgCplCents: number | null;
   paidCents: number;
-  balanceCents: number; // paid − owed (negative = still owes)
+  balanceCents: number; // paid − owed (negative = still owed)
+  stillOwedCents: number;
+
+  lines: LeadCostLine[];
+  days: { date: string; leads: number; owedCents: number }[];
+
+  /** The admin's weekly lead target (rolling 7 days) and the leads in the last 7 days. */
+  weeklyTarget: number | null;
+  last7: { leads: number; owedCents: number };
 
   // Last completed Mon–Sun week, for the weekly pay reminder. `leads` stays 0
-  // (no reminder) until the lock-in week is a completed week and while nothing
-  // is owed; `owedCents` is what is still owed on the quote.
-  lastWeek: {
-    startIso: string;
-    endIso: string;
-    leads: number;
-    owedCents: number;
-  };
+  // (no reminder) while nothing is owed.
+  lastWeek: { startIso: string; endIso: string; leads: number; owedCents: number };
 
-  /** The fixed lock-in quote everything above is taken from. */
-  quote: LeadCostQuote;
-  /** Paid in full: the dashboard panel and the reminder go away. */
   settled: boolean;
-
-  payments: LeadCostPayment[]; // counted toward the quote
-  earlierPayments: LeadCostPayment[]; // recorded before the quote, not applied
+  payments: LeadCostPayment[]; // counted toward the balance
+  earlierPayments: LeadCostPayment[]; // the lock-in quote payment and anything before BALANCE_START, not applied
 }
 
-// ─── Average cost per lead (ad spend ÷ leads) ────────────────────────────────
+// ─── Dates ───────────────────────────────────────────────────────────────────
 
-const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
-// Read-only use of whichever ads token production has. Deliberately not tied to
-// META_ADS_ACCESS_TOKEN alone: setting that one also switches on the CPL price
-// floor and the house-lead invoice amounts.
-const ADS_TOKEN = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_MANAGE_TOKEN;
-const LEDGER_START_YMD = "2026-11-09";
-const EWWS_CAMPAIGN_PREFIX = "EWWS";
+export const ymdChicago = (d: Date) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 
-// The ad accounts our own campaigns run in. Enhanced Wealth and ABCA are the two
-// the rest of the app reads; the Essential Workers account is read when the
-// token can see it, and its leads are left out of the average when it can't.
-const HOUSE_AD_ACCOUNTS: { key: "ew" | "abca" | "ewws"; id: string; tz: string; required: boolean }[] = [
-  { key: "ew", id: process.env.ENHANCED_WEALTH_AD_ACCOUNT_ID || "2254810101392917", tz: "America/Los_Angeles", required: true },
-  { key: "abca", id: process.env.ABCA_AD_ACCOUNT_ID || "2126340781245705", tz: "America/Chicago", required: true },
-  { key: "ewws", id: process.env.EWWS_AD_ACCOUNT_ID || "1270766111922960", tz: "America/Los_Angeles", required: false },
-];
-
-const ymdIn = (d: Date, tz: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-
-/** One account's spend since the lock-in began, client campaigns left out. Throws when Meta won't answer. */
-async function accountSpendCents(accountId: string, tz: string, now: Date): Promise<number> {
-  const account = `act_${accountId.replace(/^act_/, "").replace(/\D/g, "")}`;
-  const until = ymdIn(now, tz);
-  const range = encodeURIComponent(JSON.stringify({ since: LEDGER_START_YMD, until: until < LEDGER_START_YMD ? LEDGER_START_YMD : until }));
-  let next: string | null =
-    `${GRAPH}/${account}/insights?level=campaign&fields=campaign_name,spend&time_range=${range}&limit=200&access_token=${encodeURIComponent(ADS_TOKEN!)}`;
-  let cents = 0;
-  for (let page = 0; next && page < 10; page++) {
-    const res: Response = await fetch(next, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-    const json: any = await res.json().catch(() => ({}));
-    if (!res.ok || json?.error) throw new Error(json?.error?.message ?? `Graph API ${res.status}`);
-    for (const row of json.data ?? []) {
-      if (isClientCampaign(row.campaign_name)) continue; // clients pay for their own campaigns
-      cents += Math.round((parseFloat(String(row.spend ?? "0")) || 0) * 100);
-    }
-    next = json.paging?.next ?? null;
-  }
-  return cents;
+export function addDaysYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-interface HouseAdSpend {
-  spendCents: number;
-  ewwsRead: boolean;
+/** Previous completed Monday–Sunday week in America/Chicago, as UTC instants (CST). */
+function lastWeekRange(now: Date): { start: Date; end: Date } {
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(now);
+  const idx = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(wd);
+  const todayMidnightUtc = new Date(`${ymdChicago(now)}T06:00:00Z`);
+  const thisMonday = new Date(todayMidnightUtc.getTime() - ((idx + 6) % 7) * 86_400_000);
+  return { start: new Date(thisMonday.getTime() - 7 * 86_400_000), end: thisMonday };
 }
 
-let houseSpendCache: { at: number; value: HouseAdSpend | null } | null = null;
-const HOUSE_SPEND_TTL_MS = 5 * 60_000;
+// ─── Cost per lead by pool and day ───────────────────────────────────────────
 
-/** Ad spend on our own campaigns since the lock-in began. Null when it can't be read. Five-minute cache. */
-async function houseAdSpend(now: Date): Promise<HouseAdSpend | null> {
-  if (!ADS_TOKEN) return null;
-  if (houseSpendCache && Date.now() - houseSpendCache.at < HOUSE_SPEND_TTL_MS) return houseSpendCache.value;
-  const results = await Promise.all(
-    HOUSE_AD_ACCOUNTS.map((a) =>
-      accountSpendCents(a.id, a.tz, now).then(
-        (cents) => ({ a, cents, ok: true as const }),
-        (err) => {
-          console.warn(`[lead-cost] ad spend for ${a.key}: ${(err as Error).message}`);
-          return { a, cents: 0, ok: false as const };
-        },
-      ),
-    ),
-  );
-  const value: HouseAdSpend | null = results.some((r) => r.a.required && !r.ok)
-    ? null
-    : {
-        spendCents: results.reduce((sum, r) => sum + r.cents, 0),
-        ewwsRead: results.find((r) => r.a.key === "ewws")?.ok ?? false,
-      };
-  houseSpendCache = { at: Date.now(), value };
-  return value;
+type Insights = { spend?: string; actions?: { action_type: string; value: string }[] };
+type DailyRow = Insights & { campaign_id?: string; campaign_name?: string; date_start?: string };
+
+/** pool → day → that pool's spend/leads row; plus arrived leads per pool per day. */
+export interface DailyCosts {
+  insights: Map<SharedPool, Map<string, Insights>>;
+  arrived: Map<SharedPool, Map<string, number>>;
 }
 
 /**
- * The per-lead rate Ryan is billed: the average cost per lead, worked out the
- * way every advertiser's is (ad spend ÷ leads). Spend is what our own campaigns
- * have spent since the lock-in began; leads are the ones those campaigns
- * produced in that time, whoever they went to. When Meta can't be read the
- * stored lead-cost rate stands in. Never the global pricing CPL, which would
- * move sale prices.
+ * A pool's cost per lead over the `windowDays` days ending `ymd` (inclusive), or
+ * null when that window has no spend or no leads. Pass several pools to price
+ * them together.
  */
-export async function resolveCplCents(
-  houseUserId: string,
-  now = new Date(),
-): Promise<Pick<LeadCostLedger, "cplCents" | "cplSource" | "adSpendCents" | "leadsGenerated">> {
-  if (!prisma) return { cplCents: null, cplSource: "none", adSpendCents: null, leadsGenerated: null };
-  const spend = await houseAdSpend(now).catch(() => null);
-  if (spend && spend.spendCents > 0) {
-    const [row] = await prisma.$queryRaw<{ n: number; ewws: number }[]>`
-      SELECT COUNT(*)::int AS n,
-             COALESCE(SUM(CASE WHEN COALESCE(l."campaignName", l."utmCampaign", '') ILIKE ${EWWS_CAMPAIGN_PREFIX + "%"} THEN 1 ELSE 0 END), 0)::int AS ewws
-      FROM "Lead" l
-      LEFT JOIN "User" u ON u.id = l."assignedUserId"
-      WHERE l."receivedAt" >= ${LEDGER_START} AND l."receivedAt" < ${now}
-        AND l."trashedAt" IS NULL
-        AND COALESCE(l."campaignName", '') NOT LIKE 'Advertisely Advertiser%'
-        AND COALESCE(l."utmCampaign", '') NOT LIKE 'Advertisely Advertiser%'
-        AND NOT (COALESCE(u."isAdvertiser", false) AND u.id <> ${houseUserId})`;
-    const leads = (row?.n ?? 0) - (spend.ewwsRead ? 0 : row?.ewws ?? 0);
-    if (leads > 0) {
-      return { cplCents: Math.round(spend.spendCents / leads), cplSource: "meta", adSpendCents: spend.spendCents, leadsGenerated: leads };
+export function windowCplCents(costs: DailyCosts, pools: SharedPool[], ymd: string, windowDays = CPL_WINDOW_DAYS): number | null {
+  const rows: Insights[] = [];
+  let arrived = 0;
+  for (const pool of pools) {
+    for (let i = 0; i < windowDays; i++) {
+      const day = addDaysYmd(ymd, -i);
+      const row = costs.insights.get(pool)?.get(day);
+      if (row) rows.push(row);
+      arrived += costs.arrived.get(pool)?.get(day) ?? 0;
     }
   }
-  const stored = await getLeadCostCplCents();
-  return stored != null
-    ? { cplCents: stored, cplSource: "manual", adSpendCents: null, leadsGenerated: null }
-    : { cplCents: null, cplSource: "none", adSpendCents: null, leadsGenerated: null };
+  return cplFromInsights(combineInsights(rows) ?? (rows.length ? rows[0] : undefined), arrived || null);
 }
 
-/** Previous completed Monday–Sunday week in America/Chicago, as UTC instants. */
-function lastWeekRange(now: Date): { start: Date; end: Date } {
-  // Day-of-week in Chicago.
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "short" }).format(now);
-  const idx = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts);
-  // Chicago midnight today, expressed in UTC (CST = UTC-6; after DST ended Nov 1).
-  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  const todayMidnightUtc = new Date(`${ymd}T06:00:00Z`);
-  const daysSinceMonday = (idx + 6) % 7; // Mon→0, Sun→6
-  const thisMonday = new Date(todayMidnightUtc.getTime() - daysSinceMonday * 86_400_000);
-  const start = new Date(thisMonday.getTime() - 7 * 86_400_000); // last Monday
-  const end = thisMonday; // last Sunday midnight = this Monday 00:00
-  return { start, end };
+const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v20.0"}`;
+const READ_TOKEN = process.env.META_ADS_ACCESS_TOKEN || process.env.META_ADS_MANAGE_TOKEN;
+const POOLS = Object.keys(SHARED_POOL_ACCOUNTS) as SharedPool[];
+
+async function accountDailyRows(account: string, since: string, until: string): Promise<DailyRow[] | null> {
+  if (!READ_TOKEN) return null;
+  const range = encodeURIComponent(JSON.stringify({ since, until }));
+  let next: string | null =
+    `${GRAPH}/act_${account}/insights?level=campaign&time_increment=1&fields=campaign_id,campaign_name,spend,actions&time_range=${range}&limit=500&access_token=${encodeURIComponent(READ_TOKEN)}`;
+  const out: DailyRow[] = [];
+  for (let page = 0; next && page < 20; page++) {
+    const res: Response = await fetch(next, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) {
+      console.warn("[lead-cost] daily insights failed", account, json?.error?.message ?? res.status);
+      return null;
+    }
+    out.push(...(json.data ?? []));
+    next = json.paging?.next ?? null;
+  }
+  return out;
 }
 
-export async function buildLeadCostLedger(now = new Date()): Promise<LeadCostLedger | null> {
+async function clientCampaignIds(): Promise<Set<string>> {
+  if (!prisma) return new Set();
+  const users = await prisma.user.findMany({ where: { adCampaignIds: { isEmpty: false } }, select: { adCampaignIds: true } });
+  return new Set(users.flatMap((u) => u.adCampaignIds ?? []));
+}
+
+async function loadDailyCosts(since: string, until: string, now: Date): Promise<DailyCosts> {
+  const insights = new Map<SharedPool, Map<string, Insights>>();
+  const arrived = new Map<SharedPool, Map<string, number>>();
+  const clientIds = await clientCampaignIds().catch(() => new Set<string>());
+
+  const accounts = Array.from(new Set(POOLS.map((p) => SHARED_POOL_ACCOUNTS[p].account)));
+  const rowsByAccount = new Map(
+    await Promise.all(accounts.map(async (a) => [a, await accountDailyRows(a, since, until).catch(() => null)] as const)),
+  );
+  for (const pool of POOLS) {
+    const rows = rowsByAccount.get(SHARED_POOL_ACCOUNTS[pool].account);
+    if (!rows) continue;
+    const byDay = new Map<string, DailyRow[]>();
+    for (const r of rows) {
+      const day = r.date_start ?? "";
+      if (!day) continue;
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day)!.push(r);
+    }
+    const perDay = new Map<string, Insights>();
+    for (const [day, dayRows] of byDay) {
+      const row = poolSpendRow(pool, dayRows, clientIds);
+      if (row) perDay.set(day, row);
+    }
+    insights.set(pool, perDay);
+  }
+
+  if (prisma) {
+    const leads = await prisma.lead.findMany({
+      where: { receivedAt: { gte: new Date(`${since}T06:00:00Z`), lt: now }, trashedAt: null },
+      select: { receivedAt: true, source: true, rawFormData: true, campaignName: true, packageId: true },
+    });
+    for (const l of leads) {
+      const pool = sharedPoolOf({ ...l, rawFormData: withoutClientStamp(l.rawFormData) });
+      if (!pool) continue;
+      const day = ymdChicago(l.receivedAt);
+      if (!arrived.has(pool)) arrived.set(pool, new Map());
+      const m = arrived.get(pool)!;
+      m.set(day, (m.get(day) ?? 0) + 1);
+    }
+  }
+  return { insights, arrived };
+}
+
+// ─── The ledger ──────────────────────────────────────────────────────────────
+
+const LINE_LABEL: Record<LeadCostLine["key"], string> = {
+  abca: SHARED_POOL_CAMPAIGNS.abca.label,
+  ew: SHARED_POOL_CAMPAIGNS.ew.label,
+  ewws: SHARED_POOL_CAMPAIGNS.ewws.label,
+  nurse: "Nurses",
+  other: "Other sources",
+};
+
+let cache: { at: number; value: LeadCostLedger } | null = null;
+const CACHE_MS = 5 * 60_000;
+
+/** Forget the cached ledger (after a payment is recorded or removed). */
+export function forgetLeadCostLedger() {
+  cache = null;
+}
+
+export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: boolean } = {}): Promise<LeadCostLedger | null> {
   if (!prisma) return null;
+  if (!opts.fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const house = await getHouseAccount();
   if (!house) return null;
 
-  const quote = LOCKIN_QUOTE;
-  const owedCents = quote.totalCents;
+  // Leads routed to an admin, first routing only.
+  const routed = await prisma.$queryRaw<
+    { leadId: string; at: Date; source: string | null; rawFormData: unknown; campaignName: string | null; packageId: string | null }[]
+  >`
+    SELECT f."leadId", f.at, l.source, l."rawFormData", l."campaignName", l."packageId"
+    FROM (
+      SELECT DISTINCT ON (a."leadId") a."leadId", a."createdAt" AS at
+      FROM "LeadActivity" a
+      WHERE a.type = 'LEAD_ASSIGNED' AND a."createdAt" >= ${BALANCE_START} AND a.body LIKE ANY(${ADMIN_ROUTED})
+      ORDER BY a."leadId", a."createdAt" ASC
+    ) f
+    JOIN "Lead" l ON l.id = f."leadId"
+    WHERE l."trashedAt" IS NULL`;
 
-  const payRows = await prisma.adSpendPayment.findMany({
-    where: { userId: house.userId },
-    orderBy: { receivedAt: "desc" },
-    take: 50,
-  });
+  const firstDay = routed.reduce((min, r) => {
+    const d = ymdChicago(r.at);
+    return d < min ? d : min;
+  }, ymdChicago(now));
+  const costs = await loadDailyCosts(addDaysYmd(firstDay, -(CPL_WINDOW_DAYS - 1)), ymdChicago(now), now);
+
+  let usedFallback = false;
+  const priceCache = new Map<string, number>();
+  const price = (pool: SharedPool | null, day: string): number => {
+    const key = `${pool ?? "other"}|${day}`;
+    const hit = priceCache.get(key);
+    if (hit != null) return hit;
+    let cents = windowCplCents(costs, pool ? [pool] : POOLS, day);
+    if (cents == null) {
+      usedFallback = true;
+      cents = SHARED_POOL_CAMPAIGNS[pool ?? "ew"].fallbackCplCents;
+    }
+    priceCache.set(key, cents);
+    return cents;
+  };
+
+  const lines = new Map<LeadCostLine["key"], LeadCostLine>();
+  const days = new Map<string, { leads: number; owedCents: number }>();
+  const weekAgo = now.getTime() - 7 * 86_400_000;
+  const { start: lwStart, end: lwEnd } = lastWeekRange(now);
+  let owedCents = 0;
+  const last7 = { leads: 0, owedCents: 0 };
+  let lastWeekLeads = 0;
+  for (const r of routed) {
+    const pool = sharedPoolOf({ ...r, rawFormData: withoutClientStamp(r.rawFormData) });
+    const day = ymdChicago(r.at);
+    const cents = price(pool, day);
+    owedCents += cents;
+    const key = pool ?? "other";
+    const line = lines.get(key) ?? { key, label: LINE_LABEL[key], leads: 0, owedCents: 0 };
+    line.leads++;
+    line.owedCents += cents;
+    lines.set(key, line);
+    const d = days.get(day) ?? { leads: 0, owedCents: 0 };
+    d.leads++;
+    d.owedCents += cents;
+    days.set(day, d);
+    if (r.at.getTime() >= weekAgo) {
+      last7.leads++;
+      last7.owedCents += cents;
+    }
+    if (r.at >= lwStart && r.at < lwEnd) lastWeekLeads++;
+  }
+
+  const [payRows, admin] = await Promise.all([
+    prisma.adSpendPayment.findMany({
+      where: { userId: house.userId, method: LEAD_COST_PAYMENT_METHOD },
+      orderBy: { receivedAt: "desc" },
+      take: 100,
+    }),
+    prisma.user.findUnique({ where: { id: house.userId }, select: { weeklyLeadTarget: true } }),
+  ]);
   const toPayment = (p: (typeof payRows)[number]): LeadCostPayment => ({
     id: p.id,
     amountCents: p.amountCents,
@@ -356,42 +326,38 @@ export async function buildLeadCostLedger(now = new Date()): Promise<LeadCostLed
     note: p.note,
     at: p.receivedAt.toISOString(),
   });
-  const countsFrom = new Date(quote.paymentsFromIso).getTime();
-  const counted = payRows.filter((p) => p.receivedAt.getTime() >= countsFrom);
-  const earlier = payRows.filter((p) => p.receivedAt.getTime() < countsFrom);
+  const applies = (p: (typeof payRows)[number]) => p.receivedAt >= BALANCE_START && !LOCKIN_QUOTE_PAYMENT_IDS.has(p.id);
+  const counted = payRows.filter(applies);
+  const earlier = payRows.filter((p) => !applies(p));
   const paidCents = counted.reduce((s, p) => s + p.amountCents, 0);
   const stillOwedCents = Math.max(0, owedCents - paidCents);
 
-  // The weekly pop-up starts once the lock-in week is a completed week.
-  const { start, end } = lastWeekRange(now);
-  const reminderDue = end.getTime() >= new Date(quote.toIso).getTime() && stillOwedCents > 0;
-
-  return {
+  const value: LeadCostLedger = {
     userId: house.userId,
-    lockInActive: false,
-    ledgerStartIso: quote.fromIso,
-    lockInEndIso: LOCKIN_END.toISOString(),
+    startIso: BALANCE_START.toISOString(),
     nowIso: now.toISOString(),
-    cplCents: quote.cplCents,
-    cplSource: "meta",
-    adSpendCents: quote.adSpendCents,
-    leadsGenerated: quote.leadsGenerated,
-    leadsToHouse: quote.leads,
-    leadsToTeam: 0,
-    totalLeads: quote.leads,
-    team: [],
+    windowDays: CPL_WINDOW_DAYS,
+    cplSource: usedFallback ? "fallback" : "meta",
+    totalLeads: routed.length,
     owedCents,
+    avgCplCents: routed.length ? Math.round(owedCents / routed.length) : null,
     paidCents,
     balanceCents: paidCents - owedCents,
+    stillOwedCents,
+    lines: Array.from(lines.values()).sort((a, b) => b.leads - a.leads),
+    days: Array.from(days, ([date, d]) => ({ date, ...d })).sort((a, b) => a.date.localeCompare(b.date)),
+    weeklyTarget: admin?.weeklyLeadTarget ?? null,
+    last7,
     lastWeek: {
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
-      leads: reminderDue ? quote.leads : 0,
-      owedCents: reminderDue ? stillOwedCents : 0,
+      startIso: lwStart.toISOString(),
+      endIso: lwEnd.toISOString(),
+      leads: stillOwedCents > 0 ? lastWeekLeads : 0,
+      owedCents: stillOwedCents,
     },
-    quote,
     settled: stillOwedCents === 0,
     payments: counted.map(toPayment),
     earlierPayments: earlier.map(toPayment),
   };
+  cache = { at: Date.now(), value };
+  return value;
 }
