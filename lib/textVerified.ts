@@ -13,6 +13,8 @@ export const TEXT_VERIFIED_FORM_IDS = new Set<string>([
   "1453178320339815", // EWWS - Blue Collar Lead Form 11/11 v2 - LP Questions + SMS Verified
   "1491493996376938", // EW - Blue Collar Lead Form 11/11 - LP Questions + SMS Verified (Enhanced Wealth page)
   "29049465218082332", // EWWS - Nurse Lead Form 11/18 v3 - LP Questions + 5 Min Availability + SMS Verified
+  "4662994647267684", // EWWS - Nurse Lead Form 11/21 v6 - Work Status + Income Branch + SMS Verified
+  "1171618138933736", // EW - Blue Collar Lead Form 11/21 v2 - Work Status + Income Branch + SMS Verified (Enhanced Wealth page)
 ]);
 
 function asObject(value: unknown): Record<string, unknown> | null {
