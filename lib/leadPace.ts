@@ -5,6 +5,8 @@
 //   Active        advertisers the shared pool would serve right now (the same
 //                 checks as sharedClientSlots, without the state), plus anyone
 //                 with an open lead order
+//   Budget left   the client's ad-spend balance (paid in, less card processing,
+//                 less what their leads and campaigns have cost), as on Client accounts
 //   Leads left    balance ÷ what one lead costs them today, plus what's still
 //                 owed on open orders
 //   Ad spend      our own campaigns in the three ad accounts, per day. Each ad
@@ -177,6 +179,14 @@ export async function getLeadPace(): Promise<LeadPaceResult> {
     else if (orderLeft > 0) clients.push({ ...base, house: false, active: true, note: "Lead order", leadsLeft: orderLeft });
     else clients.push({ ...base, house: false, active: false, note: "No open order or ad budget", leadsLeft: null });
   }
+
+  // Unspent ad budget, for every advertiser whose balance could be read.
+  const budgetLeft = new Map<string, number>();
+  for (const [i, a] of advertisers.entries()) {
+    const s = summaries[i];
+    if (s && !s.errors.length) budgetLeft.set(a.id, s.balanceCents);
+  }
+  for (const c of clients) c.budgetLeftCents = c.house ? null : budgetLeft.get(c.userId) ?? null;
 
   // Ad spend per day, all three ad accounts. Blank when any of them can't be read.
   const spendKnown = meta.configured && meta.missing.length === 0;

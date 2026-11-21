@@ -131,6 +131,23 @@ describe("demand", () => {
     expect(s.daysOfDemand).toBe(2); // 20 ÷ (2 active × 5)
   });
 
+  it("totals the ad budget clients have left, active or not, and never lets a client who owes pull it down", () => {
+    const p = pace({
+      clients: [
+        client("a", { budgetLeftCents: 50000 }),
+        client("b", { budgetLeftCents: 12600, active: false, note: "Paused through Nov 27" }),
+        client("owes", { budgetLeftCents: -8000 }),
+        client("order-only"),
+        client("ryan", { house: true, budgetLeftCents: 999999 }),
+      ],
+    });
+    expect(p.summary.budgetLeftCents).toBe(62600);
+    expect(p.summary.activeBudgetLeftCents).toBe(50000);
+    expect(p.summary.budgetClients).toBe(2);
+    expect(p.rows.find((r) => r.userId === "owes")?.budgetLeftCents).toBe(-8000);
+    expect(p.rows.find((r) => r.userId === "order-only")?.budgetLeftCents).toBeNull();
+  });
+
   it("counts active clients and leads a day per lead type", () => {
     const s = pace({
       clients: [client("a"), client("b", { blueCollar: false, nurse: true }), client("c", { nurse: true, active: false })],

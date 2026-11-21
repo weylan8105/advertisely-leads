@@ -6,6 +6,8 @@
 //   Floor           3: an active client averaging under this is being starved
 //   Average         the last 3 full days (today is shown, never averaged: it's
 //                   a part day)
+//   Budget left     each client's unspent ad budget, and the total across all of
+//                   them: the dollar size of the demand still to be filled
 //   Active client   can take a lead right now: budget for at least one lead (or
 //                   an open order), a lead type on, in the Program where that's
 //                   required, and not on a dated pause. The house (the admins'
@@ -37,6 +39,8 @@ export interface PaceClientInput {
   nurse: boolean;
   /** Leads their balance and open orders still cover. Null when it can't be counted (free leads, unknown). */
   leadsLeft: number | null;
+  /** Their unspent ad budget. Null when they have no ad budget account or it can't be read. */
+  budgetLeftCents?: number | null;
 }
 
 export interface PaceDelivery {
@@ -59,6 +63,7 @@ export interface PaceRow {
   blueCollarPerDay: number;
   nursePerDay: number;
   leadsLeft: number | null;
+  budgetLeftCents: number | null;
   status: PaceStatus;
 }
 
@@ -103,6 +108,12 @@ export interface PaceSummary {
   spendChangePerDayCents: number | null;
   targetSpendPerDayCents: number | null;
   dailyBudgetCents: number | null;
+  /** Unspent ad budget across every client, active or not (a client who owes is counted as 0). */
+  budgetLeftCents: number;
+  /** Of that, the part held by clients who can take a lead right now. */
+  activeBudgetLeftCents: number;
+  /** Clients with any ad budget left. */
+  budgetClients: number;
   /** Leads the active clients' balances and open orders still cover. */
   leadsLeft: number;
   /** How long that lasts at the target pace. */
@@ -195,6 +206,7 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
         blueCollarPerDay: round1(a.bc / n),
         nursePerDay: round1(a.nurse / n),
         leadsLeft: c.leadsLeft,
+        budgetLeftCents: c.budgetLeftCents ?? null,
         status: paceStatus(c.active, avgPerDay, cfg.targetPerDay, cfg.floorPerDay),
       };
     })
@@ -258,6 +270,7 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
   };
 
   const leadsLeft = active.reduce((s, r) => s + (r.leadsLeft ?? 0), 0);
+  const budgetOf = (list: PaceRow[]) => list.reduce((s, r) => s + Math.max(0, r.budgetLeftCents ?? 0), 0);
   const summary: PaceSummary = {
     activeClients: active.length,
     onTarget: active.filter((r) => r.status === "on-target").length,
@@ -276,6 +289,9 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
     spendChangePerDayCents: spendChange,
     targetSpendPerDayCents: spendPerDayCents != null && spendChange != null ? Math.max(0, spendPerDayCents + spendChange) : null,
     dailyBudgetCents: input.dailyBudgetCents,
+    budgetLeftCents: budgetOf(rows),
+    activeBudgetLeftCents: budgetOf(active),
+    budgetClients: rows.filter((r) => (r.budgetLeftCents ?? 0) > 0).length,
     leadsLeft,
     daysOfDemand: neededPerDay > 0 ? round1(leadsLeft / neededPerDay) : null,
     todayToClients: rows.reduce((s, r) => s + r.today, 0),

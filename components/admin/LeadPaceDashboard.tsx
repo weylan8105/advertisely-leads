@@ -150,12 +150,17 @@ export function LeadPaceDashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <Tile
           strong
           label="Leads per active client a day"
           value={num(s.perActiveClient)}
           hint={`Target ${data.target} · ${span}`}
+        />
+        <Tile
+          label="Ad spend left for clients"
+          value={money(s.budgetLeftCents)}
+          hint={`${s.budgetClients} clients with budget · ${money(s.activeBudgetLeftCents)} of it with active clients`}
         />
         <Tile
           label="Active clients"
@@ -196,7 +201,7 @@ export function LeadPaceDashboard() {
 
       <Panel
         title="By client"
-        note={`Leads delivered each day, most starved first. The average covers ${span}; today is a part day and is not in it. Green is ${data.target} or more, red is under ${data.floor}.`}
+        note={`Leads delivered each day, most starved first. Budget left is each client's unspent ad budget; leads left is what that and any open order still cover. The average covers ${span}; today is a part day and is not in it. Green is ${data.target} or more, red is under ${data.floor}.`}
       >
         <div className="overflow-x-auto">
           <Table>
@@ -212,6 +217,7 @@ export function LeadPaceDashboard() {
                 <TableHead className="text-right">Today</TableHead>
                 <TableHead className="text-right">Avg a day</TableHead>
                 <TableHead>Pace</TableHead>
+                <TableHead className="text-right">Budget left</TableHead>
                 <TableHead className="text-right">Leads left</TableHead>
                 <TableHead className="min-w-[120px]">Lead types</TableHead>
               </TableRow>
@@ -229,13 +235,14 @@ export function LeadPaceDashboard() {
                   <TableCell className="text-right tabular-nums text-slate-500">{r.today || "·"}</TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{r.avgPerDay.toFixed(1)}</TableCell>
                   <TableCell><StatusPill status={r.status} /></TableCell>
+                  <TableCell className="text-right tabular-nums">{money(r.budgetLeftCents)}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.leadsLeft == null ? "—" : num(r.leadsLeft)}</TableCell>
                   <TableCell className="text-xs text-slate-500">{typesOf(r)}</TableCell>
                 </TableRow>
               ))}
               {!active.length && (
                 <TableRow>
-                  <TableCell colSpan={data.days.length + 6} className="py-6 text-center text-sm text-slate-500">
+                  <TableCell colSpan={data.days.length + 7} className="py-6 text-center text-sm text-slate-500">
                     No active clients.
                   </TableCell>
                 </TableRow>
@@ -250,7 +257,7 @@ export function LeadPaceDashboard() {
                 ))}
                 <TableCell className="text-right tabular-nums text-slate-500">{data.house.today || "·"}</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{data.house.avgPerDay.toFixed(1)}</TableCell>
-                <TableCell colSpan={3} />
+                <TableCell colSpan={4} />
               </TableRow>
               {inactive.map((r) => (
                 <TableRow key={r.userId} className="text-slate-400">
@@ -264,6 +271,7 @@ export function LeadPaceDashboard() {
                   <TableCell className="text-right tabular-nums">{r.today || "·"}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.avgPerDay.toFixed(1)}</TableCell>
                   <TableCell><StatusPill status={r.status} /></TableCell>
+                  <TableCell className="text-right tabular-nums">{money(r.budgetLeftCents)}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.leadsLeft == null ? "—" : num(r.leadsLeft)}</TableCell>
                   <TableCell className="text-xs">{typesOf(r)}</TableCell>
                 </TableRow>
