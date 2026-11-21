@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import type { LeadPaceResult } from "@/lib/leadPace";
 import type { PaceRow, PaceStatus } from "@/lib/leadPaceMath";
+import { LeadsByClientPanel } from "./LeadsByClientPanel";
 
 const REFRESH_MS = 60_000;
 
@@ -280,6 +281,8 @@ export function LeadPaceDashboard() {
           </Table>
         </div>
       </Panel>
+
+      <LeadsByClientPanel />
 
       <div className="grid gap-5 xl:grid-cols-3">
         <div className="xl:col-span-2">
