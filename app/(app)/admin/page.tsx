@@ -16,14 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
 import {
   Database,
   Users,
   ShoppingCart,
   Building2,
   Upload,
-  Sparkles,
   ShieldAlert,
   RefreshCw,
   Loader2,
@@ -37,7 +35,6 @@ import {
   Clock,
   Copy,
 } from "lucide-react";
-import { AdminLeadQueue } from "@/components/admin/AdminLeadQueue";
 import { MetaIntegrationManager } from "@/components/admin/MetaIntegrationManager";
 import { AdminImportLeadsButton } from "@/components/admin/AdminImportLeadsButton";
 import { AdminAllLeads } from "@/components/admin/AdminAllLeads";
@@ -51,7 +48,6 @@ import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
 import { UserModeToggle } from "@/components/admin/UserModeToggle";
 
-import { formatCurrency } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
 type ReplacementStatus = "PENDING" | "APPROVED" | "DENIED";
@@ -79,7 +75,7 @@ let toastCounter = 0;
 
 // Tabs that a notification (or any deep link) may open via ?tab=<value>.
 const VALID_TABS = new Set([
-  "all-leads", "queue", "meta", "auto", "sources", "funnel",
+  "all-leads", "meta", "sources", "funnel",
   "replacements", "accounts", "downline-orders", "trash", "stripe-sync",
 ]);
 
@@ -311,9 +307,6 @@ function AdminPageInner() {
           <>
             <UserModeToggle />
             <AdminImportLeadsButton />
-            <Button size="sm">
-              <Sparkles className="h-4 w-4" /> Open auto-distribution
-            </Button>
           </>
         }
       />
@@ -327,7 +320,6 @@ function AdminPageInner() {
           <DashboardStatCard
             label="Leads in database"
             value={stats ? fmtNum(stats.leadsInDatabase) : "—"}
-            delta={9.4}
             hint="click to view all"
             accent="teal"
             icon={<Database className="h-4 w-4" />}
@@ -342,7 +334,6 @@ function AdminPageInner() {
           <DashboardStatCard
             label="Unassigned leads"
             value={stats ? fmtNum(stats.unassignedLeads) : "—"}
-            delta={-3.1}
             hint="click to filter"
             accent="amber"
             icon={<ShieldAlert className="h-4 w-4" />}
@@ -357,7 +348,6 @@ function AdminPageInner() {
           <DashboardStatCard
             label="Sold leads"
             value={stats ? fmtNum(stats.soldLeads) : "—"}
-            delta={12.6}
             hint="click to filter"
             accent="violet"
             icon={<ShoppingCart className="h-4 w-4" />}
@@ -372,7 +362,6 @@ function AdminPageInner() {
           <DashboardStatCard
             label="Active client accounts"
             value={stats ? fmtNum(stats.activeClientAccounts) : "—"}
-            delta={6.0}
             hint="paying agents · click to view"
             accent="emerald"
             icon={<Building2 className="h-4 w-4" />}
@@ -404,10 +393,8 @@ function AdminPageInner() {
               )}
             </TabsTrigger>
             <TabsTrigger value="all-leads">Lead database</TabsTrigger>
-            <TabsTrigger value="queue">Manual assignment</TabsTrigger>
             <TabsTrigger value="meta">Meta ingestion</TabsTrigger>
-            <TabsTrigger value="auto">Auto-distribution</TabsTrigger>
-            <TabsTrigger value="sources">Sources & campaigns</TabsTrigger>
+            <TabsTrigger value="sources">CPL price floor</TabsTrigger>
             <TabsTrigger value="funnel">Funnel analytics</TabsTrigger>
             <TabsTrigger value="downline-orders">Downline orders</TabsTrigger>
             <TabsTrigger value="trash">Trash</TabsTrigger>
@@ -642,115 +629,12 @@ function AdminPageInner() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="queue">
-            <Card>
-              <CardHeader>
-                <CardTitle>Manual lead dispersal</CardTitle>
-                <CardDescription>
-                  Assign unassigned inbound leads to agents. New leads land here from Meta ad
-                  campaigns the moment they opt in.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AdminLeadQueue />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="meta">
             <MetaIntegrationManager />
           </TabsContent>
 
-          <TabsContent value="auto">
-            <Card>
-              <CardHeader>
-                <CardTitle>Auto-distribution queue</CardTitle>
-                <CardDescription>
-                  Future-ready system. Define rules to route new leads to agents by state,
-                  niche, package subscription, or round-robin.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                  <Sparkles className="h-7 w-7 mx-auto text-brand-red" />
-                  <h3 className="mt-3 font-medium">Auto-distribution engine coming online</h3>
-                  <p className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">
-                    When enabled, every new inbound IUL lead is routed to the right agent
-                    automatically based on geography, niche, and active order quotas.
-                  </p>
-                  <Badge className="mt-4" variant="purple">
-                    Roadmap · Q3
-                  </Badge>
-                </div>
-                <div className="mt-6 grid md:grid-cols-3 gap-4">
-                  {[
-                    { title: "Routing rules", body: "State, age, niche, agency seat, round-robin, weighted by order quota." },
-                    { title: "Throttling", body: "Daily caps per agent. Pause when CRM reports no pickup." },
-                    { title: "Failover", body: "Unrouted leads fall back to manual queue automatically." },
-                  ].map((c) => (
-                    <div key={c.title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                      <div className="text-sm font-medium">{c.title}</div>
-                      <div className="text-xs text-muted-foreground mt-1">{c.body}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="sources">
             <CplPanel />
-            <Card>
-              <CardHeader>
-                <CardTitle>Campaign & source tracking</CardTitle>
-                <CardDescription>
-                  Sample campaign breakdown (illustrative). Real cost-per-lead is in the panel above.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Campaign</TableHead>
-                        <TableHead className="hidden md:table-cell">Spend (30d)</TableHead>
-                        <TableHead className="hidden md:table-cell">Leads</TableHead>
-                        <TableHead className="hidden md:table-cell">CPL</TableHead>
-                        <TableHead>Quality</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {["Facebook — IUL Blue Collar", "Facebook — FIA Retirement", "Instagram — Final Expense", "Facebook — IUL Age 35-45", "Instagram — IUL Women", "Facebook — FIA Midwest", "Google — Retirement Planning", "Facebook — Final Expense Senior"].slice(0, 8).map((s, i) => {
-                        const spend = 1200 + i * 380;
-                        const leads = 32 + i * 7;
-                        const cpl = spend / leads;
-                        const q = 72 + ((i * 13) % 22);
-                        return (
-                          <TableRow key={s}>
-                            <TableCell className="text-sm">{s}</TableCell>
-                            <TableCell className="hidden md:table-cell">{formatCurrency(spend)}</TableCell>
-                            <TableCell className="hidden md:table-cell">{leads}</TableCell>
-                            <TableCell className="hidden md:table-cell">{formatCurrency(cpl)}</TableCell>
-                            <TableCell className="min-w-[140px]">
-                              <div className="flex items-center gap-2">
-                                <Progress value={q} className="h-1.5 max-w-[80px]" />
-                                <span className="text-xs text-muted-foreground">{q}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant={q > 80 ? "success" : q > 70 ? "info" : "warning"}>
-                                {q > 80 ? "Strong" : q > 70 ? "Healthy" : "Watch"}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
 
