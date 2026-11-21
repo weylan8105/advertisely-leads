@@ -21,9 +21,8 @@ function dayLabel(ymd: string) {
 
 /**
  * What the admins owe Advertisely for the leads routed to them: the reverse of a
- * client's ad-spend balance. Every lead is locked at its campaign's rolling
- * 3-day cost per lead on the day it arrived; bank transfers recorded here pay it
- * down. The owners choose here whether leads are advanced (pay after) or paid
+ * client's ad-spend balance. Every lead is locked at its campaign's 14-day cost
+ * per lead on the day it arrived; bank transfers recorded here pay it down. The owners choose here whether leads are advanced (pay after) or paid
  * for first (leads only while the balance covers them).
  * Owner-only (lib/leadCostLedger.ts).
  */
@@ -239,7 +238,7 @@ export function LeadCostPanel() {
         <DashboardStatCard
           label="Avg. cost per lead"
           value={ledger.avgCplCents != null ? usd(ledger.avgCplCents) : "—"}
-          hint={`rolling ${ledger.windowDays}-day campaign cost`}
+          hint={`${ledger.windowDays}-day campaign average`}
           icon={<Target className="h-4 w-4" />}
           accent="amber"
         />
@@ -307,9 +306,8 @@ export function LeadCostPanel() {
             <CardTitle>Where it comes from</CardTitle>
             <CardDescription>
               Every lead the round robin has sent to you since {since}, into your CRM or your team Goldmine. Each one is
-              priced at its campaign&apos;s ad spend ÷ leads over the {ledger.windowDays} days before it arrived plus that day,
-              the same rolling window clients&apos; leads are priced on, and that price is locked in. At cost: no markup and
-              no card fee.
+              priced at its campaign&apos;s ad spend ÷ leads over the {ledger.windowDays} days up to the day it arrived, and
+              that price is locked in. At cost: no markup and no card fee.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

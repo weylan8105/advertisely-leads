@@ -22,11 +22,9 @@ import {
  * arrive is still set the same way, by the admin's weekly lead target.
  *
  * Price: each lead is locked at its campaign's cost per lead on the day it was
- * delivered, over the rolling 3 days clients' shared leads are priced on (owner,
- * Nov 21 2026: "based off of the rolling 3 days, just like it is now"; this
- * replaced a 14-day average set earlier the same day): the 3 full days before
- * the delivery day plus that day. A pool with no leads in that window uses the
- * last 7 days instead. Cost per lead = the pool's ad spend ÷ its leads, the same
+ * delivered, averaged over the 14 days up to that day (owner: "the average of
+ * the last 2 weeks"; a rolling 3-day window was tried for an hour on Nov 21
+ * 2026 and the owner chose 14 days). Cost per lead = the pool's ad spend ÷ its leads, the same
  * spend rules shared leads use (lib/sharedPool.ts: every house campaign in the
  * pool's ad account, clients' own campaigns left out). At cost: no +20%, no 3%
  * card fee (admins pay by bank transfer) and no $20 minimum. A lead outside the
@@ -51,10 +49,8 @@ import {
 // paused Nov 13–18, so the first leads counted are the bank leads moved to the
 // admin's Goldmine during that pause and the round-robin leads from Nov 18.
 export const BALANCE_START = new Date("2026-11-13T06:00:00Z");
-// Full days before the delivery day that set a lead's price (plus the delivery
-// day itself), and the longer window used when those days had no leads.
-export const CPL_WINDOW_DAYS = 3;
-export const CPL_BACKUP_WINDOW_DAYS = 7;
+// Days that set a lead's price: the 14 up to and including its delivery day.
+export const CPL_WINDOW_DAYS = 14;
 export const LEAD_COST_PAYMENT_METHOD = "bank";
 const TZ = "America/Chicago";
 
@@ -179,14 +175,12 @@ export function windowCplCents(costs: DailyCosts, pools: SharedPool[], ymd: stri
 }
 
 /**
- * The price of a lead delivered on `ymd`: the pool's cost per lead over the 3
- * full days before it plus that day, or over the last 7 days when those had no
- * leads. Null when neither window can price it (caller uses the fallback).
+ * The price of a lead delivered on `ymd`: the pool's cost per lead over the 14
+ * days up to and including that day. Null when that window has no spend or no
+ * leads (caller uses the fallback).
  */
 export function leadCplCents(costs: DailyCosts, pools: SharedPool[], ymd: string): number | null {
-  return (
-    windowCplCents(costs, pools, ymd, CPL_WINDOW_DAYS + 1) ?? windowCplCents(costs, pools, ymd, CPL_BACKUP_WINDOW_DAYS + 1)
-  );
+  return windowCplCents(costs, pools, ymd, CPL_WINDOW_DAYS);
 }
 
 // ─── Advance or prepay ───────────────────────────────────────────────────────
@@ -357,7 +351,7 @@ export async function buildLeadCostLedger(now = new Date(), opts: { fresh?: bool
     return d < min ? d : min;
   }, ymdChicago(now));
   const today = ymdChicago(now);
-  const costs = await dailyCosts(addDaysYmd(firstDay, -CPL_BACKUP_WINDOW_DAYS), today, now, !!opts.fresh);
+  const costs = await dailyCosts(addDaysYmd(firstDay, -(CPL_WINDOW_DAYS - 1)), today, now, !!opts.fresh);
 
   let usedFallback = false;
   const priceCache = new Map<string, number>();

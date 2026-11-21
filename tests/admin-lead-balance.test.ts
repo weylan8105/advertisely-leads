@@ -14,22 +14,14 @@ function costs(days: Record<string, [number, number, number?]>): DailyCosts {
 }
 
 describe("admin lead balance pricing", () => {
-  it("prices a lead on the 3 full days before it arrived plus that day", () => {
-    expect(CPL_WINDOW_DAYS).toBe(3);
-    const c = costs({ "2026-11-14": [900, 1], "2026-11-15": [100, 10], "2026-11-18": [300, 10], "2026-11-19": [999, 1] });
-    // Nov 18 window = Nov 15..18: (100 + 300) / 20 = $20.00. Nov 14 is too old, Nov 19 is after the day.
-    expect(addDaysYmd("2026-11-18", -CPL_WINDOW_DAYS)).toBe("2026-11-15");
+  it("averages spend ÷ leads over the 14 days up to the delivery day", () => {
+    expect(CPL_WINDOW_DAYS).toBe(14);
+    const c = costs({ "2026-11-05": [100, 10], "2026-11-18": [300, 10], "2026-11-19": [999, 1] });
+    // Nov 18 window = Nov 5..18: (100 + 300) / 20 = $20.00; Nov 19 is after the day, ignored.
     expect(leadCplCents(c, ["abca"], "2026-11-18")).toBe(2000);
-    // Nov 15 drops out of the Nov 19 window (Nov 16..19).
+    // Nov 5 is the 14th day back from Nov 18, and drops out of the Nov 19 window.
+    expect(addDaysYmd("2026-11-18", -(CPL_WINDOW_DAYS - 1))).toBe("2026-11-05");
     expect(leadCplCents(c, ["abca"], "2026-11-19")).toBe(Math.round(((300 + 999) * 100) / 11));
-  });
-
-  it("falls back to the last 7 days when the 3-day window had no leads", () => {
-    const c = costs({ "2026-11-12": [250, 10] });
-    expect(windowCplCents(c, ["abca"], "2026-11-18", CPL_WINDOW_DAYS + 1)).toBeNull();
-    expect(leadCplCents(c, ["abca"], "2026-11-18")).toBe(2500);
-    // Older than 7 full days before: nothing to price from.
-    expect(leadCplCents(c, ["abca"], "2026-11-20")).toBeNull();
   });
 
   it("divides by the leads that arrived when Meta counted more", () => {
@@ -39,6 +31,7 @@ describe("admin lead balance pricing", () => {
 
   it("returns null with no spend or leads (caller uses the fallback)", () => {
     expect(leadCplCents(costs({}), ["abca"], "2026-11-18")).toBeNull();
+    expect(windowCplCents(costs({ "2026-11-01": [100, 10] }), ["abca"], "2026-11-18", CPL_WINDOW_DAYS)).toBeNull();
   });
 });
 
