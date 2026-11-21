@@ -98,3 +98,22 @@ describe("ABCA main page (asks age, not income): qualified on age 20 to 55", () 
     expect(isQualifiedLead({ quiz_age: "40", [w]: "Full-time with a steady paycheck" })).toBeNull();
   });
 });
+
+describe("Healthcare page: qualified on work status and age 20 to 55", () => {
+  const w = "How are you working right now?";
+  const hwa = (age: string, work?: string) => ({ lead_source: "healthcare-wealth-quiz", quiz_age: age, age, ...(work ? { [w]: work } : {}) });
+  it("full-time, travel or PRN at 20 to 55 qualify", () => {
+    expect(isQualifiedLead(hwa("35", "Full-time staff"))).toBe(true);
+    expect(isQualifiedLead(hwa("20", "Travel or contract"))).toBe(true);
+    expect(isQualifiedLead(hwa("55", "PRN or per diem"))).toBe(true);
+  });
+  it("part-time, between jobs or outside the ages don't", () => {
+    expect(isQualifiedLead(hwa("35", "Part-time"))).toBe(false);
+    expect(isQualifiedLead(hwa("35", "Between jobs right now"))).toBe(false);
+    expect(isQualifiedLead(hwa("19", "Full-time staff"))).toBe(false);
+    expect(isQualifiedLead(hwa("56", "Full-time staff"))).toBe(false);
+  });
+  it("never guesses without a work answer", () => {
+    expect(isQualifiedLead(hwa("35"))).toBeNull();
+  });
+});

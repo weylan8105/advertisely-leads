@@ -74,6 +74,7 @@ export const QUALIFIED_MAX_AGE = 55;
 // full income + age rule.
 export const QUALIFIED_MIN_AGE_AGE_ONLY = 20;
 const ABCA_QUIZ_SOURCE = "early-retirement-quiz";
+const HWA_QUIZ_SOURCE = "healthcare-wealth-quiz";
 
 /** An ABCA main-page quiz lead: the funnel that doesn't ask income. */
 function isAgeOnlyFunnel(raw: Record<string, unknown>): boolean {
@@ -110,6 +111,13 @@ export function isQualifiedLead(rawFormData: unknown): boolean | null {
   const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
   // The ABCA main page asks about work instead of income (from Nov 21 2026); it stands in for income.
   const income = isIncomeQualified(rawFormData) ?? (isAgeOnlyFunnel(raw) ? isWorkQualified(rawFormData) : null);
+  // Healthcare page: qualified = a qualifying work answer and age 20 to 55 (no age-only fallback).
+  if (String(raw["lead_source"] ?? raw["source"] ?? "").trim() === HWA_QUIZ_SOURCE) {
+    const work = isWorkQualified(rawFormData);
+    if (work === false || (age != null && (age < QUALIFIED_MIN_AGE_AGE_ONLY || age > QUALIFIED_MAX_AGE))) return false;
+    if (work === null || age == null) return null;
+    return true;
+  }
   if (isAgeOnlyFunnel(raw)) {
     if (age != null && age < QUALIFIED_MIN_AGE_AGE_ONLY) return false;
     if (income === null) {
@@ -125,13 +133,20 @@ export function isQualifiedLead(rawFormData: unknown): boolean | null {
 // ABCA main page (owner, Nov 21 2026): a subtle money qualifier instead of a plain
 // income question. Steady full-time, regular overtime or running a business count;
 // "Part-time or seasonal" and "Between jobs right now" don't.
+// The healthcare page (Nov 21 2026) asks nurses "How are you working right now?":
+// full-time staff, travel/contract or PRN count; part-time or between jobs don't.
 export const WORK_QUESTION = "Which best describes your work right now?";
-const WORK_QUALIFIED = ["Full-time with a steady paycheck", "Hourly, with regular overtime", "I run my own business or crew"];
+export const HWA_WORK_QUESTION = "How are you working right now?";
+const WORK_QUALIFIED = [
+  "Full-time with a steady paycheck", "Hourly, with regular overtime", "I run my own business or crew",
+  "Full-time staff", "Travel or contract", "PRN or per diem",
+];
 
-/** Qualified on work? true/false for the work question's answers, null when not asked or unrecognised. */
+/** Qualified on work? true/false for the work questions' answers, null when not asked or unrecognised. */
 export function isWorkQualified(rawFormData: unknown): boolean | null {
   if (!rawFormData || typeof rawFormData !== "object") return null;
-  const v = String((rawFormData as Record<string, unknown>)[WORK_QUESTION] ?? "").trim();
+  const raw = rawFormData as Record<string, unknown>;
+  const v = String(raw[WORK_QUESTION] ?? raw[HWA_WORK_QUESTION] ?? "").trim();
   if (!v) return null;
   if (WORK_QUALIFIED.includes(v)) return true;
   if (/part-time|seasonal|between jobs/i.test(v)) return false;

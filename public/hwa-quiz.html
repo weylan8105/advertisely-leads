@@ -110,6 +110,19 @@
   .bcard p{margin-top:10px;color:var(--ink-2);font-size:15.5px}
   .bcard .bq{margin-top:14px;padding-top:14px;border-top:1px solid var(--card-line);color:#66727E;font-size:13px;line-height:1.55}
 
+  /* ---- Who it's for / not for ---- */
+  .fit{padding:30px 0 20px;text-align:center}
+  .fit h2{font-size:clamp(24px,3.4vw,34px);font-weight:800;color:var(--ink);text-wrap:balance}
+  .fgrid{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:left}
+  @media(max-width:760px){ .fgrid{grid-template-columns:1fr;max-width:520px;margin-left:auto;margin-right:auto} }
+  .fcard{background:var(--card);border:1px solid var(--card-line);border-radius:16px;padding:26px}
+  .fcard h3{font-size:19px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:10px}
+  .fcard ul{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+  .fcard li{position:relative;padding-left:28px;color:var(--ink-2);font-size:15.5px}
+  .fcard li svg{position:absolute;left:0;top:3px;width:18px;height:18px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .fcard.yes li svg{stroke:var(--good)}
+  .fcard.no li svg{stroke:#8A96A3}
+
   /* ---- Process ---- */
   .process{padding:44px 0 60px;text-align:center}
   .process h2{font-size:clamp(24px,3.4vw,34px);font-weight:800;color:var(--ink)}
@@ -465,6 +478,34 @@ if (window.ABCA_AB === "B") document.documentElement.classList.add("ab-b");
     </div>
   </section>
 
+  <!-- Who it's for (owner, Nov 21 2026: qualifies visitors and tells Meta who this is for) -->
+  <section class="fit wrap" id="fit">
+    <h2>Is this a good fit?</h2>
+    <div class="fgrid">
+      <div class="fcard yes">
+        <h3>This is for</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Nurses and other healthcare workers</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Between 20 and 55 years old</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Steady shifts, with room to put a fixed amount aside each month</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Planning for retirement, including retiring earlier, with cash value that can build over time</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Wanting protection for their family and living benefits if a serious illness hits</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Wanting coverage that stays with them if they change jobs</li>
+        </ul>
+      </div>
+      <div class="fcard no">
+        <h3>This is not for</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone looking for something free or a quick payout</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone who can't set money aside each month right now</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone who needs this money back in the next year or two</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone happy relying only on coverage through work</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone not ready for a short call with a licensed agent</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <!-- Process -->
   <section class="process wrap" id="process">
     <h2>Get the facts. Make your decision.</h2>
@@ -677,6 +718,10 @@ const STEPS_A = [
     opts:["Spouse","Children","Parents","Other"] },
   { key:"role", q:"What best describes your work?", sub:"This helps your agent understand your schedule and benefits.",
     opts:["Registered Nurse (RN)","LPN / LVN","CNA or patient care tech","Nurse practitioner or advanced practice","Other healthcare or medical role"] },
+  // Owner (Nov 21 2026): subtle money qualifier, same idea as the ABCA page. Full-time, travel or
+  // PRN = qualified; part-time or between jobs quietly doesn't count (lib/metaCapi.ts WORK_QUESTIONS).
+  { key:"work_status", q:"How are you working right now?", sub:"Plans are built around how you get paid.",
+    opts:["Full-time staff","Travel or contract","PRN or per diem","Part-time","Between jobs right now"] },
   { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
   { key:"contact", q:"Where should we send your quote?", contact:true }
 ];
@@ -928,6 +973,7 @@ async function finish(){
     phone:answers.phone, email:answers.email, state:answers.state||"", zip:answers.zip||"",
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
     quiz_coverage:answers.coverage, quiz_lead_tier:tier, quiz_role:answers.role,
+    "How are you working right now?":answers.work_status||"",
     consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
     event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp, fbclid:tracking.fbclid,
     utm_source:tracking.utm_source, utm_campaign:tracking.utm_campaign, utm_content:tracking.utm_content,
