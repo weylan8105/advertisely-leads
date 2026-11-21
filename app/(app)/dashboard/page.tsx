@@ -34,6 +34,7 @@ import { TeamDialsCard } from "@/components/dashboard/TeamDialsCard";
 import { LeadDestinationCard } from "@/components/dashboard/LeadDestinationCard";
 import type { AdSpendSummary } from "@/lib/adSpend";
 import { ActivityDashboard } from "@/components/dashboard/ActivityDashboard";
+import { formatAp } from "@/components/activity/shared";
 import { LeadPerformanceChart } from "@/components/dashboard/LeadPerformanceChart";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { ExportButton } from "@/components/leads/ExportButton";
@@ -45,7 +46,7 @@ import { useRouter } from "next/navigation";
 import type { Lead, LeadTask } from "@/types";
 
 interface DashData {
-  stats: { total: number; new: number; contacted: number; presentations: number; closed: number; delivered7d: number };
+  stats: { total: number; new: number; contacted: number; presentations: number; closed: number; submittedApCents?: number; delivered7d: number };
   distribution: { label: string; count: number }[];
   chart: { day: string; received: number; contacted: number; set: number }[];
   recentLeads: Lead[];
@@ -263,9 +264,9 @@ export default function DashboardPage() {
           icon={<CalendarCheck className="h-4 w-4" />}
         />
         <DashboardStatCard
-          label="Closed"
+          label="Submitted"
           value={dash?.stats.closed ?? 0}
-          hint="policies won"
+          hint={dash ? `${formatAp(dash.stats.submittedApCents ?? 0)} AP submitted` : "apps submitted"}
           accent="emerald"
           icon={<Trophy className="h-4 w-4" />}
         />
@@ -372,13 +373,13 @@ export default function DashboardPage() {
                 New: "bg-brand-red/40",
                 Contacted: "bg-sky-500/40",
                 "Presentation Set": "bg-violet-500/40",
-                Closed: "bg-emerald-500/40",
+                Submitted: "bg-emerald-500/40",
               };
               const dist = dash?.distribution ?? [
                 { label: "New", count: 0 },
                 { label: "Contacted", count: 0 },
                 { label: "Presentation Set", count: 0 },
-                { label: "Closed", count: 0 },
+                { label: "Submitted", count: 0 },
               ];
               const denom = dist.reduce((a, b) => a + b.count, 0) || 1;
               return dist.map((d) => {

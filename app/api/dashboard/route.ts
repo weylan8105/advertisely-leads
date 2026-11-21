@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { serializeLead } from "@/lib/serialize";
+import { submittedDeals } from "@/lib/activityStats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,13 +32,15 @@ export async function GET() {
   const chartStart = new Date(startOfToday);
   chartStart.setDate(chartStart.getDate() - 6); // last 7 days incl. today
 
-  const [total, newC, contactedC, apptC, closedC, delivered7d, recvRows, contRows, recent, tasks] =
+  const [total, newC, contactedC, apptC, submitted, delivered7d, recvRows, contRows, recent, tasks] =
     await Promise.all([
       prisma.lead.count({ where }),
       prisma.lead.count({ where: { ...where, status: "NEW" } }),
       prisma.lead.count({ where: { ...where, status: "CONTACTED" } }),
       prisma.lead.count({ where: { ...where, status: "APPOINTMENT_SET" } }),
-      prisma.lead.count({ where: { ...where, status: "CLOSED" } }),
+      // Submitted business (same rule as the leaderboard): every deal this agent
+      // has submitted, i.e. its first move into Underwriting or later, all time.
+      submittedDeals(new Date(0)).then((deals) => deals.filter((d) => d.userId === callerId)),
       prisma.lead.count({ where: { ...where, assignedAt: { gte: d7 } } }),
       prisma.lead.findMany({ where: { ...where, assignedAt: { gte: chartStart } }, select: { assignedAt: true } }),
       prisma.lead.findMany({ where: { ...where, lastContactedAt: { gte: chartStart } }, select: { lastContactedAt: true } }),
@@ -73,13 +76,16 @@ export async function GET() {
     chart.push({ day: d.toLocaleDateString("en-US", { weekday: "short" }), received: recvByDay[k] ?? 0, contacted: contByDay[k] ?? 0, set: 0 });
   }
 
+  const closedC = submitted.length;
+  const submittedApCents = submitted.reduce((sum, d) => sum + d.apCents, 0);
+
   return NextResponse.json({
-    stats: { total, new: newC, contacted: contactedC, presentations: apptC, closed: closedC, delivered7d },
+    stats: { total, new: newC, contacted: contactedC, presentations: apptC, closed: closedC, submittedApCents, delivered7d },
     distribution: [
       { label: "New", count: newC },
       { label: "Contacted", count: contactedC },
       { label: "Presentation Set", count: apptC },
-      { label: "Closed", count: closedC },
+      { label: "Submitted", count: closedC },
     ],
     chart,
     recentLeads: recent.map(serializeLead),
