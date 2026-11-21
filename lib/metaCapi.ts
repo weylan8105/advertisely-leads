@@ -69,7 +69,8 @@ export const QUALIFIED_MAX_AGE = 55;
 // Owner (Nov 18 2026): on the ABCA main landing page (/) a qualified lead is 20 to
 // 55 (ideal is 30-50; 20 and 55 are the outer edges). Leads from before Nov 21
 // were asked age only and qualify on age alone; from Nov 21 the page also asks
-// income, and those leads need $3,000+/month too. Page B (/qualify) keeps the
+// a money question (income briefly, then "Which best describes your work right
+// now?", see WORK_QUESTION), and those leads need a qualifying answer too. Page B (/qualify) keeps the
 // full income + age rule.
 export const QUALIFIED_MIN_AGE_AGE_ONLY = 20;
 const ABCA_QUIZ_SOURCE = "early-retirement-quiz";
@@ -105,9 +106,10 @@ export function ageAnswer(rawFormData: unknown): number | null {
  * when one is missing and nothing failed (we never guess).
  */
 export function isQualifiedLead(rawFormData: unknown): boolean | null {
-  const income = isIncomeQualified(rawFormData);
   const age = ageAnswer(rawFormData);
   const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
+  // The ABCA main page asks about work instead of income (from Nov 21 2026); it stands in for income.
+  const income = isIncomeQualified(rawFormData) ?? (isAgeOnlyFunnel(raw) ? isWorkQualified(rawFormData) : null);
   if (isAgeOnlyFunnel(raw)) {
     if (age != null && age < QUALIFIED_MIN_AGE_AGE_ONLY) return false;
     if (income === null) {
@@ -118,6 +120,22 @@ export function isQualifiedLead(rawFormData: unknown): boolean | null {
   if (income === false || (age != null && age > QUALIFIED_MAX_AGE)) return false;
   if (income === null || age == null) return null;
   return true;
+}
+
+// ABCA main page (owner, Nov 21 2026): a subtle money qualifier instead of a plain
+// income question. Steady full-time, regular overtime or running a business count;
+// "Part-time or seasonal" and "Between jobs right now" don't.
+export const WORK_QUESTION = "Which best describes your work right now?";
+const WORK_QUALIFIED = ["Full-time with a steady paycheck", "Hourly, with regular overtime", "I run my own business or crew"];
+
+/** Qualified on work? true/false for the work question's answers, null when not asked or unrecognised. */
+export function isWorkQualified(rawFormData: unknown): boolean | null {
+  if (!rawFormData || typeof rawFormData !== "object") return null;
+  const v = String((rawFormData as Record<string, unknown>)[WORK_QUESTION] ?? "").trim();
+  if (!v) return null;
+  if (WORK_QUALIFIED.includes(v)) return true;
+  if (/part-time|seasonal|between jobs/i.test(v)) return false;
+  return null;
 }
 
 /**

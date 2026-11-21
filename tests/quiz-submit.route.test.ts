@@ -125,6 +125,13 @@ describe("POST /api/quiz/submit", () => {
     });
   });
 
+  it("keeps the main page's work answer", async () => {
+    await submit(payload({ "Which best describes your work right now?": "Hourly, with regular overtime" }));
+    expect(prismaMock.lead.create.mock.calls[0][0].data.rawFormData).toMatchObject({
+      "Which best describes your work right now?": "Hourly, with regular overtime",
+    });
+  });
+
   it("falls back to the observed IP for consent when the browser sent none", async () => {
     await submit(payload({ consent_ip: "" }), { ip: "192.0.2.55" });
     expect(prismaMock.lead.create.mock.calls[0][0].data.consentIp).toBe("192.0.2.55");

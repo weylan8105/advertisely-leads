@@ -117,6 +117,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   .bcard p{margin-top:10px;color:var(--ink-2);font-size:15.5px}
   .bcard .bq{margin-top:14px;padding-top:14px;border-top:1px solid var(--card-line);color:#66727E;font-size:13px;line-height:1.55}
 
+  /* ---- Who it's for / not for ---- */
+  .fit{padding:30px 0 20px;text-align:center}
+  .fit h2{font-size:clamp(24px,3.4vw,34px);font-weight:800;color:var(--ink);text-wrap:balance}
+  .fgrid{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;text-align:left}
+  @media(max-width:760px){ .fgrid{grid-template-columns:1fr;max-width:520px;margin-left:auto;margin-right:auto} }
+  .fcard{background:var(--card);border:1px solid var(--card-line);border-radius:16px;padding:26px}
+  .fcard h3{font-size:19px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:10px}
+  .fcard ul{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+  .fcard li{position:relative;padding-left:28px;color:var(--ink-2);font-size:15.5px}
+  .fcard li svg{position:absolute;left:0;top:3px;width:18px;height:18px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .fcard.yes li svg{stroke:var(--good)}
+  .fcard.no li svg{stroke:#8A96A3}
+
   /* ---- Process ---- */
   .process{padding:44px 0 60px;text-align:center}
   .process h2{font-size:clamp(24px,3.4vw,34px);font-weight:800;color:var(--ink)}
@@ -524,6 +537,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
   </section>
 
+  <!-- Who it's for (owner, Nov 21 2026: qualifies visitors and tells Meta who this is for) -->
+  <section class="fit wrap" id="fit">
+    <h2>Is this a good fit?</h2>
+    <div class="fgrid">
+      <div class="fcard yes">
+        <h3>This is for</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>People who work in the trades, construction, or another hands-on job</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Roughly 25 to 55 years old</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Steady work, with room to put a fixed amount aside each month</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>Wanting coverage that stays with them if they change jobs</li>
+        </ul>
+      </div>
+      <div class="fcard no">
+        <h3>This is not for</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone looking for something free or a quick payout</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone who can't set money aside each month right now</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone happy relying only on coverage through work</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Anyone not ready for a short call with a licensed agent</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <!-- Process -->
   <section class="process wrap" id="process">
     <h2>Get the facts. Make your decision.</h2>
@@ -737,15 +775,16 @@ const STEPS_A = [
     opts:["$100,000 to $250,000","$250,000 to $500,000","$500,000 to $750,000","$750,000 to $1,000,000"] },
   { key:"beneficiary", q:"Who will be your beneficiary?", sub:"The person the coverage is meant to take care of.",
     opts:["Spouse","Children","Parents","Other"] },
-  // Owner (Nov 21 2026): income, to cut down on leads who can't afford a plan. Same wording and
-  // ranges as /qualify, so lib/metaCapi.ts scores it the same ($3,000+/month qualifies).
-  { key:"monthly_income", q:"What is your gross monthly income?", sub:"Before taxes. A rough number is fine.",
-    opts:["Under $3,000","$3,000 to $5,000","$5,000 to $7,500","$7,500 to $10,000","$10,000+"] },
+  // Owner (Nov 21 2026): a subtle money qualifier instead of a plain income question (people
+  // pick the answer that looks right). Steady work, overtime or own business = qualified;
+  // part-time/seasonal or between jobs quietly doesn't count (lib/metaCapi.ts WORK_QUESTION).
+  { key:"work", q:"Which best describes your work right now?", sub:"Plans are built around how you get paid.",
+    opts:["Full-time with a steady paycheck","Hourly, with regular overtime","I run my own business or crew","Part-time or seasonal","Between jobs right now"] },
   { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
   { key:"contact", q:"Where should we send your quote?", contact:true }
 ];
 // Version B order: who you're protecting (tapped on the hero) -> ZIP -> what matters most
-// -> coverage -> income -> age -> contact. Same questions as A, ZIP moved from the hero into step 2.
+// -> coverage -> work -> age -> contact. Same questions as A, ZIP moved from the hero into step 2.
 const ZIP_STEP = { key:"zip", q:"Great. What ZIP code are you in?", sub:"Plans and prices vary by state.", zip:true };
 const STEPS_B = [
   STEPS_A.find(s=>s.key==="beneficiary"),
@@ -992,7 +1031,7 @@ async function finish(){
     phone:answers.phone, email:answers.email, state:answers.state||"", zip:answers.zip||"",
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
     quiz_coverage:answers.coverage, quiz_lead_tier:tier,
-    "What is your gross monthly income?":answers.monthly_income||"",
+    "Which best describes your work right now?":answers.work||"",
     consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
     event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp || ((document.cookie.match(/(?:^|;\s*)_fbp=([^;]+)/)||[])[1] || ""), fbclid:tracking.fbclid,
     utm_source:tracking.utm_source, utm_campaign:tracking.utm_campaign, utm_content:tracking.utm_content,

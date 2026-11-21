@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
 const STEP_LABELS = ["What matters most", "Coverage wanted", "Beneficiary", "Age", "Contact"];
 // Version B (tap-first hero A/B arm): the hero tap answers step 1, then ZIP, then the rest.
 const STEP_LABELS_B = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Age", "Contact"];
-// Same page from Nov 21 2026 on: gross monthly income asked between coverage and age.
-const STEP_LABELS_B_INCOME = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Gross monthly income", "Age", "Contact"];
+// Same page from Nov 21 2026 on: a money qualifier between coverage and age (first
+// gross monthly income, then the same day "Which best describes your work right now?").
+const STEP_LABELS_B_INCOME = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Work / income", "Age", "Contact"];
 const INCOME_STEP_DAY = "2026-11-21";
 // Page B of the Nov 16 page test (/qualify): the updated Blue Collar instant form's questions.
 const STEP_LABELS_IF = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthly income", "Monthly budget", "Retire by", "Age", "Beneficiary name", "Contact"];

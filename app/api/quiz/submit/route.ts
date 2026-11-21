@@ -54,6 +54,8 @@ const ALLOWED_FIELDS = new Set([
   "What trade do you work in?",
   "What about IUL caught your attention most?",
   "What is your gross monthly income?",
+  // ABCA main page (Nov 21 2026): the subtle money qualifier.
+  "Which best describes your work right now?",
   "How much could you comfortably put towards building your tax-free retirement each month?",
   "When would you ideally like to retire?",
   "What's your age?",

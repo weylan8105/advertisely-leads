@@ -85,4 +85,16 @@ describe("ABCA main page (asks age, not income): qualified on age 20 to 55", () 
     expect(isQualifiedLead(page("19", { [q]: "$10,000+" }))).toBe(false);
     expect(isQualifiedLead(page("56", { [q]: "$10,000+" }))).toBe(false);
   });
+  it("the work question stands in for income: steady work, overtime or own business", () => {
+    const w = "Which best describes your work right now?";
+    expect(isQualifiedLead(page("40", { [w]: "Full-time with a steady paycheck" }))).toBe(true);
+    expect(isQualifiedLead(page("40", { [w]: "Hourly, with regular overtime" }))).toBe(true);
+    expect(isQualifiedLead(page("40", { [w]: "I run my own business or crew" }))).toBe(true);
+    expect(isQualifiedLead(page("40", { [w]: "Part-time or seasonal" }))).toBe(false);
+    expect(isQualifiedLead(page("40", { [w]: "Between jobs right now" }))).toBe(false);
+    expect(isQualifiedLead(page("19", { [w]: "I run my own business or crew" }))).toBe(false);
+    expect(isQualifiedLead(page("60", { [w]: "Full-time with a steady paycheck" }))).toBe(false);
+    // Only the ABCA main page uses it.
+    expect(isQualifiedLead({ quiz_age: "40", [w]: "Full-time with a steady paycheck" })).toBeNull();
+  });
 });
