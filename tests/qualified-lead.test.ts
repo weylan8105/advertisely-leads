@@ -79,4 +79,10 @@ describe("ABCA main page (asks age, not income): qualified on age 20 to 55", () 
   it("other sources keep needing income", () => {
     expect(isQualifiedLead({ quiz_age: "40" })).toBeNull();
   });
+  it("from Nov 21 the page asks income too: $3,000+ and age 20 to 55", () => {
+    expect(isQualifiedLead(page("40", { [q]: "Under $3,000" }))).toBe(false);
+    expect(isQualifiedLead(page("40", { [q]: "$3,000 to $5,000" }))).toBe(true);
+    expect(isQualifiedLead(page("19", { [q]: "$10,000+" }))).toBe(false);
+    expect(isQualifiedLead(page("56", { [q]: "$10,000+" }))).toBe(false);
+  });
 });

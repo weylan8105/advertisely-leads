@@ -8,10 +8,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Quiz step labels (1-based), matching public/abca-quiz.html STEPS order:
-// iul_interest -> coverage -> beneficiary -> age -> contact.
+// iul_interest -> coverage -> beneficiary -> age -> contact (before the income step).
 const STEP_LABELS = ["What matters most", "Coverage wanted", "Beneficiary", "Age", "Contact"];
 // Version B (tap-first hero A/B arm): the hero tap answers step 1, then ZIP, then the rest.
 const STEP_LABELS_B = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Age", "Contact"];
+// Same page from Nov 21 2026 on: gross monthly income asked between coverage and age.
+const STEP_LABELS_B_INCOME = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Gross monthly income", "Age", "Contact"];
+const INCOME_STEP_DAY = "2026-11-21";
 // Page B of the Nov 16 page test (/qualify): the updated Blue Collar instant form's questions.
 const STEP_LABELS_IF = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthly income", "Monthly budget", "Retire by", "Age", "Beneficiary name", "Contact"];
 
@@ -19,7 +22,7 @@ const STEP_LABELS_IF = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthl
 // the API always reports them as A (control) and B (challenger) of the newest test with data.
 //  - page (Nov 16 2026): LP = the live page, IF = /qualify (instant form's questions)
 //  - hero (Oct 2026):    A = ZIP-first hero, B = tap-first hero
-type Layout = "zip" | "tap" | "if"; // which question order a visitor saw
+type Layout = "zip" | "tap" | "tapIncome" | "if"; // which question order a visitor saw
 const AB_TESTS = [
   { id: "page", tags: { A: "LP", B: "IF" }, layouts: { A: "tap", B: "if" } },
   { id: "hero", tags: { A: "A", B: "B" }, layouts: { A: "zip", B: "tap" } },
@@ -27,8 +30,8 @@ const AB_TESTS = [
 type AbTestDef = (typeof AB_TESTS)[number];
 // The hero test ended Oct 23 with B (tap-first) for everyone, so untagged visits after it saw tap-first.
 const HERO_TEST_END_DAY = "2026-10-23";
-const LABELS_BY_LAYOUT: Record<Layout, string[]> = { zip: STEP_LABELS, tap: STEP_LABELS_B, if: STEP_LABELS_IF };
-const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, if: 9 };
+const LABELS_BY_LAYOUT: Record<Layout, string[]> = { zip: STEP_LABELS, tap: STEP_LABELS_B, tapIncome: STEP_LABELS_B_INCOME, if: STEP_LABELS_IF };
+const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, tapIncome: 7, if: 9 };
 
 // A/B test planned sample per arm (two-sided alpha 0.05, 80% power):
 //  - first answer 20% -> 26%:           ~775 visitors per version
@@ -234,8 +237,9 @@ export async function GET(req: NextRequest) {
   const tagArm = (tag: string | null): "A" | "B" | null =>
     tag === test.tags.A ? "A" : tag === test.tags.B ? "B" : null;
   const arm = (p: Person) => tagArm(p.variant);
+  const tapLayout = (p: Person): Layout => (p.day >= INCOME_STEP_DAY ? "tapIncome" : "tap");
   const layout = (p: Person): Layout =>
-    p.variant === "IF" ? "if" : p.variant === "A" ? "zip" : p.variant === "B" || p.variant === "LP" ? "tap" : p.day < HERO_TEST_END_DAY ? "zip" : "tap";
+    p.variant === "IF" ? "if" : p.variant === "A" ? "zip" : p.variant === "B" || p.variant === "LP" ? tapLayout(p) : p.day < HERO_TEST_END_DAY ? "zip" : tapLayout(p);
 
   // A/B test scoping: ?variant=A | B narrows everything below to that arm of the current
   // test. While B traffic is in range, "A" means tagged A only (same period as B);
@@ -287,7 +291,9 @@ export async function GET(req: NextRequest) {
     );
   } else {
     // Every step that actually has data, not just labelled ones ("Step N" fallback).
-    const shown: Layout = variantFilter ? test.layouts[variantFilter] : "zip";
+    let shown: Layout = variantFilter ? test.layouts[variantFilter] : "zip";
+    // The tap-first page gained the income step on INCOME_STEP_DAY: label by the order most of these visitors saw.
+    if ((shown === "tap" || !variantFilter) && scoped.filter((p) => layout(p) === "tapIncome").length * 2 > scoped.length) shown = "tapIncome";
     const labels = LABELS_BY_LAYOUT[shown];
     const maxStep = Math.max(labels.length, Math.max(0, ...byStep.keys()));
     rawSteps.push({ label: shown === "zip" ? "Visited page (ZIP)" : "Visited page", count: views });

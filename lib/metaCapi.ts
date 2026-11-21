@@ -66,9 +66,11 @@ export const INSTANT_FORM_LEAD_EVENT = "Contact";
 export const QUALIFIED_LEAD_EVENT = "Subscribe";
 export const QUALIFIED_MIN_MONTHLY_INCOME = 3000;
 export const QUALIFIED_MAX_AGE = 55;
-// Owner (Nov 18 2026): the ABCA main landing page (/) asks age but not income, so
-// its leads qualify on age alone: 20 to 55 (ideal is 30-50; 20 and 55 are the
-// outer edges). Page B (/qualify) asks both and keeps the full income + age rule.
+// Owner (Nov 18 2026): on the ABCA main landing page (/) a qualified lead is 20 to
+// 55 (ideal is 30-50; 20 and 55 are the outer edges). Leads from before Nov 21
+// were asked age only and qualify on age alone; from Nov 21 the page also asks
+// income, and those leads need $3,000+/month too. Page B (/qualify) keeps the
+// full income + age rule.
 export const QUALIFIED_MIN_AGE_AGE_ONLY = 20;
 const ABCA_QUIZ_SOURCE = "early-retirement-quiz";
 
@@ -106,9 +108,12 @@ export function isQualifiedLead(rawFormData: unknown): boolean | null {
   const income = isIncomeQualified(rawFormData);
   const age = ageAnswer(rawFormData);
   const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
-  if (income === null && isAgeOnlyFunnel(raw)) {
-    if (age == null) return null;
-    return age >= QUALIFIED_MIN_AGE_AGE_ONLY && age <= QUALIFIED_MAX_AGE;
+  if (isAgeOnlyFunnel(raw)) {
+    if (age != null && age < QUALIFIED_MIN_AGE_AGE_ONLY) return false;
+    if (income === null) {
+      if (age == null) return null;
+      return age <= QUALIFIED_MAX_AGE;
+    }
   }
   if (income === false || (age != null && age > QUALIFIED_MAX_AGE)) return false;
   if (income === null || age == null) return null;

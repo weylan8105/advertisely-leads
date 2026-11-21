@@ -737,11 +737,15 @@ const STEPS_A = [
     opts:["$100,000 to $250,000","$250,000 to $500,000","$500,000 to $750,000","$750,000 to $1,000,000"] },
   { key:"beneficiary", q:"Who will be your beneficiary?", sub:"The person the coverage is meant to take care of.",
     opts:["Spouse","Children","Parents","Other"] },
+  // Owner (Nov 21 2026): income, to cut down on leads who can't afford a plan. Same wording and
+  // ranges as /qualify, so lib/metaCapi.ts scores it the same ($3,000+/month qualifies).
+  { key:"monthly_income", q:"What is your gross monthly income?", sub:"Before taxes. A rough number is fine.",
+    opts:["Under $3,000","$3,000 to $5,000","$5,000 to $7,500","$7,500 to $10,000","$10,000+"] },
   { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
   { key:"contact", q:"Where should we send your quote?", contact:true }
 ];
 // Version B order: who you're protecting (tapped on the hero) -> ZIP -> what matters most
-// -> coverage -> age -> contact. Same questions as A, ZIP moved from the hero into step 2.
+// -> coverage -> income -> age -> contact. Same questions as A, ZIP moved from the hero into step 2.
 const ZIP_STEP = { key:"zip", q:"Great. What ZIP code are you in?", sub:"Plans and prices vary by state.", zip:true };
 const STEPS_B = [
   STEPS_A.find(s=>s.key==="beneficiary"),
@@ -988,6 +992,7 @@ async function finish(){
     phone:answers.phone, email:answers.email, state:answers.state||"", zip:answers.zip||"",
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
     quiz_coverage:answers.coverage, quiz_lead_tier:tier,
+    "What is your gross monthly income?":answers.monthly_income||"",
     consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
     event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp || ((document.cookie.match(/(?:^|;\s*)_fbp=([^;]+)/)||[])[1] || ""), fbclid:tracking.fbclid,
     utm_source:tracking.utm_source, utm_campaign:tracking.utm_campaign, utm_content:tracking.utm_content,
