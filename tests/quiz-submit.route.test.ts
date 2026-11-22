@@ -20,7 +20,10 @@ vi.mock("@/lib/prisma", () => ({
 const tryFulfillForNewLead = vi.fn();
 vi.mock("@/lib/fulfillment", () => ({ tryFulfillForNewLead: (...a: unknown[]) => tryFulfillForNewLead(...a) }));
 const fireMetaLeadEvent = vi.fn();
-vi.mock("@/lib/metaCapi", () => ({ fireMetaLeadEvent: (...a: unknown[]) => fireMetaLeadEvent(...a) }));
+vi.mock("@/lib/metaCapi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/metaCapi")>()),
+  fireMetaLeadEvent: (...a: unknown[]) => fireMetaLeadEvent(...a),
+}));
 
 const authenticateApiKey = vi.fn();
 vi.mock("@/lib/apikey", () => ({
@@ -130,6 +133,20 @@ describe("POST /api/quiz/submit", () => {
     expect(prismaMock.lead.create.mock.calls[0][0].data.rawFormData).toMatchObject({
       "Which best describes your work right now?": "Hourly, with regular overtime",
     });
+  });
+
+  it("refuses part-time / between-jobs answers on either page without creating a lead", async () => {
+    for (const extra of [
+      { "Which best describes your work right now?": "Part-time or seasonal" },
+      { "Which best describes your work right now?": "Between jobs right now" },
+      { "How are you working right now?": "Part-time" },
+      { "How are you working right now?": "Between jobs right now" },
+    ]) {
+      const res = await submit(payload(extra));
+      expect(res.status).toBe(422);
+      expect(await res.json()).toMatchObject({ knockout: true });
+    }
+    expect(prismaMock.lead.create).not.toHaveBeenCalled();
   });
 
   it("falls back to the observed IP for consent when the browser sent none", async () => {

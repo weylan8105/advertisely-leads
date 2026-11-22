@@ -3,6 +3,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { normalizeInboundLead } from "@/lib/inboundLead";
 import { createInboundLead } from "@/lib/inboundIntake";
 import { allowHit, clientIp } from "@/lib/rateLimit";
+import { isWorkQualified } from "@/lib/metaCapi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,6 +150,12 @@ export async function POST(req: NextRequest) {
   if (!EVENT_ID_RE.test(eventId)) invalid.push("event_id");
   if (invalid.length) {
     return reject(`invalid ${invalid.join(",")}`, ip, { error: "Invalid fields.", fields: invalid }, 400);
+  }
+
+  // Hard knockout (Nov 21 2026): part-time/seasonal or between-jobs answers end the quiz on the
+  // page, so a submission carrying one never becomes a lead (old cached page, or a bypass).
+  if (isWorkQualified(body) === false) {
+    return reject("work knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
 
   // The page beacons 'view' on load and 'step' as the quiz advances, under the

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/track — first-party funnel beacon from the landing page.
- * Body: { sessionId, type: "view"|"step"|"complete"|"zip_error", step?, source?, fbclid?, cta?, variant? }
+ * Body: { sessionId, type: "view"|"step"|"complete"|"zip_error"|"knockout", step?, source?, fbclid?, cta?, variant? }
  * Public (analytics only, no PII). Fire-and-forget from the browser.
  */
 const CORS = {
@@ -21,7 +21,8 @@ export function OPTIONS() {
 
 // zip_error = the visitor tapped the hero/final ZIP button without a valid
 // 5-digit ZIP (step holds how many digits they had typed, 0-4).
-const TYPES = new Set(["view", "step", "complete", "zip_error"]);
+// knockout = a work answer ended the quiz on the not-a-fit screen (step = that screen).
+const TYPES = new Set(["view", "step", "complete", "zip_error", "knockout"]);
 
 export async function POST(req: NextRequest) {
   if (!isDatabaseConfigured || !prisma) {
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
   const stepNum = Number(body?.step);
   const step = !Number.isFinite(stepNum)
     ? null
-    : type === "step"
+    : type === "step" || type === "knockout"
       ? Math.min(Math.max(Math.round(stepNum), 1), 30)
       : type === "zip_error"
         ? Math.min(Math.max(Math.round(stepNum), 0), 5)

@@ -780,9 +780,10 @@ const STEPS_A = [
     opts:["Spouse","Children","Parents","Other"] },
   // Owner (Nov 21 2026): a subtle money qualifier instead of a plain income question (people
   // pick the answer that looks right). Steady work, overtime or own business = qualified;
-  // part-time/seasonal or between jobs quietly doesn't count (lib/metaCapi.ts WORK_QUESTION).
+  // part-time/seasonal or between jobs ends the quiz on a not-a-fit screen (hard knockout,
+  // Nov 21 2026; the submit route also refuses them). See lib/metaCapi.ts WORK_QUESTION.
   { key:"work", q:"Which best describes your work right now?", sub:"Plans are built around how you get paid.",
-    opts:["Full-time with a steady paycheck","Hourly, with regular overtime","I run my own business or crew","Part-time or seasonal","Between jobs right now"] },
+    opts:["Full-time with a steady paycheck","Hourly, with regular overtime","I run my own business or crew","Part-time or seasonal","Between jobs right now"], knockout:["Part-time or seasonal","Between jobs right now"] },
   { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
   { key:"contact", q:"Where should we send your quote?", contact:true }
 ];
@@ -868,7 +869,23 @@ function heroZip(e, form){
   return false;
 }
 
+// Hard knockout: a knockout answer ends the quiz here. Remembered for this browser tab so
+// reopening the quiz or reloading the page shows the same screen instead of a fresh form.
+const KO_KEY = "abca_ko";
+let knockedOut = false;
+try { knockedOut = sessionStorage.getItem(KO_KEY) === "1"; } catch (e) {}
+function renderNotFit(){
+  renderToken++;
+  navLock=false;
+  const pr=document.querySelector('.prog'); if(pr) pr.style.display='none';
+  ['qIntroH','qIntroB','qIntroR'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  document.getElementById('qstep').innerHTML =
+    `<div class="qq">Thanks for checking</div>
+     <div class="qsub">Based on your answers, this plan isn't the right fit right now. It works best for people with steady income who can set aside a fixed amount each month. If your work situation changes, we'd be glad to help then.</div>
+     <div class="qnav" style="justify-content:center"><button class="btn qcont" type="button" onclick="closeQuiz()">Close</button></div>`;
+}
 function render(){
+  if(knockedOut){ renderNotFit(); return; }
   renderToken++;
   navLock=false;
   document.getElementById('progBar').style.width = Math.round(((step+1)/(STEPS.length+1))*100) + "%";
@@ -896,6 +913,11 @@ function render(){
     host.innerHTML = html;
     host.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>{
       answers[s.key]=b.getAttribute('data-v');
+      if(s.knockout && s.knockout.includes(answers[s.key])){
+        knockedOut=true; try{ sessionStorage.setItem(KO_KEY,"1"); }catch(e){}
+        trackEvent("knockout", step+1);
+        renderNotFit(); return;
+      }
       host.querySelectorAll('.opt').forEach(x=>{x.classList.remove('sel');x.setAttribute('aria-checked','false');});
       b.classList.add('sel'); b.setAttribute('aria-checked','true');
       const tok=renderToken; setTimeout(()=>{ if(renderToken===tok) go(); },240);
@@ -998,6 +1020,7 @@ function scoreLead(a){
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 async function submitContact(){
+  if(knockedOut){ renderNotFit(); return; }
   if(submitting) return;
   const nameEl=document.getElementById('cName'), phoneEl=document.getElementById('cPhone'),
         emailEl=document.getElementById('cEmail'), zipEl=document.getElementById('cZip'),
