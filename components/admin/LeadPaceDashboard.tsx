@@ -135,7 +135,7 @@ export function LeadPaceDashboard() {
   if (!s.activeClients) verdict = "No clients can take a lead right now.";
   else if (short) {
     verdict = `Clients are ${num(s.gapPerDay)} leads a day short of ${data.target} each.`;
-    if (change != null) verdict += ` Closing it takes about ${money(change)} more ad spend a day (${num(s.leadsToAddPerDay)} more leads, since the house turn takes ${Math.round((1 - s.clientShare) * 100)}%).`;
+    if (change != null) verdict += ` Closing it takes about ${money(change)} more ad spend a day (${num(s.leadsToAddPerDay)} more leads${s.clientShare < 1 ? `, since the house turn takes ${Math.round((1 - s.clientShare) * 100)}%` : ""}).`;
   } else if (over) {
     verdict = `Clients are ${num(s.surplusPerDay)} leads a day over ${data.target} each.`;
     if (change != null) verdict += ` About ${money(-change)} a day of ad spend could come off and still hold the target.`;
@@ -171,7 +171,7 @@ export function LeadPaceDashboard() {
         <Tile
           label="Leads a day to clients"
           value={num(s.clientLeadsPerDay)}
-          hint={`${s.neededPerDay} needed for ${s.activeClients} clients · house turn ${num(s.houseLeadsPerDay)} a day`}
+          hint={`${s.neededPerDay} needed for ${s.activeClients} clients${s.houseLeadsPerDay > 0 ? ` · house turn ${num(s.houseLeadsPerDay)} a day` : ""}`}
         />
         <Tile
           label={short ? "Ad spend to add a day" : over ? "Ad spend that could come off a day" : "Ad spend change a day"}
@@ -202,7 +202,7 @@ export function LeadPaceDashboard() {
 
       <Panel
         title="By client"
-        note={`Leads delivered each day, most starved first. Budget left is each client's unspent ad budget; leads left is what that and any open order still cover. The average covers ${span}; today is a part day and is not in it. Green is ${data.target} or more, red is under ${data.floor}.`}
+        note={`Leads delivered each day, most starved first. Admins are listed for comparison but left out of the client totals above (their leads count as the house turn). Budget left is each client's unspent ad budget; leads left is what that and any open order still cover. The average covers ${span}; today is a part day and is not in it. Green is ${data.target} or more, red is under ${data.floor}.`}
       >
         <div className="overflow-x-auto">
           <Table>
@@ -225,9 +225,10 @@ export function LeadPaceDashboard() {
             </TableHeader>
             <TableBody>
               {active.map((r) => (
-                <TableRow key={r.userId}>
+                <TableRow key={r.userId} className={cn(r.admin && "bg-sky-50/40")}>
                   <TableCell className="font-medium">
                     {r.name}
+                    {r.admin && <span className="ml-1.5 rounded-full border border-sky-200 bg-sky-50 px-1.5 text-[10px] font-normal text-sky-700">Admin</span>}
                     {r.note && <div className="text-[11px] font-normal text-slate-500">{r.note}</div>}
                   </TableCell>
                   {r.perDay.map((n, i) => (
@@ -248,7 +249,7 @@ export function LeadPaceDashboard() {
                   </TableCell>
                 </TableRow>
               )}
-              <TableRow className="bg-slate-50">
+              {(data.house.today > 0 || data.house.perDay.some((n) => n > 0)) && <TableRow className="bg-slate-50">
                 <TableCell className="font-medium">
                   House turn
                   <div className="text-[11px] font-normal text-slate-500">Not a client</div>
@@ -259,7 +260,7 @@ export function LeadPaceDashboard() {
                 <TableCell className="text-right tabular-nums text-slate-500">{data.house.today || "·"}</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{data.house.avgPerDay.toFixed(1)}</TableCell>
                 <TableCell colSpan={4} />
-              </TableRow>
+              </TableRow>}
               {inactive.map((r) => (
                 <TableRow key={r.userId} className="text-slate-400">
                   <TableCell>

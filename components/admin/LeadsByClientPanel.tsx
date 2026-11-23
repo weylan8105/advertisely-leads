@@ -152,7 +152,6 @@ export function LeadsByClientPanel() {
   }
 
   const clients = data?.rows.filter((r) => !r.admin) ?? [];
-  const admins = data?.rows.filter((r) => r.admin) ?? [];
   const singleDay = data ? data.days === 1 : false;
   const rangeText = data
     ? data.from === data.to
@@ -165,14 +164,14 @@ export function LeadsByClientPanel() {
     <Fragment key={r.userId}>
       <TableRow
         onClick={() => setExpanded(expanded === r.userId ? null : r.userId)}
-        className={cn("cursor-pointer", r.admin && "text-slate-500", !r.total && !r.admin && "text-slate-400")}
+        className={cn("cursor-pointer", r.admin && "bg-sky-50/40", !r.total && "text-slate-400")}
       >
         <TableCell className="w-10 text-right tabular-nums text-slate-400">{i ?? ""}</TableCell>
         <TableCell className="font-medium">
           <span className="inline-flex items-center gap-1.5">
             <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform", expanded === r.userId && "rotate-90")} />
             {r.name}
-            {r.admin && <span className="rounded-full border border-slate-200 px-1.5 text-[10px] font-normal">Admin</span>}
+            {r.admin && <span className="rounded-full border border-sky-200 bg-sky-50 px-1.5 text-[10px] font-normal text-sky-700">Admin</span>}
           </span>
         </TableCell>
         <TableCell className="text-right font-semibold tabular-nums">{r.total}</TableCell>
@@ -264,8 +263,7 @@ export function LeadsByClientPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clients.map((r, i) => renderRow(r, i + 1))}
-                  {admins.map((r) => renderRow(r, null))}
+                  {data.rows.map((r, i) => renderRow(r, i + 1))}
                   <TableRow className="bg-slate-50 font-medium hover:bg-slate-50">
                     <TableCell />
                     <TableCell>All leads</TableCell>
@@ -281,7 +279,7 @@ export function LeadsByClientPanel() {
               </Table>
               <p className="mt-3 text-xs text-slate-500">
                 Leads by the Central-time day they were assigned, under whoever holds them now (trashed leads left out).
-                {!singleDay && " Click a client to see each day."} Admins are listed after clients.
+                {!singleDay && " Click a client to see each day."} Admins are ranked with everyone and tagged Admin.
               </p>
             </div>
           )}

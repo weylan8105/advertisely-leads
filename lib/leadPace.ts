@@ -45,7 +45,7 @@ export async function getLeadPace(): Promise<LeadPaceResult> {
   const since = dayStart(days[0], ACTIVITY_TZ);
   const warnings: string[] = [];
 
-  const [assigned, arrived, advertisers, openOrders, meta, cpl] = await Promise.all([
+  const [assigned, arrived, allAdvertisers, admins, openOrders, meta, cpl] = await Promise.all([
     prisma.lead.findMany({
       where: { trashedAt: null, assignedUserId: { not: null }, assignedAt: { gte: since } },
       select: { assignedUserId: true, assignedAt: true, packageId: true },
@@ -58,6 +58,12 @@ export async function getLeadPace(): Promise<LeadPaceResult> {
       where: { isAdvertiser: true },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true, email: true, role: true, leadTypes: true },
+    }),
+    // Admins are listed alongside the advertisers (owner, Nov 23), so their own
+    // round-robin turns can be compared with every client's.
+    prisma.user.findMany({
+      where: { OR: [{ role: "ADMIN" }, { email: { equals: HOUSE_EMAIL, mode: "insensitive" } }] },
+      select: { id: true, name: true, email: true, role: true, leadTypes: true, weeklyLeadTarget: true },
     }),
     prisma.order.findMany({
       where: { status: { in: ["PENDING", "PROCESSING", "DELIVERING"] } },
@@ -72,6 +78,8 @@ export async function getLeadPace(): Promise<LeadPaceResult> {
     Promise.all([sharedCplCents("abca"), sharedCplCents("ew"), sharedCplCents("nurse")]),
   ]);
   const [abcaCpl, ewCpl, nurseCpl] = cpl;
+  const adminIds = new Set(admins.map((a) => a.id));
+  const advertisers = allAdvertisers.filter((a) => !adminIds.has(a.id));
 
   // Deliveries per person, day and lead type.
   const tally = new Map<string, PaceDelivery>();
@@ -106,7 +114,7 @@ export async function getLeadPace(): Promise<LeadPaceResult> {
   }
 
   const advertiserIds = new Set(advertisers.map((a) => a.id));
-  const otherIds = [...new Set([...deliveries.map((d) => d.userId), ...owed.keys()])].filter((id) => !advertiserIds.has(id));
+  const otherIds = [...new Set([...deliveries.map((d) => d.userId), ...owed.keys()])].filter((id) => !advertiserIds.has(id) && !adminIds.has(id));
   const others = otherIds.length
     ? await prisma.user.findMany({ where: { id: { in: otherIds } }, select: { id: true, name: true, email: true, role: true } })
     : [];
@@ -169,6 +177,19 @@ export async function getLeadPace(): Promise<LeadPaceResult> {
     if (s.balanceCents < cheapest && orderLeft <= 0) { inactive("Out of ad budget"); continue; }
     const budgetLeads = s.balanceCents >= cheapest ? Math.floor(s.balanceCents / typical) : 0;
     clients.push({ ...row, active: true, note: null, leadsLeft: budgetLeads + orderLeft });
+  }
+  // Admins: a normal row. Active while they're in the rotation (a weekly lead
+  // target and a lead type on). They pay through the admin lead balance, not an
+  // ad budget, so budget and leads left stay blank.
+  for (const a of admins) {
+    const blueCollar = leadTypeOn(a.leadTypes, BLUE_COLLAR_LEAD_TYPE);
+    const nurse = leadTypeOn(a.leadTypes, NURSE_LEAD_TYPE);
+    const row = { userId: a.id, name: displayName(a), house: false, admin: true, blueCollar, nurse, leadsLeft: null };
+    const paused = pauseOf(a.id);
+    if (paused) clients.push({ ...row, active: false, note: `Admin · ${pausedNote(paused.until)}` });
+    else if (!(a.weeklyLeadTarget ?? 0)) clients.push({ ...row, active: false, note: "Admin · no weekly lead target" });
+    else if (!blueCollar && !nurse) clients.push({ ...row, active: false, note: "Admin · no lead type switched on" });
+    else clients.push({ ...row, active: true, note: `Admin · up to ${a.weeklyLeadTarget} a week` });
   }
   for (const u of others) {
     const base = { userId: u.id, name: displayName(u), blueCollar: false, nurse: false };

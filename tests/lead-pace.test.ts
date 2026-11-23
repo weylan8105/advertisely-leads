@@ -164,3 +164,24 @@ describe("demand", () => {
     expect(s.neededPerDay).toBe(0);
   });
 });
+
+describe("admin rows", () => {
+  it("lists an admin with the clients but keeps them out of the client totals", () => {
+    const days = ["2026-11-20", "2026-11-21", "2026-11-22"];
+    const p = buildLeadPace({
+      today: "2026-11-23", days, config: { avgDays: 3 },
+      clients: [
+        { userId: "a", name: "a", house: false, active: true, note: null, blueCollar: true, nurse: false, leadsLeft: 10 },
+        { userId: "ryan", name: "ryan", house: false, admin: true, active: true, note: null, blueCollar: true, nurse: false, leadsLeft: null },
+      ],
+      deliveries: days.flatMap((day) => [{ userId: "a", day, nurse: false, n: 3 }, { userId: "ryan", day, nurse: false, n: 9 }]),
+      spendByDay: null, ourLeadsByDay: {}, dailyBudgetCents: null,
+    });
+    expect(p.rows.map((r) => r.userId).sort()).toEqual(["a", "ryan"]);
+    expect(p.rows.find((r) => r.userId === "ryan")?.avgPerDay).toBe(9);
+    expect(p.summary.activeClients).toBe(1);
+    expect(p.summary.perActiveClient).toBe(3);
+    expect(p.summary.houseLeadsPerDay).toBe(9);
+    expect(p.house.avgPerDay).toBe(0);
+  });
+});

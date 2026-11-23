@@ -32,6 +32,8 @@ export interface PaceClientInput {
   userId: string;
   name: string;
   house: boolean;
+  /** An admin's own row: shown with the clients but kept out of the client totals, like the house turn. */
+  admin?: boolean;
   active: boolean;
   /** Why they're not active, or a note on an active client. */
   note: string | null;
@@ -53,6 +55,7 @@ export interface PaceDelivery {
 export interface PaceRow {
   userId: string;
   name: string;
+  admin: boolean;
   active: boolean;
   note: string | null;
   blueCollar: boolean;
@@ -196,6 +199,7 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
       return {
         userId: c.userId,
         name: c.name,
+        admin: !!c.admin,
         active: c.active,
         note: c.note,
         blueCollar: c.blueCollar,
@@ -220,12 +224,21 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
     houseLine.today += a.today;
     houseLine.win += a.win;
   }
+  const houseOnly = { perDay: [...houseLine.perDay], today: houseLine.today, avgPerDay: round1(houseLine.win / n) };
+
+  // Admin rows are listed for comparison but count with the house turn in the totals.
+  const clientRows = rows.filter((r) => !r.admin);
+  for (const r of rows) if (r.admin) {
+    r.perDay.forEach((v, i) => (houseLine.perDay[i] += v));
+    houseLine.today += r.today;
+    houseLine.win += get(r.userId).win;
+  }
 
   const spendOf = (day: string) => (input.spendByDay && day in input.spendByDay ? input.spendByDay[day] : null);
   const byDay: PaceDay[] = days.map((day, i) => {
     let toClients = 0;
     let served = 0;
-    for (const r of rows) {
+    for (const r of clientRows) {
       toClients += r.perDay[i];
       if (r.perDay[i] > 0) served++;
     }
@@ -244,7 +257,7 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
     };
   });
 
-  const active = rows.filter((r) => r.active);
+  const active = clientRows.filter((r) => r.active);
   const clientWin = byDay.filter((d) => inAvg.has(d.day)).reduce((s, d) => s + d.toClients, 0);
   const clientLeadsPerDay = clientWin / n;
   const houseLeadsPerDay = houseLine.win / n;
@@ -265,7 +278,7 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
   const typeLine = (key: "blueCollar" | "nurse"): PaceTypeLine => {
     const on = active.filter((r) => r[key]).length;
     // Summed from whole-window counts, not the rounded per-client figures.
-    const total = rows.reduce((s, r) => s + (key === "blueCollar" ? get(r.userId).bc : get(r.userId).nurse), 0) / n;
+    const total = clientRows.reduce((s, r) => s + (key === "blueCollar" ? get(r.userId).bc : get(r.userId).nurse), 0) / n;
     return { activeClients: on, leadsPerDay: round1(total), perClient: on ? round1(total / on) : null };
   };
 
@@ -289,12 +302,12 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
     spendChangePerDayCents: spendChange,
     targetSpendPerDayCents: spendPerDayCents != null && spendChange != null ? Math.max(0, spendPerDayCents + spendChange) : null,
     dailyBudgetCents: input.dailyBudgetCents,
-    budgetLeftCents: budgetOf(rows),
+    budgetLeftCents: budgetOf(clientRows),
     activeBudgetLeftCents: budgetOf(active),
-    budgetClients: rows.filter((r) => (r.budgetLeftCents ?? 0) > 0).length,
+    budgetClients: clientRows.filter((r) => (r.budgetLeftCents ?? 0) > 0).length,
     leadsLeft,
     daysOfDemand: neededPerDay > 0 ? round1(leadsLeft / neededPerDay) : null,
-    todayToClients: rows.reduce((s, r) => s + r.today, 0),
+    todayToClients: clientRows.reduce((s, r) => s + r.today, 0),
     todayToHouse: houseLine.today,
     blueCollar: typeLine("blueCollar"),
     nurse: typeLine("nurse"),
@@ -308,7 +321,8 @@ export function buildLeadPace(input: LeadPaceInput): LeadPace {
     avgWindow,
     today,
     rows,
-    house: { perDay: houseLine.perDay, today: houseLine.today, avgPerDay: round1(houseLeadsPerDay) },
+    // The house turn row: house accounts only (admins have their own rows).
+    house: houseOnly,
     byDay,
     summary,
   };

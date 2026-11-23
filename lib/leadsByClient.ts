@@ -4,8 +4,8 @@
 //
 // "Every client" = every non-admin account that is an advertiser, has placed an
 // order, or has ever been assigned a lead, so clients with none in the range
-// still show (at the bottom, with 0). Admins and the house account are listed
-// after the clients, marked as admins.
+// still show (at the bottom, with 0). Admins and the house account are ranked
+// right alongside them, tagged Admin (owner, Nov 23).
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
@@ -105,7 +105,7 @@ export async function getLeadsByClient(from: string, to: string): Promise<LeadsB
       byDay,
     };
   });
-  rows.sort((a, b) => Number(a.admin) - Number(b.admin) || b.total - a.total || a.name.localeCompare(b.name));
+  rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
   const total = rows.reduce((s, r) => s + r.total, 0);
   const clientTotal = rows.filter((r) => !r.admin).reduce((s, r) => s + r.total, 0);
