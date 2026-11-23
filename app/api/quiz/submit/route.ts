@@ -41,6 +41,7 @@ const BURST_WINDOW_MS = 10 * 60_000;
 const DAILY_LEADS_PER_IP = 3;
 const DAY_MS = 24 * 60 * 60_000;
 const SESSION_MAX_AGE_MS = 2 * DAY_MS; // also the session/phone dedupe window
+const QUIZ_MAX_AGE = 60; // older visitors get the not-a-fit screen (owner, Nov 23 2026)
 const MIN_FILL_MS = 8_000; // fastest real lead observed: 35s after page view
 const MAX_FIELD_LEN = 2_000;
 
@@ -156,6 +157,11 @@ export async function POST(req: NextRequest) {
   // page, so a submission carrying one never becomes a lead (old cached page, or a bypass).
   if (isWorkQualified(body) === false) {
     return reject("work knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
+  }
+  // Hard age knockout (Nov 23 2026): over 60 also ends the quiz on the page.
+  const ages = [body.age, body.quiz_age, body["What's your age?"]].map((v) => parseInt(str(v), 10));
+  if (ages.some((a) => a > QUIZ_MAX_AGE)) {
+    return reject("age knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
 
   // The page beacons 'view' on load and 'step' as the quiz advances, under the

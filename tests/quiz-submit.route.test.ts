@@ -149,6 +149,16 @@ describe("POST /api/quiz/submit", () => {
     expect(prismaMock.lead.create).not.toHaveBeenCalled();
   });
 
+  it("refuses an age over 60 without creating a lead, and keeps 60", async () => {
+    for (const extra of [{ age: "61", quiz_age: "61" }, { age: "", quiz_age: "75" }, { "What's your age?": "64" }]) {
+      const res = await submit(payload(extra));
+      expect(res.status).toBe(422);
+      expect(await res.json()).toMatchObject({ knockout: true });
+    }
+    expect(prismaMock.lead.create).not.toHaveBeenCalled();
+    expect((await submit(payload({ age: "60", quiz_age: "60" }))).status).toBe(200);
+  });
+
   it("falls back to the observed IP for consent when the browser sent none", async () => {
     await submit(payload({ consent_ip: "" }), { ip: "192.0.2.55" });
     expect(prismaMock.lead.create.mock.calls[0][0].data.consentIp).toBe("192.0.2.55");

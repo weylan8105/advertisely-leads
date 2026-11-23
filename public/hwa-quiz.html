@@ -946,8 +946,16 @@ function goToStep(i){ if(i>=0 && i<STEPS.length){ clearTimeout(zipAutoTimer); st
 function submitAge(){
   const el=document.getElementById('ageInput'); const n=parseInt((el.value||'').replace(/\D/g,''),10);
   if(!n || n<18 || n>85){ el.classList.add('err'); document.getElementById('ageMsg').textContent="Enter an age between 18 and 85."; return; }
-  answers.age=String(n); go();
+  answers.age=String(n);
+  // Hard age knockout (Nov 23 2026, owner): over 60 ends the quiz on the not-a-fit screen.
+  if(n>MAX_AGE){
+    knockedOut=true; try{ sessionStorage.setItem(KO_KEY,"1"); }catch(e){}
+    trackEvent("knockout", step+1);
+    renderNotFit(); return;
+  }
+  go();
 }
+const MAX_AGE = 60;
 function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).textContent=t; }
 
 /* ---- lead scoring (coverage / interest based; never hard-DQ) ---- */
