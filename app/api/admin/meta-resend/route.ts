@@ -13,6 +13,7 @@ import {
   fireMetaContactedEvent,
   fireMetaLeadEvent,
   fireMetaQualifiedLeadEvent,
+  fireMetaWebsiteQualifiedLeadEvent,
   fireMetaStageEvent,
   isQualifiedLead,
 } from "@/lib/metaCapi";
@@ -67,6 +68,12 @@ export async function POST() {
       orderBy: { receivedAt: "asc" },
     }),
   ]);
+  // Website (landing page) leads: only their "Qualified Lead" signal is backfilled here
+  // (their Lead event goes out at submit, shared with the browser pixel).
+  const websiteLeads = await prisma.lead.findMany({
+    where: { receivedAt: { gte: since }, trashedAt: null, OR: [{ fbclid: { not: null } }, { source: ABCA_SOURCE }] },
+    orderBy: { receivedAt: "asc" },
+  });
 
   // A Purchase that went out without Meta's lead id doesn't count as sent: it's
   // tried again, and fireMetaStageEvent only resends it once the id is found.
@@ -109,6 +116,14 @@ export async function POST() {
     }
     // fireMetaLeadEvent sends the "Qualified Lead" signal too when it applies.
     jobs.push(() => fireMetaLeadEvent(lead, lead.receivedAt));
+  }
+
+  for (const lead of websiteLeads) {
+    const raw = (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, unknown>;
+    if (!(lead.fbclid || raw["fbc"] || raw["fbp"])) continue;
+    if (isQualifiedLead(lead.rawFormData) === true && !sent.has(`${QUALIFIED_LEAD_EVENT}:${lead.id}`)) {
+      jobs.push(() => fireMetaWebsiteQualifiedLeadEvent(lead, lead.receivedAt));
+    }
   }
 
   const started = Date.now();

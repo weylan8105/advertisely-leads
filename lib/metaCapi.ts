@@ -431,6 +431,26 @@ export async function fireMetaQualifiedLeadEvent(lead: LeadLike, occurredAt?: Da
   return sendQualifiedLead(lead, crm, occurredAt);
 }
 
+/**
+ * Send only the "Qualified Lead" signal for an existing website (landing page) lead,
+ * as a website event on the funnel's pixel, the way fireMetaLeadEvent does at intake.
+ * Used to backfill leads that qualify under a newer rule. No-op unless qualified.
+ */
+export async function fireMetaWebsiteQualifiedLeadEvent(lead: LeadLike, occurredAt?: Date): Promise<SendResult> {
+  if (isQualifiedLead(lead.rawFormData) !== true) return { ok: false, skipped: "not qualified" };
+  const raw = (lead.rawFormData && typeof lead.rawFormData === "object" ? lead.rawFormData : {}) as Record<string, string>;
+  if (!(lead.fbclid || raw["fbc"] || raw["fbp"])) return { ok: false, skipped: "instant form lead, not a website lead" };
+  const result = await sendMetaEvent(lead, {
+    eventName: QUALIFIED_LEAD_EVENT,
+    eventId: `qual_${lead.id}`,
+    actionSource: "website",
+    eventSourceUrl: raw["landing_url"] || undefined,
+    eventTime: occurredAt,
+  }).catch(sendFailed);
+  await recordCapiResult(lead, QUALIFIED_LEAD_EVENT, result);
+  return result;
+}
+
 /** Fire the server-side "Purchase" event when a lead is marked Issued PAID. */
 export async function fireMetaPurchaseEvent(leadId: string, valueCents?: number | null): Promise<void> {
   if (!isMetaCapiConfigured || !prisma) return;
