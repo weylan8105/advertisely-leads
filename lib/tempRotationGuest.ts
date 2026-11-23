@@ -45,6 +45,7 @@ export const TEMP_ROTATION_GUEST = {
 export const EW_TEXT_VERIFIED_FORM_IDS = new Set<string>([
   "1491493996376938", // EW - Blue Collar Lead Form 11/11 - LP Questions + SMS Verified
   "1171618138933736", // EW - Blue Collar Lead Form 11/21 v2 - Work Status + Income Branch + SMS Verified
+  "1461044629339508", // EW - Blue Collar Lead Form 11/23 v3 - Age x Goal Knockout + Work Status + SMS Verified
 ]);
 
 const EW_CURSOR_ID = "temp-guest:ew-otp";
