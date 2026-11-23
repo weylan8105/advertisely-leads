@@ -14,6 +14,7 @@ import { goldmineLeadData, planLeadPipelines, type LeadPipeline } from "@/lib/le
 import { leadOrigin } from "@/lib/leadOrigin";
 import { isHousePaused } from "@/lib/housePause";
 import { adminLeadFunded } from "@/lib/leadCostLedger";
+import { FEWEST_FIRST, fewestFirstOrder, leadsReceivedRecently } from "@/lib/fewestFirst";
 import { isClientPaused } from "@/lib/clientPause";
 import { SHARED_POOL, TOGGLE_ONLY_POOLS, sharedPoolOf, sharedClientSlots, deliverSharedLeadToClient, poolLeadType, type ClientSlot } from "@/lib/sharedPool";
 import { leadTypeOn } from "@/lib/leadTypes";
@@ -714,9 +715,17 @@ async function routeNewLead(leadId: string): Promise<void> {
         create: { id: cursorKey, lastRecipientId: rid },
       });
 
-    // Start at the slot AFTER whoever got the last lead; take the first that accepts.
-    for (let step = 1; step <= rotation.length; step++) {
-      const rid = rotation[(lastIdx + step) % rotation.length];
+    // The turn order starts at the slot AFTER whoever got the last lead.
+    const turnOrder = rotation.map((_, step) => rotation[(lastIdx + 1 + step) % rotation.length]);
+    // FEWEST FIRST (lib/fewestFirst.ts): offer the lead to whoever has had the
+    // fewest leads in the last 24 hours, the turn order breaking ties, so a
+    // person in a few quiet states isn't starved by people in many busy ones.
+    const offerOrder = FEWEST_FIRST.enabled
+      ? fewestFirstOrder(turnOrder, await leadsReceivedRecently(turnOrder))
+      : turnOrder;
+
+    // Take the first that accepts.
+    for (const rid of offerOrder) {
       const guestSlot = guestById.get(rid);
       if (guestSlot) {
         const what = isAbcaLandingPageLead(lead.source) ? "ABCA landing-page round-robin" : "Blue Collar round-robin";
