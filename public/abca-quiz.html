@@ -1008,15 +1008,15 @@ function submitAge(){
   const el=document.getElementById('ageInput'); const n=parseInt((el.value||'').replace(/\D/g,''),10);
   if(!n || n<18 || n>85){ el.classList.add('err'); document.getElementById('ageMsg').textContent="Enter an age between 18 and 85."; return; }
   answers.age=String(n);
-  // Hard age knockout (Nov 23 2026, owner): over 60 ends the quiz on the not-a-fit screen.
-  if(n>MAX_AGE){
+  // Age x goal knockout (Nov 23 2026, owner): over 55 and mainly after retirement / cash
+  // value ends the quiz on the not-a-fit screen. Over 55 wanting a death benefit stays.
+  if(n>55 && /retire|cash value|policy loans/i.test(answers.iul_interest||"")){
     knockedOut=true; try{ sessionStorage.setItem(KO_KEY,"1"); }catch(e){}
     trackEvent("knockout", step+1);
     renderNotFit(); return;
   }
   go();
 }
-const MAX_AGE = 60;
 function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).textContent=t; }
 
 /* ---- lead scoring (coverage / interest based; never hard-DQ) ---- */
