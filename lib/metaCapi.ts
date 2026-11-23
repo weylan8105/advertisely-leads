@@ -87,7 +87,7 @@ function isAgeOnlyFunnel(raw: Record<string, unknown>): boolean {
 export function monthlyIncomeAnswer(rawFormData: unknown): string | null {
   if (!rawFormData || typeof rawFormData !== "object") return null;
   const raw = rawFormData as Record<string, unknown>;
-  const key = Object.keys(raw).find((k) => /gross[\s_]*monthly[\s_]*income/i.test(k));
+  const key = Object.keys(raw).find((k) => /gross[\s_]*monthly[\s_]*income/i.test(k) && String(raw[k] ?? "").trim());
   const v = key ? String(raw[key] ?? "").trim() : "";
   return v || null;
 }
@@ -96,9 +96,14 @@ export function monthlyIncomeAnswer(rawFormData: unknown): string | null {
 export function ageAnswer(rawFormData: unknown): number | null {
   if (!rawFormData || typeof rawFormData !== "object") return null;
   const raw = rawFormData as Record<string, unknown>;
-  const key = Object.keys(raw).find((k) => /(what'?s|what is)[\s_]*your[\s_]*age\b(?![\s_]*range)/i.test(k) || /^(quiz_)?age$/i.test(k));
-  const m = key ? String(raw[key] ?? "").match(/\d{2,3}/) : null;
-  return m ? parseInt(m[0], 10) : null;
+  // GHL sends several age keys (e.g. an empty "What is your age?" next to the filled
+  // "What's your age?"), so take the first one that actually holds a number.
+  for (const key of Object.keys(raw)) {
+    if (!(/(what'?s|what is)[\s_]*your[\s_]*age\b(?![\s_]*range)/i.test(key) || /^(quiz_)?age$/i.test(key))) continue;
+    const m = String(raw[key] ?? "").match(/\d{2,3}/);
+    if (m) return parseInt(m[0], 10);
+  }
+  return null;
 }
 
 /**

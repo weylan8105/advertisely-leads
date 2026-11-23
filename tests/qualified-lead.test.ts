@@ -135,3 +135,11 @@ describe("over 55 with a death-benefit goal (owner, Nov 23 2026)", () => {
     expect(isQualifiedLead({ lead_source: "healthcare-wealth-quiz", quiz_age: "60", "How are you working right now?": "Full-time staff", quiz_iul_interest: "Life insurance protection for my family" })).toBe(true);
   });
 });
+
+describe("GHL payloads with empty duplicate fields", () => {
+  it("reads the filled age even when an empty age key comes first", () => {
+    const raw = { "What is your age?": "", "Age": "", "What's your age?": "48", "What is your gross monthly income?": "$5,000 to $7,500" };
+    expect(ageAnswer(raw)).toBe(48);
+    expect(isQualifiedLead(raw)).toBe(true);
+  });
+});
