@@ -1,3 +1,4 @@
+import { isDeathBenefitGoal } from "./ageGoal";
 import crypto from "crypto";
 import { prisma } from "./prisma";
 import { instantFormContext, type InstantFormContext } from "./metaLeadId";
@@ -102,6 +103,7 @@ export function ageAnswer(rawFormData: unknown): number | null {
 
 /**
  * The full "Qualified Lead" test: income $3,000+/month AND age 55 or younger
+ * (no age cap when the lead's goal is a death benefit, owner Nov 23 2026)
  * (ABCA main-page quiz leads, which aren't asked income: age 20 to 55).
  * true / false when both were answered (false as soon as either fails), null
  * when one is missing and nothing failed (we never guess).
@@ -109,12 +111,16 @@ export function ageAnswer(rawFormData: unknown): number | null {
 export function isQualifiedLead(rawFormData: unknown): boolean | null {
   const age = ageAnswer(rawFormData);
   const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
+  // Owner (Nov 23 2026): over 55 still qualifies when they're after a death benefit
+  // (family protection etc.); the 55 cap only applies to retirement / cash value seekers
+  // and to leads whose goal is unknown.
+  const maxAge = isDeathBenefitGoal(raw) ? Infinity : QUALIFIED_MAX_AGE;
   // The ABCA main page asks about work instead of income (from Nov 21 2026); it stands in for income.
   const income = isIncomeQualified(rawFormData) ?? (isAgeOnlyFunnel(raw) ? isWorkQualified(rawFormData) : null);
   // Healthcare page: qualified = a qualifying work answer and age 20 to 55 (no age-only fallback).
   if (String(raw["lead_source"] ?? raw["source"] ?? "").trim() === HWA_QUIZ_SOURCE) {
     const work = isWorkQualified(rawFormData);
-    if (work === false || (age != null && (age < QUALIFIED_MIN_AGE_AGE_ONLY || age > QUALIFIED_MAX_AGE))) return false;
+    if (work === false || (age != null && (age < QUALIFIED_MIN_AGE_AGE_ONLY || age > maxAge))) return false;
     if (work === null || age == null) return null;
     return true;
   }
@@ -122,10 +128,10 @@ export function isQualifiedLead(rawFormData: unknown): boolean | null {
     if (age != null && age < QUALIFIED_MIN_AGE_AGE_ONLY) return false;
     if (income === null) {
       if (age == null) return null;
-      return age <= QUALIFIED_MAX_AGE;
+      return age <= maxAge;
     }
   }
-  if (income === false || (age != null && age > QUALIFIED_MAX_AGE)) return false;
+  if (income === false || (age != null && age > maxAge)) return false;
   if (income === null || age == null) return null;
   return true;
 }

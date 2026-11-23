@@ -24,3 +24,14 @@ export function isAgeGoalKnockout(raw: Record<string, unknown>): boolean {
   if (!goals.some(isRetirementGoal)) return false;
   return AGE_KEYS.some((k) => parseInt(String(raw[k] ?? ""), 10) > AGE_GOAL_MAX_RETIREMENT_AGE);
 }
+
+/**
+ * true when the lead answered the "what matters most" question with a death-benefit
+ * goal (family protection, living/illness benefits, "all of the above", "help
+ * understanding all of these"): anything answered that isn't retirement / cash value.
+ * false when the answer is retirement / cash value or the question wasn't answered.
+ */
+export function isDeathBenefitGoal(raw: Record<string, unknown>): boolean {
+  const goals = GOAL_KEYS.map((k) => String(raw[k] ?? "").trim()).filter(Boolean);
+  return goals.length > 0 && !goals.some(isRetirementGoal);
+}
