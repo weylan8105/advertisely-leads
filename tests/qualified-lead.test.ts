@@ -136,6 +136,17 @@ describe("hard 55 cap and date of birth (owner, Nov 23 2026)", () => {
   });
 });
 
+describe("main quiz pages with the income question (Nov 24 2026)", () => {
+  const work = "Which best describes your work right now?";
+  const inc = "What is your gross monthly income?";
+  it("under $3,000 doesn't qualify on the ABCA or healthcare page", () => {
+    expect(isQualifiedLead({ lead_source: "early-retirement-quiz", quiz_age: "35", [work]: "Full-time with a steady paycheck", [inc]: "Under $3,000" })).toBe(false);
+    expect(isQualifiedLead({ lead_source: "early-retirement-quiz", quiz_age: "35", [work]: "Full-time with a steady paycheck", [inc]: "$5,000 to $7,500" })).toBe(true);
+    expect(isQualifiedLead({ lead_source: "healthcare-wealth-quiz", quiz_age: "35", "How are you working right now?": "Full-time staff", [inc]: "Under $3,000" })).toBe(false);
+    expect(isQualifiedLead({ lead_source: "healthcare-wealth-quiz", quiz_age: "35", "How are you working right now?": "Full-time staff", [inc]: "$3,000 to $5,000" })).toBe(true);
+  });
+});
+
 describe("GHL payloads with empty duplicate fields", () => {
   it("reads the filled age even when an empty age key comes first", () => {
     const raw = { "What is your age?": "", "Age": "", "What's your age?": "48", "What is your gross monthly income?": "$5,000 to $7,500" };

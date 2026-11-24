@@ -22,7 +22,9 @@ const STEP_LABELS_IF = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthl
 // ("Under $300" ends it) on the main page, and on /qualify the under-$3,000 income branch
 // (household + set-aside; skipped steps send no beacon) plus the work question.
 const BUDGET_STEP_DAY = "2026-11-24";
-const STEP_LABELS_B_BUDGET = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Work", "Monthly budget", "Age", "Contact"];
+// (Nov 24 2026 the main page also gained gross monthly income + the under-$3,000 branch,
+// a few hours after the budget step; those first-hours visits are labelled with this order.)
+const STEP_LABELS_B_BUDGET = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Work", "Gross monthly income", "Household help (under $3k)", "Set aside $150-$300 (under $3k)", "Monthly budget", "Age", "Contact"];
 const STEP_LABELS_IF_BRANCH = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthly income", "Household help (under $3k)", "Set aside $150-$300 (under $3k)", "Monthly budget", "Retire by", "Work", "Age", "Beneficiary name", "Contact"];
 
 // Landing-page tests, newest first. Each tags its two arms differently in the beacons;
@@ -38,7 +40,7 @@ type AbTestDef = (typeof AB_TESTS)[number];
 // The hero test ended Oct 23 with B (tap-first) for everyone, so untagged visits after it saw tap-first.
 const HERO_TEST_END_DAY = "2026-10-23";
 const LABELS_BY_LAYOUT: Record<Layout, string[]> = { zip: STEP_LABELS, tap: STEP_LABELS_B, tapIncome: STEP_LABELS_B_INCOME, tapBudget: STEP_LABELS_B_BUDGET, if: STEP_LABELS_IF, ifBranch: STEP_LABELS_IF_BRANCH };
-const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, tapIncome: 7, tapBudget: 8, if: 9, ifBranch: 12 };
+const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, tapIncome: 7, tapBudget: 11, if: 9, ifBranch: 12 };
 
 // A/B test planned sample per arm (two-sided alpha 0.05, 80% power):
 //  - first answer 20% -> 26%:           ~775 visitors per version
@@ -265,7 +267,7 @@ export async function GET(req: NextRequest) {
   //  - Entered ZIP: tap-first / IF = got past the ZIP screen (step 3). ZIP-first = started
   //    from a ZIP form (header/sticky starts give no ZIP until the contact form), or
   //    completed (contact requires a ZIP). Starts from before entry points were tracked default to ZIP.
-  //  - Reached contact form: ZIP-first step 5, tap-first step 6 (7 from Nov 21, 8 from Nov 24),
+  //  - Reached contact form: ZIP-first step 5, tap-first step 6 (7 from Nov 21, 11 from Nov 24),
   //    IF step 9 (12 from Nov 24), or completed.
   const zipDone = (p: Person) =>
     layout(p) !== "zip" ? p.steps.has(3) || p.completed : p.completed || (p.steps.has(1) && /zip/.test(p.startCta ?? "zip"));

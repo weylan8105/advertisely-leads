@@ -123,6 +123,8 @@ export function isQualifiedLead(rawFormData: unknown): boolean | null {
   // Healthcare page: qualified = a qualifying work answer and age 20 to 55 (no age-only fallback).
   if (String(raw["lead_source"] ?? raw["source"] ?? "").trim() === HWA_QUIZ_SOURCE) {
     const work = isWorkQualified(rawFormData);
+    // From Nov 24 2026 the page also asks gross monthly income; under $3,000 doesn't qualify.
+    if (isIncomeQualified(rawFormData) === false) return false;
     if (work === false || (age != null && (age < QUALIFIED_MIN_AGE_AGE_ONLY || age > maxAge))) return false;
     if (work === null || age == null) return null;
     return true;

@@ -722,6 +722,14 @@ const STEPS_A = [
   // Nov 21 2026; the submit route also refuses them). See lib/metaCapi.ts WORK_QUESTION.
   { key:"work_status", q:"How are you working right now?", sub:"Plans are built around how you get paid.",
     opts:["Full-time staff","Travel or contract","PRN or per diem","Part-time","Between jobs right now"], knockout:["Part-time","Between jobs right now"] },
+  // Income + the instant forms' under-$3,000 branch (Nov 24 2026, owner): under $3,000 a month
+  // gets two extra questions, and "No, it's just me" or "Not right now" ends the quiz.
+  { key:"monthly_income", q:"What is your gross monthly income?", sub:"Before taxes. A ballpark is fine.",
+    opts:["Under $3,000","$3,000 to $5,000","$5,000 to $7,500","$7,500 to $10,000","$10,000+"] },
+  { key:"household", q:"Does anyone else in your household help with the bills?", showIf:a=>a.monthly_income==="Under $3,000",
+    opts:["Yes, a spouse or partner works","No, it's just me"], knockout:["No, it's just me"] },
+  { key:"set_aside", q:"If the numbers made sense, could you set aside $150–$300 a month?", showIf:a=>a.monthly_income==="Under $3,000",
+    opts:["Yes","Not right now"], knockout:["Not right now"] },
   // Budget knockout (Nov 23 2026, owner): matches the instant forms. "Under $300" ends the quiz.
   { key:"monthly_budget", q:"How much could you comfortably put toward an IUL each month?", sub:"A rough number is fine.",
     opts:["Under $300","$300 to $500","$500 to $1,000","$1,000 to $2,000","$2,000 to $3,500","$3,500+"], knockout:["Under $300"] },
@@ -923,12 +931,16 @@ function go(){ if(navLock) return; if(step < STEPS.length-1){ navLock=true; step
   // B: ZIP already typed into the bottom form -> don't ask for it again (still report the screen,
   // so the dashboard's "Entered ZIP" / "Reached contact" milestones keep their step numbers).
   if(STEPS[step].zip && /^\d{5}$/.test(answers.zip||"") && /^final/.test(lastEntry) && step < STEPS.length-1){ step++; trackEvent("step",step+1); }
+  // Branch questions only shown for some answers (the under-$3,000 income branch).
+  while(STEPS[step].showIf && !STEPS[step].showIf(answers) && step < STEPS.length-1){ step++; }
   render(); } }
 function back(){ if(step>0){ // keep any typed contact values before leaving that step
     const nEl=document.getElementById('cName'); if(nEl) answers.name=nEl.value.trim();
     const pEl=document.getElementById('cPhone'); if(pEl) answers.phone=pEl.value.trim();
     const eEl=document.getElementById('cEmail'); if(eEl) answers.email=eEl.value.trim();
-    step--; render(); } }
+    step--;
+    while(step>0 && STEPS[step].showIf && !STEPS[step].showIf(answers)) step--;
+    render(); } }
 // Version B ZIP screen -> validate, store ZIP/state, move on.
 function submitQuizZip(){
   const qz=document.getElementById('qZip'); if(!qz) return;
@@ -1006,6 +1018,9 @@ async function finish(){
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
     quiz_coverage:answers.coverage, quiz_lead_tier:tier, quiz_role:answers.role,
     "How are you working right now?":answers.work_status||"",
+    "What is your gross monthly income?":answers.monthly_income||"",
+    "Does anyone else in your household help with the bills?":answers.monthly_income==="Under $3,000"?(answers.household||""):"",
+    "If the numbers made sense, could you set aside $150–$300 a month?":answers.monthly_income==="Under $3,000"?(answers.set_aside||""):"",
     "How much could you comfortably put towards building your tax-free retirement each month?":answers.monthly_budget||"",
     consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
     event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp, fbclid:tracking.fbclid,
