@@ -947,9 +947,9 @@ function submitAge(){
   const el=document.getElementById('ageInput'); const n=parseInt((el.value||'').replace(/\D/g,''),10);
   if(!n || n<18 || n>85){ el.classList.add('err'); document.getElementById('ageMsg').textContent="Enter an age between 18 and 85."; return; }
   answers.age=String(n);
-  // Age x goal knockout (Nov 23 2026, owner): over 55 and mainly after retirement / cash
-  // value ends the quiz on the not-a-fit screen. Over 55 wanting a death benefit stays.
-  if(n>55 && /retire|cash value|policy loans/i.test(answers.iul_interest||"")){
+  // Hard age cutoff (Nov 23 2026, owner): no leads over 55. 56+ ends the quiz on the
+  // not-a-fit screen, whatever the goal.
+  if(n>55){
     knockedOut=true; try{ sessionStorage.setItem(KO_KEY,"1"); }catch(e){}
     trackEvent("knockout", step+1);
     renderNotFit(); return;

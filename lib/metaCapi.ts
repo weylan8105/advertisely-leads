@@ -1,4 +1,4 @@
-import { isDeathBenefitGoal } from "./ageGoal";
+import { ageFromDob, dobAnswer } from "./ageGoal";
 import crypto from "crypto";
 import { prisma } from "./prisma";
 import { instantFormContext, type InstantFormContext } from "./metaLeadId";
@@ -103,12 +103,12 @@ export function ageAnswer(rawFormData: unknown): number | null {
     const m = String(raw[key] ?? "").match(/\d{2,3}/);
     if (m) return parseInt(m[0], 10);
   }
-  return null;
+  // From Nov 23 2026 the instant forms ask Meta's "Date of birth" field instead of a typed age.
+  return ageFromDob(dobAnswer(raw));
 }
 
 /**
  * The full "Qualified Lead" test: income $3,000+/month AND age 55 or younger
- * (no age cap when the lead's goal is a death benefit, owner Nov 23 2026)
  * (ABCA main-page quiz leads, which aren't asked income: age 20 to 55).
  * true / false when both were answered (false as soon as either fails), null
  * when one is missing and nothing failed (we never guess).
@@ -116,10 +116,8 @@ export function ageAnswer(rawFormData: unknown): number | null {
 export function isQualifiedLead(rawFormData: unknown): boolean | null {
   const age = ageAnswer(rawFormData);
   const raw = (rawFormData && typeof rawFormData === "object" ? rawFormData : {}) as Record<string, unknown>;
-  // Owner (Nov 23 2026): over 55 still qualifies when they're after a death benefit
-  // (family protection etc.); the 55 cap only applies to retirement / cash value seekers
-  // and to leads whose goal is unknown.
-  const maxAge = isDeathBenefitGoal(raw) ? Infinity : QUALIFIED_MAX_AGE;
+  // Owner (Nov 23 2026): no leads over 55 at all, so the 55 cap applies whatever the goal.
+  const maxAge = QUALIFIED_MAX_AGE;
   // The ABCA main page asks about work instead of income (from Nov 21 2026); it stands in for income.
   const income = isIncomeQualified(rawFormData) ?? (isAgeOnlyFunnel(raw) ? isWorkQualified(rawFormData) : null);
   // Healthcare page: qualified = a qualifying work answer and age 20 to 55 (no age-only fallback).

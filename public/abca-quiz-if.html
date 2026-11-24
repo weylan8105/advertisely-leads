@@ -748,6 +748,7 @@ function heroZip(e, form){
 }
 
 function render(){
+  if(knockedOut){ renderNotFit(); return; }
   renderToken++;
   navLock=false;
   document.getElementById('progBar').style.width = Math.round(((step+1)/(STEPS.length+1))*100) + "%";
@@ -877,7 +878,24 @@ function submitText(){
 function submitAge(){
   const el=document.getElementById('ageInput'); const n=parseInt((el.value||'').replace(/\D/g,''),10);
   if(!n || n<18 || n>85){ el.classList.add('err'); document.getElementById('ageMsg').textContent="Enter an age between 18 and 85."; return; }
-  answers.age=String(n); go();
+  answers.age=String(n);
+  // Hard age cutoff (Nov 23 2026, owner): no leads over 55. 56+ ends the quiz here
+  // (the submit route refuses them too).
+  if(n>55){ knockedOut=true; try{ sessionStorage.setItem(KO_KEY,"1"); }catch(e){} trackEvent("knockout", step+1); renderNotFit(); return; }
+  go();
+}
+// Not-a-fit screen for the age cutoff. Remembered for this browser tab so reopening
+// the quiz shows it again instead of letting them pick a different age.
+const KO_KEY="abca_if_knockout";
+let knockedOut=false; try{ knockedOut=sessionStorage.getItem(KO_KEY)==="1"; }catch(e){}
+function renderNotFit(){
+  renderToken++;
+  navLock=false;
+  const pr=document.querySelector('.prog'); if(pr) pr.style.display='none';
+  document.getElementById('qstep').innerHTML =
+    `<div class="qq">Thanks for checking</div>
+     <div class="qsub">Based on your answers, this plan isn't the right fit right now.</div>
+     <div class="qnav" style="justify-content:center"><button class="btn qcont" type="button" onclick="closeQuiz()">Close</button></div>`;
 }
 function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).textContent=t; }
 

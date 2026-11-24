@@ -118,21 +118,21 @@ describe("Healthcare page: qualified on work status and age 20 to 55", () => {
   });
 });
 
-describe("over 55 with a death-benefit goal (owner, Nov 23 2026)", () => {
+describe("hard 55 cap and date of birth (owner, Nov 23 2026)", () => {
   const q = "What is your gross monthly income?";
   const a = "What's your age?";
   const g = "What about IUL caught your attention most?";
-  it("qualifies 56+ wanting a death benefit, not 56+ wanting cash value", () => {
-    expect(isQualifiedLead({ [q]: "$3,000 to $5,000", [a]: "62", [g]: "Permanent life insurance coverage" })).toBe(true);
-    expect(isQualifiedLead({ [q]: "$3,000 to $5,000", [a]: "62", [g]: "All of the above" })).toBe(true);
+  it("56+ never qualifies, whatever the goal", () => {
+    expect(isQualifiedLead({ [q]: "$3,000 to $5,000", [a]: "62", [g]: "Permanent life insurance coverage" })).toBe(false);
     expect(isQualifiedLead({ [q]: "$3,000 to $5,000", [a]: "62", [g]: "Tax-advantaged cash value accumulation" })).toBe(false);
-    expect(isQualifiedLead({ [q]: "Under $3,000", [a]: "62", [g]: "Permanent life insurance coverage" })).toBe(false);
+    expect(isQualifiedLead({ lead_source: "early-retirement-quiz", quiz_age: "64", "Which best describes your work right now?": "Full-time with a steady paycheck", quiz_iul_interest: "Life insurance protection for my family" })).toBe(false);
   });
-  it("ABCA and healthcare quiz pages too", () => {
-    const work = "Which best describes your work right now?";
-    expect(isQualifiedLead({ lead_source: "early-retirement-quiz", quiz_age: "64", [work]: "Full-time with a steady paycheck", quiz_iul_interest: "Life insurance protection for my family" })).toBe(true);
-    expect(isQualifiedLead({ lead_source: "early-retirement-quiz", quiz_age: "64", [work]: "Full-time with a steady paycheck", quiz_iul_interest: "Potential cash value for retirement" })).toBe(false);
-    expect(isQualifiedLead({ lead_source: "healthcare-wealth-quiz", quiz_age: "60", "How are you working right now?": "Full-time staff", quiz_iul_interest: "Life insurance protection for my family" })).toBe(true);
+  it("reads age from the date of birth when there's no typed age", () => {
+    const thirty = new Date().getUTCFullYear() - 30;
+    expect(ageAnswer({ date_of_birth: `${thirty}-01-01` })).toBe(30);
+    expect(ageAnswer({ "Date of birth": `01/01/${thirty}` })).toBe(30);
+    expect(isQualifiedLead({ [q]: "$5,000 to $7,500", date_of_birth: `${thirty}-01-01` })).toBe(true);
+    expect(isQualifiedLead({ [q]: "$5,000 to $7,500", date_of_birth: `${thirty - 30}-01-01` })).toBe(false);
   });
 });
 

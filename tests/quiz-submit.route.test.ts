@@ -149,11 +149,11 @@ describe("POST /api/quiz/submit", () => {
     expect(prismaMock.lead.create).not.toHaveBeenCalled();
   });
 
-  it("refuses over-55 retirement seekers but keeps over-55 death-benefit seekers", async () => {
+  it("refuses anyone over 55, whatever their goal (owner, Nov 23 2026)", async () => {
     for (const extra of [
       { age: "56", quiz_age: "56", quiz_iul_interest: "Potential cash value for retirement", intent: "Potential cash value for retirement" },
       { age: "64", quiz_age: "64", quiz_iul_interest: "Access to cash value through policy loans", intent: "Access to cash value through policy loans" },
-      { age: "70", quiz_age: "70", quiz_iul_interest: "Cash value for retirement, beyond my 401(k) or 403(b)", intent: "Cash value for retirement, beyond my 401(k) or 403(b)" },
+      { age: "72", quiz_age: "72", quiz_iul_interest: "Life insurance protection for my family", intent: "Life insurance protection for my family" },
     ]) {
       const res = await submit(payload(extra));
       expect(res.status).toBe(422);
@@ -161,8 +161,8 @@ describe("POST /api/quiz/submit", () => {
     }
     expect(prismaMock.lead.create).not.toHaveBeenCalled();
     for (const extra of [
-      { age: "72", quiz_age: "72", quiz_iul_interest: "Life insurance protection for my family", intent: "Life insurance protection for my family" },
       { age: "55", quiz_age: "55", quiz_iul_interest: "Potential cash value for retirement", intent: "Potential cash value for retirement" },
+      { age: "30", quiz_age: "30", quiz_iul_interest: "Life insurance protection for my family", intent: "Life insurance protection for my family" },
     ]) expect((await submit(payload(extra))).status).toBe(200);
   });
 

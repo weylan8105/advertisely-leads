@@ -3,6 +3,7 @@ import { prisma, isDatabaseConfigured } from "@/lib/prisma";
 import { tryFulfillForNewLead } from "@/lib/fulfillment";
 import { normalizeState } from "@/lib/leadImport";
 import { resolveHealthcarePackage } from "@/lib/leadPackageClassify";
+import { ageFromDob, dobAnswer } from "@/lib/ageGoal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,7 +101,10 @@ export async function POST(req: NextRequest) {
   // matching works and the lead doesn't leak to the house on a formatting typo.
   const state = normalizeState(pick(flat, ["state", "us_state", "State"]) ?? "").code;
   const ageRaw = pick(flat, ["age"]);
-  const age = ageRaw ? parseInt(ageRaw.replace(/[^0-9]/g, ""), 10) || null : null;
+  // From Nov 23 2026 the instant forms ask "Date of birth" instead of a typed age.
+  const age =
+    (ageRaw ? parseInt(ageRaw.replace(/[^0-9]/g, ""), 10) || null : null) ??
+    ageFromDob(dobAnswer(flat));
   const incomeRaw = pick(flat, ["income", "household_income", "annual_income"]);
   const income = incomeRaw
     ? parseInt(incomeRaw.replace(/[^0-9]/g, ""), 10) || null

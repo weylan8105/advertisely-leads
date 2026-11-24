@@ -4,7 +4,7 @@ import { normalizeInboundLead } from "@/lib/inboundLead";
 import { createInboundLead } from "@/lib/inboundIntake";
 import { allowHit, clientIp } from "@/lib/rateLimit";
 import { isWorkQualified } from "@/lib/metaCapi";
-import { isAgeGoalKnockout } from "@/lib/ageGoal";
+import { isOverAgeKnockout } from "@/lib/ageGoal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -158,9 +158,9 @@ export async function POST(req: NextRequest) {
   if (isWorkQualified(body) === false) {
     return reject("work knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
-  // Age x goal knockout (Nov 23 2026): over 55 and mainly after retirement / cash value.
-  if (isAgeGoalKnockout(body)) {
-    return reject("age-goal knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
+  // Hard age cutoff (Nov 23 2026): no leads over 55, whatever the goal.
+  if (isOverAgeKnockout(body)) {
+    return reject("age knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
 
   // The page beacons 'view' on load and 'step' as the quiz advances, under the
