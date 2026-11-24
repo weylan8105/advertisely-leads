@@ -709,8 +709,7 @@ const STEPS_A = [
       "Life insurance protection for my family",
       "Benefits if a serious illness keeps me off my shifts",
       "Cash value for retirement, beyond my 401(k) or 403(b)",
-      "Access to cash value through policy loans",
-      "Help understanding all of these"
+      "Access to cash value through policy loans"
     ] },
   { key:"coverage", q:"How much coverage are you looking for?", sub:"A ballpark is fine. Your agent will fine-tune it.",
     opts:["$100,000 to $250,000","$250,000 to $500,000","$500,000 to $750,000","$750,000 to $1,000,000"] },
@@ -723,6 +722,9 @@ const STEPS_A = [
   // Nov 21 2026; the submit route also refuses them). See lib/metaCapi.ts WORK_QUESTION.
   { key:"work_status", q:"How are you working right now?", sub:"Plans are built around how you get paid.",
     opts:["Full-time staff","Travel or contract","PRN or per diem","Part-time","Between jobs right now"], knockout:["Part-time","Between jobs right now"] },
+  // Budget knockout (Nov 23 2026, owner): matches the instant forms. "Under $300" ends the quiz.
+  { key:"monthly_budget", q:"How much could you comfortably put toward an IUL each month?", sub:"A rough number is fine.",
+    opts:["Under $300","$300 to $500","$500 to $1,000","$1,000 to $2,000","$2,000 to $3,500","$3,500+"], knockout:["Under $300"] },
   { key:"age", q:"What is your current age?", sub:"Age helps determine which carriers fit best.", input:"number" },
   { key:"contact", q:"Where should we send your quote?", contact:true }
 ];
@@ -961,7 +963,6 @@ function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).t
 /* ---- lead scoring (coverage / interest based; never hard-DQ) ---- */
 function scoreLead(a){
   if(a.coverage==="$500,000 to $750,000" || a.coverage==="$750,000 to $1,000,000") return "HOT";
-  if(a.iul_interest==="Help understanding all of these") return "HOT";
   return "WARM";
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -1005,6 +1006,7 @@ async function finish(){
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
     quiz_coverage:answers.coverage, quiz_lead_tier:tier, quiz_role:answers.role,
     "How are you working right now?":answers.work_status||"",
+    "How much could you comfortably put towards building your tax-free retirement each month?":answers.monthly_budget||"",
     consent_given:"Yes", consent_timestamp:nowIso, consent_language:CONSENT_TEXT, consent_ip:leadIp,
     event_name:META_EVENT, event_id:eventId, fbc:tracking.fbc, fbp:tracking.fbp, fbclid:tracking.fbclid,
     utm_source:tracking.utm_source, utm_campaign:tracking.utm_campaign, utm_content:tracking.utm_content,

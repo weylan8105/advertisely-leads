@@ -18,12 +18,18 @@ const STEP_LABELS_B_INCOME = ["Who are you protecting? (tap)", "ZIP code", "What
 const INCOME_STEP_DAY = "2026-11-21";
 // Page B of the Nov 16 page test (/qualify): the updated Blue Collar instant form's questions.
 const STEP_LABELS_IF = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthly income", "Monthly budget", "Retire by", "Age", "Beneficiary name", "Contact"];
+// From Nov 24 2026 both pages match the instant forms' knockouts: a monthly budget step
+// ("Under $300" ends it) on the main page, and on /qualify the under-$3,000 income branch
+// (household + set-aside; skipped steps send no beacon) plus the work question.
+const BUDGET_STEP_DAY = "2026-11-24";
+const STEP_LABELS_B_BUDGET = ["Who are you protecting? (tap)", "ZIP code", "What matters most", "Coverage wanted", "Work", "Monthly budget", "Age", "Contact"];
+const STEP_LABELS_IF_BRANCH = ["Trade (tap)", "ZIP code", "IUL interest", "Gross monthly income", "Household help (under $3k)", "Set aside $150-$300 (under $3k)", "Monthly budget", "Retire by", "Work", "Age", "Beneficiary name", "Contact"];
 
 // Landing-page tests, newest first. Each tags its two arms differently in the beacons;
 // the API always reports them as A (control) and B (challenger) of the newest test with data.
 //  - page (Nov 16 2026): LP = the live page, IF = /qualify (instant form's questions)
 //  - hero (Oct 2026):    A = ZIP-first hero, B = tap-first hero
-type Layout = "zip" | "tap" | "tapIncome" | "if"; // which question order a visitor saw
+type Layout = "zip" | "tap" | "tapIncome" | "tapBudget" | "if" | "ifBranch"; // which question order a visitor saw
 const AB_TESTS = [
   { id: "page", tags: { A: "LP", B: "IF" }, layouts: { A: "tap", B: "if" } },
   { id: "hero", tags: { A: "A", B: "B" }, layouts: { A: "zip", B: "tap" } },
@@ -31,8 +37,8 @@ const AB_TESTS = [
 type AbTestDef = (typeof AB_TESTS)[number];
 // The hero test ended Oct 23 with B (tap-first) for everyone, so untagged visits after it saw tap-first.
 const HERO_TEST_END_DAY = "2026-10-23";
-const LABELS_BY_LAYOUT: Record<Layout, string[]> = { zip: STEP_LABELS, tap: STEP_LABELS_B, tapIncome: STEP_LABELS_B_INCOME, if: STEP_LABELS_IF };
-const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, tapIncome: 7, if: 9 };
+const LABELS_BY_LAYOUT: Record<Layout, string[]> = { zip: STEP_LABELS, tap: STEP_LABELS_B, tapIncome: STEP_LABELS_B_INCOME, tapBudget: STEP_LABELS_B_BUDGET, if: STEP_LABELS_IF, ifBranch: STEP_LABELS_IF_BRANCH };
+const CONTACT_STEP: Record<Layout, number> = { zip: 5, tap: 6, tapIncome: 7, tapBudget: 8, if: 9, ifBranch: 12 };
 
 // A/B test planned sample per arm (two-sided alpha 0.05, 80% power):
 //  - first answer 20% -> 26%:           ~775 visitors per version
@@ -238,9 +244,9 @@ export async function GET(req: NextRequest) {
   const tagArm = (tag: string | null): "A" | "B" | null =>
     tag === test.tags.A ? "A" : tag === test.tags.B ? "B" : null;
   const arm = (p: Person) => tagArm(p.variant);
-  const tapLayout = (p: Person): Layout => (p.day >= INCOME_STEP_DAY ? "tapIncome" : "tap");
+  const tapLayout = (p: Person): Layout => (p.day >= BUDGET_STEP_DAY ? "tapBudget" : p.day >= INCOME_STEP_DAY ? "tapIncome" : "tap");
   const layout = (p: Person): Layout =>
-    p.variant === "IF" ? "if" : p.variant === "A" ? "zip" : p.variant === "B" || p.variant === "LP" ? tapLayout(p) : p.day < HERO_TEST_END_DAY ? "zip" : tapLayout(p);
+    p.variant === "IF" ? (p.day >= BUDGET_STEP_DAY ? "ifBranch" : "if") : p.variant === "A" ? "zip" : p.variant === "B" || p.variant === "LP" ? tapLayout(p) : p.day < HERO_TEST_END_DAY ? "zip" : tapLayout(p);
 
   // A/B test scoping: ?variant=A | B narrows everything below to that arm of the current
   // test. While B traffic is in range, "A" means tagged A only (same period as B);
@@ -259,7 +265,8 @@ export async function GET(req: NextRequest) {
   //  - Entered ZIP: tap-first / IF = got past the ZIP screen (step 3). ZIP-first = started
   //    from a ZIP form (header/sticky starts give no ZIP until the contact form), or
   //    completed (contact requires a ZIP). Starts from before entry points were tracked default to ZIP.
-  //  - Reached contact form: ZIP-first step 5, tap-first step 6, IF step 9 (or completed).
+  //  - Reached contact form: ZIP-first step 5, tap-first step 6 (7 from Nov 21, 8 from Nov 24),
+  //    IF step 9 (12 from Nov 24), or completed.
   const zipDone = (p: Person) =>
     layout(p) !== "zip" ? p.steps.has(3) || p.completed : p.completed || (p.steps.has(1) && /zip/.test(p.startCta ?? "zip"));
   const contactDone = (p: Person) => p.completed || p.steps.has(CONTACT_STEP[layout(p)]);
@@ -295,6 +302,9 @@ export async function GET(req: NextRequest) {
     let shown: Layout = variantFilter ? test.layouts[variantFilter] : "zip";
     // The tap-first page gained the income step on INCOME_STEP_DAY: label by the order most of these visitors saw.
     if ((shown === "tap" || !variantFilter) && scoped.filter((p) => layout(p) === "tapIncome").length * 2 > scoped.length) shown = "tapIncome";
+    // Same for the Nov 24 question order on both pages.
+    if ((shown === "tap" || shown === "tapIncome" || !variantFilter) && scoped.filter((p) => layout(p) === "tapBudget").length * 2 > scoped.length) shown = "tapBudget";
+    if (shown === "if" && scoped.filter((p) => layout(p) === "ifBranch").length * 2 > scoped.length) shown = "ifBranch";
     const labels = LABELS_BY_LAYOUT[shown];
     const maxStep = Math.max(labels.length, Math.max(0, ...byStep.keys()));
     rawSteps.push({ label: shown === "zip" ? "Visited page (ZIP)" : "Visited page", count: views });

@@ -5,6 +5,7 @@ import { createInboundLead } from "@/lib/inboundIntake";
 import { allowHit, clientIp } from "@/lib/rateLimit";
 import { isWorkQualified } from "@/lib/metaCapi";
 import { isOverAgeKnockout } from "@/lib/ageGoal";
+import { answerKnockout } from "@/lib/quizKnockout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -157,6 +158,10 @@ export async function POST(req: NextRequest) {
   // page, so a submission carrying one never becomes a lead (old cached page, or a bypass).
   if (isWorkQualified(body) === false) {
     return reject("work knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
+  }
+  // Budget / income-branch knockouts (Nov 23 2026), same as the instant forms.
+  if (answerKnockout(body)) {
+    return reject("answer knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
   // Hard age cutoff (Nov 23 2026): no leads over 55, whatever the goal.
   if (isOverAgeKnockout(body)) {

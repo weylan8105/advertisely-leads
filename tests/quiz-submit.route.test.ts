@@ -53,13 +53,13 @@ function payload(o: Record<string, unknown> = {}) {
   return {
     first_name: "Marcus", last_name: "Delgado", full_name: "Marcus Delgado",
     phone: "(512) 555-0142", email: "marcus@mailbox.example.org", state: "TX", zip: "78701",
-    quiz_beneficiary: "Spouse", quiz_iul_interest: "Help understanding all of these", quiz_age: "41",
+    quiz_beneficiary: "Spouse", quiz_iul_interest: "Life insurance protection for my family", quiz_age: "41",
     quiz_coverage: "$250,000 to $500,000", quiz_lead_tier: "HOT",
     consent_given: "Yes", consent_timestamp: "2026-10-20T12:00:00.000Z", consent_language: "By checking here...", consent_ip: "198.51.100.7",
     event_name: "Lead", event_id: "ev_1760961600000_abc123de", fbc: "", fbp: "fb.1.1.1", fbclid: "",
     utm_source: "fb", utm_campaign: "abca", utm_content: "", landing_url: "https://www.americanbluecollaradvantage.com/",
     lead_source: "early-retirement-quiz", submitted_at: "2026-10-20T12:00:00.000Z",
-    name: "Marcus Delgado", age: "41", intent: "Help understanding all of these", source: "early-retirement-quiz",
+    name: "Marcus Delgado", age: "41", intent: "Life insurance protection for my family", source: "early-retirement-quiz",
     external_id: "ev_1760961600000_abc123de", session_id: "s_mgz1abcd_k3j4h5g6", hp_check: "",
     ...o,
   };
@@ -164,6 +164,24 @@ describe("POST /api/quiz/submit", () => {
       { age: "55", quiz_age: "55", quiz_iul_interest: "Potential cash value for retirement", intent: "Potential cash value for retirement" },
       { age: "30", quiz_age: "30", quiz_iul_interest: "Life insurance protection for my family", intent: "Life insurance protection for my family" },
     ]) expect((await submit(payload(extra))).status).toBe(200);
+  });
+
+  it("refuses the instant forms' budget and income-branch knockouts (Nov 23 2026)", async () => {
+    for (const extra of [
+      { "How much could you comfortably put towards building your tax-free retirement each month?": "Under $300" },
+      { "Does anyone else in your household help with the bills?": "No, it's just me" },
+      { "If the numbers made sense, could you set aside $150–$300 a month?": "Not right now" },
+    ]) {
+      const res = await submit(payload(extra));
+      expect(res.status).toBe(422);
+      expect(await res.json()).toMatchObject({ knockout: true });
+    }
+    expect(prismaMock.lead.create).not.toHaveBeenCalled();
+    expect((await submit(payload({
+      "How much could you comfortably put towards building your tax-free retirement each month?": "$300 to $500",
+      "Does anyone else in your household help with the bills?": "Yes, a spouse or partner works",
+      "If the numbers made sense, could you set aside $150–$300 a month?": "Yes",
+    }))).status).toBe(200);
   });
 
   it("falls back to the observed IP for consent when the browser sent none", async () => {
