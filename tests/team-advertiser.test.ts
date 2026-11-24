@@ -83,8 +83,8 @@ describe("team join defaults", () => {
   });
 
   it("stops once Jace's November fee has run out (Dec 2)", async () => {
-    expect(teamAdvertiserActive("jljensen38@gmail.com", new Date("2026-12-02T05:59:00Z"))).toBe(true);
-    expect(teamAdvertiserActive("jljensen38@gmail.com", new Date("2026-12-02T06:00:00Z"))).toBe(false);
+    expect(teamAdvertiserActive("jljensen38@gmail.com", new Date("2026-12-08T05:59:00Z"))).toBe(true);
+    expect(teamAdvertiserActive("jljensen38@gmail.com", new Date("2026-12-08T06:00:00Z"))).toBe(false);
     vi.setSystemTime(new Date("2026-12-05T18:00:00Z"));
     expect(await applyTeamJoinDefaults("NEW", "JACE_TEAM")).toBe(false);
     expect(memberships[0].goldmineBlocked).toBe(false);

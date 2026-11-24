@@ -106,14 +106,14 @@ describe("program rules", () => {
     expect(program.mustJoinProgram("someone@new.test", [sub("past_due")], DEC(20))).toBe(false); // payment being retried
     expect(program.mustJoinProgram(david, [sub("incomplete")], DEC(3))).toBe(true);
     expect(program.mustJoinProgram("someone@new.test", [], DEC(20))).toBe(false);
-    expect(program.legacyRetainerEnds("jljensen38@gmail.com")?.toISOString().slice(0, 10)).toBe("2026-12-02");
+    expect(program.legacyRetainerEnds("jljensen38@gmail.com")?.toISOString().slice(0, 10)).toBe("2026-12-08");
     expect(program.legacyRetainerEnds("angeloo.rodriguez05@gmail.com")?.toISOString().slice(0, 10)).toBe("2026-12-01");
   });
 
   it("Jace's team members are covered by his fee until Dec 2, then must join like he does", () => {
     const member = "agent@team.test";
     const jace = ["Jljensen38@gmail.com "];
-    expect(program.legacyCoverEnds(member, jace)).toEqual({ ends: new Date("2026-12-02T06:00:00Z"), viaTeam: true });
+    expect(program.legacyCoverEnds(member, jace)).toEqual({ ends: new Date("2026-12-08T06:00:00Z"), viaTeam: true });
     expect(program.mustJoinProgram(member, [], DEC(1), { uplineEmails: jace, sharedPoolOnly: true })).toBe(false);
     expect(program.mustJoinProgram(member, [], DEC(2), { uplineEmails: jace, sharedPoolOnly: true })).toBe(true);
     expect(program.mustJoinProgram(member, [sub("active")], DEC(2), { uplineEmails: jace, sharedPoolOnly: true })).toBe(false);
@@ -146,20 +146,6 @@ describe("one-time promo code", () => {
     for (const status of ["trialing", "active", "canceled"]) {
       expect(program.programPromo("LUKE1000", LUKE, [{ program: true, status }])).toEqual({ ok: false, error: "That promo code has already been used." });
     }
-  });
-});
-
-describe("Jace's promo code (paid $1,667 on Nov 11 for AI creatives)", () => {
-  const JACE = "cmvzxhs4x0003l1085fm43fkq";
-  it("makes his first payment Dec 8, whenever he joins before then", () => {
-    expect(program.programPromo("JACE1667", JACE, [], new Date("2026-11-24T20:00:00Z"))).toEqual({ ok: true, code: "JACE1667", freeDays: 14 });
-    expect(program.programPromo("JACE1667", JACE, [], new Date("2026-12-02T15:00:00Z"))).toMatchObject({ freeDays: 6 });
-    expect(program.programPromo("JACE1667", JACE, [], new Date("2026-12-09T15:00:00Z"))).toMatchObject({ ok: true, freeDays: 0 });
-    expect(program.promoNoManagementFeeCents("JACE1667", JACE)).toBe(0);
-  });
-  it("only on his account, and only once", () => {
-    expect(program.programPromo("JACE1667", "someone-else", [])).toMatchObject({ ok: false });
-    expect(program.programPromo("JACE1667", JACE, [{ program: true, status: "active" }])).toMatchObject({ ok: false });
   });
 });
 

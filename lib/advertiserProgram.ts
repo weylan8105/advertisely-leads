@@ -30,7 +30,7 @@ export const ADVERTISER_PROGRAM = {
 // Renewal date of each client's November $3,000 fee (email → YYYY-MM-DD, Central).
 export const LEGACY_RETAINER_UNTIL: Record<string, string> = {
   "angeloo.rodriguez05@gmail.com": "2026-12-01", // $500 + $2,500 (Nov 1)
-  "jljensen38@gmail.com": "2026-12-02", // $3,000 (Nov 2)
+  "jljensen38@gmail.com": "2026-12-08", // $3,000 (Nov 2); owner, Nov 24: covered to Dec 8 (his $1,667 on Nov 11), joins then
   "dclayton1235@gmail.com": "2026-12-03", // $3,000 (Nov 3)
 };
 
@@ -94,15 +94,6 @@ export const PROGRAM_PROMO_CODES: Record<
     freeDays: 28,
     noManagementFeeCents: 1_500_000,
     why: "paid the $3,000 November fee up front (Nov 2026)",
-  },
-  // Jace Jensen paid $1,667 (prorated) on Nov 11 for AI creatives (owner, Nov 24 2026):
-  // $1,000 of it went to his ad spend (a manual AdSpendPayment), the rest covers the
-  // membership until Dec 8, when his first $500 is charged.
-  JACE1667: {
-    userId: "cmvzxhs4x0003l1085fm43fkq",
-    freeDays: 0,
-    freeUntil: "2026-12-08",
-    why: "paid $1,667 (prorated) for AI creatives on Nov 11 (Nov 2026)",
   },
 };
 
