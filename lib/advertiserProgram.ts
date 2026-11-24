@@ -90,6 +90,9 @@ export const PROGRAM_PROMO_CODES: Record<string, { userId: string; freeDays: num
     noManagementFeeCents: 1_500_000,
     why: "paid the $3,000 November fee up front (Nov 2026)",
   },
+  // Jace Jensen paid $1,667 (prorated) for AI creatives (owner, Nov 24 2026): that covers
+  // his first 6 weeks (three memberships) free.
+  JACE1667: { userId: "cmvzxhs4x0003l1085fm43fkq", freeDays: 42, why: "paid $1,667 (prorated) for AI creatives (Nov 2026)" },
 };
 
 export const normalizePromoCode = (code: unknown) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");

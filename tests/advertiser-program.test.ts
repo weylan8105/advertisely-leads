@@ -149,6 +149,16 @@ describe("one-time promo code", () => {
   });
 });
 
+describe("Jace's promo code (paid $1,667 for AI creatives)", () => {
+  const JACE = "cmvzxhs4x0003l1085fm43fkq";
+  it("gives his account 6 weeks free, and nothing else", () => {
+    expect(program.programPromo("JACE1667", JACE, [])).toEqual({ ok: true, code: "JACE1667", freeDays: 42 });
+    expect(program.promoNoManagementFeeCents("JACE1667", JACE)).toBe(0);
+    expect(program.programPromo("JACE1667", "someone-else", [])).toMatchObject({ ok: false });
+    expect(program.programPromo("JACE1667", JACE, [{ program: true, status: "active" }])).toMatchObject({ ok: false });
+  });
+});
+
 describe("David's promo code (paid $3,000 up front)", () => {
   const DAVID = "cmw2i7yr40000jp071hed4rll";
   it("gives his account 4 weeks free and $15,000 of spend without the management fee", () => {

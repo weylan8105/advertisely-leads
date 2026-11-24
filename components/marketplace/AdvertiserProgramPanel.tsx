@@ -254,7 +254,7 @@ export function AdvertiserProgramPanel() {
               <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                 <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
                 <div>
-                  <div className="font-semibold">Your first month is free</div>
+                  <div className="font-semibold">Your membership is free for now</div>
                   <div className="text-emerald-800">
                     Your promo code covers your membership until <strong>{fmtDate(m.freeUntil)}</strong>.
                     {ending ? " Your membership ends that day." : <> Your first {usd0(offer.amountCents)} payment is that day, then {every}.</>}
