@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
         metadata: promo ? { ...metadata, promoCode: promo.code } : metadata,
         description: ADVERTISER_PROGRAM.name,
         // Card on file, $0 today; the first membership payment comes when the free days end.
-        ...(promo ? { trial_period_days: promo.freeDays } : {}),
+        ...(promo && promo.freeDays > 0 ? { trial_period_days: promo.freeDays } : {}),
       },
       metadata: promo ? { ...metadata, promoCode: promo.code } : metadata,
       success_url: `${base}/marketplace?tab=advertise&status=success`,

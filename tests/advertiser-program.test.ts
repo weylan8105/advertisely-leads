@@ -149,11 +149,15 @@ describe("one-time promo code", () => {
   });
 });
 
-describe("Jace's promo code (paid $1,667 for AI creatives)", () => {
+describe("Jace's promo code (paid $1,667 on Nov 11 for AI creatives)", () => {
   const JACE = "cmvzxhs4x0003l1085fm43fkq";
-  it("gives his account 6 weeks free, and nothing else", () => {
-    expect(program.programPromo("JACE1667", JACE, [])).toEqual({ ok: true, code: "JACE1667", freeDays: 42 });
+  it("makes his first payment Dec 8, whenever he joins before then", () => {
+    expect(program.programPromo("JACE1667", JACE, [], new Date("2026-11-24T20:00:00Z"))).toEqual({ ok: true, code: "JACE1667", freeDays: 14 });
+    expect(program.programPromo("JACE1667", JACE, [], new Date("2026-12-02T15:00:00Z"))).toMatchObject({ freeDays: 6 });
+    expect(program.programPromo("JACE1667", JACE, [], new Date("2026-12-09T15:00:00Z"))).toMatchObject({ ok: true, freeDays: 0 });
     expect(program.promoNoManagementFeeCents("JACE1667", JACE)).toBe(0);
+  });
+  it("only on his account, and only once", () => {
     expect(program.programPromo("JACE1667", "someone-else", [])).toMatchObject({ ok: false });
     expect(program.programPromo("JACE1667", JACE, [{ program: true, status: "active" }])).toMatchObject({ ok: false });
   });

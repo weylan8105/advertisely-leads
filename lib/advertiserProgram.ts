@@ -79,7 +79,12 @@ export function waivedSavingsCents(startedAt: Date | string | null | undefined, 
 // noManagementFeeCents: the member's shared leads skip the 20% management fee
 // (they still pay the cost per lead + the 3% card fee) until their shared-lead
 // charges since joining reach this amount.
-export const PROGRAM_PROMO_CODES: Record<string, { userId: string; freeDays: number; noManagementFeeCents?: number; why: string }> = {
+// freeUntil (YYYY-MM-DD, Central): the first payment falls on that day whenever
+// they join (free days = days left until then); used instead of freeDays.
+export const PROGRAM_PROMO_CODES: Record<
+  string,
+  { userId: string; freeDays: number; freeUntil?: string; noManagementFeeCents?: number; why: string }
+> = {
   // Luke Scheffers paid the owner $1,000 directly: one full month (two memberships) free.
   LUKE1000: { userId: "cmu1muk4m0000jp043c27hqht", freeDays: 28, why: "paid $1,000 directly (Nov 2026)" },
   // David Layton paid the $3,000 November fee up front (owner, Nov 18 2026): his first
@@ -90,9 +95,15 @@ export const PROGRAM_PROMO_CODES: Record<string, { userId: string; freeDays: num
     noManagementFeeCents: 1_500_000,
     why: "paid the $3,000 November fee up front (Nov 2026)",
   },
-  // Jace Jensen paid $1,667 (prorated) for AI creatives (owner, Nov 24 2026): that covers
-  // his first 6 weeks (three memberships) free.
-  JACE1667: { userId: "cmvzxhs4x0003l1085fm43fkq", freeDays: 42, why: "paid $1,667 (prorated) for AI creatives (Nov 2026)" },
+  // Jace Jensen paid $1,667 (prorated) on Nov 11 for AI creatives (owner, Nov 24 2026):
+  // $1,000 of it went to his ad spend (a manual AdSpendPayment), the rest covers the
+  // membership until Dec 8, when his first $500 is charged.
+  JACE1667: {
+    userId: "cmvzxhs4x0003l1085fm43fkq",
+    freeDays: 0,
+    freeUntil: "2026-12-08",
+    why: "paid $1,667 (prorated) for AI creatives on Nov 11 (Nov 2026)",
+  },
 };
 
 export const normalizePromoCode = (code: unknown) => String(code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -102,12 +113,17 @@ export function programPromo(
   code: unknown,
   userId: string,
   subs: ProgramSub[],
+  now = new Date(),
 ): { ok: true; code: string; freeDays: number } | { ok: false; error: string } {
   const key = normalizePromoCode(code);
   const promo = PROGRAM_PROMO_CODES[key];
   if (!promo || promo.userId !== userId) return { ok: false, error: "That promo code isn't valid for this account." };
   if (hasJoinedProgram(subs)) return { ok: false, error: "That promo code has already been used." };
-  return { ok: true, code: key, freeDays: promo.freeDays };
+  // A set first-payment date: the days left until it (0 once it has passed: they pay today).
+  const freeDays = promo.freeUntil
+    ? Math.max(0, Math.ceil((new Date(`${promo.freeUntil}T06:00:00Z`).getTime() - now.getTime()) / 864e5))
+    : promo.freeDays;
+  return { ok: true, code: key, freeDays };
 }
 
 /** The shared-lead spend a member's promo code gives without the management fee (cents), or 0. */
