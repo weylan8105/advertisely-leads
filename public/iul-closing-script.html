@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Ryan's IUL Closing Script</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: a call script a rep reads live on the phone
+   IDEA the laminated call binder: script on the right, the client card clipped beside it
+   PICTURE the script itself, with blanks that fill from the client card as the rep types
+   COLOUR white ground, near-black ink, one mint field for the header and filled blanks; night is black with mint as ink
+   TYPE Space Grotesk 700 display + Inter text
+   LAYOUT laptop: sticky client card left, script right; phone: title, client card folded, script */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0b0b0b);--ink:light-dark(#121212,#f0f0f0);--mute:light-dark(#5a5a5a,#a6a6a6);--rule:light-dark(#e3e3e3,#262626);--mint:#b8f5d0;--field:light-dark(#b8f5d0,#0b0b0b);--fieldInk:light-dark(#0c2416,#b8f5d0);--blank:light-dark(#e2f9eb,#12261a);--blankInk:light-dark(#0d5a2e,#b8f5d0);--panel:light-dark(#f5f6f5,#141514)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;letter-spacing:-.02em;margin:0}
+.top{background:var(--field);color:var(--fieldInk);padding:clamp(24px,4vw,48px) max(5vw,16px) 22px;border-bottom:1px solid var(--rule)}
+.top-in{max-width:1240px;margin:0 auto;display:flex;flex-wrap:wrap;gap:16px 40px;align-items:end;justify-content:space-between}
+.top h1{font-size:clamp(32px,5vw,48px);line-height:1.05}
+.top p{margin:8px 0 0;font-size:16px}
+.key{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;align-items:center}
+.key span{display:inline-flex;gap:6px;align-items:center}
+.key .pz{color:var(--fieldInk);border-color:var(--fieldInk)}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--rule)}
+.bar-in{max-width:1240px;margin:0 auto;padding:8px max(5vw,16px);display:flex;gap:12px;align-items:center}
+.scroll{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none}
+.scroll a{flex:none;color:var(--ink);text-decoration:none;font-size:14px;font-weight:500;padding:10px 12px;border-radius:8px;white-space:nowrap}
+.scroll a:hover{background:var(--panel)}
+.btns{display:flex;gap:6px;flex:none}
+button{font:600 14px Inter,sans-serif;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:0 14px;min-height:44px;cursor:pointer}
+button:hover{border-color:var(--ink)}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible{outline:2px solid var(--blankInk);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:28px max(5vw,16px) 80px;display:grid;gap:36px}
+@media(min-width:1000px){.wrap{grid-template-columns:300px minmax(0,1fr)}}
+aside{align-self:start}
+@media(min-width:1000px){aside{position:sticky;top:72px;max-height:calc(100vh - 88px);overflow:auto}}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:4px 16px 16px}
+.card summary{font:700 19px "Space Grotesk",sans-serif;padding:14px 0;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.card summary::-webkit-details-marker{display:none}
+.card summary::after{content:"+";font-weight:400}
+.card[open] summary::after{content:"\2013"}
+.card .hint{font-size:13px;color:var(--mute);margin:0 0 12px}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fields .wide{grid-column:1/-1}
+.fields label{display:block;font-size:13px;color:var(--mute);margin-bottom:3px}
+.fields input{width:100%;font:16px Inter,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:9px 10px;min-height:44px}
+.derived{grid-column:1/-1;font-size:13px;color:var(--mute);margin:-2px 0 2px}
+.derived b{color:var(--ink)}
+.card button{width:100%;margin-top:14px}
+main{max-width:780px}
+section{padding-bottom:36px;margin-bottom:36px;border-bottom:1px solid var(--rule)}
+section:last-child{border-bottom:0}
+h2{font-size:28px;line-height:1.1;margin-bottom:6px}
+h2 .n{color:var(--mute);font-weight:600;margin-right:8px}
+h3{font-size:19px;margin:26px 0 8px}
+.lab{font-weight:700;font-size:16px;margin:18px 0 4px}
+.line{display:grid;grid-template-columns:3.6em minmax(0,1fr);gap:12px;padding:8px 0}
+.who{font:700 13px "Space Grotesk",sans-serif;padding-top:4px}
+.say{margin:0}
+.them .say,.them .who{color:var(--mute)}
+ul,ol{margin:4px 0;padding-left:22px}
+li{margin:7px 0;padding-left:2px}
+.blank{background:var(--blank);color:var(--blankInk);border-radius:4px;padding:0 3px;font-weight:500;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.blank.filled{background:none;color:var(--ink);font-weight:700;border-bottom:2px solid var(--mint);border-radius:0;padding:0}
+.pz{display:inline-block;font:600 12px Inter,sans-serif;color:var(--mute);border:1px solid var(--rule);border-radius:99px;padding:0 7px;line-height:18px;vertical-align:1px;white-space:nowrap}
+.pz.up{color:var(--blankInk);border-color:var(--blankInk)}
+.pz.wait{color:var(--ink);border-color:var(--ink)}
+.group{margin:14px 0 4px;font-size:13px;color:var(--mute);font-weight:600}
+details.obj{border-top:1px solid var(--rule)}
+details.obj:last-of-type{border-bottom:1px solid var(--rule)}
+details.obj>summary{list-style:none;cursor:pointer;display:flex;gap:14px;justify-content:space-between;align-items:center;padding:12px 2px;min-height:48px;font-weight:600}
+details.obj>summary::-webkit-details-marker{display:none}
+details.obj>summary::after{content:"+";flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--panel);font-weight:500}
+details.obj[open]>summary::after{content:"\2013";background:var(--mint);color:#0c2416}
+details.obj>summary:hover{color:var(--blankInk)}
+.body{padding:0 2px 18px}
+.loop>summary{font:700 19px "Space Grotesk",sans-serif}
+.loop>summary small{font:500 14px Inter,sans-serif;color:var(--mute);margin-left:8px}
+.aaa{list-style:none;padding:12px 14px;margin:14px 0 0;background:var(--panel);border-radius:10px}
+.aaa li{margin:5px 0}
+.aaa .go{font-weight:700}
+.aaa .go a{color:var(--blankInk)}
+.steps{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:16px 0;font-size:14px}
+.steps a,.steps span{padding:6px 12px;border-radius:99px;border:1px solid var(--rule);color:var(--ink);text-decoration:none;font-weight:600;white-space:nowrap}
+.steps a:hover{border-color:var(--ink)}
+.steps i{color:var(--mute);font-style:normal}
+.sms{background:var(--panel);border-radius:14px 14px 14px 4px;padding:10px 14px;margin:8px 0;max-width:520px}
+.note{font-size:13px;color:var(--mute);margin-top:40px}
+@media(max-width:600px){.line{grid-template-columns:minmax(0,1fr);gap:2px}.btns button{padding:0 10px}.bar-in{flex-wrap:wrap}.scroll{flex-basis:100%;order:2}.btns{width:100%}.btns button{flex:1}}
+main,.top,.bar{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+@media print{body{display:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+<div><h1>Ryan's IUL Closing Script</h1><p>One-call phone close for cash value IULs, built on Hormozi's framework.</p></div>
+<div class="key" aria-label="Delivery key"><span><b class="pz">/</b> short pause</span><span><b class="pz">//</b> medium pause</span><span><b class="pz wait">wait</b> stop and let them talk</span><span><b class="pz up">↑</b> raise your pitch</span></div>
+</div></header>
+
+<nav class="bar"><div class="bar-in">
+<div class="scroll"><a href="#part-1">1 Intro</a><a href="#part-2">2 Discovery</a><a href="#part-3">3 Pre-app</a><a href="#part-4">4 Pitch</a><a href="#part-5">5 Loops</a><a href="#part-6">6 Objections</a><a href="#part-7">7 Application</a><a href="#part-8">8 End of call</a></div>
+<div class="btns"><button id="openAll" type="button">Open all</button><button id="closeAll" type="button">Close all</button></div>
+</div></nav>
+
+<div class="wrap">
+<aside><details class="card" id="clientBox" open>
+<summary>Client details</summary>
+<p class="hint">Fill these in as you go. Every matching blank in the script updates.</p>
+<div class="fields" id="fields"></div>
+<button id="newCall" type="button">Clear for next call</button>
+</details></aside>
+
+<main id="script">
+
+<section id="part-1">
+<h2><span class="n">Part 1</span>Intro</h2>
+<h3>Opener</h3>
+<div class="line"><b class="who">You</b><p class="say">"Hey [Name], this is [Agent] with Enhanced Wealth. I'm calling about the tax-free early retirement request form you filled out. [/] You're still in [State], correct? [↑]"</p></div>
+<h3>Credentials</h3>
+<div class="line"><b class="who">You</b><p class="say">"Before we jump in: it's required by state law that you receive my credentials. So what I'm going to do is send you my digital business card. My face, name and license number are on there, so you know I'm licensed in [State]. [/] Not everyone can get that. I had to pass background checks, get fingerprinted and pass state exams to do this job for you. [//] Can you give me a firm 'yes' that you received my credentials? [↑]"</p></div>
+<h3>Agenda</h3>
+<div class="line"><b class="who">You</b><p class="say">"Perfect. So here's how this works. I'm going to ask you some questions about where you're at now and where you want to be, so we can build a customized plan for you. [/] If it's a good fit, we'll build out your plan. If it's not, I'll tell you straight, so we don't waste your time. [/] Fair enough? [↑]"</p></div>
+</section>
+
+<section id="part-2">
+<h2><span class="n">Part 2</span>Discovery</h2>
+<h3>Step 1: Desired vs. current (find the gap)</h3>
+<p class="lab">Desired</p>
+<ul>
+<li>"If this worked out exactly how you want, what age would you want the option to stop working? [↑]"</li>
+<li>"What would you need coming in every month at that age to live the way you want? [↑]"</li>
+<li>"Why that age? [↑]"</li>
+</ul>
+<p class="lab">Would-you-rathers</p>
+<ul>
+<li>"Would you rather your money grow taxable or tax-free? [↑]"</li>
+<li>"When the market crashes, would you rather your money ride the market down or be protected? [↑]"</li>
+<li>"Would you rather be able to get to your money before 59½ without triggering taxes and penalties, or have it locked up? [↑]"</li>
+<li>"If something happened to you, would you want your family taken care of by replacing your income or leave them to figure it out on their own? [↑]"</li>
+<li>"If you got hurt or sick and couldn't work, would you want to be able to use part of your coverage while you're alive? [↑]"</li>
+<li>"Would you rather your life insurance go with you if you change jobs, or end when the job does? [↑]"</li>
+</ul>
+<div class="line"><b class="who">You</b><p class="say">"Love that. [/] Now, so I can build this around you, I just need a quick picture of where you're at today. Fair enough? [↑]"</p></div>
+<p class="lab">Current</p>
+<ul>
+<li>"What's your monthly income, roughly? [↑] Is that with overtime? [↑]"</li>
+<li>"How many hours a week are you working right now? [↑]"</li>
+<li>"What do you already have set up for retirement? Any 401(k), IRA or pension? [↑]" Then: "Roughly what's in each? [↑]"</li>
+<li>"Anything in savings? [↑]"</li>
+<li>"What are you putting in every month, all in? [↑]"</li>
+<li>"At this pace, what age do you think you'd actually be able to stop working? [↑]"</li>
+</ul>
+<p class="lab">Confirm the gap</p>
+<div class="line"><b class="who">You</b><p class="say">"So you're on pace for [current pace retirement age] and you want [target retirement age]. That's [years between] years of your life. [//] That's what we're here to solve, right? [↑]"</p></div>
+
+<h3>Step 2: The pain cycle (pulling teeth)</h3>
+<ol>
+<li>"So what's been holding you back from having this set up already? [↑]"</li>
+<li>"Why? [↑]"</li>
+<li>"Tell me more about that." / "Can you give me an example?" / "Elaborate more on that."</li>
+<li>"What else is holding you back? [↑]"</li>
+</ol>
+
+<h3>Gap questions</h3>
+<details class="obj"><summary>1. Access gap</summary><div class="body"><ul>
+<li>"If you wanted to stop working at [target retirement age], what money could you actually use between then and 59½? [↑]"</li>
+<li>Label: "So the money you've saved is behind a door that doesn't open until you're almost 60."</li></ul></div></details>
+<details class="obj"><summary>2. Crash gap</summary><div class="body"><ul>
+<li>"What happened to your 401(k) in 2022? [↑]"</li>
+<li>"How would you feel if the market dropped 30% the year before you wanted to stop working? [↑]"</li>
+<li>Label: "So the money you're counting on can drop right when you need it most."</li></ul></div></details>
+<details class="obj"><summary>3. Tax gap</summary><div class="body"><ul>
+<li>"Do you know what tax bracket you'll be in when you pull that money out? [↑]"</li>
+<li>"Do you think taxes will be higher or lower in 20 years? [↑]"</li>
+<li>Label: "So the IRS is a partner in your 401(k), and they decide later how much of it you keep."</li></ul></div></details>
+<details class="obj"><summary>4. Body gap</summary><div class="body"><ul>
+<li>"Honestly, how many more years can your body do this job? [↑]"</li>
+<li>"If you got hurt tomorrow and couldn't work, what happens to the bills? [↑]"</li>
+<li>"What coverage do you have outside of work? [↑]"</li>
+<li>Label: "So the machine making all the money isn't protected, and the coverage you do have goes away if you leave the job."</li></ul></div></details>
+<details class="obj"><summary>5. Overtime gap</summary><div class="body"><ul>
+<li>"Last year with overtime, what did you make? [↑]" "How much of that is still sitting somewhere working for you? [↑]"</li>
+<li>Label: "So you make good money, but none of it is growing with purpose."</li></ul></div></details>
+<details class="obj"><summary>6. Waiting gap</summary><div class="body"><ul>
+<li>"What's kept you from setting this up before now? [↑]"</li>
+<li>"If you waited five more years, what do you think that costs you? [↑]"</li>
+<li>Label: "So every year this waits, you lose growth years and you bet that your health and your body hold up."</li></ul></div></details>
+
+<h3>Step 3: Recap, label, confirm</h3>
+<div class="line"><b class="who">You</b><p class="say">"So just to make sure I understand. You're [age], making about [monthly income] a month and working [hours] hours a week. You've got [balance] in your [401(k)/IRA/pension] that you can't touch until 59½ without triggering taxes &amp; penalties, and [savings balance] in savings. [Their story, in their words.] You want the option to stop at [target retirement age] with about [target monthly income] a month coming in. [//] So it sounds like the real issue isn't that you don't make enough. It's that [problem 1], [problem 2] and [problem 3]. [/] Does that sound right? [↑]"</p></div>
+<div class="line them"><b class="who">Them</b><p class="say">"Yeah. That's exactly it."</p></div>
+</section>
+
+<section id="part-3">
+<h2><span class="n">Part 3</span>Pre-app (the take-away)</h2>
+<div class="line"><b class="who">You</b><p class="say">"Okay, I've got a good picture of where you're at. [/] Now, I don't know yet if you'll get approved for this. These accounts are fully underwritten, so they're harder to get, and plenty of people get declined. [//] So before I build anything, I need to ask you a few questions to make sure this is something we can even do for you. Okay? [↑]"</p></div>
+<h3>HIPAA</h3>
+<div class="line"><b class="who">You</b><p class="say">"Are you familiar with HIPAA laws? Everything on this call is kept completely secure and confidential, just like a doctor or lawyer relationship — can I get a firm "yes" that I went over this with you?"</p></div>
+<h3>Health and background</h3>
+<ol>
+<li>"Any felonies or DUIs in the last 10 years? [↑]"</li>
+<li>"Any tobacco or nicotine in the last 12 months? Vapes and pouches count. [↑]"</li>
+<li>"Any prescriptions you take? [↑]"</li>
+<li>"How's your health overall? Anything a doctor is keeping an eye on? [↑]"</li>
+<li>"Rough height and weight? [↑]"</li>
+<li>"Do you have any life insurance now, through work or on your own? [↑]"</li>
+</ol>
+<h3>Bank</h3>
+<div class="line"><b class="who">You</b><p class="say">"Last one, and this is the one that trips people up. [/] The carriers only draft from traditional banks, like Chase or Wells Fargo. They won't take app banks like Chime or Cash App. [/] Who do you bank with? [↑]"</p></div>
+<div class="line"><b class="who">You</b><p class="say"><b>If they use an app bank:</b> "Do you have an account at any traditional bank or credit union? [↑]"</p></div>
+<h3>Close the take-away</h3>
+<div class="line"><b class="who">You</b><p class="say">"Okay. [/] Based on what you've told me, it looks like you could be a good candidate. The carriers make the final call. [/] Let me show you how this would work for you."</p></div>
+</section>
+
+<section id="part-4">
+<h2><span class="n">Part 4</span>Pitch and the ask</h2>
+<h3>Transition</h3>
+<div class="line"><b class="who">You</b><p class="say">"Okay. Given everything you just told me, I think a properly structured IUL, an indexed universal life policy built for cash value, would really help you. [/] Want me to walk you through it? [↑]"</p></div>
+<h3>Gap 1: Access</h3>
+<div class="line"><b class="who">You</b><p class="say">"So for your money being locked up until 59½. [/] With this plan, your cash value builds inside the policy, and you can get to it through policy loans at any age. No 59½ rule, no 10% penalty. [/] So at [target retirement age], you're not waiting until 59½ to touch your own money, or waiting on your body to give out first. [//] Do you think that would help? [↑]"</p></div>
+<h3>Gap 2: Market protection</h3>
+<div class="line"><b class="who">You</b><p class="say">"For the market risk. [/] Your cash value is linked to the S&amp;P 500, but it's not in the market. When the index goes up, you're credited up to a cap. When it crashes, the worst your credit can be is zero. [/] Zero is your hero. And whatever you've already been credited is locked in. A crash can't take it back. [//] Remember 2022? With this, that year's credit is a zero, not a loss. [//] Do you think that would help? [↑]"</p></div>
+<h3>Gap 3: Tax-free growth, tax-free retirement income and tax-free living benefits</h3>
+<div class="line"><b class="who">You</b><p class="say">"And for taxes. [/] Your cash value grows without you paying tax on it along the way. When you take it out through policy loans and keep the policy in force, your retirement income comes out tax-free. [/] And the whole time, your family is protected with a [death benefit] death benefit. If you get hurt or sick, the living benefits let you use part of it while you're alive, generally tax-free too. [//] Do you think that would help? [↑]"</p></div>
+<h3>The ask: their contribution</h3>
+<div class="line"><b class="who">You</b><p class="say">"Sound good so far? [↑]"</p></div>
+<div class="line them"><b class="who">Them</b><p class="say">"Yeah."</p></div>
+<div class="line"><b class="who">You</b><p class="say">"Now, to structure your policy correctly, we recommend you contribute about 10% of your monthly income. For you, that's about [10% of monthly income] a month. [/] Some of my truckers/tradesmen/nurses put in more than 10%, and some put in less. Obviously we want you to comfortably afford it. The last thing you want is to be too aggressive and spread yourself too thin. But the more you put in, the more you get, so it's up to you, and we can always adjust later if you want to add more. [//] Where do you see yourself starting each month? [↑]" [///]</p></div>
+<h3>Close it with the take-away</h3>
+<div class="line them"><b class="who">Them</b><p class="say">"[monthly contribution]."</p></div>
+<div class="line"><b class="who">You</b><p class="say">"Perfect. [/] These accounts are a privilege. Not everyone gets approved. [/] So let's open an application and see what the carriers approve you for. [↑]" [///]</p></div>
+</section>
+
+<section id="part-5">
+<h2><span class="n">Part 5</span>The loops (anything but yes)</h2>
+<h3>Start here: confirm value</h3>
+<div class="line"><b class="who">You</b><p class="say">"Completely hear you. Do you mind if I ask you a quick question? [/] Do you think starting this plan could help you get closer to [their goal, in their words]? [↑]"</p></div>
+<ul>
+<li><b>Yes:</b> "Awesome. Then let's do it. [/] Ready to get started? [↑]" [///]</li>
+<li><b>Anything else:</b> "Totally get it. So what's your main concern? [/] What are you afraid of having happen? [↑]"</li>
+</ul>
+<p class="lab">When they tell you their concern</p>
+<ul class="aaa">
+<li><b>Acknowledge:</b> "Totally get that."</li>
+<li><b>Associate:</b> "And honestly, that's exactly what the other [client's trade] guys who end up doing best with this asked me."</li>
+<li><b>Ask:</b> "Can I ask you something? [↑]"</li>
+<li class="go"><a href="#loop-1" data-open="loop-1">Run Loop 1</a></li>
+</ul>
+<p><b>Optional, in any loop (the foil):</b> "Do you mind if I share what I told a [client's trade] last month who had the same concern? [↑]"</p>
+<div class="steps" aria-label="Loop order"><a href="#loop-1" data-open="loop-1">1 Reason</a><i>→</i><a href="#loop-2" data-open="loop-2">2 Hypothetical</a><i>→</i><a href="#loop-3" data-open="loop-3">3 Zoom out</a><i>→</i><a href="#loop-4" data-open="loop-4">4 One to ten</a><i>→</i><a href="#loop-5" data-open="loop-5">5 Best/worst</a><i>→</i><a href="#part-6">Part 6</a></div>
+
+<details class="obj loop" id="loop-1"><summary><span>Loop 1: Reason<small>their reason is the reason</small></span></summary><div class="body">
+<p>Use the line that matches what they said:</p>
+<ul>
+<li>"I'm too busy right now." → "Honestly, the fact that you're working 60-hour weeks is probably the reason you should do this more than anyone. You're trading your body for money, and none of it is set up to let you stop. [/] Make sense? [↑]"</li>
+<li>"I'm young, I've got time." → "Being young is exactly why. This is the healthiest you'll be to get rated, and you get the most years of growth. [/] Make sense? [↑]"</li>
+<li>"Money's tight." → "Honestly, that's the reason to fix it now. If there's no plan for the money at [age], there won't be one at [target retirement age] either. [/] Make sense? [↑]"</li>
+</ul>
+<p><b>Ask:</b> "Ready to get started? [↑]" [///]</p>
+<ul class="aaa"><li><b>Still no?</b></li>
+<li><b>Acknowledge:</b> "That makes sense."</li>
+<li><b>Associate:</b> "Honestly, our best clients asked me the same thing."</li>
+<li><b>Ask:</b> "Mind if I ask you one more question? [↑]"</li>
+<li class="go"><a href="#loop-2" data-open="loop-2">Run Loop 2</a></li></ul>
+</div></details>
+
+<details class="obj loop" id="loop-2"><summary><span>Loop 2: Hypothetical<small>isolate the one thing</small></span></summary><div class="body">
+<div class="line"><b class="who">You</b><p class="say">"Okay, to be clear. If [the monthly amount] wasn't an issue, is this something you'd want to do? [↑]"</p></div>
+<div class="line them"><b class="who">Them</b><p class="say">"Yeah."</p></div>
+<div class="line"><b class="who">You</b><p class="say">"So it's really just [the monthly amount]. If we started at [lower contribution] and you added more later, would that solve it? [↑]" [///]</p></div>
+<ul class="aaa"><li><b>Still no?</b></li>
+<li><b>Acknowledge:</b> "I hear you."</li>
+<li><b>Associate:</b> "That's a smart thing to think through. The people who get the most out of this always do."</li>
+<li><b>Ask:</b> "Can I ask you something? [↑]"</li>
+<li class="go"><a href="#loop-3" data-open="loop-3">Run Loop 3</a></li></ul>
+</div></details>
+
+<details class="obj loop" id="loop-3"><summary><span>Loop 3: Zoom out<small>pull the parachute</small></span></summary><div class="body">
+<div class="line"><b class="who">You</b><p class="say">"Hey, let's zoom out for a second. [/] You came on this call because you want the option to stop at [target retirement age] instead of [current pace retirement age]. [Problem 1], [problem 2] and [problem 3]. This plan fixes those three things. [//] What part am I missing? [↑]"</p></div>
+<div class="line"><b class="who">You</b><p class="say">"Do you think part of the reason you're not where you want to be yet is that this decision kept getting pushed? [↑]"</p></div>
+<p><b>Ask:</b> "Ready to get started? [↑]" [///]</p>
+<ul class="aaa"><li><b>Still no?</b></li>
+<li><b>Acknowledge:</b> "Fair enough."</li>
+<li><b>Associate:</b> "Honestly, that's the same thing the [client's trade] guys who are doing best with this told me."</li>
+<li><b>Ask:</b> "Can I ask you one quick thing? [↑]"</li>
+<li class="go"><a href="#loop-4" data-open="loop-4">Run Loop 4</a></li></ul>
+</div></details>
+
+<details class="obj loop" id="loop-4"><summary><span>Loop 4: 1 to 10<small>put a number on it</small></span></summary><div class="body">
+<div class="line"><b class="who">You</b><p class="say">"On a scale of 1 to 10, how sure are you that this is right for you? [↑]"</p></div>
+<div class="line them"><b class="who">Them</b><p class="say">"[Number]."</p></div>
+<div class="line"><b class="who">You</b><p class="say">"What would make it a 10? [↑]" Answer it, then: "Ready to get started? [↑]" [///]</p></div>
+<p><b>If you can't get it to a 10:</b> "Fair. Why not a 1? [↑]" Let them list their reasons, then: "Sounds like some pretty good reasons to do it. [/] Ready to get started? [↑]" [///]</p>
+<p><b>Other way to run it</b> (whatever number they say): "Honestly, you're above most people. If you were a 10, you'd be crazy. Nobody's a 10 until they see it working, and the only way to see it working is to start. [/] Let's get you moving. [↑]"</p>
+<ul class="aaa"><li><b>Still no?</b></li>
+<li><b>Acknowledge:</b> "Totally understand."</li>
+<li><b>Associate:</b> "Our smartest clients took a minute on this too."</li>
+<li><b>Ask:</b> "Can I walk you through one last thing? [↑]"</li>
+<li class="go"><a href="#loop-5" data-open="loop-5">Run Loop 5</a></li></ul>
+</div></details>
+
+<details class="obj loop" id="loop-5"><summary><span>Loop 5: Best case, worst case<small>doing nothing is the risk</small></span></summary><div class="body">
+<div class="line"><b class="who">You</b><p class="say">"Let's look at best case and worst case. [/] Best case, it performs the way the illustration shows, and at [target retirement age] you have the option to stop working with income from policy loans and your family protected the whole way. [/] Worst case, the policy shows up, you read it during your [free-look days]-day free look, decide it's not for you, and send it back for a refund of your premium. [//] Then there's door three. You do nothing. That one guarantees you're still working at [current pace retirement age] with your money locked up. [//] Two of those doors give you a shot. Which one do you want? [↑]" [///]</p></div>
+<ul class="aaa"><li class="go">Still no? <a href="#part-6">Go to Part 6</a> and open their objection: time, money, decision maker, fit or stall.</li></ul>
+</div></details>
+</section>
+
+<section id="part-6">
+<h2><span class="n">Part 6</span>The five specific objections</h2>
+<details class="obj"><summary>1. Time: "I'm too busy" / "Now's not a good time"</summary><div class="body"><ul>
+<li><b>Flip the sequence:</b> "Waiting until you have more money to start saving is like waiting until you're healthy to go to the doctor. [/] Do you think it gets easier at 40 with the kids in travel ball? [↑]"</li>
+<li><b>Busy is the best time:</b> "Do you think you'll ever be busy again after this? [↑] Then it's better to set it up now. The draft runs on its own, so the next crazy month doesn't stop it."</li>
+<li><b>Younger self:</b> "If you could talk to 20-year-old you on his first day on the job, and he said 'I'm too busy,' what would you tell him? [↑]"</li>
+<li><b>Trade from the bottom:</b> "Of everything you spend on every month, what's the least important? [↑] Would you trade that for this? [↑]"</li>
+<li><b>Cost of waiting:</b> "Insurance is priced on age and health. Every birthday the coverage costs more, and you lose a year of growth. [/] Does waiting make this cheaper or more expensive? [↑]"</li>
+</ul></div></details>
+<details class="obj"><summary>2. Money: "It's too much"</summary><div class="body"><ul>
+<li><b>It's good that it's a lot:</b> "Honestly, that's a good thing. It means you'll take it seriously, and the people who take it seriously get the best results."</li>
+<li><b>Spent either way:</b> "That [monthly contribution] is getting spent somewhere either way: the truck note, DoorDash, whatever. [/] Does it go somewhere that gets you closer to [target retirement age] or further away? [↑]"</li>
+<li><b>If all it does:</b> "If all this did was protect your family with [death benefit] and make sure a crash can never take back your credited gains, would it be worth [monthly contribution] a month? [↑]"</li>
+<li><b>The free test:</b> "If this plan were free, would you take it? [↑]" → "Of course." → "So it's not the plan, it's the number. [/] Let's look at the number."</li>
+<li><b>"Can you do it for less?"</b> "Yes, you decide what goes in. [/] At [monthly contribution] you're on track for [target retirement age]. At [lower contribution] it's closer to [later age from the illustration]. [//] Which version do you want? [↑]"</li>
+<li><b>"Term is cheaper."</b> "If they were the same price, which would you want: coverage that ends at [term end age] with nothing back, or coverage that builds cash you can use at [target retirement age]? [↑] That's why they're not the same price."</li>
+<li><b>They truly can't afford it:</b> "Let's find a number that works. What could you set aside every month without it touching the bills? [↑]"</li>
+</ul></div></details>
+<details class="obj"><summary>3. Decision maker: "I need to talk to my wife"</summary><div class="body"><ol>
+<li>"What if she says no? [↑]" If they say "I'd probably still do it," then: "Awesome. Let's get you started."</li>
+<li>"What specifically do you think she'd disagree with? [↑]"</li>
+<li>"Does she know you're not happy with where things are for retirement? [↑] Is she good with you working until 65? [↑]" → "No." → "Then why do you think she'd be against something that fixes it? [↑]"</li>
+<li>Ask for support, not permission: "Does she usually back you on things that really matter to you? [↑] Is this one of those? [↑]"</li>
+</ol>
+<p><b>One-call move:</b> "Can we call her right now? [↑] I'll take five minutes and walk her through it."</p></div></details>
+<details class="obj"><summary>4. Fit: "I don't like [this part]"</summary><div class="body">
+<p>"Is [that part] more important to you than [their goal]? [↑] Because you can't keep everything exactly the same and get a different result."</p>
+<p class="lab">IUL-specific fit objections</p>
+<ul>
+<li><b>"I already have a 401(k)."</b> "Love that. Keep it, especially the match. That's free money. [/] Quick question: can you touch it at [target retirement age] without a penalty? [↑] So what pays for [target retirement age] to 59½? [↑]"</li>
+<li><b>"Dave Ramsey says buy term and invest the difference."</b> "Term is great at what it does. Quick question: how's the 'invest the difference' part going so far? [↑] And what happens when the term ends at [term end age]? [↑]"</li>
+<li><b>"I heard IULs are a scam" / "The fees are high."</b> "Smart to be skeptical. You're right, there are charges, like every financial product, your 401(k) included. The ones that go bad are usually underfunded or sold off an unrealistic illustration. [/] Want me to show you exactly where the charges are on yours? [↑]"</li>
+<li><b>"I don't want my money locked up."</b> "Fair. In the first [surrender period] years there are surrender charges if you cancel, so this is for long-term money. You can still typically borrow against your available cash value. [/] When can you touch your 401(k)? [↑]"</li>
+<li><b>"I'd rather just invest in the market."</b> "Got it. How did 2022 feel? [↑] This isn't instead of the market for everything. It's the part of your money where a crash means a zero credit, not a loss."</li>
+</ul></div></details>
+<details class="obj"><summary>5. Stall: "I need to think about it"</summary><div class="body"><ul>
+<li><b>Past hesitation:</b> "Do you think hesitating like this before is part of why you're [age] with [savings balance] saved? [↑]"</li>
+<li><b>Burned you twice</b> (a bad past policy or agent): "Totally fair. Did you marry the first person you ever dated? [↑] If one bad agent keeps you from the right plan now, you let him burn you twice."</li>
+<li><b>Three decisions:</b> "Has anyone ever walked you through how to make a decision like this? [↑] Mind if I do? It's three things. Do you like the plan? Do you like the company? Do you like me? [↑]" Three yeses: "Let's get you started."</li>
+<li><b>Direction, not perfection:</b> "If you hang up today without this, are you closer to [target retirement age] or further away? [↑]"</li>
+<li><b>Information, not time:</b> "You want to make an informed decision, right? [↑] Time won't give you more information. What information do you feel like you're missing? [↑]"</li>
+<li><b>Test drive:</b> "The only way to know for sure is to read the actual policy. That's what the free look is for. Let's get it approved and you can read it with it in your hands."</li>
+<li><b>Sooner or later:</b> "Are you going to set something up eventually? [↑] Then sooner beats later. The growth clock starts when you do."</li>
+<li><b>Play it out:</b> "Five years from now, nothing's changed. You're [age + 5], still working [hours] hours a week, money still locked in the [401(k)/IRA], body hurting a little more. How do you feel? [↑]" [///] "If nothing changes, nothing changes."</li>
+</ul></div></details>
+</section>
+
+<section id="part-7">
+<h2><span class="n">Part 7</span>The application</h2>
+<div class="line"><b class="who">You</b><p class="say">"Awesome. [/] Let's get your application in. This part takes about 15 minutes."</p></div>
+<h3>Asking for SSN (ask last in the proposed insured section)</h3>
+<div class="line"><b class="who">You</b><p class="say">"Here's how approval works. [/] The carriers are not going to make you pee in a cup or do a physical. They're going to look at your prescription history, your driving record and your MIB report. MIB stands for Medical Information Bureau. It's just to make sure you're healthy enough for the coverage. [//] I need a firm 'yes' that you give the carriers permission to use your social to pull your medical records. [↑]"</p></div>
+<div class="line"><b class="who">You</b><p class="say">"Okay, go ahead and confirm the social. [↑]"</p></div>
+<p class="group">SSN objections</p>
+<details class="obj"><summary>"Why do you need my social?"</summary><div class="body"><p>"Great question. Honestly, the smartest clients ask that. [/] The carriers use it for two things: to pull your MIB and prescription records so they can approve you, and to verify it's really you, so nobody can ever take out a policy in your name. [//] Make sense? [↑] Okay, go ahead and confirm the social. [↑]"</p></div></details>
+<details class="obj"><summary>"I'm not comfortable giving that over the phone."</summary><div class="body"><p>"Totally get that. You should be careful with it. [/] Quick question: did you get my business card with my license number on it? [↑] And your bank, your employer and your doctor all have your social, right? [↑] This goes to the same kind of place, straight into [Carrier]'s secure application. [//] Go ahead and confirm it when you're ready. [↑]"</p></div></details>
+<details class="obj"><summary>"How do I know this isn't a scam?"</summary><div class="body"><p>"Smart to ask. [/] My license number is on the card I sent you. You can look me up on [State]'s insurance department website right now. And the application comes to you straight from [Carrier] to sign. [//] Want to look me up real quick while I hold? [↑]"</p></div></details>
+<details class="obj"><summary>"Can't you check if I'm approved without it?"</summary><div class="body"><p>"No carrier can approve anyone without it. They need it to pull your records. [/] Without it, all I can give you is a guess. [//] Want to find out for real? [↑]"</p></div></details>
+<details class="obj"><summary>"Will this hurt my credit?"</summary><div class="body"><p>"No. This isn't a credit application. [/] The carriers are looking at your health records, not opening a loan, so nothing hits your credit score. [//] Go ahead and confirm it. [↑]"</p></div></details>
+<details class="obj"><summary>"Can I text it to you later?"</summary><div class="body"><p>"I'd rather your social not sit in a text thread. [/] The application can't go to underwriting without it, so let's put it straight in now while we're on the phone. [↑]"</p></div></details>
+
+<h3>Billing</h3>
+<div class="line"><b class="who">You</b><p class="say">"Most families start the draft right away. The carrier usually gives a decision the moment we submit, so the sooner it starts, the sooner your money starts working toward [their goal, in their words]. [/] But you choose the start date. What day works for you? [↑]"</p></div>
+<div class="line"><b class="who">You</b><p class="say">"You bank with [bank name], and you opened that account in [Client's State], correct? [↑] I can pull up the routing number for [bank] in [State] on my end, but I'm required to confirm it with you. Go grab that and I'll finish the app while you do. [↑]"</p></div>
+<ol>
+<li>"And the account number? [↑]"</li>
+<li>"I have to enter it twice. Go ahead and repeat it back to me. [↑]"</li>
+<li>"Is your name spelled the same way on the account, or is there a middle initial? [↑]"</li>
+<li>"Checking or savings? [↑]"</li>
+<li>"Give me one moment while the system verifies that info is linked to your name, for your safety and the safety of others."</li>
+</ol>
+<p class="group">Banking objections</p>
+<details class="obj"><summary>"Why do you need my bank info?"</summary><div class="body"><p>"Great question. Your contribution drafts automatically, so you never have to remember it and your policy never misses a payment by accident. [/] Nothing comes out before the start date you picked. [//] Go ahead and grab that routing number for me. [↑]"</p></div></details>
+<details class="obj"><summary>"I'm not comfortable giving my account number over the phone."</summary><div class="body"><p>"Totally get that. You should be careful with it. [/] It goes straight into [Carrier]'s secure application, same as setting up autopay for your truck note or your phone bill. [/] You've got my license number on the card I sent you, right? [↑] Okay, go ahead and read me the account number. [↑]"</p></div></details>
+<details class="obj"><summary>"Is this coming out today?"</summary><div class="body"><p>"No. Nothing comes out until [draft date], the day you picked. [/] Sound good? [↑]"</p></div></details>
+<details class="obj"><summary>"Can I just pay with a card?"</summary><div class="body"><p>"The carriers set these up on bank draft so your policy never lapses because a card expired or got replaced. [/] Do you have your checking or savings handy? [↑]"</p></div></details>
+<details class="obj"><summary>"Can I mail a check or pay later?"</summary><div class="body"><p>"Your coverage can't start until the first payment is set up, and bank draft is how [Carrier] starts it. [/] Nothing comes out until [draft date] anyway. [//] Want to knock it out now so you're not waiting? [↑]"</p></div></details>
+<details class="obj"><summary>"I don't have my bank info on me."</summary><div class="body"><p>"No worries. Pull up your banking app. It's usually under account details. [/] I'll hold. [↑]"</p></div></details>
+<details class="obj"><summary>"It's a joint account. I need to ask my wife."</summary><div class="body"><p>"Totally fair. Is she around? [↑] Let's get her on for two minutes so she knows exactly what's coming out and when. [↑]"</p></div></details>
+<details class="obj"><summary>"What if I need to change the date or stop it?"</summary><div class="body"><p>"You can call [Carrier] to change your draft date down the road. [/] And once the policy shows up, you've got your [free-look days]-day free look. [//] So let's get it started. [↑]"</p></div></details>
+<details class="obj"><summary>"I only have Chime / Cash App."</summary><div class="body"><p>"Do you have an account at any traditional bank or credit union? [↑] If not, no problem. Let's set your start date a few days out so you can open one. What bank is closest to you? [↑]"</p></div></details>
+
+<h3>After you submit</h3>
+<ul>
+<li><b>Approved:</b> <a href="#lock">lock down the close</a>.</li>
+<li><b>Declined:</b> pivot to whole life, then <a href="#lock">lock down the close</a>.</li>
+</ul>
+<details class="obj" id="wl-pivot"><summary>If the IUL is declined: pivot to whole life</summary><div class="body">
+<div class="line"><b class="who">You</b><p class="say">"[Name], the carrier came back on the indexed plan. [/] After reviewing your MIB report and prescription history, they can't approve the IUL the way it's built. [//] Here's the good news: there's still a way to get you covered and growing, with whole life through [Carrier]. Instead of market-based indexing, your cash value grows at a guaranteed [guaranteed rate]% a year. Predictable, stable growth no matter what the market does. [/] It's still permanent coverage, your premium is locked in, and your family's protected for life. [//] Let's move forward with this today so you're covered now, then we'll revisit the indexed option at your 12-month review. [/] I'll confirm the exact coverage amount based on our budget discussion in just a moment. Sound good? [↑]"</p></div>
+</div></details>
+</section>
+
+<section id="part-8">
+<h2><span class="n">Part 8</span>End of call</h2>
+<h3 id="lock">Lock down the close (before referrals)</h3>
+<div class="line"><b class="who">You</b><p class="say">"So [Name], everything is [submitted / approved]. [/] Quick recap: the coverage is [death benefit] with [Carrier]. Look for the policy in the mail. It usually takes about 10 to 12 business days."</p></div>
+<div class="line"><b class="who">You</b><p class="say">"This is my direct line, the same number my mom calls me on. Anything you need with this coverage, I'm your first call. I'm a call or text away."</p></div>
+<div class="line"><b class="who">You</b><p class="say">"Lastly, this is important. [/] I'm giving you a 4-digit PIN: [your PIN]. Nobody should contact you about this policy except me or [Carrier]. With the internet these days, you may get calls from people saying they're my manager, your policy's incomplete, 'there's a flag on your file,' or that they're with the 'review department.' [//] If anyone besides [Carrier] calls and can't give you that PIN, don't talk to them. Call me. [/] I don't want anybody messing up the coverage for your family, alright? [↑]"</p></div>
+<h3>If they bought: referrals</h3>
+<div class="line"><b class="who">You</b><p class="say">"Hey, real quick. Who else do you know who works as hard as you do? [↑] If I could work with people like you all day, that's all I'd do. [/] Guys on your crew, family, friends? [↑]"</p></div>
+<div class="line"><b class="who">You</b><p class="say">"Can you shoot them a quick group text so they know who I am? [↑] I'll send you the words right now."</p></div>
+<p class="lab">Text for the client to send</p>
+<p class="sms">"Hey [Friend's name], it's [Client]. I just set up my retirement plan with [Agent] and thought of you. [Agent], meet [Friend's name]."</p>
+<h3>If they didn't: book the next call before you hang up</h3>
+<div class="line"><b class="who">You</b><p class="say">"Let's pull up our calendars and lock in a time. Tomorrow at [time] or [time]? [↑]"</p></div>
+<details class="obj"><summary>If they push back on booking</summary><div class="body"><ol>
+<li><b>First no:</b> "How's [time] or [time] tomorrow? [↑]"</li>
+<li><b>Second no:</b> "Totally. Just so we skip the back-and-forth, want to pencil one in now? It's one less thing on your to-do list, and if something comes up, text me and we'll move it. How's [time] or [time]? [↑]"</li>
+<li><b>Third no:</b> "Totally. Then let's keep it short. Grab 15 minutes tomorrow just to keep it moving. [↑]"</li>
+<li><b>Fourth no:</b> "When were you planning on letting me know? [↑]" "Perfect. I'll call you then."</li>
+</ol></div></details>
+<div class="line"><b class="who">You</b><p class="say"><b>Spouse wasn't on:</b> "Let's get [Spouse] on with us. What time are you both home? [↑]"</p></div>
+</section>
+
+<p class="note">Client details stay in this browser tab only and clear when you close it or press "Clear for next call."</p>
+</main>
+</div>
+
+<script>
+{
+const FIELDS=[
+["name","Client name",0,["name","client"]],
+["agent","Your name",0,["agent"]],
+["state","State",0,["state","client's state"]],
+["trade","Client's trade",0,["client's trade"]],
+["spouse","Spouse's name",0,["spouse"]],
+["age","Age",0,["age"]],
+["income","Monthly income",0,["monthly income"]],
+["hours","Hours per week",0,["hours"]],
+["acct","Retirement account",0,["401(k)/ira/pension","401(k)/ira"]],
+["balance","Balance in it",0,["balance"]],
+["savings","Savings",0,["savings balance","savings"]],
+["target","Target age",0,["target retirement age"]],
+["pace","Current pace age",0,["current pace retirement age"]],
+["goalinc","Income goal per month",0,["target monthly income"]],
+["goal","Their goal, in their words",1,["their goal, in their words","their goal"]],
+["p1","Problem 1",1,["problem 1"]],
+["p2","Problem 2",1,["problem 2"]],
+["p3","Problem 3",1,["problem 3","problem 3, in their words"]],
+["contrib","Monthly contribution",0,["monthly contribution","the monthly amount"]],
+["db","Death benefit",0,["death benefit"]],
+["carrier","Carrier",0,["carrier"]],
+["bank","Bank name",0,["bank name","bank"]],
+["draft","Draft date",0,["draft date"]],
+["freelook","Free-look days",0,["free-look days"]],
+["wlrate","Whole life guaranteed rate (%)",1,["guaranteed rate"]],
+["pin","Your PIN (last 4 of your cell)",1,["your pin"]]
+];
+const alias={};
+for(const f of FIELDS)for(const k of f[3])alias[k]=f[0];
+let state={};
+try{state=JSON.parse(sessionStorage.getItem("iulClient")||"{}")||{}}catch(e){state={}}
+const save=()=>{try{sessionStorage.setItem("iulClient",JSON.stringify(state))}catch(e){}};
+const num=v=>{const n=parseFloat(String(v||"").replace(/[^0-9.]/g,""));return isFinite(n)?n:null};
+const money=n=>"$"+Math.round(n).toLocaleString("en-US");
+const derived={
+"10% of monthly income":()=>{const n=num(state.income);return n?money(n*0.1):""},
+"years between":()=>{const a=num(state.pace),b=num(state.target);return a!==null&&b!==null&&a>b?String(a-b):""},
+"age + 5":()=>{const a=num(state.age);return a!==null?String(a+5):""}
+};
+const valueFor=k=>{if(derived[k])return derived[k]();const id=alias[k];return id&&state[id]?String(state[id]).trim():""};
+
+const box=document.getElementById("fields");
+box.innerHTML=FIELDS.map(f=>`<div class="${f[2]?"wide":""}"><label for="f-${f[0]}">${f[1]}</label><input id="f-${f[0]}" data-id="${f[0]}" autocomplete="off"></div>`).join("")+`<p class="derived" id="tenPct"></p>`;
+const inputs=[...box.querySelectorAll("input")];
+for(const i of inputs)i.value=state[i.dataset.id]||"";
+
+const root=document.getElementById("script");
+const re=/\[(\/{1,3}|↑)\]|\[([^\[\]]+)\]/g;
+const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+const nodes=[];
+while(walker.nextNode()){if(walker.currentNode.nodeValue.includes("["))nodes.push(walker.currentNode)}
+for(const t of nodes){
+const s=t.nodeValue;const frag=document.createDocumentFragment();let last=0;let m;re.lastIndex=0;
+while((m=re.exec(s))){
+if(m.index>last)frag.append(s.slice(last,m.index));
+const sp=document.createElement("span");
+if(m[1]){const p=m[1];sp.className="pz"+(p==="↑"?" up":p==="///"?" wait":"");sp.textContent=p==="///"?"wait":p;sp.title=p==="/"?"short pause":p==="//"?"medium pause":p==="///"?"stop and let them talk":"raise your pitch"}
+else{sp.className="blank";sp.dataset.k=m[2].trim().toLowerCase();sp.dataset.l=m[2]}
+frag.append(sp);last=re.lastIndex}
+if(last<s.length)frag.append(s.slice(last));
+t.parentNode.replaceChild(frag,t)}
+const blanks=[...root.querySelectorAll(".blank")];
+
+const render=()=>{
+for(const b of blanks){const v=valueFor(b.dataset.k);b.textContent=v||"["+b.dataset.l+"]";b.classList.toggle("filled",!!v)}
+const ten=document.getElementById("tenPct");const n=num(state.income);
+ten.textContent="";if(n){ten.append("10% of monthly income: ");const s=document.createElement("b");s.textContent=money(n*0.1)+" a month";ten.append(s)}};
+for(const i of inputs)i.addEventListener("input",()=>{state[i.dataset.id]=i.value;save();render()});
+document.getElementById("newCall").addEventListener("click",()=>{state={};save();for(const i of inputs)i.value="";render();inputs[0].focus()});
+
+const all=()=>[...root.querySelectorAll("details.obj")];
+document.getElementById("openAll").addEventListener("click",()=>all().forEach(d=>d.open=true));
+document.getElementById("closeAll").addEventListener("click",()=>all().forEach(d=>d.open=false));
+for(const a of document.querySelectorAll("[data-open]"))a.addEventListener("click",()=>{const d=document.getElementById(a.dataset.open);if(d)d.open=true});
+
+
+const isField=e=>e.target&&e.target.closest&&e.target.closest("input,textarea");
+for(const ev of ["copy","cut","contextmenu","dragstart","selectstart"])document.addEventListener(ev,e=>{if(!isField(e))e.preventDefault()});
+document.addEventListener("keydown",e=>{const k=(e.key||"").toLowerCase();if((e.ctrlKey||e.metaKey)&&["c","x","a","s","p","u"].includes(k)&&!isField(e))e.preventDefault()});
+const cb=document.getElementById("clientBox");
+if(window.innerWidth<1000)cb.open=false;
+render();
+}
+</script>
+</body>
+</html>

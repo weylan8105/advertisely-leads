@@ -94,7 +94,7 @@ export const ANNOUNCEMENTS: Announcement[] = [
       "Always one click away — find it on your Lead CRM page under “Calling script” whenever you need it.",
     ],
     ctaLabel: "Open the script",
-    ctaHref: "/blue-collar-iul-script.pdf",
+    ctaHref: "/iul-closing-script.html",
     audience: "working_leads",
   },
   {

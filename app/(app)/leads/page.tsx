@@ -133,7 +133,7 @@ function LeadsPageInner() {
               </Select>
             )}
             <ViewToggle view={view} onChange={setView} />
-            <a href="/blue-collar-iul-script.pdf" target="_blank" rel="noopener noreferrer">
+            <a href="/iul-closing-script.html" target="_blank" rel="noopener noreferrer">
               <Button size="sm" variant="outline">
                 <FileText className="h-4 w-4" />
                 Calling script

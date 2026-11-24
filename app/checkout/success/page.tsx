@@ -132,7 +132,7 @@ export default async function CheckoutSuccessPage({
 
             {(resolvedStatus === "success" || resolvedStatus === "processing") && (
               <a
-                href="/blue-collar-iul-script.pdf"
+                href="/iul-closing-script.html"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-6 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left transition-colors hover:border-brand-red/40 hover:bg-brand-red/[0.03]"
@@ -145,7 +145,7 @@ export default async function CheckoutSuccessPage({
                     While you wait — grab the calling script
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    Our Blue-Collar IUL script: intro, discovery, and objection handling. Opens in a new tab.
+                    Our IUL closing script: intro, discovery, pitch, objections and the application. Opens in a new tab.
                   </span>
                 </span>
               </a>
