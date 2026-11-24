@@ -4,6 +4,7 @@
 // is shown at a time.
 
 import { REFERRAL_PROGRAM_ENABLED } from "@/lib/flags";
+import { NURSE_LEAD_TYPE } from "@/lib/leadTypes";
 import { findPackage } from "@/data/packages";
 import { BUCKS_PER_REFERRED_LEAD_CENTS, REFERRAL_DISCOUNT_RATE, priceCart } from "@/lib/referralPricing";
 
@@ -40,6 +41,11 @@ export interface Announcement {
    * (not the owners).
    */
   audience?: "all" | "working_leads" | "advertisers";
+  /**
+   * The button does this itself before closing: "enable-lead-type" switches
+   * `leadType` on for the viewer (PUT /api/advertiser/lead-types { enable }).
+   */
+  ctaAction?: { kind: "enable-lead-type"; leadType: string; doneText: string };
 }
 
 // Jace Jensen's account (owner request, Nov 16 2026): his team passed the
@@ -78,12 +84,17 @@ export const ANNOUNCEMENTS: Announcement[] = [
     title: "Nurse leads are live",
     body: "We just launched a new lead type: nurses and healthcare workers from our Essential Workers campaign. They're off until you turn them on.",
     highlights: [
-      "Turn them on under Lead types on your dashboard.",
+      "Turn them on with the button below, or any time under Lead types on your dashboard.",
       "They come in the states you're licensed in, alongside your Blue Collar leads.",
       "Each one is charged from your ad spend, the same way as your other leads.",
     ],
     ctaLabel: "Turn on Nurse leads",
     ctaHref: "/dashboard#lead-types",
+    ctaAction: {
+      kind: "enable-lead-type",
+      leadType: NURSE_LEAD_TYPE,
+      doneText: "Nurse leads are on. You can switch them off any time under Lead types on your dashboard.",
+    },
   },
   {
     key: "blue-collar-iul-script-2026-10",

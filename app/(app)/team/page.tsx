@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { TeamDialsCard } from "@/components/dashboard/TeamDialsCard";
+import { TeamPerformancePanel } from "@/components/team/TeamPerformancePanel";
 import {
   UsersRound,
   UserPlus,
@@ -364,6 +365,9 @@ export default function TeamPage() {
       {/* Uplines: each member's dials today and the 9 pm report. */}
       <TeamDialsCard />
 
+      {/* Team leaders: each member's production for any range (/api/team/performance). */}
+      {canManage && members.length > 1 && <TeamPerformancePanel />}
+
       {data.goldmineOff && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <Gem className="h-4 w-4 mt-0.5 shrink-0" />
@@ -400,11 +404,11 @@ export default function TeamPage() {
                 {(m.name ?? m.email).slice(0, 1).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">
-                  {m.name ?? m.email.split("@")[0]}
+                <div className="text-sm font-medium break-words">
+                  {m.name?.trim() || m.email.split("@")[0]}
                   {m.isSelf && <span className="text-muted-foreground font-normal"> (you)</span>}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{m.email}</div>
+                <div className="text-xs text-muted-foreground break-all">{m.email}</div>
               </div>
 
               {/* Goldmine access: on by default; managers switch any member's on or off. */}

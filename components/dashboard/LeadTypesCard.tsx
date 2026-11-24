@@ -28,6 +28,16 @@ export function LeadTypesCard() {
       .catch(() => {});
   }, []);
 
+  // Switched on from the announcement pop-up: show it here without a reload.
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (Array.isArray(d?.enabled)) setEnabled(d.enabled);
+    };
+    window.addEventListener("advertisely:lead-types", onChange);
+    return () => window.removeEventListener("advertisely:lead-types", onChange);
+  }, []);
+
   async function toggle(id: string) {
     const next = enabled.includes(id) ? enabled.filter((x) => x !== id) : [...enabled, id];
     setSaving(id);

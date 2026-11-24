@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Check, ArrowRight } from "lucide-react";
+import { X, Check, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Announcement } from "@/data/announcements";
 
@@ -15,6 +15,10 @@ export function AnnouncementModal() {
   const router = useRouter();
   const [item, setItem] = useState<Announcement | null>(null);
   const [closing, setClosing] = useState(false);
+  // The button's own action (e.g. switch Nurse leads on): working / done / failed.
+  const [acting, setActing] = useState(false);
+  const [done, setDone] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -54,6 +58,36 @@ export function AnnouncementModal() {
       } else {
         router.push(navigateTo);
       }
+    }
+  }
+
+  // CTA: run the announcement's action first (if any), then close and go.
+  async function cta() {
+    if (!item) return;
+    const action = item.ctaAction;
+    if (!action) return dismiss(item.ctaHref);
+    if (done) return dismiss(item.ctaHref);
+    setActing(true);
+    setActionError(null);
+    try {
+      if (action.kind === "enable-lead-type") {
+        const r = await fetch("/api/advertiser/lead-types", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enable: action.leadType }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !Array.isArray(d.enabled) || !d.enabled.includes(action.leadType)) {
+          throw new Error(d.error ?? "Couldn't turn them on. Try again, or use Lead types on your dashboard.");
+        }
+        // Tell an open Lead types card to show the new state.
+        window.dispatchEvent(new CustomEvent("advertisely:lead-types", { detail: d }));
+      }
+      setDone(true);
+    } catch (e: any) {
+      setActionError(e?.message ?? "Something went wrong. Try again.");
+    } finally {
+      setActing(false);
     }
   }
 
@@ -113,16 +147,35 @@ export function AnnouncementModal() {
           )}
           {item.breakdown?.footnote && <p className="mt-2 text-[11px] text-muted-foreground">{item.breakdown.footnote}</p>}
 
+          {done && item.ctaAction && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <span>{item.ctaAction.doneText}</span>
+            </div>
+          )}
+          {actionError && (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionError}</div>
+          )}
+
           <div className="mt-6 flex items-center justify-end gap-2">
-            {!item.noSecondary && (
-              <Button variant="outline" size="sm" onClick={() => dismiss()}>
-                Maybe later
+            {done ? (
+              <Button size="sm" onClick={() => dismiss()}>
+                Done
               </Button>
+            ) : (
+              <>
+                {!item.noSecondary && (
+                  <Button variant="outline" size="sm" onClick={() => dismiss()} disabled={acting}>
+                    Maybe later
+                  </Button>
+                )}
+                <Button size="sm" onClick={cta} disabled={acting}>
+                  {acting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {item.ctaLabel}
+                  {item.ctaHref && !item.ctaAction && <ArrowRight className="h-4 w-4" />}
+                </Button>
+              </>
             )}
-            <Button size="sm" onClick={() => dismiss(item.ctaHref)}>
-              {item.ctaLabel}
-              {item.ctaHref && <ArrowRight className="h-4 w-4" />}
-            </Button>
           </div>
         </div>
       </div>
