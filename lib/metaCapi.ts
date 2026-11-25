@@ -77,10 +77,12 @@ export const QUALIFIED_MIN_AGE_AGE_ONLY = 20;
 const ABCA_QUIZ_SOURCE = "early-retirement-quiz";
 const HWA_QUIZ_SOURCE = "healthcare-wealth-quiz";
 
-/** An ABCA main-page quiz lead: the funnel that doesn't ask income. */
+/** An ABCA main-page quiz lead: the funnel that doesn't ask income. The /open split-test
+ *  page (quiz_variant "open", Nov 24 2026) is the Nov 20 main page, so it counts too. */
 function isAgeOnlyFunnel(raw: Record<string, unknown>): boolean {
   const source = String(raw["lead_source"] ?? raw["source"] ?? "").trim();
-  return source === ABCA_QUIZ_SOURCE && !String(raw["quiz_variant"] ?? "").trim();
+  const variant = String(raw["quiz_variant"] ?? "").trim();
+  return source === ABCA_QUIZ_SOURCE && (!variant || variant === "open");
 }
 
 /** The lead's answer to the gross monthly income question, or null if it wasn't asked. */

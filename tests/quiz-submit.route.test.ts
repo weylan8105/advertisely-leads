@@ -184,6 +184,20 @@ describe("POST /api/quiz/submit", () => {
     }))).status).toBe(200);
   });
 
+  it("lets the /open split-test page through every knockout (owner, Nov 24 2026)", async () => {
+    for (const extra of [
+      { age: "62", quiz_age: "62" },
+      { "Which best describes your work right now?": "Between jobs right now" },
+      { "How much could you comfortably put towards building your tax-free retirement each month?": "Under $300" },
+    ]) {
+      expect((await submit(payload({ ...extra, quiz_variant: "open" }))).status).toBe(200);
+    }
+    expect(prismaMock.lead.create).toHaveBeenCalled();
+    expect(prismaMock.lead.create.mock.calls[0][0].data.rawFormData).toMatchObject({ quiz_variant: "open" });
+    // Any other variant still gets the knockout.
+    expect((await submit(payload({ age: "62", quiz_age: "62", quiz_variant: "instant-form-questions" }))).status).toBe(422);
+  });
+
   it("falls back to the observed IP for consent when the browser sent none", async () => {
     await submit(payload({ consent_ip: "" }), { ip: "192.0.2.55" });
     expect(prismaMock.lead.create.mock.calls[0][0].data.consentIp).toBe("192.0.2.55");

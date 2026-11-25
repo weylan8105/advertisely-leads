@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
   const cta = body?.cta ? String(body.cta).replace(/[^a-z0-9_]/gi, "").slice(0, 32) || null : null;
   // Landing-page test arm: "A"/"B" (Oct hero test) or "LP"/"IF" (Nov 16 page test:
   // the live page vs /qualify). Anything else (e.g. "QA") is ignored.
-  const variant = ["A", "B", "LP", "IF"].includes(body?.variant) ? (body.variant as string) : null;
+  // "OPEN" = the /open no-knockout page (Nov 24 2026 split test vs the knockout page at /).
+  const variant = ["A", "B", "LP", "IF", "OPEN"].includes(body?.variant) ? (body.variant as string) : null;
 
   try {
     await prisma.funnelEvent.create({ data: { sessionId, type, step, source, fbclid, cta, variant } });

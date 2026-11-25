@@ -70,6 +70,10 @@ describe("ABCA main page (asks age, not income): qualified on age 20 to 55", () 
   it("never guesses a missing age", () => {
     expect(isQualifiedLead({ lead_source: "early-retirement-quiz" })).toBeNull();
   });
+  it("the /open split-test page (quiz_variant open) uses the same age-only rule", () => {
+    expect(isQualifiedLead(page("38", { quiz_variant: "open" }))).toBe(true);
+    expect(isQualifiedLead(page("62", { quiz_variant: "open" }))).toBe(false);
+  });
   it("page B (/qualify) keeps the full income + age rule", () => {
     const b = page("40", { quiz_variant: "instant-form-questions" });
     expect(isQualifiedLead(b)).toBeNull(); // no income answer: never guessed

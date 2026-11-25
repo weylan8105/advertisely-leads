@@ -7,6 +7,8 @@ const ABCA_PAGES = [
   { source: "/", destination: "/abca-quiz.html" },
   // Landing page B of the Nov 2026 test: the instant form's questions.
   { source: "/qualify", destination: "/abca-quiz-if.html" },
+  // Nov 24 2026 split test: the Nov 20 page with no knockouts, run in its own campaign.
+  { source: "/open", destination: "/abca-quiz-open.html" },
   { source: "/privacy", destination: "/abca-privacy.html" },
   { source: "/terms", destination: "/abca-terms.html" },
 ];

@@ -37,6 +37,8 @@ const FUNNELS: Record<string, { packageId?: string; label: string }> = {
   "healthcare-wealth-quiz": { packageId: "healthcare-iul", label: "Healthcare Wealth Advantage quiz" },
 };
 const DEFAULT_SOURCE = "early-retirement-quiz";
+/** quiz_variant sent by the no-knockout split-test page (public/abca-quiz-open.html, /open). */
+const OPEN_VARIANT = "open";
 const MAX_BODY_CHARS = 16_000;
 const BURST_LIMIT = 10; // requests per IP per instance per window
 const BURST_WINDOW_MS = 10 * 60_000;
@@ -154,17 +156,22 @@ export async function POST(req: NextRequest) {
     return reject(`invalid ${invalid.join(",")}`, ip, { error: "Invalid fields.", fields: invalid }, 400);
   }
 
+  // Split test (owner, Nov 24 2026): the /open page (quiz_variant "open") is the Nov 20 page
+  // with no knockouts at all, run in its own campaign against the knockout page. Its leads
+  // skip every knockout below.
+  const openPage = str(body.quiz_variant) === OPEN_VARIANT;
+
   // Hard knockout (Nov 21 2026): part-time/seasonal or between-jobs answers end the quiz on the
   // page, so a submission carrying one never becomes a lead (old cached page, or a bypass).
-  if (isWorkQualified(body) === false) {
+  if (!openPage && isWorkQualified(body) === false) {
     return reject("work knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
   // Budget / income-branch knockouts (Nov 23 2026), same as the instant forms.
-  if (answerKnockout(body)) {
+  if (!openPage && answerKnockout(body)) {
     return reject("answer knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
   // Hard age cutoff (Nov 23 2026): no leads over 55, whatever the goal.
-  if (isOverAgeKnockout(body)) {
+  if (!openPage && isOverAgeKnockout(body)) {
     return reject("age knockout", ip, { error: "Based on your answers, this plan isn't the right fit right now.", knockout: true }, 422);
   }
 
