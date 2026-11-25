@@ -327,6 +327,7 @@ export interface ScorecardAd {
   adName: string;
   adsetId: string;
   adsetName: string;
+  campaignId: string;
   campaignName: string;
   account: "ABCA" | "Enhanced Wealth";
   status: string | null;
@@ -385,9 +386,9 @@ export async function getScorecardSpend(sinceYmd: string | null, untilYmd: strin
     SCORECARD_ACCOUNTS.map(async ({ label, raw }) => {
       const account = raw.startsWith("act_") ? raw : `act_${raw}`;
       const [ins, list] = await Promise.all([
-        fetchAllPages(`${GRAPH}/${account}/insights?level=ad&fields=ad_id,ad_name,adset_id,adset_name,campaign_name,spend&${range}&limit=500&${tok}`),
+        fetchAllPages(`${GRAPH}/${account}/insights?level=ad&fields=ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend&${range}&limit=500&${tok}`),
         fetchAllPages(
-          `${GRAPH}/${account}/ads?fields=id,name,effective_status,adset{id,name},campaign{name}` +
+          `${GRAPH}/${account}/ads?fields=id,name,effective_status,adset{id,name},campaign{id,name}` +
             `&effective_status=${encodeURIComponent(JSON.stringify(AD_STATUSES))}&limit=500&${tok}`,
         ),
       ]);
@@ -403,6 +404,7 @@ export async function getScorecardSpend(sinceYmd: string | null, untilYmd: strin
           adName: String(a.name ?? a.id),
           adsetId,
           adsetName: String(a.adset?.name ?? ""),
+          campaignId: String(a.campaign?.id ?? ""),
           campaignName: String(a.campaign?.name ?? ""),
           account: label,
           status: a.effective_status ? String(a.effective_status) : null,
@@ -419,6 +421,7 @@ export async function getScorecardSpend(sinceYmd: string | null, untilYmd: strin
           adName: String(r.ad_name ?? adId),
           adsetId,
           adsetName: String(r.adset_name ?? ""),
+          campaignId: String(r.campaign_id ?? ""),
           campaignName: String(r.campaign_name ?? ""),
           account: label,
           status: null,

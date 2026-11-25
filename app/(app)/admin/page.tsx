@@ -43,6 +43,7 @@ import { AdminDownlineOrders } from "@/components/admin/AdminDownlineOrders";
 import { FunnelAnalytics } from "@/components/admin/FunnelAnalytics";
 import { AdCostTable } from "@/components/admin/AdCostTable";
 import { CreativeScorecard } from "@/components/admin/CreativeScorecard";
+import { SplitTestScorecard } from "@/components/admin/SplitTestScorecard";
 import { CplPanel } from "@/components/admin/CplPanel";
 import { TrafficSnapshot } from "@/components/admin/TrafficSnapshot";
 import { TrashQueue } from "@/components/admin/TrashQueue";
@@ -751,6 +752,18 @@ function AdminPageInner() {
           </TabsContent>
 
           <TabsContent value="funnel">
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Open vs filtered split test</CardTitle>
+                <CardDescription>
+                  The no-knockout and knockout versions of the Enhanced Wealth form and the ABCA page, side by side,
+                  judged on what the leads became instead of what they cost.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SplitTestScorecard />
+              </CardContent>
+            </Card>
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Creative scorecard</CardTitle>
