@@ -735,9 +735,7 @@ const STEPS_A = [
     opts:[
       "Life insurance protection for my family",
       "Benefits for a qualifying serious illness",
-      "Potential cash value for retirement",
-      "Access to cash value through policy loans",
-      "Help understanding all of these"
+      "Potential cash value for retirement"
     ] },
   { key:"coverage", q:"How much coverage are you looking for?", sub:"A ballpark is fine. Your agent will fine-tune it.",
     opts:["$100,000 to $250,000","$250,000 to $500,000","$500,000 to $750,000","$750,000 to $1,000,000"] },
@@ -952,7 +950,6 @@ function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).t
 /* ---- lead scoring (coverage / interest based; never hard-DQ) ---- */
 function scoreLead(a){
   if(a.coverage==="$500,000 to $750,000" || a.coverage==="$750,000 to $1,000,000") return "HOT";
-  if(a.iul_interest==="Help understanding all of these") return "HOT";
   return "WARM";
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
