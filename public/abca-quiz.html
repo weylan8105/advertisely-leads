@@ -805,6 +805,12 @@ const STEPS_B = [
   ...STEPS_A.filter(s=>s.key!=="beneficiary")
 ];
 const STEPS = window.ABCA_AB==="B" ? STEPS_B : STEPS_A;
+// "What matters most" = cash value -> the coverage screen asks for a cash value goal
+// instead (owner, Nov 26 2026). Same slot, so the funnel's step numbers don't move.
+const CASH_GOAL_STEP = { key:"cash_value_goal", q:"What is your cash value goal for retirement?", sub:"A ballpark is fine. Your agent will run the numbers with you.",
+  opts:["$300,000 to $500,000","$500,000 to $1,000,000","$1,000,000 to $2,000,000","$2,000,000 to $3,000,000"] };
+const wantsCashValue = a => /cash value/i.test((a && a.iul_interest) || "");
+function stepAt(i){ const s=STEPS[i]; return s && s.key==="coverage" && wantsCashValue(answers) ? CASH_GOAL_STEP : s; }
 const ZIP_STEP_IDX = STEPS.findIndex(s=>s.zip); // -1 in version A (ZIP is taken on the hero)
 let step = 0, navLock = false, renderToken = 0, submitting = false;
 
@@ -898,7 +904,7 @@ function render(){
   renderToken++;
   navLock=false;
   document.getElementById('progBar').style.width = Math.round(((step+1)/(STEPS.length+1))*100) + "%";
-  const s = STEPS[step];
+  const s = stepAt(step);
   const host = document.getElementById('qstep');
   let html = `<div class="qq">${s.q}</div>` + (s.sub?`<div class="qsub">${s.sub}</div>`:"");
   // The screen right after the ZIP was entered shows it with an easy way back to fix it
@@ -1035,6 +1041,7 @@ function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).t
 /* ---- lead scoring (coverage / interest based; never hard-DQ) ---- */
 function scoreLead(a){
   if(a.coverage==="$500,000 to $750,000" || a.coverage==="$750,000 to $1,000,000") return "HOT";
+  if(a.cash_value_goal==="$1,000,000 to $2,000,000" || a.cash_value_goal==="$2,000,000 to $3,000,000") return "HOT";
   return "WARM";
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -1066,6 +1073,8 @@ async function submitContact(){
 async function finish(){
   submitting = true;
   const btn=document.getElementById('submitBtn'); if(btn){ btn.disabled=true; btn.textContent='Sending...'; }
+  // Only the amount question they actually answered (they may have gone back and switched).
+  if(wantsCashValue(answers)) delete answers.coverage; else delete answers.cash_value_goal;
   const tier = scoreLead(answers);
   const parts=(answers.name||"").trim().split(/\s+/);
   const firstName_=parts[0]||"", lastName_=parts.slice(1).join(" ")||"";
@@ -1076,7 +1085,7 @@ async function finish(){
     first_name:firstName_, last_name:lastName_, full_name:answers.name,
     phone:answers.phone, email:answers.email, state:answers.state||"", zip:answers.zip||"",
     quiz_beneficiary:answers.beneficiary, quiz_iul_interest:answers.iul_interest, quiz_age:answers.age,
-    quiz_coverage:answers.coverage, quiz_lead_tier:tier,
+    quiz_coverage:answers.coverage, quiz_cash_value_goal:answers.cash_value_goal, quiz_lead_tier:tier,
     "Which best describes your work right now?":answers.work||"",
     "What is your gross monthly income?":answers.monthly_income||"",
     "Does anyone else in your household help with the bills?":answers.monthly_income==="Under $3,000"?(answers.household||""):"",

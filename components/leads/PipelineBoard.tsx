@@ -504,7 +504,12 @@ export function PipelineBoard({
                     const cb = callbackStatus(lead.callbackAt, now);
                     const local = localTimeForState(lead.state);
                     const rf = (lead.rawFormData || {}) as Record<string, unknown>;
-                    const qCoverage = typeof rf.quiz_coverage === "string" ? rf.quiz_coverage : "";
+                    const qCoverage =
+                      typeof rf.quiz_coverage === "string" && rf.quiz_coverage
+                        ? rf.quiz_coverage
+                        : typeof rf.quiz_cash_value_goal === "string" && rf.quiz_cash_value_goal
+                          ? `Cash value goal: ${rf.quiz_cash_value_goal}`
+                          : "";
                     const qBeneficiary = typeof rf.quiz_beneficiary === "string" ? rf.quiz_beneficiary : "";
                     return (
                       <Fragment key={lead.id}>

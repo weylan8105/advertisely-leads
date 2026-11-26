@@ -53,7 +53,7 @@ const MAX_FIELD_LEN = 2_000;
 const ALLOWED_FIELDS = new Set([
   "first_name", "last_name", "full_name", "name", "phone", "email", "state", "zip",
   "age", "intent", "source", "lead_source", "external_id",
-  "quiz_beneficiary", "quiz_iul_interest", "quiz_age", "quiz_coverage", "quiz_lead_tier", "quiz_role",
+  "quiz_beneficiary", "quiz_iul_interest", "quiz_age", "quiz_coverage", "quiz_cash_value_goal", "quiz_lead_tier", "quiz_role",
   // ABCA landing page B (/qualify): the instant form's questions, under its labels.
   "quiz_variant",
   "What trade do you work in?",
