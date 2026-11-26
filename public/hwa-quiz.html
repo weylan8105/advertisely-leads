@@ -747,7 +747,7 @@ const STEPS = window.ABCA_AB==="B" ? STEPS_B : STEPS_A;
 // "What matters most" = cash value -> the coverage screen asks for a cash value goal
 // instead (owner, Nov 26 2026). Same slot, so the funnel's step numbers don't move.
 const CASH_GOAL_STEP = { key:"cash_value_goal", q:"What is your cash value goal for retirement?", sub:"A ballpark is fine. Your agent will run the numbers with you.",
-  opts:["$300,000 to $500,000","$500,000 to $1,000,000","$1,000,000 to $2,000,000","$2,000,000 to $3,000,000"] };
+  opts:["$300,000 to $500,000","$500,000 to $1,000,000","$1,000,000 to $2,000,000","$2,000,000 to $3,000,000","$3,000,000+"] };
 const wantsCashValue = a => /cash value/i.test((a && a.iul_interest) || "");
 function stepAt(i){ const s=STEPS[i]; return s && s.key==="coverage" && wantsCashValue(answers) ? CASH_GOAL_STEP : s; }
 const ZIP_STEP_IDX = STEPS.findIndex(s=>s.zip); // -1 in version A (ZIP is taken on the hero)
@@ -980,7 +980,7 @@ function setMsg(el,id,t){ el.classList.add('err'); document.getElementById(id).t
 /* ---- lead scoring (coverage / interest based; never hard-DQ) ---- */
 function scoreLead(a){
   if(a.coverage==="$500,000 to $750,000" || a.coverage==="$750,000 to $1,000,000") return "HOT";
-  if(a.cash_value_goal==="$1,000,000 to $2,000,000" || a.cash_value_goal==="$2,000,000 to $3,000,000") return "HOT";
+  if(a.cash_value_goal==="$1,000,000 to $2,000,000" || a.cash_value_goal==="$2,000,000 to $3,000,000" || a.cash_value_goal==="$3,000,000+") return "HOT";
   return "WARM";
 }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
